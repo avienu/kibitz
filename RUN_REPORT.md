@@ -83,13 +83,38 @@ si4spec README links to SCID source as "reference decoder" pointers — those
 links were not followed. Gaps that can only be resolved empirically are
 listed in DECISIONS_NEEDED.md (§4–5), not resolved by guessing.
 
+## Real-data verification (addendum, same day)
+
+The user pointed at `~/Dropbox/chess/` (read-only). Results:
+
+- **All ten real SCID .si4 databases parse with zero unresolvable entries**
+  (47,533 game headers total): benoni2/3, brians, fics, friends_games,
+  guy_reams, temp_ma, mypages (3,810 personal FICS/CwF games), twictest
+  (4,046 TWIC/World Cup 2011 games), league4545 (39,628 ICC league games;
+  its .sg4 is missing but header dumping doesn't need it). Spot-checks match
+  known reality (Karjakin 2788 at Khanty-Mansiysk 2011, etc.), and a
+  byte-level cross-check of benoni2 against its sibling PGN matched exactly —
+  including reproducing odd `Site "3"`-style tags present in the source data.
+  Rows shown as `? - ?` are genuine empty comment-only games in the file
+  (flags say not-deleted, ply 0, comment count 1), not parse errors.
+  → Phase 0's "real .si4 headers dump correctly" criterion **passes**.
+- **`mygames` is a PGN, not an .si4** (128 KB, 60 OTB games). Imported with
+  0 failures into `testdata/corpus/mygames.sqlite` (10.4 ms, 4,279 positions);
+  position search over it works (e.g. 24 games reach the Sicilian after
+  1.e4 c5, ~100 µs/query). `bigdatabase` has only an .sn4 (no .si4/.sg4) —
+  incomplete remnant, unusable.
+- `~/Dropbox/chess/` was not modified; all derived artifacts live in the
+  repo's git-ignored `testdata/corpus/`.
+
+Still open from real data: full .sg4 movetext decoding (Phase 1) now has
+real files to validate against — the DECISIONS_NEEDED.md §5 ambiguities can
+be settled empirically using mypages/twictest.
+
 ## What a human must do or decide next (prioritized)
 
-1. **Provide real data**: drop your SCID databases (.si4/.sg4/.sn4) and
-   ChessBase PGN exports into `testdata/private/` — Phase 0's "real .si4
-   headers dump correctly" and Phase 1's real-corpora acceptance are
-   **unverified** without them (synthetic fixtures stand in; flagged).
-   Then run: `cargo run -p si4-read --example dump_headers -- <base>.si4`.
+1. ~~Provide real data~~ **Done — see addendum.** Remaining real-data gap:
+   ChessBase-exported PGN corpora (the run found none) and the full megabase
+   (`bigdatabase` is header-less); point silman at them when available.
 2. **Run the demo app visually**: `cd app && npm install && npm run tauri
    dev` (or open the built debug bundle). Board rendering, arrow-key
    stepping and the live eval panel are logic-tested but were never seen on
