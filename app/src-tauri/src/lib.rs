@@ -1,0 +1,147 @@
+//! Silman Phase 0 spike — Tauri shell.
+//!
+//! Exposes three IPC commands over the UCI manager (src/uci.rs):
+//! `resolve_engine_path`, `analyze_position`, `stop_analysis`.
+//! Search progress streams to the frontend as `engine-info` events and the
+//! run terminates with a single `engine-done` event.
+//!
+//! Product principle (CLAUDE.md #6): the engine is spawned lazily on the
+//! first user-initiated `analyze_position` and never runs unprompted.
+
+pub mod uci;
+
+use std::sync::Arc;
+
+use serde::Serialize;
+use tauri::{Emitter, Manager, State};
+use tokio::sync::Mutex;
+
+use uci::{Engine, StopHandle, UciPosition};
+
+/// Shared engine state. `engine` is locked for the duration of a search,
+/// serializing searches; `stop` stays accessible so `stop_analysis` can
+/// interrupt a search that currently holds the engine lock.
+#[derive(Default)]
+pub struct EngineState {
+    engine: Arc<Mutex<Option<Engine>>>,
+    stop: std::sync::Mutex<Option<StopHandle>>,
+}
+
+/// Terminal event payload for an analysis run (`engine-done`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DonePayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bestmove: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ponder: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+/// Report which engine binary would be used for `user_path` (may be null).
+/// Resolution order: user path > SILMAN_STOCKFISH > repo binary > PATH.
+#[tauri::command]
+fn resolve_engine_path(user_path: Option<String>) -> Result<String, String> {
+    uci::resolve_engine_path(user_path.as_deref()).map(|p| p.display().to_string())
+}
+
+/// Start `go nodes <nodes>` on `fen`. Returns as soon as the search task is
+/// launched; progress arrives via `engine-info` / `engine-done` events.
+#[tauri::command]
+async fn analyze_position(
+    app: tauri::AppHandle,
+    state: State<'_, EngineState>,
+    fen: String,
+    nodes: Option<u64>,
+    user_path: Option<String>,
+) -> Result<(), String> {
+    let path = uci::resolve_engine_path(user_path.as_deref())?;
+    let nodes = nodes.unwrap_or(uci::DEFAULT_NODES).max(1);
+    let engine_slot = Arc::clone(&state.engine);
+
+    tauri::async_runtime::spawn(async move {
+        let done = run_search(&app, &engine_slot, path, fen, nodes).await;
+        let payload = match done {
+            Ok(best) => DonePayload {
+                bestmove: Some(best.bestmove),
+                ponder: best.ponder,
+                error: None,
+            },
+            Err(e) => DonePayload {
+                bestmove: None,
+                ponder: None,
+                error: Some(e),
+            },
+        };
+        let _ = app.emit("engine-done", payload);
+    });
+    Ok(())
+}
+
+/// Interrupt the current search (engine replies `bestmove` promptly).
+/// No-op if nothing is running.
+#[tauri::command]
+fn stop_analysis(state: State<'_, EngineState>) -> Result<(), String> {
+    let handle = state.stop.lock().expect("stop mutex poisoned").clone();
+    if let Some(handle) = handle {
+        tauri::async_runtime::spawn(async move {
+            let _ = handle.stop().await;
+        });
+    }
+    Ok(())
+}
+
+/// Ensure an engine at `path` is running (respawning if the path changed or
+/// the previous process died), then run one bounded search, streaming infos.
+async fn run_search(
+    app: &tauri::AppHandle,
+    engine_slot: &Arc<Mutex<Option<Engine>>>,
+    path: std::path::PathBuf,
+    fen: String,
+    nodes: u64,
+) -> Result<uci::BestMove, String> {
+    let mut slot = engine_slot.lock().await;
+    let needs_spawn = match slot.as_ref() {
+        Some(engine) => engine.path() != path,
+        None => true,
+    };
+    if needs_spawn {
+        if let Some(old) = slot.take() {
+            old.quit().await;
+        }
+        let engine = Engine::spawn(&path).await?;
+        let state: State<'_, EngineState> = app.state();
+        *state.stop.lock().expect("stop mutex poisoned") = Some(engine.stop_handle());
+        *slot = Some(engine);
+    }
+    let engine = slot.as_mut().expect("engine just ensured");
+    let result = engine
+        .analyze(&UciPosition::Fen(fen), nodes, |info| {
+            // Skip currmove/progress lines that carry no evaluation.
+            if info.has_score() {
+                let _ = app.emit("engine-info", info);
+            }
+        })
+        .await;
+    if result.is_err() {
+        // Engine likely died; drop it so the next analyze respawns.
+        *slot = None;
+        let state: State<'_, EngineState> = app.state();
+        *state.stop.lock().expect("stop mutex poisoned") = None;
+    }
+    result
+}
+
+/// Build and run the Tauri application.
+pub fn run() {
+    tauri::Builder::default()
+        .manage(EngineState::default())
+        .invoke_handler(tauri::generate_handler![
+            resolve_engine_path,
+            analyze_position,
+            stop_analysis
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

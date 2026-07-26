@@ -1,0 +1,35 @@
+[package]
+name = "silman-app"
+version = "0.0.1"
+description = "Silman Phase 0 spike demo — Tauri shell (board + PGN stepping + UCI engine panel)"
+authors = ["Shawn O'Connor"]
+license = "GPL-3.0-only"
+edition = "2021"
+
+# Standalone package: NOT a member of the repo's root cargo workspace.
+# The empty [workspace] table makes cargo treat this directory as its own
+# workspace root with its own Cargo.lock (crates/* stay GPL-free).
+[workspace]
+
+[lib]
+name = "silman_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = [
+    "process",
+    "io-util",
+    "sync",
+    "time",
+    "macros",
+    "rt-multi-thread",
+] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
