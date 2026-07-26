@@ -54,7 +54,7 @@ pub fn screen(board: &Board, cfg: &WsuiConfig) -> WsuiReport {
         detect_weak_king(board, side, cfg, &mut alerts);
     }
     // Most severe first within the stable side order.
-    alerts.sort_by(|a, b| b.severity.cmp(&a.severity));
+    alerts.sort_by_key(|a| std::cmp::Reverse(a.severity));
     let screen_fired = alerts.iter().any(|a| a.severity >= cfg.fire_threshold);
     WsuiReport {
         alerts,

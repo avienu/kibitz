@@ -791,7 +791,7 @@ pub fn assess(board: &Board) -> Vec<Imbalance> {
     .into_iter()
     .flatten()
     .collect();
-    out.sort_by(|a, b| b.magnitude.cmp(&a.magnitude));
+    out.sort_by_key(|i| std::cmp::Reverse(i.magnitude));
     out
 }
 
