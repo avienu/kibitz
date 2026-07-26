@@ -1,11 +1,19 @@
 import { useMemo, useState } from "react";
+import { formatWhiteCp, legacyEvalTitle, type PlyEval } from "./lib/analyses";
+import {
+  ANNOTATION_DISPLAY_MODES,
+  commentView,
+  getSavedAnnotationDisplay,
+  saveAnnotationDisplay,
+  type AnnotationDisplay,
+} from "./lib/annotationDisplay";
+import { nagView } from "./lib/nags";
 import {
   buildAnnView,
   commentAfter,
   cycleNag,
   deleteComment,
   deleteVariation,
-  nagSuffix,
   setComment,
   type AnnItem,
   type JsonToken,
@@ -17,12 +25,28 @@ interface AnnotatedMovesProps {
   tokens: JsonToken[];
   /** Current mainline ply shown on the board. */
   currentPly: number;
+  /** Stored engine evals keyed by mainline ply (White-POV), if loaded. */
+  evals?: Map<number, PlyEval> | null;
   dirty: boolean;
   saving: boolean;
   onSelectPly: (ply: number) => void;
   onChange: (tokens: JsonToken[]) => void;
   onSave: () => void;
   onRevert: () => void;
+}
+
+/** One NAG rendered as a glyph / marker / invisible tooltip (verdict 2). */
+function NagGlyph({ nag }: { nag: number }) {
+  const v = nagView(nag);
+  if (v.hidden) return <span className="nag nag-diagram" title={v.title} />;
+  if (v.unknown) {
+    return (
+      <span className="nag nag-unknown" title={v.title}>
+        {v.glyph}
+      </span>
+    );
+  }
+  return <span className="nag">{v.glyph}</span>;
 }
 
 interface Block {
@@ -40,6 +64,7 @@ export default function AnnotatedMoves({
   startFen,
   tokens,
   currentPly,
+  evals,
   dirty,
   saving,
   onSelectPly,
@@ -49,6 +74,12 @@ export default function AnnotatedMoves({
 }: AnnotatedMovesProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [editing, setEditing] = useState<{ moveIndex: number; text: string } | null>(null);
+  const [display, setDisplay] = useState<AnnotationDisplay>(getSavedAnnotationDisplay);
+
+  const setDisplayMode = (mode: AnnotationDisplay) => {
+    setDisplay(mode);
+    saveAnnotationDisplay(mode);
+  };
 
   const view = useMemo(() => buildAnnView(startFen, tokens), [startFen, tokens]);
 
@@ -93,6 +124,7 @@ export default function AnnotatedMoves({
   const renderMove = (item: MoveItem) => {
     const isCur = item.mainlinePly !== null && item.mainlinePly === currentPly;
     const isSel = item.index === selected;
+    const ev = item.mainlinePly !== null ? evals?.get(item.mainlinePly) : undefined;
     return (
       <span key={item.index} className="ann-move-wrap">
         <button
@@ -109,8 +141,18 @@ export default function AnnotatedMoves({
         >
           {item.num ? `${item.num} ` : ""}
           {item.san}
-          {nagSuffix(item.nag)}
+          {item.nag !== null && <NagGlyph nag={item.nag} />}
         </button>
+        {ev &&
+          (ev.kind === "legacy" ? (
+            <span className="ply-eval legacy" title={legacyEvalTitle(ev.engine)}>
+              {formatWhiteCp(ev.whiteCp)}
+            </span>
+          ) : (
+            <span className="ply-eval" title={ev.engine}>
+              {formatWhiteCp(ev.whiteCp)}
+            </span>
+          ))}
         {isSel && (
           <span className="ann-controls">
             <button
@@ -135,10 +177,19 @@ export default function AnnotatedMoves({
     switch (item.kind) {
       case "move":
         return renderMove(item);
-      case "comment":
+      case "comment": {
+        const cv = commentView(display, item.text);
+        if (!cv.visible) return null;
+        if (cv.collapsed) {
+          return (
+            <span key={item.index} className="ann-comment ann-comment-collapsed" title={cv.title}>
+              {cv.text}
+            </span>
+          );
+        }
         return (
           <span key={item.index} className="ann-comment">
-            {item.text}
+            {cv.text}
             <button
               className="ann-x"
               title="Delete comment"
@@ -148,6 +199,7 @@ export default function AnnotatedMoves({
             </button>
           </span>
         );
+      }
       case "varStart":
         return (
           <span key={item.index} className="ann-paren">
@@ -174,6 +226,17 @@ export default function AnnotatedMoves({
     <div className="ann">
       <div className="ann-header">
         <h3>Moves &amp; annotations</h3>
+        <span className="ann-view-toggle" title="Comment display: full / hover (° marker) / hidden">
+          {ANNOTATION_DISPLAY_MODES.map((mode) => (
+            <button
+              key={mode}
+              className={display === mode ? "cur" : ""}
+              onClick={() => setDisplayMode(mode)}
+            >
+              {mode}
+            </button>
+          ))}
+        </span>
         {dirty && <span className="ann-dirty">unsaved changes</span>}
         <button onClick={onSave} disabled={!dirty || saving}>
           {saving ? "Saving…" : "Save"}

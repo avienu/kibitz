@@ -7,6 +7,7 @@ import {
   openDatabase,
   openingTree,
   saveDbPath,
+  setWindowTitle,
   type DbSummary,
   type GameDetail,
   type GameList,
@@ -68,6 +69,9 @@ export default function DatabaseView({
       setSummary(s);
       saveDbPath(path);
       setPage(0);
+      // Cosmetics (verdict 4): reflect the open database in the title bar.
+      const filename = s.path.split(/[\\/]/).pop() ?? s.path;
+      setWindowTitle(`silman — ${filename}`).catch(() => {});
     } catch (e) {
       setSummary(null);
       setDbError(String(e));

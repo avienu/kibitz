@@ -7,7 +7,10 @@ import { parseSquare, squareRank } from "chessops/util";
 import AnnotatedMoves from "./AnnotatedMoves";
 import Board, { type BoardMovable } from "./Board";
 import DatabaseView from "./DatabaseView";
+import GameTools from "./GameTools";
 import PrepView from "./PrepView";
+import ProfileView from "./ProfileView";
+import { evalsByPly, type PlyEval } from "./lib/analyses";
 import {
   clampPly,
   gameFromSans,
@@ -17,12 +20,14 @@ import {
   type LoadedGame,
 } from "./lib/game";
 import {
+  gameAnalyses,
   getGame,
   getGameTokens,
   explainPosition,
   updateGameTokens,
   type Explanation,
   type GameDetail,
+  type PlayerProfile,
 } from "./lib/db";
 import { shapesFromRecord } from "./lib/explainView";
 import { insertVariation, type JsonToken } from "./lib/tokens";
@@ -60,7 +65,7 @@ const SAMPLE_PGN = `[Event "London"]
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-type Mode = "analyze" | "database" | "prep";
+type Mode = "analyze" | "database" | "prep" | "profile";
 
 /** Annotation-edit state for the currently loaded database game. */
 interface AnnotState {
@@ -89,6 +94,10 @@ export default function App() {
   const [annot, setAnnot] = useState<AnnotState | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingVar, setPendingVar] = useState<PendingVariation | null>(null);
+  /** Stored engine evals for the loaded database game (White-POV, per ply). */
+  const [evals, setEvals] = useState<Map<number, PlyEval> | null>(null);
+  /** Last built player profile (survives tab switches; used by Prep too). */
+  const [profile, setProfile] = useState<PlayerProfile | null>(null);
 
   const [explanation, setExplanation] = useState<Explanation | null>(null);
   const [explaining, setExplaining] = useState(false);
@@ -161,6 +170,7 @@ export default function App() {
       const b = res.game.headers["Black"] ?? "?";
       tokenReqRef.current++; // invalidate any in-flight token fetch
       setAnnot(null);
+      setEvals(null);
       applyGame(res.game, `${w} — ${b}, ${res.game.sans.length} plies.`, res.warning);
     },
     [applyGame],
@@ -189,6 +199,7 @@ export default function App() {
           ? ` (${detail.whiteElo ?? "?"}–${detail.blackElo ?? "?"})`
           : "";
       setAnnot(null);
+      setEvals(null);
       applyGame(
         res.game,
         `#${detail.id} ${detail.white} — ${detail.black}${elos}, ${detail.result}, ${res.game.sans.length} plies.`,
@@ -207,6 +218,12 @@ export default function App() {
           });
         })
         .catch((e) => setStatus((s) => `${s} (annotations unavailable: ${e})`));
+      gameAnalyses(detail.id)
+        .then((rows) => {
+          if (tokenReqRef.current !== req) return;
+          setEvals(evalsByPly(rows));
+        })
+        .catch(() => {}); // eval display is best-effort
     },
     [applyGame],
   );
@@ -222,6 +239,20 @@ export default function App() {
       }
     },
     [loadDbGame],
+  );
+
+  /** Reload the loaded db game in place (after annotate / job fold-back). */
+  const reloadCurrent = useCallback(() => {
+    if (annot) void loadDbGameAt(annot.gameId, ply);
+  }, [annot, ply, loadDbGameAt]);
+
+  /** Profile drill-down: show the example game in the Database tab. */
+  const loadProfileExample = useCallback(
+    (gameId: number, atPly: number) => {
+      void loadDbGameAt(gameId, atPly);
+      setMode("database");
+    },
+    [loadDbGameAt],
   );
 
   const step = useCallback(
@@ -480,6 +511,9 @@ export default function App() {
           <button className={mode === "prep" ? "cur" : ""} onClick={() => setMode("prep")}>
             Prep
           </button>
+          <button className={mode === "profile" ? "cur" : ""} onClick={() => setMode("profile")}>
+            Profile
+          </button>
         </div>
 
         {mode === "analyze" && (
@@ -525,14 +559,23 @@ export default function App() {
             onAdvance={() => step(1)}
           />
         )}
-        {mode === "prep" && <PrepView onLoadGameAt={loadDbGameAt} />}
+        {mode === "prep" && <PrepView onLoadGameAt={loadDbGameAt} profile={profile} />}
+        {mode === "profile" && (
+          <ProfileView
+            profile={profile}
+            onProfileBuilt={setProfile}
+            onLoadGameAt={loadProfileExample}
+          />
+        )}
 
+        {game && annot && <GameTools gameId={annot.gameId} onReload={reloadCurrent} />}
         {game &&
           (annot ? (
             <AnnotatedMoves
               startFen={annot.startFen}
               tokens={annot.tokens}
               currentPly={ply}
+              evals={evals}
               dirty={annotDirty}
               saving={saving}
               onSelectPly={(p) => {

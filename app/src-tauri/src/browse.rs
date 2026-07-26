@@ -102,6 +102,9 @@ pub struct DbSummary {
 pub async fn open_database(state: State<'_, DbState>, path: String) -> Result<DbSummary, String> {
     let resolved = resolve_db_path(&path)?;
     let conn = silman_db::db::open(&resolved).map_err(|e| e.to_string())?;
+    // Tolerate short write locks from the run_jobs worker connection.
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
     let stats = silman_db::query::stats(&conn).map_err(|e| e.to_string())?;
     let summary = DbSummary {
         games: stats.games,

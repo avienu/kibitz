@@ -4,6 +4,7 @@
  * the UI stays pure.
  */
 import { invoke } from "@tauri-apps/api/core";
+import type { AnalysisRow } from "./analyses";
 import type { FeatureRecordJson } from "./explainView";
 import type { JsonToken } from "./tokens";
 
@@ -185,4 +186,119 @@ export interface Explanation {
 
 export function explainPosition(fen: string): Promise<Explanation> {
   return invoke<Explanation>("explain_position", { fen });
+}
+
+/* ---- Run 4: analyses, annotate/re-analyze/jobs, export, profile ---- */
+
+/** All stored evals for one game (fresh rows first per ply). */
+export function gameAnalyses(gameId: number): Promise<AnalysisRow[]> {
+  return invoke<AnalysisRow[]>("game_analyses", { gameId });
+}
+
+export interface AnnotateSummary {
+  positionsAnalyzed: number;
+  screensFired: number;
+  jobsEnqueued: number;
+  commentsAdded: number;
+}
+
+/** Static Silman annotation pass over one game (enqueues confirm jobs). */
+export function annotateGame(gameId: number): Promise<AnnotateSummary> {
+  return invoke<AnnotateSummary>("annotate_game", { gameId });
+}
+
+/** Enqueue a bounded eval per mainline position; returns the job count. */
+export function reanalyzeGame(gameId: number): Promise<number> {
+  return invoke<number>("reanalyze_game", { gameId });
+}
+
+/** Start the background job worker (the user-initiated engine entry point). */
+export function runJobs(): Promise<void> {
+  return invoke<void>("run_jobs");
+}
+
+export interface JobsStatus {
+  pending: number;
+  running: number;
+  done: number;
+  failed: number;
+  /** True while the run_jobs worker thread is alive. */
+  workerActive: boolean;
+  /** Engine identity of the most recently completed job, if any. */
+  engine: string | null;
+}
+
+export function jobsStatus(): Promise<JobsStatus> {
+  return invoke<JobsStatus>("jobs_status");
+}
+
+/** Render one stored game (with annotations) as PGN text. */
+export function exportGamePgn(gameId: number): Promise<string> {
+  return invoke<string>("export_game_pgn", { gameId });
+}
+
+/* Player profile (goal 4). Field names are snake_case: the payload is the
+ * silman-profile PlayerProfile record serialized as-is. */
+
+export interface PhaseAcpl {
+  moves: number;
+  acpl: number;
+  blunders: number;
+  mistakes: number;
+  inaccuracies: number;
+}
+
+export interface MotifRow {
+  kind: string;
+  opportunities: number;
+  taken: number;
+  missed: number;
+  allowed: number;
+  example_missed: number[];
+  example_allowed: number[];
+}
+
+export interface StructureRow {
+  flag: string;
+  games: number;
+  score_pct: number;
+  examples: number[];
+}
+
+export interface EcoRow {
+  eco: string;
+  games: number;
+  score_pct: number;
+  examples: number[];
+}
+
+export interface Conversion {
+  winning_reached: number;
+  converted_wins: number;
+  losing_reached: number;
+  held: number;
+}
+
+export interface PlayerProfile {
+  player: string;
+  games: number;
+  score_pct: number;
+  eval_coverage_pct: number;
+  acpl_opening: PhaseAcpl;
+  acpl_middlegame: PhaseAcpl;
+  acpl_endgame: PhaseAcpl;
+  motifs: MotifRow[];
+  structures: StructureRow[];
+  eco: EcoRow[];
+  conversion: Conversion;
+}
+
+export function buildProfile(player: string): Promise<PlayerProfile> {
+  return invoke<PlayerProfile>("build_profile", { player });
+}
+
+/* ---- Cosmetics (verdict 4) ---- */
+
+export function setWindowTitle(title: string): Promise<void> {
+  return invoke<void>("set_window_title", { title });
 }

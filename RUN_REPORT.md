@@ -1,5 +1,204 @@
 # RUN_REPORT.md
 
+# Run 4 — 2026-07-26
+
+## Headline
+
+All four maintainer verdicts fixed with regression tests; **Phase 4
+profile shipped and run on the full personal corpus**; LLM verbalizer and
+UI wiring per agent addenda below; the five acceptance games are
+re-annotated with the full pipeline (static screen → bounded engine →
+verdict fold-back) — samples at the end of this section for judgment.
+Scale track skipped (no ≥5M corpus in testdata/private/).
+
+## The maintainer verdicts
+
+1. **Prose leaks — fixed.** The verbalizer got a per-key grammatical
+   evidence dispatcher; the dump path no longer exists in the code, and a
+   lint (no `_ [ ] { } "`, no digit-after-colon) runs inside every
+   snapshot, over all records, and over every template with slots
+   stripped. Your exact complaint case now renders: "White has the
+   superior minor pieces. Black's f8-bishop is a problem piece, hemmed in
+   by its own pawns on c5 and d6."
+2. **NAG rendering — fixed in the UI** (glyph map with tooltip-only
+   unknowns; $201 renders as nothing visible + "diagram marker (imported)"
+   tooltip). Provenance answer: $201/$18/$14/$10 are genuine imported
+   Fritz/SCID annotator NAGs from your 2011 auto-analysis — real data,
+   not our markers, so they stay stored; only their RENDERING changes.
+3. **Legacy analysis provenance — the full requirement set:**
+   (a) fresh runs capture the engine's real `id name` and stamp it (with
+   nodes and timestamp) on every stored analysis row and job result;
+   (b) import now parses engine comments into structured `analyses` rows
+   tagged legacy-import: your corpus yielded **7,420 rows across 387
+   games — Stockfish 2.1.1 64bit (5,408), Stockfish 2.0.1 (1,994), Toga
+   II 1.2.1a (18)** — with mixed comments keeping their human text
+   ("Move out of book Nf6 82%..."), stacked double annotations peeled,
+   and SCID blunder markers (****Dn) excluded from names — each shape
+   regression-tested against your actual comment bytes;
+   (c) legacy evals render muted with an engine-vintage tooltip, fresh
+   normal, both White-POV-normalized (POV conversion unit-tested);
+   (d) re-analyze game action (UI button + `silman-cli reanalyze-game`)
+   enqueues fresh per-position evals; fresh rows are preferred for
+   display; legacy rows are never deleted or overwritten.
+4. **Cosmetics:** window title = app + open db; annotation display
+   toggle full/hover/hidden.
+
+## Confirm-verdict fold-back (goal 3)
+
+wsui-confirm verdicts now merge into stored annotations: a confirmed
+alert leads its comment with the engine's SAN PV and score; a refuted
+alert is dropped from the prose (a refuted screen with no surviving alert
+inserts nothing); persisting weaknesses narrate once, not once per ply.
+Idempotent via jobs.folded_at; `run-jobs` folds automatically. Tests
+cover confirmed, refuted, idempotency, and the two anti-repetition rules
+(both were found by reading real acceptance output, then locked in).
+
+Across the five acceptance games: 264 bounded jobs, 0 failures —
+**69 confirmed, 179 refuted, 16 unclear**. The 68% refute rate is the
+architecture doing its job: the static screen over-fires cheaply
+(by design, per docs/VALIDATION.md), the bounded engine cleans it up, and
+fold-back keeps refuted claims out of the user-visible prose.
+
+## Phase 4 — PlayerProfile (goal 4)
+
+silman-profile::player is pure aggregation (BSD, no I/O), hand-validated
+on a fixture where every number is computable by inspection. The app
+pipeline extracts per-ply alert sets (persistence-aware: a weak king is
+ONE opportunity, counted when it appears), merges evals from `analyses`
+(fresh preferred, POV-normalized), samples mid-game structure flags, and
+profiles the **full 1,026-game personal corpus in ~2 s**.
+
+Three representative findings from your own profile (spot-check games in
+brackets; every claim is drill-down-able in the Profile UI):
+
+1. **Loose pieces are the biggest leak — in both directions.** You cash
+   80% of newly-loose enemy pieces (1,179 of 1,479 opportunities taken),
+   but you ALLOWED 1,318 newly-loose pieces of your own — roughly 1.3 per
+   game [games 3749, 3740, 3732]. Nunn's LPDO, both sides of the coin.
+2. **Backward pawns are your worst structure.** In 113 games where you
+   carried a backward pawn you scored **45.1%**, against a 55.9% overall
+   baseline — the only structure flag below 49% [3686, 3667, 3661]. For
+   contrast: your isolated-pawn games score 57.2% (340 games) — isolation
+   doesn't hurt you; backwardness does.
+3. **Attacking conversion against weak kings is under-realized:** of 713
+   fresh enemy weak-king situations you punished 57 and let 656 pass
+   [3749, 3740, 3729]. Combined with the legacy-eval ACPL slope (opening
+   82 → middlegame 182 → endgame 201, over the 387 games your 2011 self
+   analyzed), the profile's claim is: tactics execution late in the game
+   is the highest-value training target.
+
+(Eval coverage is 3.7% — the legacy 2011 analyses. A full fresh ACPL
+pass is one command: `reanalyze-game` per game or a batch loop; ~2-3 h of
+engine time for the whole corpus at 200k nodes.)
+
+## CLI surface audit (goal 2)
+
+UI paths now exist for: browse/search/tree, prep view, profile report
+(with drill-down), annotate game, re-analyze game, run jobs (+status
+strip), export PGN, explain position (+LLM mode), annotation editing.
+Intentionally CLI-only, with exact commands:
+
+- Imports: `silman-cli --db <db> init | import-pgn <f> | import-si4 <base>`
+- Network syncs: `twic-sync --from N | lichess-sync <u> | chesscom-sync <u> | fics-sync <u> <year>`
+- Validation harness: `cargo run -p silman-db --bin wsui-validate -- ...`
+- Fingerprint (superseded by Profile UI but kept): `fingerprint <player>`
+- `explain <fen>` / `explain-llm <fen>` (LLM needs ANTHROPIC_API_KEY)
+
+Rationale: imports and network syncs are provenance-sensitive batch
+operations that want explicit flags; they are the next natural UI
+candidates if wanted.
+
+## Agent addenda (verified)
+
+- **LLM verbalizer** (Phase 4, goal 5): LlmTransport trait keeps the BSD
+  crate network-free (confirmed absent from its cargo tree); strict
+  grounding validation (SAN tokens verbatim-in-record or legal-in-FEN,
+  squares must exist in the record) with TOTAL template fallback on any
+  violation, transport error, or empty output; 8 offline hallucination-
+  injection tests all fire fallback; app-layer AnthropicTransport +
+  `explain-llm` CLI; live test env-gated (SILMAN_LLM_TESTS=1).
+- **UI wiring**: NAG glyphs w/ tooltip-only unknowns and invisible $201;
+  legacy evals muted w/ engine-vintage tooltips, POV-normalized (tested);
+  Annotate/Re-analyze/Run-jobs buttons with a polling status strip and a
+  background worker on its own connection; Export PGN via clipboard+modal
+  (no dialog plugin in capabilities — deliberate); Profile tab with
+  clickable drill-down into every example game; prep-view profile-weakness
+  strip; window title from app+db; annotation display toggle
+  full/hover/hidden. 21 src-tauri + 58 vitest tests. Everything remains
+  VISUALLY unverified (no screen access) — same standing caveat.
+
+## Final verification
+
+131 workspace + 21 src-tauri + 58 vitest tests green; fmt/clippy clean
+everywhere including `--features llm`; license gate green ×4 (ureq
+confirmed absent from silman-verbalize's tree with the llm feature on).
+
+## Acceptance samples — five games, three positions each
+
+
+#### Game 1 — sounix–christoforo 2011, C41, 1-0, 89 plies (your hands-on reference game)
+
+**[confirmed] after 34. Bf3:**
+> White's king is seriously exposed around g2. The pressure comes from Black's pawn on f4. The pawn cover is gone on the f-file, the shield pawn on the g-file has pushed too far forward and the h-file in front of the king is wide open. The engine confirms it: Kxe6 Bg4+ Kd5, winning about 4.6 pawns. Meanwhile, White's rook on e6 hangs — nobody defends it. It is under attack from Black's king on d5. White has the superior minor pieces. White owns the bishop pair in an open position. Meanwhile, White has the initiative and is dictating play. A good plan for White: open the position so the bishops can breathe.
+
+**[confirmed-late] after 41. Bxg6:**
+> White's bishop on g6 hangs — nobody defends it. It is under attack from Black's king on f6. The engine confirms it: Kxg6 Bd2 Rb8, winning about 2.9 pawns. White's minor pieces are a touch better placed. White owns the bishop pair in an open position. Meanwhile, White's pawn structure is a shade healthier. Black has a passed pawn on f4. Black's pawns on c4, f4 and a7 are isolated. White has a queenside pawn majority. Black has a kingside pawn majority. At the same time, White is slightly ahead on material. Black is up the exchange. Beyond that, Black has a little more room to work with. A good plan for White: open the position so the bishops can breathe. Another idea for White: advance the queenside pawn majority. Another idea for White: blockade Black's passed pawn (key squares: f3). Another idea for Black: use the extra space and sidestep piece trades.
+
+**[endgame] after 39. Kf3:**
+> White's king is not entirely safe around f3. The pressure comes from Black's pawn on f4, the pawn on e5, the king on f5 and the rook on g6. Enemy pieces are massing around it. The engine confirms it: Rh8 Be4+ Kf6, winning about 5.5 pawns. In this endgame Black's better pawn structure counts for a great deal. Black has passed pawns on f4 and e5. Black's pawns on c4 and a7 are isolated. White has a queenside pawn majority. Black has a kingside pawn majority. Meanwhile, Black is ahead on material. Black is up the exchange. At the same time, Black enjoys a clear space advantage. A good plan for Black: advance the queenside pawn majority. Another idea for Black: blockade Black's passed pawn (key squares: f3). Another idea for Black: use the extra space and sidestep piece trades.
+
+
+#### Game 3749 — sounix–Dennis70x7 2012, B32, 1-0, 49 plies (decisive tactical)
+
+**[confirmed] after 10. Be4:**
+> Black's rook on a8 hangs — nobody defends it. It is under attack from White's bishop on e4. The engine confirms it: Rb8 Nc3 Ne7, winning about 1.6 pawns. White's pawn structure is a shade healthier. Black's d7-pawn is backward. White has a queenside pawn majority. Meanwhile, White has a little more room to work with. At the same time, White is slightly ahead in development. A good plan for White: advance the queenside pawn majority. Another idea for White: use the extra space and sidestep piece trades. Another idea for White: open the position before the opponent finishes development.
+
+**[confirmed-late] after 25. Rf7+:**
+> Black's queen on e5 is trapped — it has no safe square to run to. It is attacked by White's bishop on d4, and nothing defends it. A capture sequence here wins roughly a queen. The engine confirms it: Kh8 Qh7#, winning about 100 pawns. Meanwhile, Black's king is seriously exposed around g7. The pressure comes from White's queen on d3, the pawn on g5, the bishop on h5, the pawn on e6 and the rook on f7. The pawn cover is gone on the g-file and the f-file in front of the king is wide open. On top of that, White's king is seriously exposed around g1. The pressure comes from Black's queen on e5. The shield pawn on the g-file has pushed too far forward and the f-file in front of the king is wide open. Also, Black's queen on e5 hangs — nobody defends it. It is under attack from White's bishop on d4. Black's knight on e7 hangs — nobody defends it. It is under attack from White's rook on f7. Meanwhile, Black's knight on e7 is trapped — it has no safe square to run to. It is attacked by White's rook on f7, and nothing defends it. A capture sequence here wins roughly a minor piece. On top of that, White's queen on d3 hangs — nobody defends it. It is under attack from Black's pawn on c4. White's minor pieces are a touch better placed. White owns the bishop pair in an open position. Meanwhile, White's pawn structure is a shade healthier. Black's pawns on h6 and a7 are isolated. White's e6-pawn is isolated. White has a kingside pawn majority. At the same time, White is slightly ahead on material. White is a pawn up. Beyond that, White has slightly the better of the open lines. The f-file is open. The b-, e- and g-files are half-open for Black. The c- and d-files are half-open for White. White has a rook on the seventh rank. White has a little more room to work with. A good plan for White: open the position so the bishops can breathe. Another idea for White: double the heavy pieces on the open file. Another idea for White: use the extra space and sidestep piece trades.
+
+**[quiet] after 11. Nc3:**
+> No immediate tactics jump out; the position will be decided by its long-term features. White is clearly ahead in development. A good plan for White: open the position before the opponent finishes development.
+
+
+#### Game 3506 — sounix–forense 2012, C62, 0-1, 174 plies (endgame marathon)
+
+**[confirmed] after 13. Nd4:**
+> Black's queen on e6 cannot be adequately defended. It is attacked by White's knight on d4 but defended only by Black's pawn on f7. A capture sequence here wins roughly a rook. The engine confirms it: Qd7 Nxc6 Qxc6, winning about 2.1 pawns. Black's pawn structure is a shade healthier. Black's pawns on f7 and h7 are isolated. White's pawns on a2, c2 and c3 are isolated. White's pawns on c2 and c3 are doubled. White has a kingside pawn majority. Meanwhile, White is slightly ahead on material. White is a pawn up. At the same time, White has a small edge in the fight for the key squares. Black's position has holes on f5 and f6. White's position has a hole on c4. A good plan for White: reroute the knight toward the waiting outpost (key squares: f5).
+
+**[confirmed-late] after 76. Ke3:**
+> Black's king is not entirely safe around b4. The pressure comes from White's queen on b2. Enemy pieces are massing around it. The engine confirms it: Kc5 Qa1 Kd5, winning about 5.1 pawns. In this endgame Black's pawn structure should decide the game. Black has passed pawns on a2, b3 and c4. Black has a queenside pawn majority. Meanwhile, in this endgame White's extra material should decide matters. White is up a decisive amount of material. At the same time, Black enjoys a clear space advantage. A good plan for Black: blockade Black's passed pawn (key squares: a1). Another idea for Black: use the extra space and sidestep piece trades.
+
+**[quiet] after 6. Bxc6:**
+> No immediate tactics jump out; the position will be decided by its long-term features. White is ahead on material. White is three pawns up.
+
+
+#### Game 3721 — Fezzik–sounix 2012, A64, draw, 90 plies (quiet positional)
+
+**[confirmed] after 26. Ne3:**
+> Black's queen on g4 hangs — nobody defends it. It is under attack from White's knight on e3. The engine confirms it: Qh4 Ne4 Rf8, winning about 1.7 pawns. Meanwhile, White's knight on d6 hangs — nobody defends it. It is under attack from Black's rook on d8. On top of that, White's bishop on g2 is trapped — it has no safe square to run to. It is attacked by Black's queen on g4 but defended only by White's king on g1 and the knight on e3. Also, White's king is not entirely safe around g1. The pressure comes from Black's queen on g4. The pawn cover is gone on the g-file and the shield pawn on the h-file has pushed too far forward. White has the superior minor pieces. White owns the bishop pair in an open position. Meanwhile, Black's pawn structure is a shade healthier. White has a passed pawn on d5. White's pawns on b2, f2, d5 and h6 are isolated. Black has a queenside pawn majority. A good plan for White: open the position so the bishops can breathe. Another idea for Black: blockade White's passed pawn (key squares: d6).
+
+**[quiet] after 19. gxh5:**
+> No immediate tactics jump out; the position will be decided by its long-term features. White has a winning material advantage. White is up a decisive amount of material. Meanwhile, Black has the healthier pawn structure. White's pawns on f2, d5 and h5 are isolated. Black has a queenside pawn majority. At the same time, Black has the initiative and is dictating play.
+
+**[other] after 18. hxg4:**
+> Black's knight on h5 cannot be adequately defended. It is attacked by White's pawn on g4 but defended only by Black's pawn on g6. A capture sequence here wins roughly a minor piece. The engine could not confirm this at the given budget. Meanwhile, White's king is not entirely safe around g1. The pawn cover is gone on the h-file and the shield pawn on the g-file has pushed too far forward. White's minor pieces are a touch better placed. White owns the bishop pair in an open position. Meanwhile, Black's pawn structure is a shade healthier. White's d5-pawn is isolated. Black has a queenside pawn majority. At the same time, White is slightly ahead on material. White is two pawns up. Beyond that, Black has slightly the better of the open lines. The e-file is open. The f-file is half-open for Black. The c- and h-files are half-open for White. White has a little more room to work with. A good plan for White: open the position so the bishops can breathe. Another idea for Black: double the heavy pieces on the open file. Another idea for White: use the extra space and sidestep piece trades.
+
+
+#### Game 3727 — elmaestro–sounix 2012, B92, 0-1, 82 plies (run-3 comparison game)
+
+**[confirmed] after 35... Bxd4:**
+> White's king is seriously exposed around h1. The pressure comes from Black's rook on e2, the bishop on d4 and the rook on g5. Enemy pieces are massing around it and the pawn cover is gone on the g-file. The engine confirms it: Rc7+ Kf8 Rc8+, winning about 3.7 pawns. Meanwhile, Black's king is seriously exposed around f7. The pressure comes from White's rook on f3 and the pawn on f6. The pawn cover is gone on the f-file and the e-file in front of the king is wide open. White enjoys a clear space advantage. A good plan for White: use the extra space and sidestep piece trades.
+
+**[confirmed-late] after 41... Kf8:**
+> White's king is seriously exposed around h1. The pressure comes from Black's rook on e2, the rook on g2 and the bishop on d4. Enemy pieces are massing around it and the pawn cover is gone on the g-file. The engine confirms it: Rg8+ Kxg8 f7+, winning about 100 pawns. Meanwhile, Black's king is seriously exposed around f8. The pressure comes from White's pawn on f6 and the rook on g7. Enemy pieces are massing around it, the pawn cover is gone on the f-file, the e-file in front of the king is wide open and the back rank is airless. White enjoys a clear space advantage. A good plan for White: use the extra space and sidestep piece trades.
+
+**[quiet] after 27. c5:**
+> No immediate tactics jump out; the position will be decided by its long-term features. White enjoys a clear space advantage. A good plan for White: use the extra space and sidestep piece trades.
+
+
+---
+
+
 # Run 3 — 2026-07-25/26
 
 ## Headline

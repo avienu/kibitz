@@ -3,6 +3,11 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+Run-4 note: all four maintainer verdicts implemented and regression-
+tested; no new parked decisions. Open judgment items listed in
+RUN_REPORT.md run-4 section: full-corpus fresh ACPL pass (~2-3h engine
+time, one command), NAG multi-glyph display, imports/network-sync UI.
+
 Run-3 note: no new parked decisions. Item 4 closed empirically; item 6's
 root-cache remains deferred (scale condition not met); new judgment calls
 (WSUI default thresholds, confirm-verdict fold-back into annotations) are

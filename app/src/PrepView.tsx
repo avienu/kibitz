@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { matchingPlayers, prepView, type WeakLine } from "./lib/db";
+import { matchingPlayers, prepView, type PlayerProfile, type WeakLine } from "./lib/db";
 
 interface PrepViewProps {
   /** Load a database game into the game view at the given ply. */
   onLoadGameAt: (gameId: number, ply: number) => void;
+  /** Profile built in the Profile tab, if any (for the weaknesses strip). */
+  profile: PlayerProfile | null;
 }
 
 function fmtElo(elo: number | null): string {
@@ -11,11 +13,41 @@ function fmtElo(elo: number | null): string {
 }
 
 /**
+ * Compact strip over the weak-line cards when a profile exists for the
+ * same opponent (run-4 goal 5): their top 3 motif weaknesses (by
+ * missed+allowed) and 2 worst-scoring structures.
+ */
+function ProfileWeaknessStrip({ profile }: { profile: PlayerProfile }) {
+  // Motifs arrive pre-sorted by missed+allowed descending.
+  const motifs = profile.motifs.filter((m) => m.missed + m.allowed > 0).slice(0, 3);
+  const structures = [...profile.structures]
+    .filter((s) => s.games > 0)
+    .sort((a, b) => a.score_pct - b.score_pct)
+    .slice(0, 2);
+  if (motifs.length === 0 && structures.length === 0) return null;
+  return (
+    <div className="prep-profile-strip">
+      <span className="pps-title">Profile weaknesses:</span>
+      {motifs.map((m) => (
+        <span key={m.kind} className="pps-item" title="missed opportunities + allowed against them">
+          {m.kind} ({m.missed} missed, {m.allowed} allowed)
+        </span>
+      ))}
+      {structures.map((s) => (
+        <span key={s.flag} className="pps-item pps-struct" title="their score in games with this structure">
+          {s.flag} {s.score_pct.toFixed(0)}% / {s.games}g
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Opponent prep (Phase 2): pick an opponent + color, rank their weakest
  * opening spots, and surface master games reaching those exact positions.
  * Uses the database opened in the Database tab.
  */
-export default function PrepView({ onLoadGameAt }: PrepViewProps) {
+export default function PrepView({ onLoadGameAt, profile }: PrepViewProps) {
   const [player, setPlayer] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [color, setColor] = useState<"white" | "black">("black");
@@ -108,6 +140,10 @@ export default function PrepView({ onLoadGameAt }: PrepViewProps) {
           </div>
         )}
       </div>
+
+      {lines && profile && profile.player === player.trim() && (
+        <ProfileWeaknessStrip profile={profile} />
+      )}
 
       {lines &&
         lines.map((line, i) => (

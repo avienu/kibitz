@@ -506,6 +506,161 @@ textarea {
   gap: 6px;
 }
 
+/* NAG glyphs (verdict 2) */
+.nag {
+  margin-left: 1px;
+}
+.nag-unknown {
+  border-bottom: 1px dotted #9a958b;
+  cursor: help;
+  opacity: 0.8;
+}
+.nag-diagram {
+  /* invisible marker: tooltip only */
+}
+
+/* Per-ply eval display (verdict 3c) */
+.ply-eval {
+  font-size: 11px;
+  margin: 0 4px 0 1px;
+  color: #9fc267;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ply-eval.legacy {
+  font-style: italic;
+  color: #a29d93;
+  opacity: 0.7;
+  cursor: help;
+}
+
+/* Annotation-display toggle + collapsed comments (verdict 4) */
+.ann-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+}
+.ann-view-toggle button {
+  padding: 1px 7px;
+  font-size: 11px;
+}
+.ann-view-toggle button.cur {
+  background: #6b5f3f;
+  border-color: #8a7c52;
+}
+.ann-comment-collapsed {
+  font-style: normal;
+  color: #cfa85a;
+  cursor: help;
+  padding: 0 2px;
+}
+
+/* Game tools (annotate / re-analyze / run jobs / export) */
+.gametools {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid #4a4740;
+  border-radius: 6px;
+}
+.gametools-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.jobs-strip {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.85;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.jobs-strip .running {
+  color: #9fc267;
+}
+.jobs-strip .jobs-engine {
+  opacity: 0.9;
+}
+.gametools .msg {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #cfa85a;
+}
+
+/* Export-PGN modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: #2b2b28;
+  border: 1px solid #5a574f;
+  border-radius: 8px;
+  padding: 14px;
+  width: 640px;
+  max-width: 90vw;
+}
+.modal h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.modal textarea {
+  height: 320px;
+}
+.modal-buttons {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* Profile view */
+.profile-summary {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.profile-line {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pf-ex {
+  padding: 0 6px;
+  font-size: 11px;
+  margin-right: 3px;
+}
+
+/* Prep: profile-weaknesses strip */
+.prep-profile-strip {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid #6b5f3f;
+  border-radius: 6px;
+  background: #34312a;
+  font-size: 12px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.pps-title {
+  font-weight: 600;
+  opacity: 0.8;
+}
+.pps-item {
+  color: #cfa85a;
+}
+.pps-item.pps-struct {
+  color: #b7b2a7;
+}
+
 /* Prep view */
 .prep-form {
   display: flex;

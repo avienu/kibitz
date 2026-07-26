@@ -16,6 +16,7 @@
 //! Database browsing never touches the engine.
 
 pub mod browse;
+pub mod dbops;
 pub mod explain;
 pub mod prep;
 pub mod tokens;
@@ -149,6 +150,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(EngineState::default())
         .manage(browse::DbState::default())
+        .manage(dbops::JobsWorker::default())
         .invoke_handler(tauri::generate_handler![
             resolve_engine_path,
             analyze_position,
@@ -162,7 +164,15 @@ pub fn run() {
             prep::prep_view,
             tokens::get_game_tokens,
             tokens::update_game_tokens,
-            explain::explain_position
+            explain::explain_position,
+            dbops::game_analyses,
+            dbops::annotate_game,
+            dbops::reanalyze_game,
+            dbops::run_jobs,
+            dbops::jobs_status,
+            dbops::export_game_pgn,
+            dbops::build_profile,
+            dbops::set_window_title
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
