@@ -1,0 +1,11 @@
+[package]
+name = "silman-profile"
+description = "Corpus batch profiling and aggregation over silman-core feature records"
+license = "BSD-3-Clause"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+silman-core = { path = "../silman-core" }
+serde = { workspace = true }

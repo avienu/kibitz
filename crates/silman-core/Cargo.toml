@@ -1,0 +1,13 @@
+[package]
+name = "silman-core"
+description = "Static chess feature detectors: WSUI tactical screen, imbalance extractor, feature records"
+license = "BSD-3-Clause"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cozy-chess = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

@@ -1,0 +1,22 @@
+# GPL-3.0 benchmark harness. Lives OUTSIDE crates/* on purpose: it depends on
+# shakmaty (GPL-3.0) to compare cozy-chess against it on identical hardware.
+# Nothing may depend on this crate; it is never published.
+[package]
+name = "movegen-bench"
+description = "Phase 0 GO/NO-GO benchmark: cozy-chess vs shakmaty movegen and attack queries"
+license = "GPL-3.0-only"
+publish = false
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cozy-chess = { workspace = true }
+shakmaty = "0.27"
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "movegen"
+harness = false

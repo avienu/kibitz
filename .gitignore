@@ -1,0 +1,9 @@
+/target
+**/node_modules
+/app/dist
+/tools/
+/testdata/private/
+*.sqlite
+*.sqlite-journal
+*.db
+.DS_Store

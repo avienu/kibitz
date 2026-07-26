@@ -1,0 +1,13 @@
+[package]
+name = "si4-read"
+description = "Cleanroom reader for SCID .si4/.sg4/.sn4 databases, implemented from community format documentation only"
+license = "BSD-3-Clause"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
