@@ -86,7 +86,7 @@ export default function GameTools({ gameId, onReload }: GameToolsProps) {
     setMsg(null);
     try {
       const n = await reanalyzeGame(gameId);
-      setMsg(`Enqueued ${n} position evals (press Run jobs to execute).`);
+      setMsg(`Enqueued ${n} position evals (press Run engine jobs to execute).`);
       await refresh();
     } catch (e) {
       setMsg(String(e));
@@ -144,7 +144,7 @@ export default function GameTools({ gameId, onReload }: GameToolsProps) {
           disabled={jobs?.workerActive ?? false}
           title="Run all pending engine jobs, then fold verdicts back into the annotations"
         >
-          Run jobs
+          Run engine jobs
         </button>
         <button onClick={() => void doExport()} title="Export this game as annotated PGN">
           Export PGN
