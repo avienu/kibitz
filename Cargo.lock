@@ -1079,6 +1079,7 @@ name = "silman-core"
 version = "0.1.0"
 dependencies = [
  "cozy-chess",
+ "insta",
  "serde",
  "serde_json",
  "thiserror",
