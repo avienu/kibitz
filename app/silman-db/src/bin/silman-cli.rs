@@ -80,6 +80,8 @@ enum Command {
         #[arg(long)]
         month: Option<u8>,
     },
+    /// Export one stored game as PGN to stdout.
+    ExportPgn { game_id: i64 },
     /// Print database summary counts.
     Stats,
 }
@@ -272,6 +274,9 @@ fn main() -> anyhow::Result<()> {
             let fetcher = silman_db::net::UreqFetcher;
             let report = silman_db::net::fics::sync_user(&conn, &fetcher, &username, year, month)?;
             println!("{report:?}");
+        }
+        Command::ExportPgn { game_id } => {
+            print!("{}", silman_db::export::export_pgn(&conn, game_id)?);
         }
         Command::Stats => {
             let s = stats(&conn)?;
