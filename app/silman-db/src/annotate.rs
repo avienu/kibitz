@@ -263,7 +263,11 @@ pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
                 }
             }
             _ => {
-                if has_content && !repeat {
+                // Insert only when something tactical survived the verdict:
+                // a refuted screen with no remaining alert has nothing new
+                // to say (the positional story was already narrated by the
+                // annotate pass where it changed).
+                if has_content && !repeat && record.wsui.screen_fired {
                     tokens.insert(move_idx + 1, Token::Comment(prose));
                 }
             }
