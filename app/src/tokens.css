@@ -1,0 +1,41 @@
+/* Design tokens — design/handoff-1/README.md §Design Tokens (values final).
+   Dark is the default on :root; light is the same roles, derived, under
+   :root[data-theme="light"]. Evidence hues are NOT here: they are semantic,
+   identical in both themes (see board-treatments.css / lib/evidence.ts). */
+@import "/fonts/fonts.css";
+
+:root {
+  --bg: #0e1113;
+  --panel: #15191c;
+  --panel2: #1a1f23;
+  --panel3: #202629;
+  --line: rgba(233, 241, 246, 0.09);
+  --line2: rgba(233, 241, 246, 0.16);
+  --tx: #e6ebee;
+  --dim: #9ba5ac;
+  --faint: #6c767d;
+  --accent: #d6a04a;
+  --good: #6fb894;
+  --bad: #de6f5e;
+  --info: #6aa8dd;
+  --violet: #a98bd4;
+  --desk: radial-gradient(120% 90% at 50% -20%, #1b2024 0%, #0c0f11 70%);
+}
+
+:root[data-theme="light"] {
+  --bg: #f2f0ec;
+  --panel: #fbfaf8;
+  --panel2: #f1efeb;
+  --panel3: #e9e6e1;
+  --line: rgba(24, 30, 34, 0.1);
+  --line2: rgba(24, 30, 34, 0.2);
+  --tx: #1a1e21;
+  --dim: #5e666b;
+  --faint: #8b9297;
+  --accent: #a9762a;
+  --good: #3f8a66;
+  --bad: #c1503f;
+  --info: #35709f;
+  --violet: #7b5cad;
+  --desk: radial-gradient(120% 90% at 50% -20%, #ffffff 0%, #eae7e2 70%);
+}

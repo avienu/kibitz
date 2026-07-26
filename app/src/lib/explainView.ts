@@ -1,8 +1,10 @@
 /**
  * View helpers for the explain-position panel: turn a FeatureRecord (spec
- * JSON shape, snake_case fields — docs/SILMAN_ENGINE_SPEC.md) into board
- * overlay shapes. Pure; unit-testable.
+ * JSON shape, snake_case fields — docs/SILMAN_ENGINE_SPEC.md) into the
+ * shared evidence-overlay input (lib/evidence.ts). Pure; unit-testable.
  */
+
+import type { Evidence, EvidenceArrow } from "./evidence";
 
 /** Minimal typing of the FeatureRecord JSON the UI consumes. */
 export interface AlertJson {
@@ -32,47 +34,52 @@ export interface FeatureRecordJson {
   imbalances: ImbalanceJson[];
 }
 
-export interface BoardShape {
-  orig: string;
-  /** When set, the shape is an arrow orig→dest instead of a circle. */
-  dest?: string;
-  brush: string;
-}
+/** Legacy import path for the auto-shape type (now lives in evidence.ts). */
+export type { BoardShape } from "./evidence";
 
 const SQUARE = /^[a-h][1-8]$/;
 
 /**
- * Evidence overlay: alert target squares red, attacker squares orange,
- * imbalance-evidence squares green. A square keeps its most alarming color
- * (red > orange > green).
+ * Map a FeatureRecord onto the evidence-overlay language: alert targets ring,
+ * attackers wedge + arrow into the target, defenders wedge (no arrow),
+ * imbalance-evidence squares wash, plan squares key-wedge. Marks stack — a
+ * square may carry several roles (the overlay module paint-orders them).
  */
-export function shapesFromRecord(record: FeatureRecordJson): BoardShape[] {
-  const targets = new Set<string>();
-  const attackers = new Set<string>();
-  const evidence = new Set<string>();
+export function evidenceFromRecord(record: FeatureRecordJson): Evidence {
+  const alerts: string[] = [];
+  const attackers: string[] = [];
+  const defenders: string[] = [];
+  const imbalance: string[] = [];
+  const key: string[] = [];
+  const arrows: EvidenceArrow[] = [];
 
   for (const alert of record.wsui?.alerts ?? []) {
-    if (alert.target && SQUARE.test(alert.target)) targets.add(alert.target);
+    const target = alert.target && SQUARE.test(alert.target) ? alert.target : undefined;
+    if (target) alerts.push(target);
     for (const sq of alert.attackers ?? []) {
-      if (SQUARE.test(sq)) attackers.add(sq);
+      if (!SQUARE.test(sq)) continue;
+      attackers.push(sq);
+      // Arrows always point attacker → target, never the reverse.
+      if (target) arrows.push({ from: sq, to: target, kind: "attacker" });
+    }
+    for (const sq of alert.defenders ?? []) {
+      if (SQUARE.test(sq)) defenders.push(sq);
     }
   }
-  for (const imbalance of record.imbalances ?? []) {
-    for (const value of Object.values(imbalance.evidence ?? {})) {
+
+  for (const imb of record.imbalances ?? []) {
+    for (const value of Object.values(imb.evidence ?? {})) {
       if (!Array.isArray(value)) continue;
       for (const sq of value) {
-        if (typeof sq === "string" && SQUARE.test(sq)) evidence.add(sq);
+        if (typeof sq === "string" && SQUARE.test(sq)) imbalance.push(sq);
+      }
+    }
+    for (const plan of imb.plans ?? []) {
+      for (const sq of plan.squares ?? []) {
+        if (SQUARE.test(sq)) key.push(sq);
       }
     }
   }
 
-  const shapes: BoardShape[] = [];
-  for (const sq of targets) shapes.push({ orig: sq, brush: "red" });
-  for (const sq of attackers) {
-    if (!targets.has(sq)) shapes.push({ orig: sq, brush: "orange" });
-  }
-  for (const sq of evidence) {
-    if (!targets.has(sq) && !attackers.has(sq)) shapes.push({ orig: sq, brush: "green" });
-  }
-  return shapes;
+  return { alerts, attackers, defenders, imbalance, key, arrows };
 }

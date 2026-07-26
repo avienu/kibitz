@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { shapesFromRecord, type FeatureRecordJson } from "./explainView";
+import { evidenceFromRecord, type FeatureRecordJson } from "./explainView";
+import { evidenceView } from "./evidence";
 
 const record: FeatureRecordJson = {
   schema_version: 1,
@@ -29,33 +30,52 @@ const record: FeatureRecordJson = {
         isolated: ["d5"],
         half_open_files: ["d"], // not squares: must be ignored
         count: 2, // not an array: ignored
-        overlapping: ["c6"], // already an alert target: red wins
+        overlapping: ["c6"], // also an alert target: roles stack now
       },
+      plans: [{ hint: "blockade", squares: ["d6", "x9"] }], // x9 invalid
     },
   ],
 };
 
-describe("shapesFromRecord", () => {
-  it("colors targets red, attackers orange, evidence green", () => {
-    const shapes = shapesFromRecord(record);
-    const byBrush = (brush: string) =>
-      shapes
-        .filter((s) => s.brush === brush)
-        .map((s) => s.orig)
-        .sort();
-    expect(byBrush("red")).toEqual(["c6"]);
-    expect(byBrush("orange")).toEqual(["d4", "e5"]);
-    expect(byBrush("green")).toEqual(["d5"]);
-    // No duplicate squares: red > orange > green precedence.
-    expect(new Set(shapes.map((s) => s.orig)).size).toBe(shapes.length);
+describe("evidenceFromRecord", () => {
+  it("maps targets, attackers, defenders, imbalance evidence and plan squares", () => {
+    const ev = evidenceFromRecord(record);
+    expect(ev.alerts).toEqual(["c6"]);
+    expect(ev.attackers.sort()).toEqual(["d4", "e5"]);
+    expect(ev.defenders).toEqual(["b7"]);
+    expect(ev.imbalance.sort()).toEqual(["c6", "d5"]);
+    expect(ev.key).toEqual(["d6"]);
   });
 
-  it("returns nothing for a quiet record", () => {
+  it("emits attacker→target arrows only (defenders get no arrow)", () => {
+    const ev = evidenceFromRecord(record);
+    expect(ev.arrows.map((a) => `${a.from}>${a.to}:${a.kind}`).sort()).toEqual([
+      "d4>c6:attacker",
+      "e5>c6:attacker",
+    ]);
+  });
+
+  it("feeds the shared overlay module: roles stack on one square", () => {
+    const view = evidenceView(evidenceFromRecord(record));
+    const c6 = view.marks.filter((m) => m.square === "c6").map((m) => m.role);
+    // c6 is both imbalance evidence and an alert target: wash under ring.
+    expect(c6).toEqual(["imbalance", "alert-target"]);
+    expect(view.shapes.map((s) => s.brush)).toEqual(["attacker", "attacker"]);
+  });
+
+  it("returns empty evidence for a quiet record", () => {
     const quiet: FeatureRecordJson = {
       ...record,
       wsui: { screen_fired: false, alerts: [] },
       imbalances: [],
     };
-    expect(shapesFromRecord(quiet)).toEqual([]);
+    expect(evidenceFromRecord(quiet)).toEqual({
+      alerts: [],
+      attackers: [],
+      defenders: [],
+      imbalance: [],
+      key: [],
+      arrows: [],
+    });
   });
 });

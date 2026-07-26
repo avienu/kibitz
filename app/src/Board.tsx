@@ -1,9 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import type { CSSProperties } from "react";
 import { Chessground } from "chessground";
 import type { Api } from "chessground/api";
 import type { DrawBrushes, DrawShape } from "chessground/draw";
 import type { Key } from "chessground/types";
-import type { BoardShape } from "./lib/explainView";
+import {
+  EVIDENCE_COLORS,
+  arrowPolygonPoints,
+  arrowStrokeWidth,
+  boardGeometry,
+  evidenceView,
+  type ArrowKind,
+  type BoardShape,
+  type BoardTreatment,
+  type Evidence,
+  type SquareMark,
+} from "./lib/evidence";
 
 export interface BoardMovable {
   /** Side allowed to input a move (the side to move). */
@@ -19,15 +31,64 @@ interface BoardProps {
   lastMove?: [string, string];
   /** When set, the side to move can input moves (annotation variations). */
   movable?: BoardMovable;
-  /** Auto-shapes overlaid on the board (explain-position evidence). */
+  /** Raw auto-shapes (trainer arrows etc.). Ignored while `evidence` is set. */
   shapes?: BoardShape[];
   /** Bottom side of the board (default white; Train flips for Black). */
   orientation?: "white" | "black";
+  /** Board skin (design/handoff-1): Studio Walnut default, Instrument alternate. */
+  treatment?: BoardTreatment;
+  /** Grid edge in px, snapped to a multiple of 8 (seam-free). Default 520. */
+  size?: number;
+  /** Evidence-overlay input — the one shared overlay language. */
+  evidence?: Evidence | null;
+  /** Overlay loudness: 0.44 baseline, 1.0 for the hovered sentence. */
+  intensity?: number;
+  /** Per-block isolation: restrict evidence to these squares. */
+  isolate?: ReadonlySet<string>;
 }
 
+/** Percent position of a square in the visual grid for an orientation. */
+function squarePos(square: string, orientation: "white" | "black"): CSSProperties {
+  const f = square.charCodeAt(0) - 97; // a..h
+  const r = square.charCodeAt(1) - 49; // 1..8
+  const x = orientation === "black" ? 7 - f : f;
+  const y = orientation === "black" ? r : 7 - r;
+  return { left: `${x * 12.5}%`, top: `${y * 12.5}%` };
+}
+
+/** 64 static texture cells (walnut grain / instrument seam, via CSS).
+ * Square-colour parity is symmetric under flipping, so this never re-renders. */
+const TEXTURE_CELLS = (() => {
+  const cells: { key: string; className: string; style: CSSProperties }[] = [];
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const dark = (x + y) % 2 === 1; // top-left (a8 from White) is light
+      cells.push({
+        key: `t${x}${y}`,
+        className: `silman-sq ${dark ? "silman-sq-dark" : "silman-sq-light"}`,
+        style: { left: `${x * 12.5}%`, top: `${y * 12.5}%` },
+      });
+    }
+  }
+  return cells;
+})();
+
 /** Chessground board that tracks the `fen` prop; optionally accepts move
- * input (a played move snaps back — the model decides what it means). */
-export default function Board({ fen, lastMove, movable, shapes, orientation }: BoardProps) {
+ * input (a played move snaps back — the model decides what it means).
+ * Skinned per design/handoff-1; evidence overlays render as an absolutely
+ * positioned mark grid (under pieces) plus chessground auto-shape arrows. */
+export default function Board({
+  fen,
+  lastMove,
+  movable,
+  shapes,
+  orientation,
+  treatment = "walnut",
+  size = 520,
+  evidence,
+  intensity,
+  isolate,
+}: BoardProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<Api | null>(null);
   const fenRef = useRef(fen);
@@ -37,6 +98,12 @@ export default function Board({ fen, lastMove, movable, shapes, orientation }: B
   lastMoveRef.current = lastMove;
   onMoveRef.current = movable?.onMove;
 
+  const geo = boardGeometry(size, treatment);
+  const view = useMemo(
+    () => evidenceView(evidence ?? null, { intensity, isolate, lastMove }),
+    [evidence, intensity, isolate, lastMove],
+  );
+
   useEffect(() => {
     if (!elRef.current) return;
     apiRef.current = Chessground(elRef.current, {
@@ -45,6 +112,8 @@ export default function Board({ fen, lastMove, movable, shapes, orientation }: B
       coordinates: true,
       animation: { enabled: true, duration: 150 },
       lastMove: lastMove as Key[] | undefined,
+      // The last-move wash is drawn by the evidence overlay (exact colours).
+      highlight: { lastMove: false, check: true },
       movable: {
         free: false,
         color: undefined,
@@ -65,8 +134,9 @@ export default function Board({ fen, lastMove, movable, shapes, orientation }: B
       },
       drawable: {
         enabled: false,
-        // Partial brush set: chessground deep-merges it over the defaults,
-        // adding "orange" alongside the built-in red/green.
+        // Partial brush set: chessground deep-merges it over the defaults —
+        // "orange" for the legacy trainer shapes. (Evidence arrows are NOT
+        // chessground shapes — the overlay's own SVG layer draws them.)
         brushes: {
           orange: { key: "or", color: "#e68f00", opacity: 0.9, lineWidth: 10 },
         } as unknown as DrawBrushes,
@@ -91,9 +161,59 @@ export default function Board({ fen, lastMove, movable, shapes, orientation }: B
     });
   }, [fen, lastMove, movable, orientation]);
 
+  // Legacy trainer shapes only — evidence arrows never go through chessground.
   useEffect(() => {
     apiRef.current?.setAutoShapes((shapes ?? []) as DrawShape[]);
   }, [shapes]);
 
-  return <div className="board" ref={elRef} />;
+  const styleVars = {
+    "--sb-size": `${geo.size}px`,
+    "--sb-cell": `${geo.cell}px`,
+    "--sb-frame-pad": `${geo.framePad}px`,
+    "--sb-gutter": `${geo.gutter}px`,
+    "--sb-coord-fs": `${geo.coordFontSize}px`,
+    "--sb-coord-inset-b": `${geo.coordInsetBottom}px`,
+    "--sb-coord-inset-l": `${geo.coordInsetLeft}px`,
+  } as CSSProperties;
+
+  const markEl = (m: SquareMark) => (
+    <div
+      key={`${m.square}-${m.role}`}
+      className={`silman-mark silman-mark-${m.role}`}
+      style={{ ...squarePos(m.square, orientation ?? "white"), opacity: m.opacity }}
+    />
+  );
+
+  return (
+    <div className={`board silman-board silman-${treatment}`} style={styleVars}>
+      <div className="silman-grid" style={{ width: geo.size, height: geo.size }}>
+        <div ref={elRef} style={{ width: geo.size, height: geo.size }} />
+        <div className="silman-overlay" aria-hidden>
+          {TEXTURE_CELLS.map((c) => (
+            <div key={c.key} className={c.className} style={c.style} />
+          ))}
+          {view.marks.map(markEl)}
+        </div>
+        {view.shapes.length > 0 && (
+          <svg
+            className="silman-arrows"
+            viewBox={`0 0 ${geo.size} ${geo.size}`}
+            width={geo.size}
+            height={geo.size}
+            aria-hidden
+          >
+            {view.shapes.map((s) => (
+              <polygon
+                key={`${s.orig}-${s.dest}`}
+                points={arrowPolygonPoints(s.orig, s.dest!, geo.cell, orientation ?? "white")}
+                fill={EVIDENCE_COLORS[s.brush as ArrowKind].line}
+                strokeWidth={arrowStrokeWidth(geo.cell)}
+                opacity={view.arrowOpacity}
+              />
+            ))}
+          </svg>
+        )}
+      </div>
+    </div>
+  );
 }
