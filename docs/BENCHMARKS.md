@@ -39,3 +39,27 @@ shakmaty, Stockfish 18 `go perft`) after the commonly published CPW pos-6
 figures turned out not to match the FEN as transcribed.
 
 Reproduce: `cargo bench -p movegen-bench`, `cargo test -p silman-core`.
+
+## Phase 1 checkpoint: import + position search (2026-07-25)
+
+Same hardware. Corpus: Lichess standard rated 2013-01 (CC0), 121,332 games
+in the file; 121,220 imported, 112 duplicates skipped, 0 parse failures,
+8,154,858 positions indexed. Database size ≈ 640 MB (SQLite, WAL).
+
+- Import (silman-cli release build, single-threaded): **86.1 s ≈ 1,409
+  games/s** including SAN replay, move encoding, ep-normalized hashing and
+  position-index inserts.
+- Position search (`silman-cli find-fen`, warm cache):
+
+| Query | Hits | Time |
+|---|---|---|
+| After 1.e4 (worst case tried) | 72,444 | 139 ms |
+| Sicilian after 1.e4 c5 | 11,465 | 31 ms |
+| Italian after 3...Nf6 | 1,358 | 5.0 ms |
+| Position absent from corpus | 0 | 63 µs |
+
+All far under the ROADMAP 1 s bar at this corpus size. The Phase 1 full
+acceptance (sub-second on ≥5M games) still needs a ~40x larger corpus; the
+index is a plain SQLite B-tree on (position_hash), so growth is roughly
+logarithmic per hit plus linear in hits returned.
+
