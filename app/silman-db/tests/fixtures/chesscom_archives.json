@@ -1,0 +1,7 @@
+{
+  "archives": [
+    "https://api.chess.com/pub/player/testuser/games/2024/01",
+    "https://api.chess.com/pub/player/testuser/games/2024/02",
+    "https://api.chess.com/pub/player/testuser/games/2024/03"
+  ]
+}

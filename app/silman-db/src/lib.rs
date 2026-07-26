@@ -7,6 +7,7 @@
 
 pub mod db;
 pub mod eco;
+pub mod fingerprint;
 pub mod hash;
 pub mod import;
 pub mod import_si4;

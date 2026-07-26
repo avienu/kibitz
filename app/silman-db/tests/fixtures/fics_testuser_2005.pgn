@@ -1,0 +1,17 @@
+[Event "FICS rated blitz game"]
+[Site "FICS freechess.org"]
+[Date "2005.06.18"]
+[White "testuser"]
+[Black "ficsfriend"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 1-0
+
+[Event "FICS rated blitz game"]
+[Site "FICS freechess.org"]
+[Date "2005.06.19"]
+[White "ficsfriend"]
+[Black "testuser"]
+[Result "0-1"]
+
+1. g4 e5 2. f3 Qh4# 0-1

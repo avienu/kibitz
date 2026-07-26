@@ -1,0 +1,25 @@
+[Event "Rated blitz game"]
+[Site "https://lichess.org/abcd1234"]
+[Date "2024.01.15"]
+[White "testuser"]
+[Black "someopponent"]
+[Result "0-1"]
+[UTCDate "2024.01.15"]
+[UTCTime "13:45:10"]
+[WhiteElo "1500"]
+[BlackElo "1520"]
+
+1. f3 e5 2. g4 Qh4# 0-1
+
+[Event "Rated rapid game"]
+[Site "https://lichess.org/efgh5678"]
+[Date "2024.02.20"]
+[White "otherplayer"]
+[Black "testuser"]
+[Result "1-0"]
+[UTCDate "2024.02.20"]
+[UTCTime "08:00:00"]
+[WhiteElo "1610"]
+[BlackElo "1490"]
+
+1. e4 e5 2. Qh5 Nc6 3. Bc4 g6 4. Qf3 Nd4 5. Qxf7# 1-0

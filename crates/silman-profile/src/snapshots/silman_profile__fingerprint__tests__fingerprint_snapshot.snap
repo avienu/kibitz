@@ -1,0 +1,97 @@
+---
+source: crates/silman-profile/src/fingerprint.rs
+assertion_line: 340
+expression: fp
+---
+{
+  "player": "Fixture Player",
+  "white": {
+    "games": 3,
+    "score_pct": 50.0,
+    "eco_families": [
+      {
+        "eco": "B20",
+        "games": 2,
+        "score_pct": 50.0
+      },
+      {
+        "eco": "C20",
+        "games": 1,
+        "score_pct": 50.0
+      }
+    ],
+    "positions": [
+      {
+        "hash": 100,
+        "min_ply": 0,
+        "count": 3,
+        "moves": [
+          {
+            "san": "e4",
+            "count": 3,
+            "score_pct": 50.0
+          }
+        ]
+      },
+      {
+        "hash": 102,
+        "min_ply": 2,
+        "count": 2,
+        "moves": [
+          {
+            "san": "Bc4",
+            "count": 1,
+            "score_pct": 100.0
+          },
+          {
+            "san": "c3",
+            "count": 1,
+            "score_pct": 0.0
+          }
+        ]
+      }
+    ],
+    "deviations": [
+      {
+        "hash_before": 102,
+        "san": "Bc4",
+        "ply": 2,
+        "count": 1,
+        "score_pct": 100.0
+      },
+      {
+        "hash_before": 102,
+        "san": "c3",
+        "ply": 2,
+        "count": 1,
+        "score_pct": 0.0
+      }
+    ]
+  },
+  "black": {
+    "games": 1,
+    "score_pct": 100.0,
+    "eco_families": [
+      {
+        "eco": "B20",
+        "games": 1,
+        "score_pct": 100.0
+      }
+    ],
+    "positions": [
+      {
+        "hash": 101,
+        "min_ply": 1,
+        "count": 1,
+        "moves": [
+          {
+            "san": "c5",
+            "count": 1,
+            "score_pct": 100.0
+          }
+        ]
+      }
+    ],
+    "deviations": []
+  }
+}

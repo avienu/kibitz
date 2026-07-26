@@ -49,6 +49,37 @@ enum Command {
     FindFen { fen: String },
     /// Show the opening tree (moves, W/D/L, perf) for a FEN.
     OpeningTree { fen: String },
+    /// Repertoire fingerprint for a player (exact name).
+    Fingerprint {
+        player: String,
+        #[arg(long, default_value_t = silman_db::fingerprint::DEFAULT_MAX_PLIES)]
+        max_plies: u16,
+        /// Emit the full fingerprint as JSON instead of a summary.
+        #[arg(long)]
+        json: bool,
+    },
+    /// List player names matching a pattern.
+    Players { pattern: String },
+    /// Incrementally ingest TWIC issues (personal use; see first-run notice).
+    TwicSync {
+        /// Issue number to start from (required on first run).
+        #[arg(long)]
+        from: Option<u32>,
+        #[arg(long, default_value_t = 5)]
+        max_issues: u32,
+    },
+    /// Download and import a Lichess user's games (resumable).
+    LichessSync { username: String },
+    /// Download and import a chess.com user's monthly archives (resumable).
+    ChesscomSync { username: String },
+    /// Download and import a FICS user's games via ficsgames.org.
+    FicsSync {
+        username: String,
+        year: u16,
+        /// Month 1-12; omit for the whole year.
+        #[arg(long)]
+        month: Option<u8>,
+    },
     /// Print database summary counts.
     Stats,
 }
@@ -150,6 +181,97 @@ fn main() -> anyhow::Result<()> {
                 );
             }
             println!("{} game(s) in {:.3?}", hits.len(), elapsed);
+        }
+        Command::Fingerprint {
+            player,
+            max_plies,
+            json,
+        } => {
+            let fp = silman_db::fingerprint::player_fingerprint(&conn, &player, max_plies)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&fp)?);
+            } else {
+                for (label, cf) in [("White", &fp.white), ("Black", &fp.black)] {
+                    println!(
+                        "== {} as {label}: {} games, {:.1}% score",
+                        fp.player, cf.games, cf.score_pct
+                    );
+                    println!("  openings:");
+                    for e in cf.eco_families.iter().take(8) {
+                        println!(
+                            "    {:<4} {:>4} games  {:>5.1}%",
+                            e.eco, e.games, e.score_pct
+                        );
+                    }
+                    println!("  most-visited positions:");
+                    for p in cf.positions.iter().take(8) {
+                        let moves: Vec<String> = p
+                            .moves
+                            .iter()
+                            .take(4)
+                            .map(|m| format!("{} x{} ({:.0}%)", m.san, m.count, m.score_pct))
+                            .collect();
+                        println!(
+                            "    ply>={:<2} seen {:>3}x: {}",
+                            p.min_ply,
+                            p.count,
+                            moves.join(", ")
+                        );
+                    }
+                    println!("  book deviations (first exit per game):");
+                    for d in cf.deviations.iter().take(8) {
+                        let ctx = silman_db::fingerprint::example_game_at(&conn, d.hash_before)
+                            .map(|(id, w, b)| format!("  e.g. game #{id} {w}-{b}"))
+                            .unwrap_or_default();
+                        println!(
+                            "    ply {:<2} {:<8} x{} ({:.0}%){}",
+                            d.ply, d.san, d.count, d.score_pct, ctx
+                        );
+                    }
+                    println!();
+                }
+            }
+        }
+        Command::Players { pattern } => {
+            for name in silman_db::fingerprint::matching_players(&conn, &pattern)? {
+                println!("{name}");
+            }
+        }
+        Command::TwicSync { from, max_issues } => {
+            let fetcher = silman_db::net::UreqFetcher;
+            let report = silman_db::twic::sync(
+                &conn,
+                &fetcher,
+                &silman_db::twic::TwicOptions { from, max_issues },
+            )?;
+            if let Some(notice) = &report.first_run_notice {
+                println!("{notice}");
+            }
+            for issue in &report.issues {
+                println!("{issue:?}");
+            }
+            if report.up_to_date {
+                println!("up to date");
+            }
+        }
+        Command::LichessSync { username } => {
+            let fetcher = silman_db::net::UreqFetcher;
+            let report = silman_db::net::lichess::sync_user(&conn, &fetcher, &username)?;
+            println!("{report:?}");
+        }
+        Command::ChesscomSync { username } => {
+            let fetcher = silman_db::net::UreqFetcher;
+            let report = silman_db::net::chesscom::sync_user(&conn, &fetcher, &username)?;
+            println!("{report:?}");
+        }
+        Command::FicsSync {
+            username,
+            year,
+            month,
+        } => {
+            let fetcher = silman_db::net::UreqFetcher;
+            let report = silman_db::net::fics::sync_user(&conn, &fetcher, &username, year, month)?;
+            println!("{report:?}");
         }
         Command::Stats => {
             let s = stats(&conn)?;
