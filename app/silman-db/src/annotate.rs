@@ -137,6 +137,10 @@ pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
     use silman_core::record::{EngineCheck, EngineCheckStatus};
 
     let mut report = FoldReport::default();
+    // Suppress narration of the SAME persisting weakness at consecutive
+    // folded plies: a king attack confirmed eight moves running is one
+    // story, not eight. Keyed per game by the leading alert's identity.
+    let mut last_story: std::collections::HashMap<i64, String> = Default::default();
     let jobs: Vec<(i64, String, String)> = {
         let mut stmt = conn.prepare(
             "SELECT id, payload, result FROM jobs
@@ -243,6 +247,13 @@ pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
                 .imbalances
                 .iter()
                 .any(|i| i.magnitude >= Magnitude::Clear);
+        let story = record
+            .wsui
+            .alerts
+            .first()
+            .map(|a| format!("{:?}@{:?}:{status:?}", a.kind, a.target))
+            .unwrap_or_default();
+        let repeat = !story.is_empty() && last_story.get(&game_id) == Some(&story);
         match tokens.get(move_idx + 1) {
             Some(Token::Comment(_)) => {
                 if has_content {
@@ -252,10 +263,13 @@ pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
                 }
             }
             _ => {
-                if has_content {
+                if has_content && !repeat {
                     tokens.insert(move_idx + 1, Token::Comment(prose));
                 }
             }
+        }
+        if has_content {
+            last_story.insert(game_id, story);
         }
         crate::edit::update_game_tokens(conn, game_id, &tokens)?;
         conn.execute(
