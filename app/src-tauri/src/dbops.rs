@@ -223,6 +223,31 @@ pub async fn jobs_status(
 }
 
 // ---------------------------------------------------------------------------
+// narration voice setting (run-5 item 3)
+// ---------------------------------------------------------------------------
+
+/// The stored narration voice ("coach" — the default — or "neutral"),
+/// from the open database's meta table.
+#[tauri::command]
+pub async fn get_narration_voice(state: State<'_, DbState>) -> Result<String, String> {
+    with_conn(&state, |conn| {
+        silman_db::narrate::narration_voice(conn)
+            .map(|voice| voice.as_str().to_string())
+            .map_err(|e| e.to_string())
+    })
+}
+
+/// Persist the narration voice ("coach" / "neutral"). Stored prose is
+/// regenerated in the new voice by the next annotate / fold-back pass.
+#[tauri::command]
+pub async fn set_narration_voice(state: State<'_, DbState>, voice: String) -> Result<(), String> {
+    let voice: silman_verbalize::Voice = voice.parse().map_err(|e| format!("{e}"))?;
+    with_conn(&state, |conn| {
+        silman_db::narrate::set_narration_voice(conn, voice).map_err(|e| e.to_string())
+    })
+}
+
+// ---------------------------------------------------------------------------
 // export (goal 2), profile (goal 4), window title (verdict 4)
 // ---------------------------------------------------------------------------
 

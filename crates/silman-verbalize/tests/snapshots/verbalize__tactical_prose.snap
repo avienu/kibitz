@@ -1,6 +1,6 @@
 ---
 source: crates/silman-verbalize/tests/verbalize.rs
-assertion_line: 464
+assertion_line: 467
 expression: out
 ---
-The defense of Black's knight on c6 simply does not hold together. The attack from White's knight on e5 and the bishop on b5 is met only by Black's pawn on b7. That defender is overloaded — it cannot cover everything at once. If the captures start, the attacker comes out ahead by about two pawns. The engine confirms it: Bxc6 bxc6 Nxc6, winning about 1.9 pawns. Meanwhile, nobody is watching Black's rook on a8 right now.
+The defenders of Black's knight on c6 are overworked, and they know it. The attack from White's knight on e5 and the bishop on b5 is met only by Black's pawn on b7. That defender is overloaded — no piece can be in two places at once. If the captures start, the attacker comes out ahead by about two pawns. The engine confirms it: Bxc6 bxc6 Nxc6, winning about 1.9 pawns. Meanwhile, nobody is looking after Black's rook on a8 — it has been left to fend for itself.

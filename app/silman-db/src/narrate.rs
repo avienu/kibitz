@@ -13,10 +13,44 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use silman_core::record::{EngineCheck, EngineCheckStatus, Magnitude, Severity};
+use silman_verbalize::Voice;
 
 use crate::movebin::Token;
+
+/// `meta` key holding the user's narration voice ("coach" / "neutral").
+/// The `meta` key/value table is this codebase's existing minimal config
+/// mechanism (position_hash_version, encoding_version live there too), so
+/// the voice setting needs no schema migration.
+const VOICE_META_KEY: &str = "narration_voice";
+
+/// The stored narration voice, defaulting to [`Voice::Coach`] when the
+/// setting is absent or unrecognized (run-5 item 3: Coach is the default).
+pub fn narration_voice(conn: &Connection) -> anyhow::Result<Voice> {
+    let stored: Option<String> = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = ?1",
+            [VOICE_META_KEY],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(stored
+        .as_deref()
+        .map(Voice::from_setting)
+        .unwrap_or_default())
+}
+
+/// Persist the narration voice. Callers regenerate narrations themselves
+/// (the next annotate/fold-back pass picks the new voice up).
+pub fn set_narration_voice(conn: &Connection, voice: Voice) -> anyhow::Result<()> {
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![VOICE_META_KEY, voice.as_str()],
+    )?;
+    Ok(())
+}
 
 /// A completed wsui-confirm verdict for one mainline ply.
 #[derive(Debug, Clone)]
@@ -91,16 +125,19 @@ fn plan_key(p: &silman_core::record::CompositePlan) -> String {
     format!("{}:{:?}", p.target, p.favors)
 }
 
-/// Regenerate the full narration set for one game from scratch.
+/// Regenerate the full narration set for one game from scratch, rendering
+/// prose in `voice` (callers read the stored setting via
+/// [`narration_voice`]).
 ///
-/// Deterministic and idempotent: the same game + verdicts always produce
-/// the same rows, so calling after every new verdict batch is safe.
+/// Deterministic and idempotent: the same game + verdicts + voice always
+/// produce the same rows, so calling after every new verdict batch is safe.
 /// Returns the number of narrated plies.
 pub fn narrate_game(
     conn: &Connection,
     game_id: i64,
     verdicts: &HashMap<u32, Verdict>,
     max_comments: u32,
+    voice: Voice,
 ) -> anyhow::Result<u32> {
     let (start, tokens) = crate::edit::game_tokens(conn, game_id)?;
 
@@ -234,7 +271,7 @@ pub fn narrate_game(
                     || !record.imbalances.is_empty()
                     || !record.composite_plans.is_empty();
                 if has_content && rows.len() < max_comments as usize {
-                    let sections = silman_verbalize::verbalize_sections(&record);
+                    let sections = silman_verbalize::verbalize_sections_voiced(&record, voice);
                     let text = [sections.tactics, sections.imbalances, sections.plans]
                         .into_iter()
                         .filter(|s| !s.is_empty())

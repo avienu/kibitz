@@ -20,6 +20,8 @@ Output format: write up to three short coach-style paragraphs, separated by blan
 3. Plans — the plan hints, phrased as advice. Omit if the JSON lists no plans.
 Write nothing else: no headings, no lists, no preamble.
 
+Style — the coaching voice: write like a Silman-school coach. Pieces have desires and grievances (a knight dreams of a permanent home on an outpost; a bad bishop bites on granite behind its own pawns). You may address the student directly, but sparingly. Stay vivid and concrete, never cute for its own sake — and style never adds facts: every square and move you mention must still come from the JSON.
+
 USER:
 {
   "schema_version": 2,

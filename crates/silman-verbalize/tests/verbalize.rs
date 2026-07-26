@@ -7,7 +7,8 @@
 //! bad-bishop complaint case, and a synthetic record that exercises every
 //! evidence key and alert detail the silman-core detectors emit.
 //!
-//! Two hard guarantees are enforced across all of them:
+//! Two hard guarantees are enforced across all of them, and across BOTH
+//! voices (run-5 item 3 — the Coach overlay and the Neutral baseline):
 //! - the prose lint: no underscores, brackets, braces, quotes, or bare
 //!   labeled numbers may ever reach the output (no serialized data leaks);
 //! - the no-invention property: every square mentioned in the prose appears
@@ -20,7 +21,9 @@ use silman_core::record::{
     ImbalanceKind, Magnitude, Phase, PlanHint, Provenance, Severity, SideColor, TacticAlert,
     WsuiReport, SCHEMA_VERSION,
 };
-use silman_verbalize::{verbalize, verbalize_sections};
+use silman_verbalize::{
+    verbalize, verbalize_sections, verbalize_sections_voiced, verbalize_voiced, Voice,
+};
 
 fn provenance() -> Provenance {
     Provenance {
@@ -464,6 +467,15 @@ fn tactical_prose() {
     insta::assert_snapshot!(out);
 }
 
+/// Per-voice snapshot for the tactical record (Coach is snapshotted by
+/// `tactical_prose` above, since Coach is the default voice).
+#[test]
+fn tactical_prose_neutral() {
+    let out = verbalize_voiced(&tactical_record(), Voice::Neutral);
+    lint_prose(&out);
+    insta::assert_snapshot!(out);
+}
+
 #[test]
 fn quiet_positional_prose() {
     let record = quiet_record();
@@ -473,6 +485,19 @@ fn quiet_positional_prose() {
     assert!(!sections.imbalances.contains("e4"));
     assert!(!sections.plans.contains("knight"));
     let out = verbalize(&record);
+    lint_prose(&out);
+    insta::assert_snapshot!(out);
+}
+
+/// Per-voice snapshot for the quiet record (Coach is the default above).
+#[test]
+fn quiet_positional_prose_neutral() {
+    let record = quiet_record();
+    let sections = verbalize_sections_voiced(&record, Voice::Neutral);
+    assert!(sections.tactics.is_empty());
+    assert!(!sections.imbalances.contains("e4"));
+    assert!(!sections.plans.contains("knight"));
+    let out = verbalize_voiced(&record, Voice::Neutral);
     lint_prose(&out);
     insta::assert_snapshot!(out);
 }
@@ -541,15 +566,18 @@ fn lint_prose(text: &str) {
     }
 }
 
-/// Run the lint over every record's full rendering and every section.
+/// Run the lint over every record's full rendering and every section, in
+/// BOTH voices.
 #[test]
 fn prose_lint_over_all_records() {
-    for record in all_records() {
-        lint_prose(&verbalize(&record));
-        let sections = verbalize_sections(&record);
-        lint_prose(&sections.tactics);
-        lint_prose(&sections.imbalances);
-        lint_prose(&sections.plans);
+    for voice in Voice::ALL {
+        for record in all_records() {
+            lint_prose(&verbalize_voiced(&record, voice));
+            let sections = verbalize_sections_voiced(&record, voice);
+            lint_prose(&sections.tactics);
+            lint_prose(&sections.imbalances);
+            lint_prose(&sections.plans);
+        }
     }
 }
 
@@ -564,6 +592,7 @@ fn prose_lint_over_all_templates() {
         include_str!("../templates/imbalances.tmpl"),
         include_str!("../templates/evidence.tmpl"),
         include_str!("../templates/plans.tmpl"),
+        include_str!("../templates/coach.tmpl"),
     ];
     for source in sources {
         for line in source.lines() {
@@ -602,23 +631,26 @@ fn squares_in(text: &str) -> BTreeSet<String> {
         .collect()
 }
 
-/// The hard property template mode satisfies by construction: no square is
-/// ever mentioned in the prose unless it appears in the record's own data
-/// (alert squares, PVs, evidence, plan squares, engine moves). The FEN is
-/// blanked before extracting the allowed set so it cannot mask inventions.
+/// The hard property template mode satisfies by construction, in BOTH
+/// voices: no square is ever mentioned in the prose unless it appears in
+/// the record's own data (alert squares, PVs, evidence, plan squares,
+/// engine moves). The FEN is blanked before extracting the allowed set so
+/// it cannot mask inventions.
 #[test]
 fn output_squares_all_come_from_the_record() {
-    for record in all_records() {
-        let out = verbalize(&record);
-        let mut data_only = record.clone();
-        data_only.fen = String::new();
-        let allowed = squares_in(&serde_json::to_string(&data_only).unwrap());
-        let used = squares_in(&out);
-        let invented: Vec<&String> = used.difference(&allowed).collect();
-        assert!(
-            invented.is_empty(),
-            "verbalizer invented squares {invented:?} in:\n{out}"
-        );
+    for voice in Voice::ALL {
+        for record in all_records() {
+            let out = verbalize_voiced(&record, voice);
+            let mut data_only = record.clone();
+            data_only.fen = String::new();
+            let allowed = squares_in(&serde_json::to_string(&data_only).unwrap());
+            let used = squares_in(&out);
+            let invented: Vec<&String> = used.difference(&allowed).collect();
+            assert!(
+                invented.is_empty(),
+                "verbalizer ({voice:?}) invented squares {invented:?} in:\n{out}"
+            );
+        }
     }
 }
 
@@ -698,15 +730,73 @@ fn composite_plan_narrates_unified() {
         score: 4,
         favors: Favors::White,
     }];
+    // Coach (default) voice: the coach lead, with the same member clauses.
     let out = verbalize(&r);
     assert!(
-        out.contains("Everything points to d5"),
-        "unified lead: {out}"
+        out.contains("The whole position is pointing at d5"),
+        "unified coach lead: {out}"
     );
     assert!(out.contains("reroute the knight"), "{out}");
     assert!(out.contains("backward pawn"), "{out}");
-    // Prose lints still hold in the composite path.
-    for ch in ['_', '[', ']', '{', '}', '"'] {
-        assert!(!out.contains(ch), "lint char {ch:?} in: {out}");
+    // Neutral voice: the base lead, same clauses, same target.
+    let neutral = verbalize_voiced(&r, Voice::Neutral);
+    assert!(
+        neutral.contains("Everything points to d5"),
+        "unified neutral lead: {neutral}"
+    );
+    assert!(neutral.contains("reroute the knight"), "{neutral}");
+    // Prose lints still hold in the composite path, in both voices.
+    for text in [&out, &neutral] {
+        for ch in ['_', '[', ']', '{', '}', '"'] {
+            assert!(!text.contains(ch), "lint char {ch:?} in: {text}");
+        }
     }
+}
+
+/// Run-5 item 3: the Coach voice is a pure overlay. Where an override
+/// exists the voices differ; where none exists they render identically;
+/// and the setting tokens round-trip.
+#[test]
+fn coach_voice_overlays_and_neutral_stays_plain() {
+    // Overridden keys: the tactical alert leads differ by voice, and the
+    // coach phrasing never leaks into neutral prose.
+    let record = tactical_record();
+    let coach = verbalize_voiced(&record, Voice::Coach);
+    let neutral = verbalize_voiced(&record, Voice::Neutral);
+    assert_ne!(coach, neutral);
+    assert!(coach.contains("overworked"), "coach alt lead: {coach}");
+    assert!(!neutral.contains("overworked"), "coach leak: {neutral}");
+    // Both voices ground the same facts: same squares mentioned.
+    assert_eq!(squares_in(&coach), squares_in(&neutral));
+    // The default voice IS Coach.
+    assert_eq!(verbalize(&record), coach);
+    assert_eq!(
+        verbalize_sections(&record),
+        verbalize_sections_voiced(&record, Voice::Coach)
+    );
+
+    // A record whose rendering touches no overridden key (engine verdict
+    // only) reads identically in both voices: the overlay falls back.
+    let mut engine_only = quiet_record();
+    engine_only.imbalances.clear();
+    engine_only.engine = Some(silman_core::record::EngineEval {
+        eval_cp: 25,
+        mate_in: None,
+        best: "Nf3".into(),
+        multipv: vec![],
+    });
+    let c = verbalize_sections_voiced(&engine_only, Voice::Coach);
+    let n = verbalize_sections_voiced(&engine_only, Voice::Neutral);
+    assert_eq!(c.imbalances, n.imbalances, "fallback must be seamless");
+
+    // Setting tokens round-trip; lenient parse defaults to Coach.
+    for voice in Voice::ALL {
+        assert_eq!(voice.as_str().parse::<Voice>().unwrap(), voice);
+        assert_eq!(Voice::from_setting(voice.as_str()), voice);
+    }
+    assert_eq!(Voice::from_setting("NEUTRAL"), Voice::Neutral);
+    assert_eq!(Voice::from_setting(""), Voice::Coach);
+    assert_eq!(Voice::from_setting("garbage"), Voice::Coach);
+    assert!("garbage".parse::<Voice>().is_err());
+    assert_eq!(Voice::default(), Voice::Coach);
 }

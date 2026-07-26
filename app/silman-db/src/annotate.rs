@@ -88,7 +88,9 @@ pub fn annotate_game(
         }
     }
 
-    report.comments_added = crate::narrate::narrate_game(conn, game_id, &existing, max_comments)?;
+    let voice = crate::narrate::narration_voice(conn)?;
+    report.comments_added =
+        crate::narrate::narrate_game(conn, game_id, &existing, max_comments, voice)?;
     Ok(report)
 }
 
@@ -137,9 +139,10 @@ pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
         report.folded += 1;
     }
 
+    let voice = crate::narrate::narration_voice(conn)?;
     for game_id in touched {
         let verdicts = crate::narrate::load_verdicts(conn, game_id)?;
-        crate::narrate::narrate_game(conn, game_id, &verdicts, u32::MAX)?;
+        crate::narrate::narrate_game(conn, game_id, &verdicts, u32::MAX, voice)?;
     }
     Ok(report)
 }

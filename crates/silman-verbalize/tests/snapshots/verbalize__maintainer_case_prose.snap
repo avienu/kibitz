@@ -1,7 +1,8 @@
 ---
 source: crates/silman-verbalize/tests/verbalize.rs
+assertion_line: 538
 expression: out
 ---
-Black's bishop on f8 is slightly short of defenders. Only Black's king on e8 and the rook on h8 keep it defended.
+Black's bishop on f8 could use one more friend — its defense is a little thin. Only Black's king on e8 and the rook on h8 keep it defended.
 
-White has the superior minor pieces. Black's f8-bishop is a problem piece, hemmed in by its own pawns on c5 and d6. Meanwhile, White is slightly ahead on material. White is a pawn up.
+White's minor pieces have found real work; their counterparts are still waiting for a career. Black's f8-bishop is biting on granite — its own pawns on c5 and d6 block every road it wants to travel. Meanwhile, White is slightly ahead on material. White is a pawn up.

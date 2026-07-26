@@ -15,10 +15,10 @@ use silman_core::record::{
     SCHEMA_VERSION,
 };
 use silman_verbalize::llm::{
-    build_prompt, validate, FallbackReason, LlmTransport, LlmVerbalizer, TransportError,
-    VerbalizeMode,
+    build_prompt, build_prompt_voiced, validate, FallbackReason, LlmTransport, LlmVerbalizer,
+    TransportError, VerbalizeMode,
 };
-use silman_verbalize::{verbalize, Verbalizer};
+use silman_verbalize::{verbalize, verbalize_voiced, Verbalizer, Voice};
 
 /// Transport double returning a canned result; never touches the network.
 struct FakeTransport(Result<String, TransportError>);
@@ -90,6 +90,31 @@ fn prompt_construction_is_deterministic_snapshot() {
     assert_eq!(system, system2);
     assert_eq!(user, user2);
     insta::assert_snapshot!(format!("SYSTEM:\n{system}\n\nUSER:\n{user}"));
+}
+
+/// Run-5 item 3: the prompt names the requested voice's style, and the
+/// template fallback is rendered in that same voice.
+#[test]
+fn prompt_and_fallback_respect_the_requested_voice() {
+    let record = fixture_record();
+    let (coach_system, coach_user) = build_prompt_voiced(&record, Voice::Coach);
+    let (neutral_system, neutral_user) = build_prompt_voiced(&record, Voice::Neutral);
+    assert!(coach_system.contains("coaching voice"), "{coach_system}");
+    assert!(neutral_system.contains("neutral voice"), "{neutral_system}");
+    assert_ne!(coach_system, neutral_system);
+    assert_eq!(coach_user, neutral_user, "voice only changes the style");
+    // The default prompt is the Coach prompt.
+    let (default_system, _) = build_prompt(&record);
+    assert_eq!(default_system, coach_system);
+
+    // A transport failure falls back to template prose IN the same voice.
+    let failing = || FakeTransport(Err(TransportError::new("down")));
+    let coach_out = LlmVerbalizer::with_voice(failing(), Voice::Coach).verbalize_checked(&record);
+    let neutral_out =
+        LlmVerbalizer::with_voice(failing(), Voice::Neutral).verbalize_checked(&record);
+    assert_eq!(coach_out.text, verbalize_voiced(&record, Voice::Coach));
+    assert_eq!(neutral_out.text, verbalize_voiced(&record, Voice::Neutral));
+    assert_ne!(coach_out.text, neutral_out.text);
 }
 
 #[test]

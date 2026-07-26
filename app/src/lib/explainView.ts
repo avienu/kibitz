@@ -34,6 +34,8 @@ export interface FeatureRecordJson {
 
 export interface BoardShape {
   orig: string;
+  /** When set, the shape is an arrow orig→dest instead of a circle. */
+  dest?: string;
   brush: string;
 }
 

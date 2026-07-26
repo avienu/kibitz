@@ -60,7 +60,7 @@ use std::fmt;
 
 use silman_core::record::FeatureRecord;
 
-use crate::{verbalize, Verbalizer};
+use crate::{verbalize_voiced, Verbalizer, Voice};
 
 /// The system prompt sent with every request. A `const` so that prompt
 /// construction is deterministic and snapshot-testable.
@@ -90,6 +90,26 @@ first. Omit if the JSON lists no imbalances.
 3. Plans — the plan hints, phrased as advice. Omit if the JSON lists no \
 plans.
 Write nothing else: no headings, no lists, no preamble.";
+
+/// Per-voice style addendum appended to [`SYSTEM_PROMPT`] (run-5 item 3).
+/// The Coach voice mirrors the template overlay in `templates/coach.tmpl`;
+/// both remind the model that style may never add facts.
+pub fn voice_prompt(voice: Voice) -> &'static str {
+    match voice {
+        Voice::Coach => {
+            "Style — the coaching voice: write like a Silman-school coach. \
+Pieces have desires and grievances (a knight dreams of a permanent home on \
+an outpost; a bad bishop bites on granite behind its own pawns). You may \
+address the student directly, but sparingly. Stay vivid and concrete, never \
+cute for its own sake — and style never adds facts: every square and move \
+you mention must still come from the JSON."
+        }
+        Voice::Neutral => {
+            "Style — the neutral voice: keep the tone plain and factual. Do \
+not anthropomorphize the pieces; describe the position without flourish."
+        }
+    }
+}
 
 /// A transport-level failure (network, HTTP, provider error, bad payload).
 /// The verbalizer maps any transport error to a template fallback.
@@ -168,34 +188,49 @@ pub struct LlmVerbalization {
     pub mode: VerbalizeMode,
 }
 
-/// Deterministic prompt construction: the fixed system prompt plus the
-/// record serialized as pretty JSON (`BTreeMap` evidence keys keep the
-/// serialization stable). Snapshot-tested.
-pub fn build_prompt(record: &FeatureRecord) -> (&'static str, String) {
+/// Deterministic prompt construction in the default (Coach) voice: the
+/// fixed system prompt plus the record serialized as pretty JSON
+/// (`BTreeMap` evidence keys keep the serialization stable).
+/// Snapshot-tested.
+pub fn build_prompt(record: &FeatureRecord) -> (String, String) {
+    build_prompt_voiced(record, Voice::default())
+}
+
+/// [`build_prompt`] with an explicit [`Voice`]: the system prompt carries
+/// the matching style addendum from [`voice_prompt`].
+pub fn build_prompt_voiced(record: &FeatureRecord, voice: Voice) -> (String, String) {
     let user = serde_json::to_string_pretty(record).expect("FeatureRecord serializes to JSON");
-    (SYSTEM_PROMPT, user)
+    (format!("{SYSTEM_PROMPT}\n\n{}", voice_prompt(voice)), user)
 }
 
 /// LLM-backed [`Verbalizer`], generic over the transport. Output is used
-/// only when it passes post-validation; otherwise the template rendering is
-/// returned in full.
+/// only when it passes post-validation; otherwise the template rendering —
+/// in the SAME voice the prompt requested — is returned in full.
 pub struct LlmVerbalizer<T: LlmTransport> {
     transport: T,
+    voice: Voice,
 }
 
 impl<T: LlmTransport> LlmVerbalizer<T> {
+    /// A verbalizer in the default (Coach) voice.
     pub fn new(transport: T) -> Self {
-        Self { transport }
+        Self::with_voice(transport, Voice::default())
+    }
+
+    /// A verbalizer with an explicit [`Voice`], used for both the prompt's
+    /// style addendum and the template fallback.
+    pub fn with_voice(transport: T, voice: Voice) -> Self {
+        Self { transport, voice }
     }
 
     /// Verbalize and report which mode produced the prose.
     pub fn verbalize_checked(&self, record: &FeatureRecord) -> LlmVerbalization {
-        let (system, user) = build_prompt(record);
+        let (system, user) = build_prompt_voiced(record, self.voice);
         let fallback = |reason: FallbackReason| LlmVerbalization {
-            text: verbalize(record),
+            text: verbalize_voiced(record, self.voice),
             mode: VerbalizeMode::TemplateFallback(reason),
         };
-        match self.transport.complete(system, &user) {
+        match self.transport.complete(&system, &user) {
             Err(error) => fallback(FallbackReason::Transport(error)),
             Ok(text) => {
                 let text = text.trim();

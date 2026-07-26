@@ -45,7 +45,7 @@ use phrase::{
     capitalize_first, decapitalize_first, favors_side, humanize, join_and, magnitude_key,
     pawns_amount, phase_key, see_key, severity_key, side_name,
 };
-use templates::{fill, lookup, lookup_var, rotation};
+use templates::{fill, lookup, lookup_var, lookup_voiced, rotation, try_lookup_voiced};
 
 /// The three prose sections of a verbalized position, in composition order.
 /// Each section is a single paragraph; empty strings mean the record had
@@ -55,6 +55,71 @@ pub struct Sections {
     pub tactics: String,
     pub imbalances: String,
     pub plans: String,
+}
+
+/// Narration voice (run-5 item 3). The voice is a template OVERLAY, not a
+/// code fork: Coach reads `coach.<key>` overrides from
+/// `templates/coach.tmpl` and falls back to the base key wherever no
+/// override exists, so both voices say exactly the same THINGS — only the
+/// phrasing differs. Coach is the product default.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Voice {
+    /// Anthropomorphized Silman-style coaching prose (the default): pieces
+    /// have desires and grievances, the student is occasionally addressed
+    /// directly, and no fact beyond the record is ever added.
+    #[default]
+    Coach,
+    /// The plain base templates, with no anthropomorphizing overlay.
+    Neutral,
+}
+
+impl Voice {
+    /// Both voices, for tests and settings enumeration.
+    pub const ALL: [Voice; 2] = [Voice::Coach, Voice::Neutral];
+
+    /// The stable setting token for this voice ("coach" / "neutral").
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Voice::Coach => "coach",
+            Voice::Neutral => "neutral",
+        }
+    }
+
+    /// Lenient parse for stored settings: "neutral" (any case) selects
+    /// Neutral; anything else — including absent or corrupt values — falls
+    /// back to the Coach default.
+    pub fn from_setting(value: &str) -> Voice {
+        if value.trim().eq_ignore_ascii_case("neutral") {
+            Voice::Neutral
+        } else {
+            Voice::Coach
+        }
+    }
+}
+
+/// Strict-parse error for [`Voice`] (`FromStr`), used to validate
+/// user-supplied setting values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownVoice(pub String);
+
+impl std::fmt::Display for UnknownVoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unknown voice {:?} (expected coach or neutral)", self.0)
+    }
+}
+
+impl std::error::Error for UnknownVoice {}
+
+impl std::str::FromStr for Voice {
+    type Err = UnknownVoice;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "coach" => Ok(Voice::Coach),
+            "neutral" => Ok(Voice::Neutral),
+            _ => Err(UnknownVoice(s.to_string())),
+        }
+    }
 }
 
 /// Anything that can turn a [`FeatureRecord`] into prose. The optional LLM
@@ -74,17 +139,23 @@ impl Verbalizer for TemplateVerbalizer {
     }
 }
 
-/// Render the whole record as coach-style prose: tactics, then imbalances,
-/// then plans, as blank-line-separated paragraphs. A record with nothing to
-/// report yields a single graceful "nothing stands out" line.
+/// Render the whole record as prose in the default (Coach) voice: tactics,
+/// then imbalances, then plans, as blank-line-separated paragraphs. A
+/// record with nothing to report yields a single graceful "nothing stands
+/// out" line.
 pub fn verbalize(record: &FeatureRecord) -> String {
-    let sections = verbalize_sections(record);
+    verbalize_voiced(record, Voice::default())
+}
+
+/// [`verbalize`] with an explicit [`Voice`].
+pub fn verbalize_voiced(record: &FeatureRecord, voice: Voice) -> String {
+    let sections = verbalize_sections_voiced(record, voice);
     if sections.tactics.is_empty() && sections.imbalances.is_empty() && sections.plans.is_empty() {
-        return lookup(&["empty"]).to_string();
+        return lookup_voiced(voice, &["empty"]).to_string();
     }
     let mut paragraphs: Vec<String> = Vec::new();
     if sections.tactics.is_empty() {
-        paragraphs.push(lookup(&["tactics.quiet"]).to_string());
+        paragraphs.push(lookup_voiced(voice, &["tactics.quiet"]).to_string());
     } else {
         paragraphs.push(sections.tactics);
     }
@@ -97,9 +168,15 @@ pub fn verbalize(record: &FeatureRecord) -> String {
     paragraphs.join("\n\n")
 }
 
-/// Render the record into its three sections without joining them, for
-/// callers (the app UI) that lay the sections out separately.
+/// Render the record into its three sections without joining them, in the
+/// default (Coach) voice, for callers (the app UI) that lay the sections
+/// out separately.
 pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
+    verbalize_sections_voiced(record, Voice::default())
+}
+
+/// [`verbalize_sections`] with an explicit [`Voice`].
+pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sections {
     let board = Board::from_fen(&record.fen);
 
     // Tactical alerts, most severe first (stable within a severity).
@@ -112,11 +189,11 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
         .map(|(index, alert)| {
             // Two alerts often share evidence (the same attackers pressing
             // the same square); state each clause once per comment.
-            let sentences: Vec<String> = render_alert_sentences(alert, &board)
+            let sentences: Vec<String> = render_alert_sentences(alert, &board, voice)
                 .into_iter()
                 .filter(|sentence| seen_clauses.insert(sentence.clone()))
                 .collect();
-            apply_starter("rotation.alert", index, sentences.join(" "))
+            apply_starter(voice, "rotation.alert", index, sentences.join(" "))
         })
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
@@ -144,9 +221,10 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
         .enumerate()
         .map(|(index, imbalance)| {
             apply_starter(
+                voice,
                 "rotation.imbalance",
                 index,
-                render_imbalance(imbalance, &board, record.phase),
+                render_imbalance(imbalance, &board, record.phase, voice),
             )
         })
         .collect();
@@ -158,7 +236,7 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
                 SideColor::Black
             });
             imbalance_sentences.push(fill(
-                lookup(&["engine.eval.mate"]),
+                lookup_voiced(voice, &["engine.eval.mate"]),
                 &[
                     ("mate", &mate.abs().to_string()),
                     ("side", side),
@@ -168,7 +246,7 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
         } else {
             let score = format!("{:+.1}", f64::from(engine.eval_cp) / 100.0);
             imbalance_sentences.push(fill(
-                lookup(&["engine.eval"]),
+                lookup_voiced(voice, &["engine.eval"]),
                 &[("score", &score), ("best", &engine.best)],
             ));
         }
@@ -193,7 +271,8 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
                 .hints
                 .iter()
                 .filter_map(|h| {
-                    templates::try_lookup(&format!("plan.composite.clause.{h}")).map(str::to_string)
+                    try_lookup_voiced(voice, &format!("plan.composite.clause.{h}"))
+                        .map(str::to_string)
                 })
                 .collect();
             let clause_text = if clauses.is_empty() {
@@ -202,12 +281,12 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
                 join_and(&clauses)
             };
             plan_sentences.push(fill(
-                lookup(&["plan.composite.lead"]),
+                lookup_voiced(voice, &["plan.composite.lead"]),
                 &[("target", &cp.target), ("clauses", &clause_text)],
             ));
         } else {
             plan_sentences.push(fill(
-                lookup(&["plan.composite.runner_up"]),
+                lookup_voiced(voice, &["plan.composite.runner_up"]),
                 &[
                     ("target", &cp.target),
                     ("side", side_name_favors(cp.favors)),
@@ -218,7 +297,12 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
     for imbalance in &selected {
         for plan in &imbalance.plans {
             if seen.insert(plan.hint.as_str()) {
-                plan_sentences.push(render_plan(plan, imbalance.favors, plan_sentences.len()));
+                plan_sentences.push(render_plan(
+                    plan,
+                    imbalance.favors,
+                    plan_sentences.len(),
+                    voice,
+                ));
             }
         }
     }
@@ -233,8 +317,8 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
 /// Prefix the paragraph with its rotation starter. Without a starter the
 /// first letter is capitalized; with one, the sentence is decapitalized
 /// unless it opens with a side name (a proper noun).
-fn apply_starter(rotation_key: &str, index: usize, paragraph: String) -> String {
-    let starter = rotation(rotation_key, index);
+fn apply_starter(voice: Voice, rotation_key: &str, index: usize, paragraph: String) -> String {
+    let starter = rotation(voice, rotation_key, index);
     if starter.is_empty() {
         return capitalize_first(&paragraph);
     }
@@ -248,7 +332,7 @@ fn apply_starter(rotation_key: &str, index: usize, paragraph: String) -> String 
     format!("{starter} {body}")
 }
 
-fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
+fn render_alert_sentences(alert: &TacticAlert, board: &Board, voice: Voice) -> Vec<String> {
     let side = side_name(alert.side);
     // Phrasing-variety seed: the target square's index, so the same alert
     // on the same square always reads identically, while adjacent alerts
@@ -286,7 +370,7 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
         && !alert.defenders.is_empty()
     {
         return vec![fill(
-            lookup(&["alert.overloaded"]),
+            lookup_voiced(voice, &["alert.overloaded"]),
             &[("subject", &subject), ("defenders", &defenders)],
         )];
     }
@@ -298,7 +382,7 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
     let detail_lead_key = detail.map(|token| format!("alert.{kind}.{token}"));
     let detail_in_lead = detail_lead_key
         .as_deref()
-        .is_some_and(|key| !lookup(&[key]).is_empty());
+        .is_some_and(|key| !lookup_voiced(voice, &[key]).is_empty());
     let severity_lead_key = format!("alert.{kind}.{}", severity_key(alert.severity));
     let mut lead_keys: Vec<&str> = Vec::new();
     if let Some(key) = detail_lead_key.as_deref() {
@@ -307,14 +391,14 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
     lead_keys.push(severity_lead_key.as_str());
     lead_keys.push("alert.generic");
     let mut sentences = vec![fill(
-        lookup_var(&lead_keys, seed),
+        lookup_var(voice, &lead_keys, seed),
         &[("subject", &subject), ("target_clause", &target_clause)],
     )];
 
     if alert.kind == AlertKind::WeakKing {
         if !attackers.is_empty() {
             sentences.push(fill(
-                lookup(&["clause.king_attackers"]),
+                lookup_voiced(voice, &["clause.king_attackers"]),
                 &[("attackers", &attackers)],
             ));
         }
@@ -322,18 +406,18 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
         // The lead sentence already states that nothing defends it.
         if !attackers.is_empty() {
             sentences.push(fill(
-                lookup(&["clause.attacked_by"]),
+                lookup_voiced(voice, &["clause.attacked_by"]),
                 &[("attackers", &attackers)],
             ));
         }
     } else {
         match (attackers.is_empty(), defenders.is_empty()) {
             (false, false) => sentences.push(fill(
-                lookup_var(&["clause.attack_defend.both"], seed),
+                lookup_var(voice, &["clause.attack_defend.both"], seed),
                 &[("attackers", &attackers), ("defenders", &defenders)],
             )),
             (false, true) => sentences.push(fill(
-                lookup(&["clause.attack_defend.attackers"]),
+                lookup_voiced(voice, &["clause.attack_defend.attackers"]),
                 &[("attackers", &attackers)],
             )),
             (true, false) => {
@@ -342,7 +426,10 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
                 } else {
                     "clause.attack_defend.defenders"
                 };
-                sentences.push(fill(lookup(&[key]), &[("defenders", &defenders)]));
+                sentences.push(fill(
+                    lookup_voiced(voice, &[key]),
+                    &[("defenders", &defenders)],
+                ));
             }
             (true, true) => {}
         }
@@ -351,12 +438,12 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
     if let Some(token) = detail {
         if !detail_in_lead {
             if alert.kind == AlertKind::WeakKing {
-                sentences.push(render_king_details(token));
+                sentences.push(render_king_details(token, voice));
             } else {
-                let known = lookup(&[&format!("detail.{token}")]);
+                let known = lookup_voiced(voice, &[&format!("detail.{token}")]);
                 if known.is_empty() {
                     sentences.push(fill(
-                        lookup(&["clause.detail"]),
+                        lookup_voiced(voice, &["clause.detail"]),
                         &[("detail", &humanize(token))],
                     ));
                 } else {
@@ -369,14 +456,14 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
     if let Some(see) = alert.see {
         if see > 0 {
             sentences.push(fill(
-                lookup_var(&["clause.see"], seed),
+                lookup_var(voice, &["clause.see"], seed),
                 &[("amount", lookup(&[see_key(see)]))],
             ));
         }
     }
 
     if let Some(check) = &alert.engine_check {
-        sentences.push(render_engine_check(check));
+        sentences.push(render_engine_check(check, voice));
     }
 
     sentences
@@ -387,7 +474,7 @@ fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
 /// rewritten as a natural clause and the clauses joined into one sentence;
 /// the zone-pressure count is folded away, and a shield file already
 /// reported as wide open is not also reported as missing its pawn.
-fn render_king_details(detail: &str) -> String {
+fn render_king_details(detail: &str, voice: Voice) -> String {
     let mut zone_pressure = false;
     let mut back_rank = false;
     let mut missing: Vec<String> = Vec::new();
@@ -419,11 +506,11 @@ fn render_king_details(detail: &str) -> String {
 
     let mut clauses: Vec<String> = Vec::new();
     if zone_pressure {
-        clauses.push(lookup(&["king.zone_pressure"]).to_string());
+        clauses.push(lookup_voiced(voice, &["king.zone_pressure"]).to_string());
     }
     if !missing.is_empty() {
         clauses.push(fill(
-            lookup(&["king.shield_missing"]),
+            lookup_voiced(voice, &["king.shield_missing"]),
             &[("files", &file_phrase(&missing))],
         ));
     }
@@ -433,7 +520,10 @@ fn render_king_details(detail: &str) -> String {
         } else {
             "king.shield_advanced"
         };
-        clauses.push(fill(lookup(&[key]), &[("files", &file_phrase(&advanced))]));
+        clauses.push(fill(
+            lookup_voiced(voice, &[key]),
+            &[("files", &file_phrase(&advanced))],
+        ));
     }
     if !open.is_empty() {
         let key = if open.len() > 1 {
@@ -441,10 +531,13 @@ fn render_king_details(detail: &str) -> String {
         } else {
             "king.open_files"
         };
-        clauses.push(fill(lookup(&[key]), &[("files", &file_phrase(&open))]));
+        clauses.push(fill(
+            lookup_voiced(voice, &[key]),
+            &[("files", &file_phrase(&open))],
+        ));
     }
     if back_rank {
-        clauses.push(lookup(&["king.back_rank"]).to_string());
+        clauses.push(lookup_voiced(voice, &["king.back_rank"]).to_string());
     }
     clauses.extend(extras);
     format!("{}.", capitalize_first(&join_and(&clauses)))
@@ -457,7 +550,8 @@ fn side_name_favors(favors: Favors) -> &'static str {
     }
 }
 
-fn render_engine_check(check: &EngineCheck) -> String {
+fn render_engine_check(check: &EngineCheck, voice: Voice) -> String {
+    let engine_key = |key: &str| lookup_voiced(voice, &[key]);
     match check.status {
         EngineCheckStatus::Confirmed => {
             let pv = check.pv.join(" ");
@@ -466,37 +560,37 @@ fn render_engine_check(check: &EngineCheck) -> String {
             if let Some(mate) = check.mate_in {
                 let m = mate.abs().to_string();
                 return if mate == 0 {
-                    fill(lookup(&["engine.confirmed.pv_mate_now"]), &[("pv", &pv)])
+                    fill(engine_key("engine.confirmed.pv_mate_now"), &[("pv", &pv)])
                 } else if mate < 0 {
-                    fill(lookup(&["engine.confirmed.mate_against"]), &[("mate", &m)])
+                    fill(engine_key("engine.confirmed.mate_against"), &[("mate", &m)])
                 } else if pv.is_empty() {
-                    fill(lookup(&["engine.confirmed.mate"]), &[("mate", &m)])
+                    fill(engine_key("engine.confirmed.mate"), &[("mate", &m)])
                 } else {
                     fill(
-                        lookup(&["engine.confirmed.pv_mate"]),
+                        engine_key("engine.confirmed.pv_mate"),
                         &[("pv", &pv), ("mate", &m)],
                     )
                 };
             }
             match (check.pv.is_empty(), check.score_delta_cp) {
                 (false, Some(delta)) => fill(
-                    lookup(&["engine.confirmed.pv_delta"]),
+                    engine_key("engine.confirmed.pv_delta"),
                     &[("pv", &pv), ("delta", &pawns_amount(delta))],
                 ),
-                (false, None) => fill(lookup(&["engine.confirmed.pv"]), &[("pv", &pv)]),
+                (false, None) => fill(engine_key("engine.confirmed.pv"), &[("pv", &pv)]),
                 (true, Some(delta)) => fill(
-                    lookup(&["engine.confirmed.delta"]),
+                    engine_key("engine.confirmed.delta"),
                     &[("delta", &pawns_amount(delta))],
                 ),
-                (true, None) => lookup(&["engine.confirmed"]).to_string(),
+                (true, None) => engine_key("engine.confirmed").to_string(),
             }
         }
-        EngineCheckStatus::Refuted => lookup(&["engine.refuted"]).to_string(),
-        EngineCheckStatus::UnclearAtBudget => lookup(&["engine.unclear"]).to_string(),
+        EngineCheckStatus::Refuted => engine_key("engine.refuted").to_string(),
+        EngineCheckStatus::UnclearAtBudget => engine_key("engine.unclear").to_string(),
     }
 }
 
-fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase) -> String {
+fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase, voice: Voice) -> String {
     let kind = format!("{:?}", imbalance.kind);
 
     // Cross-key context: "open" flavors the bishop-pair phrase, and a named
@@ -517,12 +611,12 @@ fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase) -> Strin
     entries.sort_by_key(|(key, _)| rank(key));
     let evidence: Vec<String> = entries
         .iter()
-        .filter_map(|(key, value)| render_evidence(key, value, board, &context))
+        .filter_map(|(key, value)| render_evidence(key, value, board, &context, voice))
         .map(|clause| format!("{}.", capitalize_first(&clause)))
         .collect();
 
     let aspect_key = format!("aspect.{kind}");
-    let known_aspect = lookup(&[aspect_key.as_str()]);
+    let known_aspect = lookup_voiced(voice, &[aspect_key.as_str()]);
     let aspect = if known_aspect.is_empty() {
         humanize(&kind)
     } else {
@@ -533,7 +627,7 @@ fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase) -> Strin
         None => {
             let balanced_key = format!("imbalance.{kind}.balanced");
             fill(
-                lookup(&[balanced_key.as_str(), "imbalance.balanced"]),
+                lookup_voiced(voice, &[balanced_key.as_str(), "imbalance.balanced"]),
                 &[("aspect", &aspect)],
             )
         }
@@ -543,11 +637,14 @@ fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase) -> Strin
             let plain_key = format!("imbalance.{kind}.{magnitude}");
             let generic_key = format!("imbalance.generic.{magnitude}");
             fill(
-                lookup(&[
-                    phased_key.as_str(),
-                    plain_key.as_str(),
-                    generic_key.as_str(),
-                ]),
+                lookup_voiced(
+                    voice,
+                    &[
+                        phased_key.as_str(),
+                        plain_key.as_str(),
+                        generic_key.as_str(),
+                    ],
+                ),
                 &[("beneficiary", side_name(side)), ("aspect", &aspect)],
             )
         }
@@ -632,13 +729,14 @@ fn render_evidence(
     value: &Value,
     board: &Board,
     context: &EvidenceContext,
+    voice: Voice,
 ) -> Option<String> {
     // Doubled majors carry the file in the key ("doubled_majors_d") and the
     // owning side in the value.
     if let Some(file) = key.strip_prefix("doubled_majors_") {
         let side = side_from_value(value)?;
         return Some(fill(
-            lookup(&["evidence.doubled_majors"]),
+            lookup_voiced(voice, &["evidence.doubled_majors"]),
             &[
                 ("side", side_name(side)),
                 ("files", &file_phrase(&[file.to_string()])),
@@ -662,7 +760,9 @@ fn render_evidence(
         "character" => match value.as_str() {
             // "open" flavors the bishop-pair clause instead (see below);
             // on its own it is the unmarked case and stays unspoken.
-            Some("closed") => Some(lookup(&["evidence.character.closed"]).to_string()),
+            Some("closed") => {
+                Some(lookup_voiced(voice, &["evidence.character.closed"]).to_string())
+            }
             _ => None,
         },
 
@@ -673,7 +773,10 @@ fn render_evidence(
             } else {
                 "evidence.bishop_pair"
             };
-            Some(fill(lookup(&[template_key]), &[("side", side_name(side))]))
+            Some(fill(
+                lookup_voiced(voice, &[template_key]),
+                &[("side", side_name(side))],
+            ))
         }
 
         "bad_bishop" => {
@@ -686,12 +789,12 @@ fn render_evidence(
                 .unwrap_or_default();
             if pawns.is_empty() {
                 Some(fill(
-                    lookup(&["evidence.bad_bishop.bare"]),
+                    lookup_voiced(voice, &["evidence.bad_bishop.bare"]),
                     &[("side", side_name(side)), ("square", square)],
                 ))
             } else {
                 Some(fill(
-                    lookup(&["evidence.bad_bishop"]),
+                    lookup_voiced(voice, &["evidence.bad_bishop"]),
                     &[
                         ("side", side_name(side)),
                         ("square", square),
@@ -713,7 +816,7 @@ fn render_evidence(
             };
             let owner = side.map(side_name).unwrap_or("");
             Some(fill(
-                lookup(&[template_key.as_str()]),
+                lookup_voiced(voice, &[template_key.as_str()]),
                 &[("side", owner), ("items", &join_and(&squares))],
             ))
         }
@@ -721,7 +824,7 @@ fn render_evidence(
         "queenside_majority" | "kingside_majority" => {
             let side = side_from_value(value)?;
             Some(fill(
-                lookup(&[&format!("evidence.{base}")]),
+                lookup_voiced(voice, &[&format!("evidence.{base}")]),
                 &[("side", side_name(side))],
             ))
         }
@@ -744,12 +847,15 @@ fn render_evidence(
                 3 => "evidence.material.three_pawns_up",
                 _ => "evidence.material.many_pawns_up",
             };
-            Some(fill(lookup(&[template_key]), &[("side", side_name(side))]))
+            Some(fill(
+                lookup_voiced(voice, &[template_key]),
+                &[("side", side_name(side))],
+            ))
         }
 
         "pattern" => {
             let pattern = value.as_str()?;
-            let known = lookup(&[&format!("evidence.pattern.{pattern}")]);
+            let known = lookup_voiced(voice, &[&format!("evidence.pattern.{pattern}")]);
             if known.is_empty() {
                 None
             } else {
@@ -765,7 +871,7 @@ fn render_evidence(
                 "evidence.open_files"
             };
             Some(fill(
-                lookup(&[template_key]),
+                lookup_voiced(voice, &[template_key]),
                 &[("files", &file_phrase(&files))],
             ))
         }
@@ -781,7 +887,7 @@ fn render_evidence(
             };
             let owner = key_side.map(side_name).unwrap_or("");
             Some(fill(
-                lookup(&[template_key]),
+                lookup_voiced(voice, &[template_key]),
                 &[("files", &file_phrase(&files)), ("side", owner)],
             ))
         }
@@ -789,7 +895,7 @@ fn render_evidence(
         "rook_on_seventh" => {
             let side = side_from_value(value)?;
             Some(fill(
-                lookup(&["evidence.rook_on_seventh"]),
+                lookup_voiced(voice, &["evidence.rook_on_seventh"]),
                 &[("side", side_name(side))],
             ))
         }
@@ -803,7 +909,7 @@ fn render_evidence(
                 "evidence.holes"
             };
             Some(fill(
-                lookup(&[template_key]),
+                lookup_voiced(voice, &[template_key]),
                 &[("side", side_name(side)), ("items", &join_and(&squares))],
             ))
         }
@@ -812,7 +918,7 @@ fn render_evidence(
             let side = key_side?;
             let square = value.as_str()?;
             Some(fill(
-                lookup(&["evidence.established_outpost"]),
+                lookup_voiced(voice, &["evidence.established_outpost"]),
                 &[("side", side_name(side)), ("items", square)],
             ))
         }
@@ -838,7 +944,7 @@ fn pawn_owner(board: &Board, squares: &[String]) -> Option<SideColor> {
     owner
 }
 
-fn render_plan(plan: &PlanHint, favors: Favors, index: usize) -> String {
+fn render_plan(plan: &PlanHint, favors: Favors, index: usize, voice: Voice) -> String {
     // A blockade is the DEFENDER's plan: attribute it to the side facing
     // the passer, whatever the parent imbalance favors.
     let favors = match plan.hint.as_str() {
@@ -847,7 +953,7 @@ fn render_plan(plan: &PlanHint, favors: Favors, index: usize) -> String {
         _ => favors,
     };
     let hint_key = format!("plan.{}", plan.hint);
-    let known = lookup(&[hint_key.as_str()]);
+    let known = lookup_voiced(voice, &[hint_key.as_str()]);
     let action = if known.is_empty() {
         humanize(&plan.hint)
     } else {
@@ -859,7 +965,7 @@ fn render_plan(plan: &PlanHint, favors: Favors, index: usize) -> String {
         format!(
             " {}",
             fill(
-                lookup(&["clause.plan_squares"]),
+                lookup_voiced(voice, &["clause.plan_squares"]),
                 &[("squares", &join_and(&plan.squares))],
             )
         )
@@ -872,7 +978,7 @@ fn render_plan(plan: &PlanHint, favors: Favors, index: usize) -> String {
     };
     let side = favors_side(favors).map(side_name).unwrap_or("");
     fill(
-        lookup(&[lead_key]),
+        lookup_voiced(voice, &[lead_key]),
         &[
             ("side", side),
             ("plan", &action),

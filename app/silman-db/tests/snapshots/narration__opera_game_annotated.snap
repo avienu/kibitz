@@ -12,40 +12,48 @@ expression: pgn
 [Result "1-0"]
 [ECO "C41"]
 
-1. e4 e5 2. Nf3 d6 3. d4 Bg4 $2 4. dxe5 Bxf3 {White's queen on d1 cannot be
-adequately defended. It is attacked by Black's bishop on f3 but defended only by
-White's king on e1. A capture sequence here wins roughly a queen. Meanwhile,
-Black's bishop on f3 hangs — nobody defends it. It is under attack from
-White's queen on d1 and the pawn on g2.} 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8.
-Nc3 c6 {White has the superior minor pieces. White owns the bishop pair in an
-open position. A good plan for White: open the position so the bishops can
-breathe.} 9. Bg5 b5 $4 {White's bishop on c4 has more attackers than its
-defenders can handle. The attack from Black's pawn on b5 is met only by White's
-queen on b3. If the captures start, the attacker comes out ahead by about two
-pawns. Meanwhile, White's queen on b3 is running out of squares — it has no
-safe retreat, and the trap is ready to be sprung. Only White's pawn on a2, the
-pawn on c2 and the bishop on c4 keep it defended.} 10. Nxb5 {White's knight on
-b5 is under pressure — its defense is stretched thin. It is attacked by
-Black's pawn on c6 but defended only by White's queen on b3 and the bishop on
-c4. A capture sequence here wins about two pawns.} 10... cxb5 11. Bxb5+ {White
-has the healthier pawn structure. White has a passed pawn on c2. Black's a7-pawn
-is isolated. White has a queenside pawn majority. A good plan for White: advance
-the queenside pawn majority. Another idea for Black: blockade White's passed
-pawn (key squares: c3).} 11... Nbd7 {Black's knight on d7 is trapped — it has
-no safe square to run to. It is attacked by White's bishop on b5 but defended
-only by Black's knight on f6, the queen on e7 and the king on e8.} 12. O-O-O
-{White's king is not entirely safe around c1. The d-file in front of the king is
-wide open.} 12... Rd8 13. Rxd7 {Black's queen on e7 cannot be adequately
-defended. It is attacked by White's rook on d7 but defended only by Black's king
-on e8 and the bishop on f8. A capture sequence here wins roughly a rook.
-Meanwhile, White's rook on d7 cannot be adequately defended. It is attacked by
-Black's knight on f6, the queen on e7, the rook on d8 and the king on e8 but
-defended only by White's bishop on b5. White has the initiative and is dictating
-play.} 13... Rxd7 {Black is ahead on material. Black is three pawns up.} 14. Rd1
-Qe6 15. Bxd7+ {The defense of Black's queen on e6 simply does not hold together.
+1. e4 e5 2. Nf3 d6 3. d4 Bg4 $2 4. dxe5 Bxf3 {White's queen on d1 is crying out
+for help that its defenders cannot give. It is attacked by Black's bishop on f3
+but defended only by White's king on e1. A capture sequence here wins roughly a
+queen. Meanwhile, Black's bishop on f3 hangs — it stands under attack with no
+friend in sight. It is under attack from White's queen on d1 and the pawn on
+g2.} 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 {White's minor pieces have
+found real work; their counterparts are still waiting for a career. White owns
+the bishop pair in an open position. Here is what White should be dreaming
+about: open the position and let the bishops finally stretch their diagonals.}
+9. Bg5 b5 $4 {White's bishop on c4 has collected more enemies than friends. The
+attack from Black's pawn on b5 is met only by White's queen on b3. If the
+captures start, the attacker comes out ahead by about two pawns. Meanwhile,
+White's queen on b3 has nowhere to run — the cage is built, and the door is
+about to close. Only White's pawn on a2, the pawn on c2 and the bishop on c4
+keep it defended.} 10. Nxb5 {White's knight on b5 is calling for reinforcements
+— the defense around it is stretched thin. It is attacked by Black's pawn on
+c6 but defended only by White's queen on b3 and the bishop on c4. A capture
+sequence here wins about two pawns.} 10... cxb5 11. Bxb5+ {White's pawn
+structure is the happier one — the opponent's carries scars that will not heal
+by themselves. White has a passed pawn on c2. Black's a7-pawn is isolated. White
+has a queenside pawn majority. Here is what White should be dreaming about:
+march the queenside majority — those pawns outnumber their opposition and they
+know it. Another dream for Black: put a piece in front of White's passer and put
+its dreams on hold (key squares: c3).} 11... Nbd7 {Black's knight on d7 is
+trapped — the cage is shut, and there is no safe square left. It is attacked
+by White's bishop on b5 but defended only by Black's knight on f6, the queen on
+e7 and the king on e8.} 12. O-O-O {White's king is feeling a draft around c1 —
+the shelter is thinner than it would like. The d-file in front of the king is
+wide open.} 12... Rd8 13. Rxd7 {Black's queen on e7 is crying out for help that
+its defenders cannot give. It is attacked by White's rook on d7 but defended
+only by Black's king on e8 and the bishop on f8. A capture sequence here wins
+roughly a rook. Meanwhile, White's rook on d7 is crying out for help that its
+defenders cannot give. It is attacked by Black's knight on f6, the queen on e7,
+the rook on d8 and the king on e8 but defended only by White's bishop on b5.
+White is asking the questions; the opponent is stuck finding answers.} 13...
+Rxd7 {Black is ahead on material. Black is three pawns up.} 14. Rd1 Qe6 15.
+Bxd7+ {The defenders of Black's queen on e6 are overworked, and they know it.
 The attack from White's queen on b3 and the bishop on d7 is met only by Black's
 pawn on f7. If the captures start, the attacker comes out ahead by roughly a
-queen. Meanwhile, Black's queen on e6 is trapped — it has no safe square to
-run to.} 15... Nxd7 16. Qb8+ {White's queen on b8 hangs — nobody defends it.
-It is under attack from Black's knight on d7.} 16... Nxb8 {Black has a winning
-material advantage. Black is up a decisive amount of material.} 17. Rd8# 1-0
+queen. Meanwhile, Black's queen on e6 is trapped — the cage is shut, and there
+is no safe square left.} 15... Nxd7 16. Qb8+ {White's queen on b8 hangs — it
+stands under attack with no friend in sight. It is under attack from Black's
+knight on d7.} 16... Nxb8 {Black has won enough material to decide the game; the
+rest is care and technique. Black is up a decisive amount of material.} 17. Rd8#
+1-0

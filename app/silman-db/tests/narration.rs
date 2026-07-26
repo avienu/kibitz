@@ -97,6 +97,55 @@ fn full_game_narration_is_delta_driven_and_snapshot_stable() {
     assert_eq!(pgn, again, "narration must be idempotent");
 }
 
+/// Run-5 item 3: the narration voice is a stored setting (meta table),
+/// defaults to Coach, and re-annotating after a change regenerates the
+/// same plies in the other voice.
+#[test]
+fn narration_voice_setting_switches_the_prose() {
+    use silman_verbalize::Voice;
+    let (_d, conn) = setup();
+
+    // Coach is the default when nothing is stored.
+    assert_eq!(
+        silman_db::narrate::narration_voice(&conn).unwrap(),
+        Voice::Coach
+    );
+    silman_db::annotate::annotate_game(&conn, 1, 100_000, 64).unwrap();
+    let coach = silman_db::narrate::narrations(&conn, 1).unwrap();
+
+    silman_db::narrate::set_narration_voice(&conn, Voice::Neutral).unwrap();
+    assert_eq!(
+        silman_db::narrate::narration_voice(&conn).unwrap(),
+        Voice::Neutral
+    );
+    silman_db::annotate::annotate_game(&conn, 1, 100_000, 64).unwrap();
+    let neutral = silman_db::narrate::narrations(&conn, 1).unwrap();
+
+    // Same story (same narrated plies), different phrasing somewhere.
+    let mut coach_plies: Vec<u32> = coach.keys().copied().collect();
+    let mut neutral_plies: Vec<u32> = neutral.keys().copied().collect();
+    coach_plies.sort();
+    neutral_plies.sort();
+    assert_eq!(
+        coach_plies, neutral_plies,
+        "voice must not change WHAT is narrated"
+    );
+    assert_ne!(coach, neutral, "voices must phrase differently");
+
+    // Setting round-trips back to Coach as well.
+    silman_db::narrate::set_narration_voice(&conn, Voice::Coach).unwrap();
+    assert_eq!(
+        silman_db::narrate::narration_voice(&conn).unwrap(),
+        Voice::Coach
+    );
+    silman_db::annotate::annotate_game(&conn, 1, 100_000, 64).unwrap();
+    assert_eq!(
+        silman_db::narrate::narrations(&conn, 1).unwrap(),
+        coach,
+        "coach narration must be reproducible"
+    );
+}
+
 #[test]
 fn similarity_metric_sanity() {
     assert!(jaccard("the knight on d5 is strong", "the knight on d5 is strong") > 0.99);

@@ -1,9 +1,10 @@
 ---
 source: crates/silman-verbalize/tests/verbalize.rs
+assertion_line: 489
 expression: out
 ---
-No immediate tactics jump out; the position will be decided by its long-term features.
+No tactics are shouting for attention; the pieces are settling in for a long positional argument.
 
-White has the healthier pawn structure. Black's d5-pawn is isolated. Meanwhile, White has the superior minor pieces. White owns the bishop pair in an open position.
+White's pawn structure is the happier one — the opponent's carries scars that will not heal by themselves. Black's d5-pawn is isolated. Meanwhile, White's minor pieces have found real work; their counterparts are still waiting for a career. White owns the bishop pair in an open position.
 
-A good plan for White: blockade the weak pawn, then pile up on it (key squares: d4 and d5). Another idea for White: look for ways to open the position.
+Here is what White should be dreaming about: park a piece in front of the weak pawn so it can never move again, then pile on it at your leisure (key squares: d4 and d5). Another dream for White: look for the break that throws the position open.

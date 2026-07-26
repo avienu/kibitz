@@ -184,8 +184,33 @@ export interface Explanation {
   prose: string;
 }
 
-export function explainPosition(fen: string): Promise<Explanation> {
-  return invoke<Explanation>("explain_position", { fen });
+/** Narration voice (run-5 item 3): coach (default) or neutral. */
+export type NarrationVoice = "coach" | "neutral";
+
+const VOICE_KEY = "silman.narrationVoice";
+
+/** Locally saved voice, used before/without an open database. */
+export function getSavedVoice(): NarrationVoice {
+  return localStorage.getItem(VOICE_KEY) === "neutral" ? "neutral" : "coach";
+}
+
+export function saveVoice(voice: NarrationVoice): void {
+  localStorage.setItem(VOICE_KEY, voice);
+}
+
+/** The voice stored in the open database's settings (meta table). */
+export function getNarrationVoice(): Promise<NarrationVoice> {
+  return invoke<NarrationVoice>("get_narration_voice");
+}
+
+/** Persist the voice in the open database; narrations regenerate on the
+ * next annotate / job fold-back pass. */
+export function setNarrationVoice(voice: NarrationVoice): Promise<void> {
+  return invoke<void>("set_narration_voice", { voice });
+}
+
+export function explainPosition(fen: string, voice?: NarrationVoice): Promise<Explanation> {
+  return invoke<Explanation>("explain_position", { fen, voice });
 }
 
 /* ---- Run 4: analyses, annotate/re-analyze/jobs, export, profile ---- */
@@ -295,6 +320,76 @@ export interface PlayerProfile {
 
 export function buildProfile(player: string): Promise<PlayerProfile> {
   return invoke<PlayerProfile>("build_profile", { player });
+}
+
+/* ---- Phase 5: Repertoire Trainer (Train tab) ---- */
+
+export interface TrainCounts {
+  due: number;
+  total: number;
+}
+
+/** Due/total card counts per color (tab badge + queue header). */
+export interface TrainSummary {
+  white: TrainCounts;
+  black: TrainCounts;
+}
+
+export interface DueCard {
+  cardId: number;
+  repertoireName: string;
+  /** Position the expected move is played from (side to move = color). */
+  fen: string;
+  expectedSan: string;
+  expectedUci: string;
+  ply: number;
+  /** Numbered SAN of the moves leading here (the review prompt). */
+  linePrefix: string;
+  due: string;
+  /** True until the card's first review. */
+  isNew: boolean;
+  reps: number;
+  lapses: number;
+}
+
+export interface TrainGraded {
+  cardId: number;
+  stability: number;
+  difficulty: number;
+  intervalDays: number;
+  due: string;
+  reps: number;
+  lapses: number;
+}
+
+export interface TrainAdded {
+  repertoire: string;
+  cardsAdded: number;
+  cardsExisting: number;
+}
+
+export type TrainColor = "white" | "black";
+export type TrainGrade = "again" | "hard" | "good" | "easy";
+
+export function trainSummary(): Promise<TrainSummary> {
+  return invoke<TrainSummary>("train_summary");
+}
+
+export function trainQueue(color: TrainColor, limit?: number): Promise<DueCard[]> {
+  return invoke<DueCard[]>("train_queue", { color, limit });
+}
+
+export function trainGrade(cardId: number, grade: TrainGrade): Promise<TrainGraded> {
+  return invoke<TrainGraded>("train_grade", { cardId, grade });
+}
+
+export function trainAddLine(
+  color: TrainColor,
+  sans: string[],
+  startFen?: string,
+  name?: string,
+): Promise<TrainAdded> {
+  return invoke<TrainAdded>("train_add_line", { color, sans, startFen, name });
 }
 
 /* ---- Cosmetics (verdict 4) ---- */
