@@ -4,6 +4,7 @@ members = [
     "crates/silman-core",
     "crates/silman-profile",
     "crates/silman-verbalize",
+    "crates/silman-tb",
     "crates/si4-read",
     "app/silman-db",
     "bench/movegen-bench",
@@ -24,6 +25,7 @@ anyhow = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
+cc = "1"
 tempfile = "3"
 criterion = "0.5"
 ureq = "2"

@@ -1,0 +1,17 @@
+[package]
+name = "silman-tb"
+description = "Syzygy endgame tablebase probing (WDL/DTZ) via the vendored Fathom C library"
+# Crate code is BSD-3-Clause; the vendored Fathom C sources compiled into the
+# crate are MIT (see vendor/fathom/LICENSE and README.md).
+license = "BSD-3-Clause AND MIT"
+links = "fathom"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cozy-chess = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+cc = { workspace = true }

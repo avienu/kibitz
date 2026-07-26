@@ -24,6 +24,8 @@ versions.
 | ureq | 2 | MIT OR Apache-2.0 | app | Blocking HTTP for TWIC/Lichess/chess.com ingesters. Network is app-layer only. |
 | zip | 2 | MIT | app | TWIC issue archives. |
 | insta | 1 | Apache-2.0 | dev-deps | Snapshot tests (silman-profile). |
+| Fathom (vendored C source) | commit `c9c6fef0dddc05d2e242c183acf5833149ab676d` | MIT | crates/silman-tb | Syzygy probing. Vendored verbatim from <https://github.com/jdart1/Fathom> into `crates/silman-tb/vendor/fathom/` with its LICENSE file (MIT, © 2013-2018 Ronald de Man, © 2015 basil00, © 2016-2025 Jon Dart — text verified at vendor time). Compiled and statically linked; the crate's SPDX is therefore `BSD-3-Clause AND MIT`. |
+| cc | 1 | MIT OR Apache-2.0 | build-deps (silman-tb) | Compiles the vendored Fathom C at build time. |
 
 ## Bundled data
 

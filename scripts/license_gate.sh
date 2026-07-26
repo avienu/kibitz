@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 FORBIDDEN='GPL|LGPL|AGPL'
-BSD_CRATES=(silman-core silman-profile silman-verbalize si4-read)
+BSD_CRATES=(silman-core silman-profile silman-verbalize silman-tb si4-read)
 status=0
 
 for pkg in "${BSD_CRATES[@]}"; do

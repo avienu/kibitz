@@ -8,3 +8,4 @@
 *.sqlite-journal
 *.db
 .DS_Store
+/testdata/syzygy/

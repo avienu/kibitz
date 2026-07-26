@@ -1160,6 +1160,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "silman-tb"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "cozy-chess",
+ "thiserror",
+]
+
+[[package]]
 name = "silman-verbalize"
 version = "0.1.0"
 dependencies = [
