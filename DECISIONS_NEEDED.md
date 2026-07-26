@@ -3,6 +3,16 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+Run-5 note: no new parked decisions from the core feedback items. Two
+judgment calls made on the data and documented for review rather than
+parked: (a) the WSUI firing-rule study kept the incumbent solo rule as
+default (it wins the balanced objective; the table in VALIDATION.md
+shows exactly what any stricter rule costs — flip `WsuiConfig::rule`
+if you weigh FP heavier than recall); (b) after verdict fold-back the
+narrator regenerates without the annotate-time comment cap (verdicts
+sharpen prose, they don't add noise; say the word and it inherits the
+cap instead).
+
 Run-4 note: all four maintainer verdicts implemented and regression-
 tested; no new parked decisions. Open judgment items listed in
 RUN_REPORT.md run-4 section: full-corpus fresh ACPL pass (~2-3h engine

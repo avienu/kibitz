@@ -1,3 +1,118 @@
+# Run 5 — 2026-07-26
+
+## Headline
+
+All four of your feedback items that fell to the core pipeline are fixed
+and regression-gated: **mate scores can no longer render as material**
+(full score-matrix tests), **annotations now narrate the delta** (new
+narrations architecture with a full-game similarity gate), **plan
+synthesis ships** (convergent hints become one ranked composite plan),
+and the **WSUI firing-rule study is published** in VALIDATION.md — the
+incumbent solo rule won on the data, so the default is unchanged and the
+alternatives are config knobs. **The Fathom FFI (the run's riskiest item)
+landed early and fully validated** — crates/silman-tb probes 3-man
+Syzygy files with WDL and DTZ answers matching the Lichess tablebase API
+exactly. Voice, discoverability, and trainer work: agent addenda below.
+
+## Item 1 — mate scores (bug)
+
+Every path from engine score to prose was audited. `EngineCheck` and
+`EngineEval` gained `mate_in` (schema v2); the job runner converts
+engine mate lines to the beneficiary's POV (`mate_for_beneficiary` in
+results, mate-aware confirmed/refuted grading); fold-back nulls
+`score_delta_cp` whenever a mate is present so no downstream path can
+see a 100-pawn sentinel. Templates: "The engine confirms it: {pv} —
+forced mate in {mate}." / "…mates in {mate} even after the defense's
+best try." / checkmate-on-board / eval-side variants. The required
+matrix is tested end-to-end: positive cp ("wins about two pawns"),
+negative cp, mate for ("forced mate in 3"), mate against, mate-in-0
+(checkmate), plus a belt-and-suspenders case where a cp sentinel sneaks
+in NEXT TO a mate and the mate wording still wins. A fold-back test
+plants a mate verdict in a done job and asserts the exported PGN says
+"forced mate in 3" and never "pawns".
+
+## Item 2 — repetition (bug): the delta-narration redesign
+
+The root cause was architectural: generated comments lived inline in the
+movetext, so both the annotator and fold-back did incremental token
+surgery with only local memory. Redesign:
+
+- **Migration 0007**: generated prose moved to a `narrations(game_id,
+  ply)` side table, merged into exports after the mainline move. Human
+  comments are never touched; regeneration is wholesale, deterministic,
+  and idempotent (asserted).
+- **One shared narrator** (`narrate_game`) serves both batch annotation
+  and verdict fold-back — the two paths cannot drift apart again.
+- **Delta filtering**: an annotation narrates what the MOVE changed —
+  new alerts, themes that appear or change magnitude, plans as they
+  form. Standing themes restate only at phase boundaries. An alert that
+  vanishes and re-arises within 8 plies (attacker captured and instantly
+  replaced) is not retold. A verdict on a persisting alert narrates once,
+  not at every ply the screen kept firing.
+- **Blunder-class moves** (`?`/`??` NAGs) lead tactically with all
+  positional boilerplate suppressed.
+- **Terminal positions** get no chatter (no more "the knight on b8
+  hangs" under the checkmating move).
+- **Phrasing variety**: same-kind alerts on different squares select
+  square-seeded `.alt` template variants; clauses shared by two alerts
+  in one comment render once. (Also fixed while in there: blockade plan
+  hints now attribute to the DEFENDING side — "Another idea for Black:
+  blockade White's passed pawn".)
+
+The required gate: the Opera game (Morphy 1858, with `?`/`??` NAGs on
+the two famous mistakes) is annotated end-to-end and snapshot-tested,
+and the test FAILS if any two consecutive narrations exceed 0.6 Jaccard
+word-set similarity. The snapshot reads as a story now — see
+`app/silman-db/tests/snapshots/narration__opera_game_annotated.snap`.
+
+## Item 4 — plan synthesis
+
+`silman_core::plans::synthesize()` clusters PlanHints by (side, file of
+the hint's destination square); destination squares get double vote
+weight for naming the target; composites rank by (count of distinct
+supporting imbalances, magnitude-weighted score). `FeatureRecord` v2
+carries `composite_plans`. The verbalizer narrates the top composite as
+ONE unified sentence — "Everything points to d5: reroute the knight
+there and pile up on the backward pawn in front of it." — the runner-up
+briefly, the rest dropped; member hints are consumed so they never
+repeat as singles. Golden test: the Sveshnikov bind position (FEN
+r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7)
+converges on d5 with outpost + knight-route + backward-pawn support.
+
+## Item 5 — WSUI firing-rule study
+
+`WsuiConfig` gained `rule: FiringRule` (solo / pair /
+high-solo-or-two-distinct / weighted score, unit-tested); the validation
+harness sweeps every family × threshold × SEE band on the train half and
+publishes each family's best point on the holdout. Full table in
+docs/VALIDATION.md. Verdict: **the incumbent solo rule wins outright**
+(81.3% recall / 39.2% FP, balanced objective 42.1 vs 38.5 for the best
+challenger). Every stricter rule pays for FP reduction with
+disproportionate recall loss — pair rules halve FP but drop ~28 recall
+points, because most real tactics present as one dominant alert. Default
+unchanged; `PairAtOrAbove` (15.6% FP / 93.1% precision) is documented as
+the knob for latency-sensitive batch profiling. Personal-corpus motif
+counts re-verified byte-identical (Undefended allowed 1,318; WeakKing
+57/713 conversion — same as run 4).
+
+## Phase 5 — Fathom FFI (crates/silman-tb) — DONE, validated
+
+Vendored Fathom @ c9c6fef (LICENSE verified MIT verbatim before
+vendoring; per-file sha256s in the crate README), compiled via `cc`, no
+bindgen. Safe API: `Tablebase::init` (global-mutex guarded — Fathom has
+process-global state), `probe_wdl` (thread-safe), **`probe_root`** (DTZ
+best-move — shipped, not parked), cozy-chess `Board` adapters, bare-kings
+short-circuit, structured errors (castling rights, nonzero rule50,
+too-many-pieces). Validation: 10/10 tests against real 3-man Syzygy
+files (`scripts/fetch_syzygy_test_files.sh`, ~26 KB) with every probe
+cross-checked against the Lichess tablebase API — KQvK Win dtz 13 best
+Qa7 (exact match), KRvK Win dtz 23, KPvK wrong-corner Win vs rook-pawn
+Draw, promotion-position root move a7a8=Q dtz 1. Tests skip cleanly when
+the files are absent (CI-safe). License gate extended and green for all
+five BSD crates.
+
+<!-- AGENT-ADDENDA -->
+
 # RUN_REPORT.md
 
 # Run 4 — 2026-07-26
