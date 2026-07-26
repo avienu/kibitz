@@ -6,8 +6,10 @@
 //! callers feed it precomputed data. See CLAUDE.md.
 
 pub mod fingerprint;
+pub mod player;
 
 pub use fingerprint::{
     fingerprint, Color, ColorFingerprint, DeviationPoint, EcoFamilyStat, FingerprintGame,
     FingerprintOptions, GameScore, MoveStat, OwnMove, PositionStat, RepertoireFingerprint,
 };
+pub use player::{player_profile, PhaseTag, PlayerProfile, ProfileGame, ProfilePly};

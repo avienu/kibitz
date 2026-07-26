@@ -111,6 +111,14 @@ enum Command {
     },
     /// Analyze one FEN statically and print the coach prose + record JSON.
     Explain { fen: String },
+    /// Full player profile (motifs, structures, ACPL where evals exist).
+    Profile {
+        player: String,
+        #[arg(long, default_value_t = 2000)]
+        max_games: u32,
+        #[arg(long)]
+        json: bool,
+    },
     /// Print database summary counts.
     Stats,
 }
@@ -349,6 +357,61 @@ fn main() -> anyhow::Result<()> {
             println!("{}", silman_verbalize::verbalize(&record));
             println!("---");
             println!("{}", serde_json::to_string_pretty(&record)?);
+        }
+        Command::Profile {
+            player,
+            max_games,
+            json,
+        } => {
+            let p = silman_db::profile::build_profile(&conn, &player, max_games)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&p)?);
+            } else {
+                println!(
+                    "== {} — {} games, {:.1}% score, eval coverage {:.1}%",
+                    p.player, p.games, p.score_pct, p.eval_coverage_pct
+                );
+                for (label, a) in [
+                    ("opening", &p.acpl_opening),
+                    ("middlegame", &p.acpl_middlegame),
+                    ("endgame", &p.acpl_endgame),
+                ] {
+                    if a.moves > 0 {
+                        println!(
+                            "  ACPL {label:<11} {:>6.1}  ({} moves: {} blunders, {} mistakes, {} inaccuracies)",
+                            a.acpl, a.moves, a.blunders, a.mistakes, a.inaccuracies
+                        );
+                    }
+                }
+                println!("  motif matrix (opportunities taken/missed | allowed against self):");
+                for m in p.motifs.iter().take(8) {
+                    println!(
+                        "    {:<22} opp {:>4}  taken {:>4}  missed {:>4} (e.g. {:?})  allowed {:>4} (e.g. {:?})",
+                        m.kind, m.opportunities, m.taken, m.missed, m.example_missed, m.allowed, m.example_allowed
+                    );
+                }
+                println!("  structures:");
+                for s in p.structures.iter().take(8) {
+                    println!(
+                        "    {:<22} {:>4} games  {:>5.1}%  (e.g. {:?})",
+                        s.flag, s.games, s.score_pct, s.examples
+                    );
+                }
+                println!("  openings:");
+                for e in p.eco.iter().take(8) {
+                    println!(
+                        "    {:<4} {:>4} games  {:>5.1}%  (e.g. {:?})",
+                        e.eco, e.games, e.score_pct, e.examples
+                    );
+                }
+                println!(
+                    "  conversion: reached +2.00 in {} games, converted {}; reached -1.00 in {}, held {}",
+                    p.conversion.winning_reached,
+                    p.conversion.converted_wins,
+                    p.conversion.losing_reached,
+                    p.conversion.held
+                );
+            }
         }
         Command::Stats => {
             let s = stats(&conn)?;

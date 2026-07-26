@@ -55,17 +55,32 @@ fn parse_engine_comment(text: &str) -> Option<(String, String, u32, i32)> {
             if name_tokens.len() >= 6 || t.ends_with('%') || t.chars().all(|c| c.is_ascii_digit()) {
                 break;
             }
-            name_tokens.push(t);
-            // An engine name plausibly starts at a capitalized word.
-            if t.chars().next().is_some_and(|c| c.is_ascii_uppercase()) && name_tokens.len() >= 2 {
+            // Human text before the engine name starts lowercase; the
+            // token adjacent to depth:eval (e.g. "64bit:") may too.
+            if !name_tokens.is_empty()
+                && (t.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+                    || t.contains(':')
+                    || t.starts_with('+')
+                    || t.starts_with('-'))
+            {
                 break;
             }
+            name_tokens.push(t);
         }
+    }
+    // Engine names start with a capitalized word (Stockfish, Toga,
+    // Rybka...): trim leading junk (SCID blunder markers like
+    // "****D9 2.9->9.7") off the collected window.
+    name_tokens.reverse();
+    while let Some(first) = name_tokens.first() {
+        if first.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+            break;
+        }
+        name_tokens.remove(0);
     }
     let engine = if name_tokens.is_empty() {
         "unknown (imported)".to_string()
     } else {
-        name_tokens.reverse();
         tokens.truncate(tokens.len() - name_tokens.len());
         name_tokens.join(" ").trim_end_matches(':').to_string()
     };
@@ -93,21 +108,30 @@ pub fn extract_legacy_evals(tokens: Vec<Token>) -> (Vec<Token>, Vec<LegacyEval>)
                 ply += 1;
                 out.push(t);
             }
-            Token::Comment(text) if depth == 0 && ply > 0 => match parse_engine_comment(text) {
-                Some((rest, engine, d, eval_cp)) => {
-                    evals.push(LegacyEval {
+            Token::Comment(text) if depth == 0 && ply > 0 => {
+                // Comments may contain SEVERAL stacked engine evals
+                // (re-annotated games); peel them off right to left.
+                let mut remainder = text.clone();
+                let mut found = Vec::new();
+                while let Some((rest, engine, d, eval_cp)) = parse_engine_comment(&remainder) {
+                    found.push(LegacyEval {
                         ply,
                         engine,
                         depth: d,
                         eval_cp,
                     });
-                    let rest = rest.trim();
+                    remainder = rest;
+                }
+                if found.is_empty() {
+                    out.push(t);
+                } else {
+                    evals.extend(found.into_iter().rev());
+                    let rest = remainder.trim();
                     if !rest.is_empty() {
                         out.push(Token::Comment(rest.to_string()));
                     }
                 }
-                None => out.push(t),
-            },
+            }
             _ => out.push(t),
         }
     }
@@ -144,6 +168,28 @@ mod tests {
         // Negative eval.
         let (_, _, _, cp) = parse_engine_comment("Rybka 3: 14:-1.20").unwrap();
         assert_eq!(cp, -120);
+
+        // Multi-word capitalized engine names survive intact (observed:
+        // "Toga II 1.2.1a" in the maintainer's database).
+        let (rest, engine, _, _) = parse_engine_comment("Toga II 1.2.1a: 12:+0.15").unwrap();
+        assert_eq!(engine, "Toga II 1.2.1a");
+        assert_eq!(rest, "");
+        let (rest, engine, _, _) =
+            parse_engine_comment("Last book move Stockfish 2.1.1 64bit: 20:+0.84").unwrap();
+        assert_eq!(engine, "Stockfish 2.1.1 64bit");
+        assert_eq!(rest, "Last book move");
+
+        // Stacked double annotations peel correctly (observed in real
+        // re-annotated games).
+        let (rest, engine, depth, cp) =
+            parse_engine_comment("Stockfish 2.0.1: 25:+1.53 Stockfish 2.0.1: 24:-5.73").unwrap();
+        assert_eq!(engine, "Stockfish 2.0.1");
+        assert_eq!((depth, cp), (24, -573));
+        assert_eq!(rest, "Stockfish 2.0.1: 25:+1.53");
+        let (rest2, engine2, depth2, cp2) = parse_engine_comment(&rest).unwrap();
+        assert_eq!(engine2, "Stockfish 2.0.1");
+        assert_eq!((depth2, cp2), (25, 153));
+        assert_eq!(rest2, "");
 
         // Plain human comments pass through.
         assert!(parse_engine_comment("Last book move").is_none());

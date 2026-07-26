@@ -24,7 +24,7 @@ pub enum GameScore {
 }
 
 impl GameScore {
-    fn points(self) -> f64 {
+    pub fn points(self) -> f64 {
         match self {
             GameScore::Win => 1.0,
             GameScore::Draw => 0.5,
