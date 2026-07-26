@@ -6,12 +6,16 @@
 //! BSD crates must never depend on this.
 
 pub mod db;
+pub mod eco;
 pub mod hash;
 pub mod import;
+pub mod import_si4;
 pub mod movebin;
+pub mod net;
 pub mod pgn;
 pub mod query;
 pub mod san;
+pub mod twic;
 
 #[cfg(test)]
 mod tests {
@@ -111,6 +115,54 @@ mod tests {
         )
         .unwrap();
         assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn opening_tree_counts_validated_by_hand() {
+        // Fixture: Morphy game (1.e4, White wins), miniature (1.f3, Black
+        // wins), broken game (rejected), duplicate (skipped). From the
+        // start position the tree must therefore be exactly:
+        //   e4: 1 game, 1-0  |  f3: 1 game, 0-1
+        // and after 1.e4 e5 2.Nf3 (Morphy only): d6: 1 game, 1-0.
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(&dir.path().join("test.sqlite")).unwrap();
+        let source = SourceInfo {
+            name: "fixture".into(),
+            origin: "unit test".into(),
+            license: "public domain".into(),
+        };
+        import_pgn(&conn, &source, Cursor::new(FIXTURE)).unwrap();
+
+        let (tree, _) = crate::query::opening_tree(
+            &conn,
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        )
+        .unwrap();
+        assert_eq!(tree.len(), 2);
+        let e4 = tree.iter().find(|m| m.san == "e4").unwrap();
+        assert_eq!(
+            (e4.count, e4.white_wins, e4.draws, e4.black_wins),
+            (1, 1, 0, 0)
+        );
+        let f3 = tree.iter().find(|m| m.san == "f3").unwrap();
+        assert_eq!(
+            (f3.count, f3.white_wins, f3.draws, f3.black_wins),
+            (1, 0, 0, 1)
+        );
+
+        let (tree, _) = crate::query::opening_tree(
+            &conn,
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+        )
+        .unwrap();
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].san, "d6");
+
+        // ECO tagging via the bundled dataset: the Morphy game is a Philidor.
+        let eco: String = conn
+            .query_row("SELECT eco FROM games WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert!(eco.starts_with("C41"), "expected Philidor C41, got {eco}");
     }
 
     #[test]

@@ -30,21 +30,66 @@ pub struct ImportStats {
 }
 
 /// A game fully prepared for insertion.
-struct PreparedGame {
-    white: Option<String>,
-    black: Option<String>,
-    event: Option<String>,
-    site: Option<String>,
-    round: Option<String>,
-    date: Option<String>,
-    result: u8,
-    white_elo: Option<i64>,
-    black_elo: Option<i64>,
-    eco: Option<String>,
-    movetext: Vec<u8>,
-    position_hashes: Vec<u64>,
-    header_sig: u64,
-    moves_hash: u64,
+pub(crate) struct PreparedGame {
+    pub white: Option<String>,
+    pub black: Option<String>,
+    pub event: Option<String>,
+    pub site: Option<String>,
+    pub round: Option<String>,
+    pub date: Option<String>,
+    pub result: u8,
+    pub white_elo: Option<i64>,
+    pub black_elo: Option<i64>,
+    /// Fallback ECO from the source's own header; the bundled dataset takes
+    /// precedence at insert time.
+    pub eco_tag: Option<String>,
+    pub start_fen: Option<String>,
+    pub movetext: Vec<u8>,
+    /// Position hashes for ply 0 (start position) through the final ply.
+    pub position_hashes: Vec<u64>,
+    pub header_sig: u64,
+    pub moves_hash: u64,
+}
+
+impl PreparedGame {
+    /// Build the movetext, per-ply hashes (including ply 0) and signatures
+    /// by replaying `moves` from `start`. Shared by the PGN and .si4
+    /// importers so duplicate detection works across sources.
+    pub fn from_moves(
+        start: &Board,
+        moves: &[cozy_chess::Move],
+    ) -> Result<(Vec<u8>, Vec<u64>, u64), String> {
+        let mut board = start.clone();
+        let mut movetext = Vec::with_capacity(moves.len());
+        let mut hashes = Vec::with_capacity(moves.len() + 1);
+        let mut moves_hash_input = Vec::with_capacity(moves.len() * 2);
+        hashes.push(crate::hash::position_hash(&board));
+        for (ply, &mv) in moves.iter().enumerate() {
+            let ordered = ordered_legal_moves(&board);
+            let idx = ordered
+                .iter()
+                .position(|&m| m == mv)
+                .ok_or_else(|| format!("ply {}: move {mv} is not legal", ply + 1))?;
+            movetext.push(idx as u8);
+            moves_hash_input.push(mv.from as u8);
+            moves_hash_input.push(mv.to as u8);
+            board.play(mv);
+            hashes.push(crate::hash::position_hash(&board));
+        }
+        Ok((movetext, hashes, fnv1a64(&moves_hash_input)))
+    }
+
+    /// Header signature over identity fields that survive re-export between
+    /// tools (see DECISIONS_NEEDED.md item 3).
+    pub fn header_signature(
+        white: Option<&str>,
+        black: Option<&str>,
+        date: Option<&str>,
+        result: u8,
+    ) -> u64 {
+        let norm = |v: Option<&str>| v.unwrap_or("?").trim().to_ascii_lowercase();
+        fnv1a64(format!("{}|{}|{}|{}", norm(white), norm(black), norm(date), result).as_bytes())
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -61,16 +106,17 @@ pub enum PrepareError {
 /// Replay the SAN mainline, producing the binary movetext, the per-ply
 /// position hashes, and the duplicate-detection signatures.
 fn prepare(game: &RawGame) -> Result<PreparedGame, PrepareError> {
-    let mut board = match game.tag("FEN") {
-        Some(fen) if game.tag("SetUp") != Some("0") => {
-            fen.parse::<Board>().map_err(PrepareError::CustomStart)?
-        }
-        _ => Board::default(),
+    let start_fen = match game.tag("FEN") {
+        Some(fen) if game.tag("SetUp") != Some("0") => Some(fen.to_string()),
+        _ => None,
+    };
+    let start = match &start_fen {
+        Some(fen) => fen.parse::<Board>().map_err(PrepareError::CustomStart)?,
+        None => Board::default(),
     };
 
-    let mut movetext = Vec::with_capacity(game.sans.len());
-    let mut hashes = Vec::with_capacity(game.sans.len());
-    let mut moves_hash_input = Vec::with_capacity(game.sans.len() * 2);
+    let mut board = start.clone();
+    let mut moves = Vec::with_capacity(game.sans.len());
     for (ply, san) in game.sans.iter().enumerate() {
         if san == "--" || san == "Z0" {
             return Err(PrepareError::NullMove);
@@ -79,36 +125,25 @@ fn prepare(game: &RawGame) -> Result<PreparedGame, PrepareError> {
             ply: ply + 1,
             msg: e.to_string(),
         })?;
-        let ordered = ordered_legal_moves(&board);
-        let idx = ordered
-            .iter()
-            .position(|&m| m == mv)
-            .expect("parse_san returns a legal move");
-        movetext.push(idx as u8);
-        moves_hash_input.push(mv.from as u8);
-        moves_hash_input.push(mv.to as u8);
+        moves.push(mv);
         board.play(mv);
-        hashes.push(crate::hash::position_hash(&board));
     }
+    let (movetext, hashes, moves_hash) = PreparedGame::from_moves(&start, &moves)
+        .map_err(|msg| PrepareError::BadMove { ply: 0, msg })?;
 
     let tag_owned = |k: &str| game.tag(k).map(str::to_string);
-    let norm = |k: &str| game.tag(k).unwrap_or("?").trim().to_ascii_lowercase();
-    // Header signature: identity fields that survive re-export between tools
-    // (player names, date, result). Event/site names vary across sources and
-    // would defeat cross-source duplicate detection.
-    let header = format!(
-        "{}|{}|{}|{}",
-        norm("White"),
-        norm("Black"),
-        norm("Date"),
-        game.result.as_u8()
-    );
-
     let elo = |k: &str| {
         game.tag(k)
             .and_then(|v| v.trim().parse::<i64>().ok())
             .filter(|&e| e > 0)
     };
+    let date = tag_owned("UTCDate").or_else(|| tag_owned("Date"));
+    let header_sig = PreparedGame::header_signature(
+        game.tag("White"),
+        game.tag("Black"),
+        date.as_deref(),
+        game.result.as_u8(),
+    );
 
     Ok(PreparedGame {
         white: tag_owned("White"),
@@ -116,13 +151,14 @@ fn prepare(game: &RawGame) -> Result<PreparedGame, PrepareError> {
         event: tag_owned("Event"),
         site: tag_owned("Site"),
         round: tag_owned("Round"),
-        date: tag_owned("UTCDate").or_else(|| tag_owned("Date")),
+        date,
         result: game.result.as_u8(),
         white_elo: elo("WhiteElo"),
         black_elo: elo("BlackElo"),
-        eco: tag_owned("ECO"),
-        header_sig: fnv1a64(header.as_bytes()),
-        moves_hash: fnv1a64(&moves_hash_input),
+        eco_tag: tag_owned("ECO"),
+        start_fen,
+        header_sig,
+        moves_hash,
         movetext,
         position_hashes: hashes,
     })
@@ -153,6 +189,7 @@ pub fn import_pgn<R: BufRead>(
     let start = Instant::now();
     let mut stats = ImportStats::default();
 
+    crate::eco::ensure_openings(conn)?;
     conn.execute(
         "INSERT INTO sources (name, origin, license) VALUES (?1, ?2, ?3)",
         params![source.name, source.origin, source.license],
@@ -189,7 +226,7 @@ pub fn import_pgn<R: BufRead>(
     Ok(stats)
 }
 
-fn insert_game(
+pub(crate) fn insert_game(
     conn: &Connection,
     source_id: i64,
     g: &PreparedGame,
@@ -200,12 +237,19 @@ fn insert_game(
     let event_id = intern(conn, "events", g.event.as_deref())?;
     let site_id = intern(conn, "sites", g.site.as_deref())?;
 
+    // ECO: bundled-dataset classification (deepest book position reached)
+    // wins; the source's own tag is the fallback.
+    let eco = match crate::eco::classify(conn, &g.position_hashes[1..])? {
+        Some((eco, _name)) => Some(eco),
+        None => g.eco_tag.clone(),
+    };
+
     let mut game_stmt = conn.prepare_cached(
         "INSERT OR IGNORE INTO games
            (source_id, white_id, black_id, event_id, site_id, round, date,
             result, white_elo, black_elo, eco, ply_count, encoding_version,
-            movetext, header_sig, moves_hash)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
+            movetext, header_sig, moves_hash, start_fen)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
     )?;
     let inserted = game_stmt.execute(params![
         source_id,
@@ -218,12 +262,13 @@ fn insert_game(
         g.result,
         g.white_elo,
         g.black_elo,
-        g.eco,
+        eco,
         g.movetext.len() as i64,
         ENCODING_VERSION,
         g.movetext,
         g.header_sig as i64,
         g.moves_hash as i64,
+        g.start_fen,
     ])?;
     if inserted == 0 {
         stats.duplicates_skipped += 1;
@@ -231,10 +276,14 @@ fn insert_game(
     }
     let game_id = conn.last_insert_rowid();
     let mut pos_stmt = conn.prepare_cached(
-        "INSERT INTO positions (position_hash, game_id, ply) VALUES (?1, ?2, ?3)",
+        "INSERT INTO positions (position_hash, game_id, ply, next_byte)
+         VALUES (?1, ?2, ?3, ?4)",
     )?;
-    for (i, &h) in g.position_hashes.iter().enumerate() {
-        pos_stmt.execute(params![h as i64, game_id, (i + 1) as i64])?;
+    // Row `ply` holds the position after `ply` plies (ply 0 = start) and
+    // the movetext byte of the move played FROM it (NULL at game end).
+    for (ply, &h) in g.position_hashes.iter().enumerate() {
+        let next_byte = g.movetext.get(ply).map(|&b| b as i64);
+        pos_stmt.execute(params![h as i64, game_id, ply as i64, next_byte])?;
         stats.positions_indexed += 1;
     }
     stats.games_imported += 1;

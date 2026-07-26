@@ -15,6 +15,7 @@ pub const POSITION_HASH_VERSION: u32 = 1;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_init.sql")),
     (2, include_str!("../migrations/0002_openings_tree_twic.sql")),
+    (3, include_str!("../migrations/0003_start_fen.sql")),
 ];
 
 #[derive(Debug, thiserror::Error)]

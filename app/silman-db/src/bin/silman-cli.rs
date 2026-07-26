@@ -35,8 +35,20 @@ enum Command {
         #[arg(long, default_value = "unknown")]
         license: String,
     },
+    /// Import a SCID database (.si4/.sg4/.sn4 base path).
+    ImportSi4 {
+        base: PathBuf,
+        #[arg(long, default_value = "SCID import")]
+        source_name: String,
+        #[arg(long, default_value = "local SCID database")]
+        origin: String,
+        #[arg(long, default_value = "personal data")]
+        license: String,
+    },
     /// List games that reached the given FEN, with query timing.
     FindFen { fen: String },
+    /// Show the opening tree (moves, W/D/L, perf) for a FEN.
+    OpeningTree { fen: String },
     /// Print database summary counts.
     Stats,
 }
@@ -75,6 +87,59 @@ fn main() -> anyhow::Result<()> {
             for f in &st.failures {
                 eprintln!("  skipped: {f}");
             }
+        }
+        Command::ImportSi4 {
+            base,
+            source_name,
+            origin,
+            license,
+        } => {
+            let source = SourceInfo {
+                name: source_name,
+                origin,
+                license,
+            };
+            let st = silman_db::import_si4::import_si4(&conn, &source, &base)?;
+            println!(
+                "imported {} games ({} duplicates, {} failed, {} empty, {} with null moves) \
+                 in {:.2?}",
+                st.base.games_imported,
+                st.base.duplicates_skipped,
+                st.base.games_failed,
+                st.empty_skipped,
+                st.null_move_skipped,
+                st.base.elapsed
+            );
+            if st.comments_dropped + st.nags_dropped + st.variations_dropped > 0 {
+                println!(
+                    "NOTE: {} comments, {} NAGs, {} variations present in the source were NOT \
+                     stored (annotation storage pending encoding v2 — see DECISIONS_NEEDED.md)",
+                    st.comments_dropped, st.nags_dropped, st.variations_dropped
+                );
+            }
+            for f in &st.base.failures {
+                eprintln!("  failed: {f}");
+            }
+        }
+        Command::OpeningTree { fen } => {
+            let (tree, elapsed) = silman_db::query::opening_tree(&conn, &fen)?;
+            println!(
+                "{:<8} {:>7} {:>6} {:>6} {:>6} {:>8} {:>6}",
+                "move", "games", "+W", "=D", "-B", "avg-elo", "perf"
+            );
+            for m in &tree {
+                println!(
+                    "{:<8} {:>7} {:>6} {:>6} {:>6} {:>8} {:>6}",
+                    m.san,
+                    m.count,
+                    m.white_wins,
+                    m.draws,
+                    m.black_wins,
+                    m.avg_elo.map_or("-".into(), |e| e.to_string()),
+                    m.perf.map_or("-".into(), |p| p.to_string()),
+                );
+            }
+            println!("{} distinct moves in {:.3?}", tree.len(), elapsed);
         }
         Command::FindFen { fen } => {
             let (hits, elapsed) = find_fen(&conn, &fen)?;
