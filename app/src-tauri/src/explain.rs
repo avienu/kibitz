@@ -11,6 +11,9 @@ use serde::Serialize;
 pub struct Explanation {
     pub record: serde_json::Value,
     pub prose: String,
+    /// The game-view contract (schema v3): tag, eval readout, dual-voice
+    /// headline and blocks, each block with its evidence overlay set.
+    pub explanation: serde_json::Value,
 }
 
 pub(crate) fn explain_position_impl(
@@ -20,8 +23,14 @@ pub(crate) fn explain_position_impl(
     let board: cozy_chess::Board = fen.parse().map_err(|e| format!("bad FEN {fen:?}: {e:?}"))?;
     let record = silman_core::analyze(&board);
     let prose = silman_verbalize::verbalize_voiced(&record, voice);
+    let explanation =
+        serde_json::to_value(silman_verbalize::explain(&record)).map_err(|e| e.to_string())?;
     let record = serde_json::to_value(&record).map_err(|e| e.to_string())?;
-    Ok(Explanation { record, prose })
+    Ok(Explanation {
+        record,
+        prose,
+        explanation,
+    })
 }
 
 /// Static analysis + prose for `fen` in the requested narration voice
@@ -61,5 +70,20 @@ mod tests {
         assert_eq!(coach.record, neutral.record);
 
         assert!(explain_position_impl("not a fen", Voice::default()).is_err());
+
+        // The explanation contract rides along: dual-voice headline and
+        // per-block evidence, independent of the requested prose voice.
+        assert_eq!(
+            coach.explanation["schemaVersion"],
+            serde_json::Value::Null,
+            "contract serializes snake_case like the record"
+        );
+        assert_eq!(
+            coach.explanation["schema_version"],
+            silman_core::record::SCHEMA_VERSION
+        );
+        assert!(coach.explanation["headline"]["coach"].is_string());
+        assert!(coach.explanation["headline"]["neutral"].is_string());
+        assert_eq!(coach.explanation, neutral.explanation);
     }
 }

@@ -1,10 +1,10 @@
 ---
 source: crates/silman-core/src/record.rs
-assertion_line: 293
+assertion_line: 384
 expression: json
 ---
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "fen": "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2",
   "side_to_move": "white",
   "phase": "middlegame",

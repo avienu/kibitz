@@ -24,7 +24,7 @@ Style — the coaching voice: write like a Silman-school coach. Pieces have desi
 
 USER:
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "fen": "r1bqk2r/pp2bppp/2n2n2/1B1pN3/3P4/2N5/PPP2PPP/R1BQK2R w KQkq - 0 9",
   "side_to_move": "white",
   "phase": "middlegame",

@@ -26,6 +26,7 @@
 //! rendered imbalances' hints, deduplicated by hint token.
 
 mod board;
+mod explain;
 #[cfg(feature = "llm")]
 pub mod llm;
 mod phrase;
@@ -41,6 +42,7 @@ use silman_core::record::{
 };
 
 use board::{Board, PieceKind};
+pub use explain::explain;
 use phrase::{
     capitalize_first, decapitalize_first, favors_side, humanize, join_and, magnitude_key,
     pawns_amount, phase_key, see_key, severity_key, side_name,
@@ -143,6 +145,11 @@ impl Verbalizer for TemplateVerbalizer {
 /// then imbalances, then plans, as blank-line-separated paragraphs. A
 /// record with nothing to report yields a single graceful "nothing stands
 /// out" line.
+/// Above this absolute advantage (centipawns) prose stops counting pawns
+/// and states a verdict; the number belongs to the eval readout. Mate
+/// rendering (run-5) is untouched and always wins over any band.
+pub const DECISIVE_CP: i32 = 500;
+
 pub fn verbalize(record: &FeatureRecord) -> String {
     verbalize_voiced(record, Voice::default())
 }
@@ -199,22 +206,7 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
         .collect::<Vec<_>>()
         .join(" ");
 
-    // Dominant imbalances: winning > clear > minor; with three or more
-    // imbalances the minor ones are noise unless nothing stronger exists.
-    let mut ranked: Vec<&Imbalance> = record.imbalances.iter().collect();
-    ranked.sort_by_key(|imbalance| Reverse(imbalance.magnitude));
-    let drop_minor = record.imbalances.len() >= 3
-        && ranked
-            .iter()
-            .any(|imbalance| imbalance.magnitude > Magnitude::Minor);
-    let selected: Vec<&Imbalance> = if drop_minor {
-        ranked
-            .into_iter()
-            .filter(|imbalance| imbalance.magnitude > Magnitude::Minor)
-            .collect()
-    } else {
-        ranked
-    };
+    let selected = select_imbalances(&record.imbalances);
 
     let mut imbalance_sentences: Vec<String> = selected
         .iter()
@@ -243,6 +235,16 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
                     ("best", &engine.best),
                 ],
             ));
+        } else if engine.eval_cp.abs() >= DECISIVE_CP {
+            let side = side_name(if engine.eval_cp > 0 {
+                SideColor::White
+            } else {
+                SideColor::Black
+            });
+            imbalance_sentences.push(fill(
+                lookup_voiced(voice, &["engine.eval.decisive"]),
+                &[("side", side), ("best", &engine.best)],
+            ));
         } else {
             let score = format!("{:+.1}", f64::from(engine.eval_cp) / 100.0);
             imbalance_sentences.push(fill(
@@ -266,33 +268,7 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
         for h in &cp.hints {
             seen.insert(h.as_str());
         }
-        if i == 0 {
-            let clauses: Vec<String> = cp
-                .hints
-                .iter()
-                .filter_map(|h| {
-                    try_lookup_voiced(voice, &format!("plan.composite.clause.{h}"))
-                        .map(str::to_string)
-                })
-                .collect();
-            let clause_text = if clauses.is_empty() {
-                humanize(&cp.hints.join(", "))
-            } else {
-                join_and(&clauses)
-            };
-            plan_sentences.push(fill(
-                lookup_voiced(voice, &["plan.composite.lead"]),
-                &[("target", &cp.target), ("clauses", &clause_text)],
-            ));
-        } else {
-            plan_sentences.push(fill(
-                lookup_voiced(voice, &["plan.composite.runner_up"]),
-                &[
-                    ("target", &cp.target),
-                    ("side", side_name_favors(cp.favors)),
-                ],
-            ));
-        }
+        plan_sentences.push(render_composite(cp, i, voice));
     }
     for imbalance in &selected {
         for plan in &imbalance.plans {
@@ -332,7 +308,11 @@ fn apply_starter(voice: Voice, rotation_key: &str, index: usize, paragraph: Stri
     format!("{starter} {body}")
 }
 
-fn render_alert_sentences(alert: &TacticAlert, board: &Board, voice: Voice) -> Vec<String> {
+pub(crate) fn render_alert_sentences(
+    alert: &TacticAlert,
+    board: &Board,
+    voice: Voice,
+) -> Vec<String> {
     let side = side_name(alert.side);
     // Phrasing-variety seed: the target square's index, so the same alert
     // on the same square always reads identically, while adjacent alerts
@@ -572,6 +552,16 @@ fn render_engine_check(check: &EngineCheck, voice: Voice) -> String {
                     )
                 };
             }
+            // Large finite advantages read as a verdict, not a pawn
+            // count (run-6 residual): the number lives in the eval
+            // readout, not the prose.
+            if check.score_delta_cp.is_some_and(|d| d.abs() >= DECISIVE_CP) {
+                return if pv.is_empty() {
+                    engine_key("engine.confirmed.decisive").to_string()
+                } else {
+                    fill(engine_key("engine.confirmed.pv_decisive"), &[("pv", &pv)])
+                };
+            }
             match (check.pv.is_empty(), check.score_delta_cp) {
                 (false, Some(delta)) => fill(
                     engine_key("engine.confirmed.pv_delta"),
@@ -590,7 +580,12 @@ fn render_engine_check(check: &EngineCheck, voice: Voice) -> String {
     }
 }
 
-fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase, voice: Voice) -> String {
+pub(crate) fn render_imbalance(
+    imbalance: &Imbalance,
+    board: &Board,
+    phase: Phase,
+    voice: Voice,
+) -> String {
     let kind = format!("{:?}", imbalance.kind);
 
     // Cross-key context: "open" flavors the bishop-pair phrase, and a named
@@ -944,7 +939,7 @@ fn pawn_owner(board: &Board, squares: &[String]) -> Option<SideColor> {
     owner
 }
 
-fn render_plan(plan: &PlanHint, favors: Favors, index: usize, voice: Voice) -> String {
+pub(crate) fn render_plan(plan: &PlanHint, favors: Favors, index: usize, voice: Voice) -> String {
     // A blockade is the DEFENDER's plan: attribute it to the side facing
     // the passer, whatever the parent imbalance favors.
     let favors = match plan.hint.as_str() {
@@ -1044,4 +1039,56 @@ fn owned_list(board: &Board, squares: &[String]) -> String {
         })
         .collect();
     join_and(&phrases)
+}
+
+/// Dominance selection shared by narration and the explanation builder:
+/// winning > clear > minor; with three or more imbalances the minor ones
+/// are noise unless nothing stronger exists.
+pub(crate) fn select_imbalances(imbalances: &[Imbalance]) -> Vec<&Imbalance> {
+    let mut ranked: Vec<&Imbalance> = imbalances.iter().collect();
+    ranked.sort_by_key(|imbalance| Reverse(imbalance.magnitude));
+    let drop_minor = imbalances.len() >= 3 && ranked.iter().any(|i| i.magnitude > Magnitude::Minor);
+    if drop_minor {
+        ranked
+            .into_iter()
+            .filter(|i| i.magnitude > Magnitude::Minor)
+            .collect()
+    } else {
+        ranked
+    }
+}
+
+/// Render one composite plan: index 0 is the unified lead, later indices
+/// the brief runner-up.
+pub(crate) fn render_composite(
+    cp: &silman_core::record::CompositePlan,
+    index: usize,
+    voice: Voice,
+) -> String {
+    if index == 0 {
+        let clauses: Vec<String> = cp
+            .hints
+            .iter()
+            .filter_map(|h| {
+                try_lookup_voiced(voice, &format!("plan.composite.clause.{h}")).map(str::to_string)
+            })
+            .collect();
+        let clause_text = if clauses.is_empty() {
+            humanize(&cp.hints.join(", "))
+        } else {
+            join_and(&clauses)
+        };
+        fill(
+            lookup_voiced(voice, &["plan.composite.lead"]),
+            &[("target", &cp.target), ("clauses", &clause_text)],
+        )
+    } else {
+        fill(
+            lookup_voiced(voice, &["plan.composite.runner_up"]),
+            &[
+                ("target", &cp.target),
+                ("side", side_name_favors(cp.favors)),
+            ],
+        )
+    }
 }

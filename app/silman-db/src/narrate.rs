@@ -114,7 +114,14 @@ fn is_blunder_nag(n: u8) -> bool {
 }
 
 fn alert_key(a: &silman_core::record::TacticAlert) -> String {
-    format!("{:?}@{:?}", a.kind, a.target)
+    // A king that wanders square to square is ONE story, not a new alert
+    // per square (run-6 residual): key WeakKing by side, everything else
+    // by its target square.
+    if a.kind == silman_core::record::AlertKind::WeakKing {
+        format!("{:?}@{:?}", a.kind, a.side)
+    } else {
+        format!("{:?}@{:?}", a.kind, a.target)
+    }
 }
 
 fn theme_key(i: &silman_core::record::Imbalance) -> String {

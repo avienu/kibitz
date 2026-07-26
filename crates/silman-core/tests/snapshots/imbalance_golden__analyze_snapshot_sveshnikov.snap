@@ -1,10 +1,10 @@
 ---
 source: crates/silman-core/tests/imbalance_golden.rs
-assertion_line: 149
+assertion_line: 166
 expression: record
 ---
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "fen": "r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7",
   "side_to_move": "white",
   "phase": "opening",

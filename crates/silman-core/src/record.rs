@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -189,6 +189,97 @@ pub struct CompositePlan {
     pub favors: Favors,
 }
 
+/// One string per narration voice (schema v3). The UI never synthesizes
+/// prose: both voices arrive pre-rendered so the voice toggle is instant
+/// and provably shows the same facts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VoiceText {
+    pub coach: String,
+    pub neutral: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BlockKind {
+    Alert,
+    Imbalance,
+    Plan,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ArrowKind {
+    Attacker,
+    Key,
+}
+
+/// A board arrow, always drawn source → target.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvidenceArrow {
+    pub from: String,
+    pub to: String,
+    pub kind: ArrowKind,
+}
+
+/// The squares/arrows one explanation block asks the board to show, in
+/// the shared evidence-overlay language (design/handoff-1). Field names
+/// are the UI contract — do not rename.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Evidence {
+    /// Alert-target squares (red ring).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alerts: Vec<String>,
+    /// Attacking pieces' squares (amber wedge + arrow).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attackers: Vec<String>,
+    /// Defending pieces' squares (blue wedge, no arrow).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub defenders: Vec<String>,
+    /// Imbalance squares (green wash).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imbalance: Vec<String>,
+    /// Key squares / plan targets (violet wedge).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub key: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arrows: Vec<EvidenceArrow>,
+}
+
+/// One sentence block of an explanation: what to say (both voices) and
+/// what to show while saying it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExplanationBlock {
+    pub kind: BlockKind,
+    pub text: VoiceText,
+    pub evidence: Evidence,
+}
+
+/// Numeric readout for the verdict pill / eval bar, White's POV.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvalReadout {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cp: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mate: Option<i32>,
+    /// Preformatted: "+2.6" or "#5" (negative mate = Black mates).
+    pub display: String,
+}
+
+/// The per-position explanation object consumed by the game view
+/// (schema v3; produced by silman-verbalize::explain — the UI must not
+/// synthesize explanations).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Explanation {
+    pub schema_version: u32,
+    /// Verdict pill text: "TACTICAL SCREEN FIRED" | "FORCED MATE" |
+    /// "QUIET POSITION".
+    pub tag: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eval: Option<EvalReadout>,
+    pub headline: VoiceText,
+    pub blocks: Vec<ExplanationBlock>,
+}
+
 /// The universal contract: everything silman knows about one position.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FeatureRecord {
@@ -273,7 +364,7 @@ mod tests {
         let json = serde_json::to_string_pretty(&record).unwrap();
         // Spec-sketch spellings must hold exactly.
         for needle in [
-            "\"schema_version\": 2",
+            "\"schema_version\": 3",
             "\"side_to_move\": \"white\"",
             "\"phase\": \"middlegame\"",
             "\"kind\": \"InadequatelyDefended\"",

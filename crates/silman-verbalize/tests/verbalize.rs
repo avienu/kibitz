@@ -800,3 +800,110 @@ fn coach_voice_overlays_and_neutral_stays_plain() {
     assert!("garbage".parse::<Voice>().is_err());
     assert_eq!(Voice::default(), Voice::Coach);
 }
+
+/// Run-6: the explanation contract — dual-voice blocks with evidence.
+#[test]
+fn explanation_contract_dual_voice_with_evidence() {
+    use silman_core::record::{ArrowKind, BlockKind};
+    let r = tactical_record();
+    let ex = silman_verbalize::explain(&r);
+    assert_eq!(ex.schema_version, silman_core::record::SCHEMA_VERSION);
+    assert_eq!(ex.tag, "TACTICAL SCREEN FIRED");
+    // Headline exists in both voices and is not repeated inside the lead
+    // block.
+    assert!(!ex.headline.coach.is_empty() && !ex.headline.neutral.is_empty());
+    let lead = &ex.blocks[0];
+    assert!(!lead.text.coach.starts_with(&ex.headline.coach));
+    // The lead alert block carries ring + attacker/defender squares and
+    // attacker→target arrows.
+    assert_eq!(lead.kind, BlockKind::Alert);
+    assert_eq!(lead.evidence.alerts, vec!["c6".to_string()]);
+    assert!(!lead.evidence.attackers.is_empty());
+    assert!(lead
+        .evidence
+        .arrows
+        .iter()
+        .all(|a| a.to == "c6" && a.kind == ArrowKind::Attacker));
+    assert_eq!(lead.evidence.arrows.len(), lead.evidence.attackers.len());
+    // Voices differ in wording, never in evidence (same struct per block).
+    assert_ne!(lead.text.coach, lead.text.neutral);
+    // Eval readout: confirmed delta for the beneficiary of a BLACK-owned
+    // alert converts to White-positive POV.
+    let eval = ex.eval.expect("confirmed check yields a readout");
+    assert!(eval.cp.unwrap() > 0, "{eval:?}");
+    assert!(eval.display.starts_with('+'));
+}
+
+#[test]
+fn explanation_quiet_position_and_mate_tag() {
+    use silman_core::record::{EngineEval, EvalReadout};
+    let mut r = quiet_record();
+    let ex = silman_verbalize::explain(&r);
+    assert_eq!(ex.tag, "QUIET POSITION");
+    assert!(ex
+        .blocks
+        .iter()
+        .all(|b| !b.evidence.alerts.iter().any(String::is_empty)));
+
+    r.engine = Some(EngineEval {
+        eval_cp: 31900,
+        mate_in: Some(-4),
+        best: "Qh2#".into(),
+        multipv: vec![],
+    });
+    let ex = silman_verbalize::explain(&r);
+    assert_eq!(ex.tag, "FORCED MATE");
+    let EvalReadout { mate, display, .. } = ex.eval.unwrap();
+    assert_eq!(mate, Some(-4));
+    assert_eq!(display, "#4");
+}
+
+/// Run-6 residual: at DECISIVE_CP the prose stops counting pawns.
+#[test]
+fn decisive_band_boundaries() {
+    use silman_verbalize::DECISIVE_CP;
+    let mk = |delta: i32| {
+        let mut r = tactical_record();
+        if let Some(a) = r.wsui.alerts.first_mut() {
+            if let Some(c) = a.engine_check.as_mut() {
+                c.score_delta_cp = Some(delta);
+                c.mate_in = None;
+            }
+        }
+        verbalize(&r)
+    };
+    let below = mk(DECISIVE_CP - 1);
+    assert!(below.contains("winning about"), "{below}");
+    assert!(below.contains("4.99") || below.contains("5"), "{below}");
+    let at = mk(DECISIVE_CP);
+    assert!(at.contains("simply winning"), "{at}");
+    assert!(
+        !at.contains("winning about"),
+        "engine prose stops counting pawns at the band: {at}"
+    );
+    let way_above = mk(910);
+    assert!(way_above.contains("simply winning"), "{way_above}");
+    // Mate still outranks any band.
+    let mut r = tactical_record();
+    if let Some(a) = r.wsui.alerts.first_mut() {
+        if let Some(c) = a.engine_check.as_mut() {
+            c.score_delta_cp = Some(10_000);
+            c.mate_in = Some(3);
+        }
+    }
+    let mate = verbalize(&r);
+    assert!(mate.contains("forced mate in 3"), "{mate}");
+
+    // Whole-position eval band.
+    use silman_core::record::EngineEval;
+    let mut q = quiet_record();
+    q.engine = Some(EngineEval {
+        eval_cp: 910,
+        mate_in: None,
+        best: "g4".into(),
+        multipv: vec![],
+    });
+    let out = verbalize(&q);
+    assert!(out.contains("completely winning for White"), "{out}");
+    assert!(!out.contains("+9.1"), "number stays out of prose: {out}");
+}

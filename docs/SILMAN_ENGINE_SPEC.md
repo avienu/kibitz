@@ -93,9 +93,49 @@ in sync):
 }
 ```
 
+Version history: v2 added `mate_in` (EngineCheck beneficiary-POV /
+EngineEval White-POV) and `composite_plans`; v3 added the Explanation
+contract below (no change to the record fields themselves).
+
 Consumers: silman-verbalize (single-position prose), silman-profile
 (aggregation), app trainers (weakness targeting), app UI (highlight overlays
 from `evidence` squares).
+
+## Explanation (silman-core::record, built by silman-verbalize::explain) — the game-view contract
+
+Schema v3 (run 6, design/handoff-1). One object per analyzed position; the
+UI never synthesizes prose or evidence. Both voices arrive pre-rendered so
+the voice toggle is instant and provably never changes the evidence.
+
+```json
+{
+  "schema_version": 3,
+  "tag": "TACTICAL SCREEN FIRED",    // | "FORCED MATE" | "QUIET POSITION"
+  "eval": { "cp": 260, "mate": null, "display": "+2.6" },   // White POV; null when nothing ran
+  "headline": { "coach": "...", "neutral": "..." },          // lead sentence, removed from block 0
+  "blocks": [ {
+      "kind": "alert",               // alert | imbalance | plan
+      "text": { "coach": "...", "neutral": "..." },
+      "evidence": {
+        "alerts": ["c6"],            // red ring squares
+        "attackers": ["e5","b5"],    // amber wedge squares
+        "defenders": ["b7"],         // blue wedge squares (never arrows)
+        "imbalance": [],             // green wash squares
+        "key": [],                   // violet wedge squares (plan targets)
+        "arrows": [ { "from": "e5", "to": "c6", "kind": "attacker" } ]  // kind: attacker|key
+      } } ]
+}
+```
+
+Block order mirrors narration: alerts (severity-desc, clause-deduped per
+voice), dominance-selected imbalances, composite plans then leftover single
+hints. Evidence rules: alert blocks ring the target and arrow every
+attacker into it; imbalance blocks wash every square found in the
+imbalance's structured evidence values; plan blocks mark key squares and
+draw route arrows (first→last hint square, and composite route pairs ending
+on the target). Prose bands: at ±5.00 pawns (`DECISIVE_CP`) engine prose
+states a verdict ("simply winning") and the number stays in `eval`; mate
+wording always outranks any band.
 
 ## silman-profile — corpus profiling
 
