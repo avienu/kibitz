@@ -115,14 +115,13 @@ be settled empirically using mypages/twictest.
 1. ~~Provide real data~~ **Done — see addendum.** Remaining real-data gap:
    ChessBase-exported PGN corpora (the run found none) and the full megabase
    (`bigdatabase` is header-less); point silman at them when available.
-2. **Run the demo app visually**: `cd app && npm install && npm run tauri
-   dev` (or open the built debug bundle). Board rendering, arrow-key
-   stepping and the live eval panel are logic-tested but were never seen on
-   screen (no display access this run). Click Analyze on a position and
-   confirm live depth/eval/PV updates.
-3. **Push to GitHub and watch CI**: the Linux leg (workspace + Tauri system
-   deps + app job) has never executed — "runs on Linux" is asserted by CI
-   config, not yet by a green run.
+2. ~~Run the demo app visually~~ **Done** — user confirmed `cd app && npm
+   install && npm run tauri dev` works on macOS.
+3. ~~Watch CI~~ **Done** — repo at github.com/avienu/silman; first run
+   green on all four jobs (rust + app, each on ubuntu-latest and
+   macos-latest), so "builds on Linux" is now verified by an actual run.
+   Minor: actions/checkout@v4 and setup-node@v4 emit Node-20 deprecation
+   notices; bump to @v5 whenever convenient.
 4. **Decide the five parked items in DECISIONS_NEEDED.md** — most urgent are
    the PGN annotation-import policy and null-move encoding (both gate the
    full Phase 1 importer).
