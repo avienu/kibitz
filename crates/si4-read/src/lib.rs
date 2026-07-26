@@ -11,9 +11,11 @@
 
 pub mod fixture;
 mod names;
+pub mod sg4;
 mod si4;
 
 pub use names::{NameBase, Sn4Header};
+pub use sg4::{decode_game, DecodedGame, Sg4Error};
 pub use si4::{DateTriple, IndexEntry, Si4Header};
 
 use std::io;

@@ -121,3 +121,36 @@ implemented (Phase 1).
 
 Anything hitting these gaps against real user databases must be reported in
 RUN_REPORT.md rather than resolved from SCID source.
+
+## 6. Empirical findings (2026-07-25, run 2)
+
+Gaps resolved by hypothesis-testing against the maintainer's real databases
+(9 bases, 7,905 games, validated by full decode: every move legal, mainline
+ply count equal to the index's, final material equal to the index
+signature). No SCID source consulted.
+
+1. **Non-standard tags** (gap §5.8): a first byte ≥ 0xF1 is a single-byte
+   tag *code* for a common tag (0xF3 = Annotator observed), followed by
+   {value_len, value}. Bytes 0x01–0xF0 are a literal name length as
+   documented. 0x00 terminates the list.
+2. **Pawn numbering / double push** (gap §5.4): pawns are numbered 8..=15
+   for files a..h at the standard start; pawn move code 15 is the
+   two-square advance.
+3. **Rook table is transposed in the community doc** (gap §5.6): codes 0–7
+   are to-FILE (same rank), 8–15 are to-RANK+8 (same file) — making rook
+   and queen encodings mutually consistent. The queen table is correct as
+   documented (bit3=1 → to-rank; bit3=0 → to-file; same-file → diagonal
+   with destination square = next byte − 64).
+4. **Null move** (gap §5.5): byte 0x00 (piece 0, code 0).
+5. **Variations**: there is no start-of-game marker; marker 13 opens a
+   variation branching from the position *before* the preceding move;
+   consecutive variations on the same move each rewind to that point.
+6. **Piece numbers are swap-remove list indices**, not fixed identities:
+   initial order K, Ra, Nb, Bc, Q, Bf, Ng, Rh, pawns a..h (custom starts:
+   FEN scan order with the king swapped to 0); on capture, the last list
+   element moves into the freed slot, so numbers are reused mid-game.
+7. **Empty games** (0 plies) may carry a stale full-material default
+   (0x6A86A8) in the index's final-material field.
+
+Still open: meaning of Elo top nibble (§5.2); count-code table holes
+(§5.3); pre-v400 entries (§5.12).
