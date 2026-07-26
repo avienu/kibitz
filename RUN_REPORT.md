@@ -1,5 +1,39 @@
 # RUN_REPORT.md
 
+# Run 2 addendum — 2026-07-25 (maintainer rulings implemented)
+
+The maintainer decided items 1–3 and 7 (and accepted 6). All implemented,
+tested, CI-verified:
+
+- **Encoding v2** exactly per the specified design: inline escape tokens
+  (COMMENT varint+UTF-8, NAG, nestable VAR_START/VAR_END, NULL_MOVE, END,
+  reserved ESCAPE) above move indices 0–217. Both importers now store full
+  annotation trees — the PGN reader captures comments/NAGs (including
+  `!?`-suffix normalization)/variations, and the sg4 decoder's token
+  stream flows straight into storage: re-importing mypages stored 16,653
+  comments, 29,576 NAGs, 8,680 variations inline. Export renders all of it
+  back; the round-trip test now asserts **full token-level semantic
+  equality** on an annotated Latin-1 fixture. Real-data proof: benoni2's
+  `{LC}` annotator comment survives si4 → db → PGN.
+- **Null moves**: dedicated token; in-check nulls (PGN-legal in analysis
+  lines, unrepresentable as a legal position) truncate the affected line
+  gracefully rather than failing the game.
+- **One-shot v1→v2 migration** on db open, as ruled (no dual encodings):
+  the 121k-game corpus upgraded transparently in ~13 s; a 7.8k-game copy
+  in 0.6 s. Note: v1 databases never stored annotations, so upgrading
+  cannot recover them — re-import from source where annotations matter
+  (done for the SCID bases).
+- **Duplicates**: sources carry a kind (personal > twic > online > other);
+  on collision the kept game is upgraded to the highest-priority source's
+  headers+movetext and the losing copy is recorded in a `duplicates` link
+  table — nothing deleted. Tested both orders (personal-then-TWIC,
+  TWIC-then-personal-upgrades).
+- **Etiquette**: User-Agent contact filled in (contact@kibitzchess.org); FICS
+  sync prints a personal-use/bandwidth notice, same posture as TWIC.
+- **This phase 1 blocker is now closed.** Phase 1 outstanding items are
+  only: annotation *editing* UI (storage now exists; UI is run-3 work with
+  the prep view) and the ≥5M-game scale acceptance.
+
 # Run 2 — 2026-07-25 (later the same day)
 
 ## ⚠ Headline: Phase 1 is complete EXCEPT annotation storage/editing

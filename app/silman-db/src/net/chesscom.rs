@@ -20,7 +20,7 @@ use std::io::{BufReader, Read};
 use anyhow::Context;
 use rusqlite::Connection;
 
-use crate::import::{import_pgn, SourceInfo};
+use crate::import::{import_pgn, SourceInfo, SourceKind};
 use crate::net::{fetch_with_retry, meta_get, meta_set, Fetcher, MAX_RATE_LIMIT_FAILURES};
 
 /// License string recorded in `sources` for chess.com imports.
@@ -149,6 +149,7 @@ pub fn sync_user(
             name: format!("chess.com: {username} {month}"),
             origin: url,
             license: CHESSCOM_LICENSE.to_string(),
+            kind: SourceKind::Online,
         };
         let stats = import_pgn(conn, &source, BufReader::new(body))
             .with_context(|| format!("importing chess.com {username} {month}"))?;

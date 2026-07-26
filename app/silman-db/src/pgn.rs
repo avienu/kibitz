@@ -1,11 +1,12 @@
 //! Streaming, malformed-input-tolerant PGN reader.
 //!
 //! Yields one raw game at a time from any `BufRead` without loading the file
-//! into memory. Tag pairs are parsed; movetext is tokenized into SAN tokens
-//! (mainline only for now — variations are skipped with nesting, comments
-//! and NAGs are skipped). A malformed game yields an error item and the
-//! reader resynchronizes at the next tag section, so one bad game never
-//! aborts an import.
+//! into memory. Tag pairs are parsed; movetext is tokenized into a full
+//! [`PgnToken`] stream — SAN moves, nulls, NAGs (including `!?`-style
+//! suffixes), brace/semicolon comments, and nested variations — in PGN text
+//! order. A malformed game yields an error item and the reader
+//! resynchronizes at the next tag section, so one bad game never aborts an
+//! import.
 
 use std::io::BufRead;
 
@@ -39,11 +40,22 @@ impl GameResult {
     }
 }
 
+/// One movetext token, in PGN text order, variations included.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PgnToken {
+    San(String),
+    Null,
+    Nag(u8),
+    Comment(String),
+    VarStart,
+    VarEnd,
+}
+
 #[derive(Debug, Default)]
 pub struct RawGame {
     pub tags: Vec<(String, String)>,
-    /// Mainline SAN tokens, in order.
-    pub sans: Vec<String>,
+    /// Full movetext token stream (annotations and variations included).
+    pub tokens: Vec<PgnToken>,
     pub result: GameResult,
     /// 1-based line number where this game's tag section started.
     pub start_line: u64,
@@ -55,6 +67,22 @@ impl RawGame {
             .iter()
             .find(|(k, _)| k == name)
             .map(|(_, v)| v.as_str())
+    }
+
+    /// Mainline SAN strings (nulls rendered as `--`), variations excluded.
+    pub fn mainline_sans(&self) -> Vec<String> {
+        let mut depth = 0u32;
+        let mut out = Vec::new();
+        for t in &self.tokens {
+            match t {
+                PgnToken::VarStart => depth += 1,
+                PgnToken::VarEnd => depth = depth.saturating_sub(1),
+                PgnToken::San(s) if depth == 0 => out.push(s.clone()),
+                PgnToken::Null if depth == 0 => out.push("--".to_string()),
+                _ => {}
+            }
+        }
+        out
     }
 }
 
@@ -137,74 +165,97 @@ impl<R: BufRead> PgnReader<R> {
     }
 }
 
-/// Tokenize a movetext fragment, appending SAN tokens to `sans`.
-/// `depth` tracks variation nesting and `in_comment` a brace comment, both
-/// across line boundaries. Returns the game result if a terminator was seen.
+/// Map PGN suffix annotations to their standard NAG values.
+fn suffix_nag(suffix: &str) -> Option<u8> {
+    match suffix {
+        "!" => Some(1),
+        "?" => Some(2),
+        "!!" => Some(3),
+        "??" => Some(4),
+        "!?" => Some(5),
+        "?!" => Some(6),
+        _ => None,
+    }
+}
+
+/// Tokenize a movetext fragment into `tokens`. `depth` tracks variation
+/// nesting and `comment` an in-progress brace comment, both across line
+/// boundaries. Returns the game result if a terminator was seen.
 fn tokenize_movetext(
     line: &str,
-    sans: &mut Vec<String>,
+    tokens: &mut Vec<PgnToken>,
     depth: &mut u32,
-    in_comment: &mut bool,
+    comment: &mut Option<String>,
 ) -> Option<GameResult> {
     let mut token = String::new();
     let mut result = None;
     for c in line.chars() {
-        if *in_comment {
+        if let Some(buf) = comment {
             if c == '}' {
-                *in_comment = false;
+                tokens.push(PgnToken::Comment(std::mem::take(buf).trim().to_string()));
+                *comment = None;
+            } else {
+                buf.push(c);
             }
             continue;
         }
         match c {
             '{' => {
-                flush_token(&mut token, sans, *depth, &mut result);
-                *in_comment = true;
+                flush_token(&mut token, tokens, &mut result);
+                *comment = Some(String::new());
             }
             '(' => {
-                flush_token(&mut token, sans, *depth, &mut result);
+                flush_token(&mut token, tokens, &mut result);
                 *depth += 1;
+                tokens.push(PgnToken::VarStart);
             }
             ')' => {
-                flush_token(&mut token, sans, *depth, &mut result);
-                *depth = depth.saturating_sub(1);
+                flush_token(&mut token, tokens, &mut result);
+                if *depth > 0 {
+                    *depth -= 1;
+                    tokens.push(PgnToken::VarEnd);
+                }
             }
             ';' => {
                 // Rest-of-line comment.
-                flush_token(&mut token, sans, *depth, &mut result);
+                flush_token(&mut token, tokens, &mut result);
+                let text = line.split_once(';').map(|(_, r)| r.trim()).unwrap_or("");
+                if !text.is_empty() {
+                    tokens.push(PgnToken::Comment(text.to_string()));
+                }
                 break;
             }
-            c if c.is_whitespace() => flush_token(&mut token, sans, *depth, &mut result),
+            c if c.is_whitespace() => flush_token(&mut token, tokens, &mut result),
             _ => token.push(c),
         }
         if result.is_some() {
             return result;
         }
     }
-    flush_token(&mut token, sans, *depth, &mut result);
+    flush_token(&mut token, tokens, &mut result);
+    // A comment still open at line end continues on the next line.
+    if let Some(buf) = comment {
+        buf.push(' ');
+    }
     result
 }
 
-fn flush_token(
-    token: &mut String,
-    sans: &mut Vec<String>,
-    depth: u32,
-    result: &mut Option<GameResult>,
-) {
+fn flush_token(token: &mut String, tokens: &mut Vec<PgnToken>, result: &mut Option<GameResult>) {
     if token.is_empty() {
         return;
     }
     let t = std::mem::take(token);
-    if depth > 0 {
-        return; // inside a variation: skip
-    }
     match t.as_str() {
         "1-0" => *result = Some(GameResult::WhiteWins),
         "0-1" => *result = Some(GameResult::BlackWins),
         "1/2-1/2" => *result = Some(GameResult::Draw),
         "*" => *result = Some(GameResult::Unknown),
         _ => {
-            if t.starts_with('$') {
-                return; // NAG
+            if let Some(rest) = t.strip_prefix('$') {
+                if let Ok(n) = rest.parse::<u16>() {
+                    tokens.push(PgnToken::Nag(n.min(255) as u8));
+                }
+                return;
             }
             // Strip a leading move number ("1." / "23..." / bare "12").
             let stripped = t.trim_start_matches(|c: char| c.is_ascii_digit());
@@ -212,10 +263,19 @@ fn flush_token(
             if stripped.is_empty() {
                 return; // pure move number token
             }
-            if stripped == "--" || stripped == "Z0" {
-                sans.push(stripped.to_string()); // null move; importer decides
+            // Peel a suffix annotation ("Ne4!?" → San("Ne4") + Nag(5)).
+            let trimmed = stripped.trim_end_matches(['!', '?']);
+            let suffix = &stripped[trimmed.len()..];
+            if trimmed.is_empty() {
+                return;
+            }
+            if trimmed == "--" || trimmed == "Z0" {
+                tokens.push(PgnToken::Null);
             } else {
-                sans.push(stripped.to_string());
+                tokens.push(PgnToken::San(trimmed.to_string()));
+            }
+            if let Some(nag) = suffix_nag(suffix) {
+                tokens.push(PgnToken::Nag(nag));
             }
         }
     }
@@ -232,7 +292,7 @@ impl<R: BufRead> Iterator for PgnReader<R> {
         let mut seen_tags = false;
         let mut seen_moves = false;
         let mut depth = 0u32;
-        let mut in_comment = false;
+        let mut comment: Option<String> = None;
 
         loop {
             let line = match self.next_line() {
@@ -250,7 +310,7 @@ impl<R: BufRead> Iterator for PgnReader<R> {
                 }
                 continue;
             }
-            if trimmed.starts_with('[') && !in_comment && depth == 0 && !seen_moves {
+            if trimmed.starts_with('[') && comment.is_none() && depth == 0 && !seen_moves {
                 if game.start_line == 0 {
                     game.start_line = self.line_no;
                 }
@@ -261,7 +321,7 @@ impl<R: BufRead> Iterator for PgnReader<R> {
                 }
                 continue;
             }
-            if trimmed.starts_with('[') && !in_comment && depth == 0 && seen_moves {
+            if trimmed.starts_with('[') && comment.is_none() && depth == 0 && seen_moves {
                 // Next game's tag section with no blank line between games.
                 self.pending_line = Some(line);
                 self.line_no -= 0;
@@ -273,7 +333,7 @@ impl<R: BufRead> Iterator for PgnReader<R> {
             }
             seen_moves = true;
             if let Some(res) =
-                tokenize_movetext(trimmed, &mut game.sans, &mut depth, &mut in_comment)
+                tokenize_movetext(trimmed, &mut game.tokens, &mut depth, &mut comment)
             {
                 game.result = res;
                 break;
@@ -317,13 +377,51 @@ spanning lines} Nc6 3. Bb5 (3. Bc4 Bc5 (3... Nf6)) 3... a6 $1 1-0
         assert_eq!(games.len(), 2);
         assert_eq!(games[0].tag("White"), Some("Alice"));
         assert_eq!(
-            games[0].sans,
+            games[0].mainline_sans(),
             vec!["e4", "e5", "Nf3", "Nc6", "Bb5", "a6"],
-            "variations, comments, NAGs and move numbers are skipped"
+            "mainline excludes variations and annotations"
         );
         assert_eq!(games[0].result, GameResult::WhiteWins);
-        assert_eq!(games[1].sans, vec!["d4", "d5", "c4"]);
+        assert_eq!(games[1].mainline_sans(), vec!["d4", "d5", "c4"]);
         assert_eq!(games[1].result, GameResult::Draw);
+
+        // Full token stream: the multi-line comment is captured, the nested
+        // variation structure is preserved, and $1 became a NAG token.
+        let toks = &games[0].tokens;
+        assert!(toks
+            .iter()
+            .any(|t| matches!(t, PgnToken::Comment(c) if c.contains("spanning lines"))));
+        assert_eq!(
+            toks.iter()
+                .filter(|t| matches!(t, PgnToken::VarStart))
+                .count(),
+            2,
+            "nested variation preserved"
+        );
+        assert!(toks.contains(&PgnToken::Nag(1)));
+        // Semicolon comment in game 2.
+        assert!(games[1]
+            .tokens
+            .contains(&PgnToken::Comment("rest of line ignored".into())));
+    }
+
+    #[test]
+    fn suffix_annotations_become_nags() {
+        let text = "[White \"A\"]\n\n1. e4!? e5?? 2. Nf3! *\n";
+        let games: Vec<_> = PgnReader::new(Cursor::new(text))
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            games[0].tokens,
+            vec![
+                PgnToken::San("e4".into()),
+                PgnToken::Nag(5),
+                PgnToken::San("e5".into()),
+                PgnToken::Nag(4),
+                PgnToken::San("Nf3".into()),
+                PgnToken::Nag(1),
+            ]
+        );
     }
 
     #[test]

@@ -36,8 +36,13 @@ Lichess tablebase API (app layer).
 
 - SQLite. Tables: games (headers + binary movetext), players, events, sites,
   sources (provenance: origin, license, import date), migrations.
-- Move encoding: 1 byte per move = index into deterministic legal-move ordering
-  (must match the movegen used at encode time; version the encoding).
+- Move encoding (v2, 2026-07-25): 1 byte per move = index into a fully
+  specified deterministic legal-move ordering (0–217; ordering defined by
+  the rules of chess, not a library); byte values 249–255 are inline escape
+  tokens (NULL_MOVE, COMMENT with varint+UTF-8, NAG, VAR_START/VAR_END,
+  END, reserved ESCAPE) so annotations and variations live in the same
+  single-pass stream. Version recorded in the db; upgrades are one-shot
+  re-encodes, never dual live encodings.
 - Position search: 64-bit Zobrist hash → games index. Start as SQLite table
   (position_hash, game_id, ply); escalate to RocksDB only if Phase 1 benchmarks
   miss targets (sub-second position query on ≥5M games).

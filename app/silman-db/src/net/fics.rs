@@ -58,7 +58,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use rusqlite::Connection;
 
-use crate::import::{import_pgn, SourceInfo};
+use crate::import::{import_pgn, SourceInfo, SourceKind};
 use crate::net::{retry_429, Fetcher, MAX_RATE_LIMIT_FAILURES};
 
 /// The ficsgames.org download CGI (POST, form-encoded).
@@ -178,6 +178,7 @@ pub fn sync_user(
             month.unwrap_or(0)
         ),
         license: FICS_LICENSE.to_string(),
+        kind: SourceKind::Online,
     };
 
     match classify(&bytes) {

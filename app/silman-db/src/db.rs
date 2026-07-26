@@ -16,6 +16,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_init.sql")),
     (2, include_str!("../migrations/0002_openings_tree_twic.sql")),
     (3, include_str!("../migrations/0003_start_fen.sql")),
+    (
+        4,
+        include_str!("../migrations/0004_source_kind_duplicates.sql"),
+    ),
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +32,8 @@ pub enum DbError {
         "database was written with move encoding_version {found}, this build expects {expected}"
     )]
     EncodingVersionMismatch { found: u32, expected: u32 },
+    #[error("v1→v2 movetext upgrade failed on game {game_id}: {msg}")]
+    UpgradeFailed { game_id: i64, msg: String },
 }
 
 /// Open (creating if necessary) a silman database and bring it up to the
@@ -77,12 +83,56 @@ fn check_versions(conn: &Connection) -> Result<(), DbError> {
         });
     }
     let enc_v = get_or_init_meta(conn, "encoding_version", ENCODING_VERSION as u32)?;
-    if enc_v != ENCODING_VERSION as u32 {
-        return Err(DbError::EncodingVersionMismatch {
-            found: enc_v,
+    match enc_v {
+        v if v == ENCODING_VERSION as u32 => Ok(()),
+        1 => upgrade_encoding_v1_to_v2(conn),
+        found => Err(DbError::EncodingVersionMismatch {
+            found,
             expected: ENCODING_VERSION as u32,
-        });
+        }),
     }
+}
+
+/// One-shot re-encode of every stored game from encoding v1 (bare move
+/// indices) to v2 (token stream). Decided 2026-07-25: a single migration,
+/// not lazy per-row versioning — carrying two live encodings indefinitely
+/// is complexity with no payoff at this data size. The `positions` index
+/// is unaffected (its next_byte column stores ordered-legal-move indices,
+/// which are identical in both versions).
+fn upgrade_encoding_v1_to_v2(conn: &Connection) -> Result<(), DbError> {
+    use crate::movebin::{decode_game_v1, encode_game};
+    use cozy_chess::Board;
+
+    conn.execute_batch("BEGIN")?;
+    let games: Vec<(i64, Vec<u8>, Option<String>)> = {
+        let mut stmt =
+            conn.prepare("SELECT id, movetext, start_fen FROM games WHERE encoding_version = 1")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let mut update =
+        conn.prepare("UPDATE games SET movetext = ?1, encoding_version = 2 WHERE id = ?2")?;
+    for (id, blob, start_fen) in games {
+        let start: Board = match start_fen.as_deref() {
+            Some(fen) => fen.parse().map_err(|e| DbError::UpgradeFailed {
+                game_id: id,
+                msg: format!("bad start FEN: {e:?}"),
+            })?,
+            None => Board::default(),
+        };
+        let moves = decode_game_v1(&start, &blob).map_err(|e| DbError::UpgradeFailed {
+            game_id: id,
+            msg: e.to_string(),
+        })?;
+        let v2 = encode_game(&start, &moves).expect("v1 games re-encode losslessly");
+        update.execute(rusqlite::params![v2, id])?;
+    }
+    drop(update);
+    conn.execute(
+        "UPDATE meta SET value = '2' WHERE key = 'encoding_version'",
+        [],
+    )?;
+    conn.execute_batch("COMMIT")?;
     Ok(())
 }
 

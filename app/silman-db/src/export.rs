@@ -1,14 +1,11 @@
-//! PGN export of stored games.
-//!
-//! Exports everything the database currently stores: seven-tag roster,
-//! Elo/ECO tags, custom start positions, and the mainline. Comments, NAGs
-//! and variations are not yet stored (DECISIONS_NEEDED.md items 1–2), so
-//! round-trip equality holds for the representable subset.
+//! PGN export of stored games: seven-tag roster, Elo/ECO tags, custom
+//! start positions, and the full movetext token stream — moves, comments,
+//! NAGs, nested variations and null moves (`--`).
 
-use cozy_chess::Board;
+use cozy_chess::{Board, Color};
 use rusqlite::Connection;
 
-use crate::movebin::decode_game;
+use crate::movebin::{decode_tokens, Token};
 use crate::san::format_san;
 
 #[derive(Debug, thiserror::Error)]
@@ -98,44 +95,122 @@ pub fn export_pgn(conn: &Connection, game_id: i64) -> Result<String, ExportError
     };
     out.push('\n');
 
-    let moves = decode_game(&start, &movetext).map_err(|e| ExportError::Movetext(e.to_string()))?;
-    let mut board = start.clone();
-    let mut line_len = 0usize;
-    let mut body = String::new();
-    let start_fullmove_white = board.side_to_move() == cozy_chess::Color::White;
-    // Exported fullmove numbering restarts at 1 (the FEN carries the real
-    // counter for custom starts; SAN semantics are unaffected).
-    let mut fullmove = 1u32;
-    let mut first = true;
-    for mv in moves {
-        let white_to_move = board.side_to_move() == cozy_chess::Color::White;
-        let mut token = String::new();
-        if white_to_move {
-            token.push_str(&format!("{fullmove}. "));
-        } else if first && !start_fullmove_white {
-            token.push_str(&format!("{fullmove}... "));
-        }
-        token.push_str(&format_san(&board, mv));
-        if !white_to_move {
-            fullmove += 1;
-        }
-        if line_len + token.len() + 1 > 80 {
-            body.push('\n');
-            line_len = 0;
-        } else if !body.is_empty() {
-            body.push(' ');
-            line_len += 1;
-        }
-        line_len += token.len();
-        body.push_str(&token);
-        board.play(mv);
-        first = false;
-    }
+    let tokens =
+        decode_tokens(&start, &movetext).map_err(|e| ExportError::Movetext(e.to_string()))?;
+    let mut body = render_movetext(&start, &tokens);
     if !body.is_empty() {
         body.push(' ');
     }
     body.push_str(result_str);
-    out.push_str(&body);
+    out.push_str(&wrap_80(&body));
     out.push('\n');
     Ok(out)
+}
+
+/// Render the token stream as PGN movetext (no result, no wrapping).
+fn render_movetext(start: &Board, tokens: &[Token]) -> String {
+    /// One nesting level of the renderer.
+    struct Level {
+        board: Board,
+        before: Option<(Board, u32)>, // board + fullmove before last move
+        fullmove: u32,
+        /// A move number must be printed even for Black's move (after a
+        /// comment, variation, or at a variation/game start).
+        force_number: bool,
+    }
+    let mut level = Level {
+        board: start.clone(),
+        before: None,
+        // Exported fullmove numbering restarts at 1 (the FEN carries the
+        // real counter for custom starts; SAN semantics are unaffected).
+        fullmove: 1,
+        force_number: true,
+    };
+    let mut stack: Vec<Level> = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
+
+    for token in tokens {
+        match token {
+            Token::Move(_) | Token::Null => {
+                let white = level.board.side_to_move() == Color::White;
+                let mut s = String::new();
+                if white {
+                    s.push_str(&format!("{}. ", level.fullmove));
+                } else if level.force_number {
+                    s.push_str(&format!("{}... ", level.fullmove));
+                }
+                match token {
+                    Token::Move(mv) => s.push_str(&format_san(&level.board, *mv)),
+                    _ => s.push_str("--"),
+                }
+                parts.push(s);
+                level.before = Some((level.board.clone(), level.fullmove));
+                match token {
+                    Token::Move(mv) => level.board.play(*mv),
+                    _ => {
+                        level.board = level
+                            .board
+                            .null_move()
+                            .expect("stored streams contain only legal nulls");
+                    }
+                }
+                if !white {
+                    level.fullmove += 1;
+                }
+                level.force_number = false;
+            }
+            Token::Nag(n) => parts.push(format!("${n}")),
+            Token::Comment(text) => {
+                // PGN brace comments cannot contain '}'.
+                parts.push(format!("{{{}}}", text.replace('}', ")")));
+                level.force_number = true;
+            }
+            Token::VarStart => {
+                let (branch, branch_fullmove) = level
+                    .before
+                    .clone()
+                    .expect("stored streams attach variations to a move");
+                parts.push("(".to_string());
+                stack.push(level);
+                level = Level {
+                    board: branch,
+                    before: None,
+                    fullmove: branch_fullmove,
+                    force_number: true,
+                };
+            }
+            Token::VarEnd => {
+                parts.push(")".to_string());
+                level = stack.pop().expect("balanced variations");
+                level.force_number = true;
+            }
+        }
+    }
+    // Join, but glue "(" to the following token and ")" to the preceding.
+    let mut body = String::new();
+    for part in parts {
+        if !body.is_empty() && part != ")" && !body.ends_with('(') {
+            body.push(' ');
+        }
+        body.push_str(&part);
+    }
+    body
+}
+
+/// Soft-wrap at ~80 columns on spaces.
+fn wrap_80(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + text.len() / 80);
+    let mut line_len = 0usize;
+    for word in text.split(' ') {
+        if line_len > 0 && line_len + 1 + word.len() > 80 {
+            out.push('\n');
+            line_len = 0;
+        } else if line_len > 0 {
+            out.push(' ');
+            line_len += 1;
+        }
+        out.push_str(word);
+        line_len += word.len();
+    }
+    out
 }

@@ -4,7 +4,7 @@
 use std::io::Cursor;
 
 use silman_db::export::export_pgn;
-use silman_db::import::{import_pgn, SourceInfo};
+use silman_db::import::{import_pgn, SourceInfo, SourceKind};
 use silman_db::pgn::PgnReader;
 
 fn source(name: &str) -> SourceInfo {
@@ -12,6 +12,7 @@ fn source(name: &str) -> SourceInfo {
         name: name.into(),
         origin: "test".into(),
         license: "test".into(),
+        kind: SourceKind::Personal,
     }
 }
 
@@ -51,9 +52,9 @@ spanning two lines.} e5 2. Nf3 $1 Nc6 (2... d6 3. d4 {Philidor} (3. Bc4))
 1. c8=Q Ka4 2. Qc6+ Kb4 1/2-1/2
 "#;
 
-fn sans_of(pgn: &str) -> Vec<Vec<String>> {
+fn tokens_of(pgn: &str) -> Vec<Vec<silman_db::pgn::PgnToken>> {
     PgnReader::new(Cursor::new(pgn))
-        .map(|g| g.unwrap().sans)
+        .map(|g| g.unwrap().tokens)
         .collect()
 }
 
@@ -64,18 +65,21 @@ fn import_export_round_trip_is_semantically_equal() {
     let st = import_pgn(&conn, &source("annotated"), Cursor::new(ANNOTATED)).unwrap();
     assert_eq!(st.games_imported, 2, "failures: {:?}", st.failures);
 
-    let original = sans_of(ANNOTATED);
-    for (game_id, orig_sans) in [(1i64, &original[0]), (2i64, &original[1])] {
+    let original = tokens_of(ANNOTATED);
+    for (game_id, orig_tokens) in [(1i64, &original[0]), (2i64, &original[1])] {
         let exported = export_pgn(&conn, game_id).unwrap();
         let reparsed: Vec<_> = PgnReader::new(Cursor::new(exported.as_str()))
             .map(|g| g.unwrap())
             .collect();
         assert_eq!(reparsed.len(), 1);
         let g = &reparsed[0];
-        // Mainline move-for-move equality (comments/NAGs/variations are not
-        // stored yet — DECISIONS_NEEDED.md items 1-2 — so the representable
-        // subset is headers + mainline + result).
-        assert_eq!(&g.sans, orig_sans, "game {game_id} mainline differs");
+        // FULL semantic equality (encoding v2): moves, comments, NAGs
+        // (including !?-style suffixes normalized to NAG tokens on both
+        // sides), nested variations, in identical order.
+        assert_eq!(
+            &g.tokens, orig_tokens,
+            "game {game_id} token stream differs"
+        );
     }
 
     // Header fidelity, including Latin-1 names and the custom start.
@@ -150,4 +154,66 @@ Nf5 8. Qxd8+ Kxd8 1/2-1/2
     let different = PERSONAL.replace("8. Qxd8+ Kxd8 1/2-1/2", "8. Nc3 Be7 1/2-1/2");
     let st3 = import_pgn(&conn, &source("other"), Cursor::new(different)).unwrap();
     assert_eq!((st3.games_imported, st3.duplicates_skipped), (1, 0));
+
+    // The losing TWIC copy was recorded, not deleted (decision #3).
+    let dup_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM duplicates", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(dup_count, 1);
+    let (dup_event, kept): (String, i64) = conn
+        .query_row("SELECT event, kept_game_id FROM duplicates", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .unwrap();
+    assert_eq!(dup_event, "12th Karpov Poikovsky");
+    assert_eq!(kept, 1);
+
+    const TWIC_PGN: &str = r#"[Event "12th Karpov Poikovsky"]
+[Site "Poikovsky RUS"]
+[Date "2011.10.05"]
+[Round "5.1"]
+[White "Karjakin, Sergey"]
+[Black "Morozevich, Alexander"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O a6 1-0
+"#;
+    const PERSONAL_COPY: &str = r#"[Event "Karpov Mem"]
+[Site "Poikovsky"]
+[Date "2011.10.05"]
+[Round "5"]
+[White "Karjakin, Sergey"]
+[Black "Morozevich, Alexander"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O a6 1-0
+"#;
+    // Reverse order: TWIC arrives first, the personal copy later. The
+    // personal source outranks TWIC, so the kept game's headers flip to
+    // the personal copy and the TWIC copy moves into `duplicates`.
+    let twic_src = SourceInfo {
+        name: "TWIC 884".into(),
+        origin: "test".into(),
+        license: "test".into(),
+        kind: SourceKind::Twic,
+    };
+    import_pgn(&conn, &twic_src, Cursor::new(TWIC_PGN)).unwrap();
+    let st5 = import_pgn(&conn, &source("personal2"), Cursor::new(PERSONAL_COPY)).unwrap();
+    assert_eq!(st5.duplicates_skipped, 1);
+    assert_eq!(st5.duplicates_upgraded, 1, "personal outranks twic");
+    let (event, kind): (String, String) = conn
+        .query_row(
+            "SELECT e.name, s.kind FROM games g
+             JOIN events e ON e.id = g.event_id
+             JOIN sources s ON s.id = g.source_id
+             WHERE g.id = (SELECT MAX(id) FROM games)",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        event, "Karpov Mem",
+        "kept game now carries personal headers"
+    );
+    assert_eq!(kind, "personal");
 }

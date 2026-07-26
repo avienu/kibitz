@@ -22,7 +22,7 @@ use std::io::{Cursor, Read};
 use anyhow::Context;
 use rusqlite::{params, Connection};
 
-use crate::import::{import_pgn, SourceInfo};
+use crate::import::{import_pgn, SourceInfo, SourceKind};
 use crate::net::{fetch_with_retry, Fetcher, MAX_RATE_LIMIT_FAILURES};
 
 /// Printed by the CLI when a sync starts from an empty `twic_issues` table.
@@ -147,6 +147,7 @@ pub fn sync(
             name: format!("TWIC {issue}"),
             origin: url.clone(),
             license: TWIC_LICENSE.to_string(),
+            kind: SourceKind::Twic,
         };
         let stats = import_pgn(conn, &source, Cursor::new(pgn))
             .with_context(|| format!("importing TWIC {issue}"))?;

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use rusqlite::Connection;
 
-use crate::import::{import_pgn, SourceInfo};
+use crate::import::{import_pgn, SourceInfo, SourceKind};
 use crate::net::{fetch_with_retry, meta_get, meta_set, Fetcher, MAX_RATE_LIMIT_FAILURES};
 
 /// License string recorded in `sources` for Lichess imports.
@@ -96,6 +96,7 @@ pub fn sync_user(
         name: format!("Lichess: {username}"),
         origin: url,
         license: LICHESS_LICENSE.to_string(),
+        kind: SourceKind::Online,
     };
     let stats = import_pgn(conn, &source, BufReader::new(File::open(&tmp.path)?))
         .with_context(|| format!("importing lichess games for {username}"))?;

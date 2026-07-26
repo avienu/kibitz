@@ -449,7 +449,7 @@ pub async fn find_games_at(state: State<'_, DbState>, fen: String) -> Result<Gam
 #[cfg(test)]
 mod tests {
     use super::*;
-    use silman_db::import::{import_pgn, SourceInfo};
+    use silman_db::import::{import_pgn, SourceInfo, SourceKind};
     use std::io::Cursor;
 
     /// Opera game (public domain), a fool's-mate miniature with elos, and a
@@ -489,6 +489,7 @@ mod tests {
             name: "fixture".into(),
             origin: "unit test".into(),
             license: "public domain".into(),
+            kind: SourceKind::Personal,
         };
         let st = import_pgn(&conn, &source, Cursor::new(FIXTURE)).unwrap();
         assert_eq!(st.games_imported, 3, "failures: {:?}", st.failures);

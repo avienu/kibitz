@@ -45,12 +45,28 @@ pub enum Sg4Error {
     NullInCheck,
 }
 
-/// Fully decoded game record (mainline only; variation moves are walked for
-/// stream correctness but not retained).
+/// One decoded movetext token, in traversal order, variations included.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameToken {
+    Move(Move),
+    Null,
+    Nag(u8),
+    /// Index into [`DecodedGame::comments`].
+    Comment(usize),
+    VarStart,
+    VarEnd,
+}
+
+/// Fully decoded game record: the complete token stream plus mainline
+/// convenience fields.
 #[derive(Debug, Default)]
 pub struct DecodedGame {
     /// None = standard start position.
     pub start_fen: Option<String>,
+    /// Full token stream (moves at every depth, NAGs, comment refs,
+    /// variation markers).
+    pub tokens: Vec<GameToken>,
+    /// Mainline moves only (nulls appear as placeholders; see null_plies).
     pub moves: Vec<Move>,
     /// Plies within the mainline that are null moves ("--"). The move at
     /// that index in `moves` is a placeholder and must not be played.
@@ -422,15 +438,21 @@ pub fn decode_game(record: &[u8]) -> Result<DecodedGame, Sg4Error> {
         let b = cur.u8("move stream")?;
         match b {
             11 => {
-                let _nag = cur.u8("NAG value")?;
+                let nag = cur.u8("NAG value")?;
                 out.nag_count += 1;
+                out.tokens.push(GameToken::Nag(nag));
             }
-            12 => out.comment_count += 1,
+            12 => {
+                out.tokens
+                    .push(GameToken::Comment(out.comment_count as usize));
+                out.comment_count += 1;
+            }
             13 => {
                 // Variation branching from before the previous move
                 // (empirical finding 5).
                 out.variation_count += 1;
                 depth += 1;
+                out.tokens.push(GameToken::VarStart);
                 stack.push((state.clone(), before_last.clone()));
                 if let Some(prev) = &before_last {
                     state = prev.clone();
@@ -438,6 +460,7 @@ pub fn decode_game(record: &[u8]) -> Result<DecodedGame, Sg4Error> {
             }
             14 => {
                 depth = depth.checked_sub(1).ok_or(Sg4Error::UnbalancedVariation)?;
+                out.tokens.push(GameToken::VarEnd);
                 (state, before_last) = stack.pop().ok_or(Sg4Error::UnbalancedVariation)?;
             }
             15 => break,
@@ -446,6 +469,7 @@ pub fn decode_game(record: &[u8]) -> Result<DecodedGame, Sg4Error> {
                 before_last = Some(state.clone());
                 let next = state.board.null_move().ok_or(Sg4Error::NullInCheck)?;
                 state.board = next;
+                out.tokens.push(GameToken::Null);
                 if depth == 0 {
                     out.null_plies.push(out.moves.len());
                     out.moves.push(Move {
@@ -459,6 +483,7 @@ pub fn decode_game(record: &[u8]) -> Result<DecodedGame, Sg4Error> {
                 let ply = out.moves.len() + 1;
                 before_last = Some(state.clone());
                 let mv = apply_move(&mut state, b >> 4, b & 0xF, &mut cur, ply)?;
+                out.tokens.push(GameToken::Move(mv));
                 if depth == 0 {
                     out.moves.push(mv);
                 }

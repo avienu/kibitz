@@ -25,10 +25,10 @@ use rusqlite::{Connection, OptionalExtension};
 
 /// User-Agent header sent with every request from every client.
 ///
-/// Maintainer: replace `PLACEHOLDER_EMAIL` with a real contact address
+/// Contact address per Lichess/chess.com API etiquette.
 /// before shipping — both Lichess and chess.com ask API consumers to be
 /// identifiable and contactable.
-pub const USER_AGENT: &str = "silman/0.1 (personal chess database; contact: PLACEHOLDER_EMAIL)";
+pub const USER_AGENT: &str = "silman/0.1 (personal chess database; contact: contact@kibitzchess.org)";
 
 /// How many HTTP 429 responses a single logical fetch tolerates (sleeping
 /// between attempts per [`backoff_delay`]) before aborting the sync.

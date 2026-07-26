@@ -1,16 +1,20 @@
 //! Full .si4 database import: headers via the si4-read index/namebase,
 //! moves via the cleanroom .sg4 decoder.
 //!
-//! Annotation storage is blocked on DECISIONS_NEEDED.md items 1–2
-//! (encoding v2): comments/NAGs/variations are counted and reported, not
-//! stored; games containing mainline null moves are skipped and counted.
+//! Comments, NAGs and variations are stored inline in movetext encoding
+//! v2 (decided 2026-07-25); null moves are stored as tokens. Lines with a
+//! null move played while in check are unrepresentable and truncated at
+//! that point (counted, never fatal).
 
 use std::path::Path;
 use std::time::Instant;
 
 use cozy_chess::Board;
 use rusqlite::Connection;
+use si4_read::sg4::GameToken;
 use si4_read::{decode_game, Database, IndexEntry};
+
+use crate::movebin::Token;
 
 use crate::import::{insert_game, ImportStats, PreparedGame, SourceInfo};
 
@@ -19,13 +23,10 @@ pub struct Si4ImportStats {
     pub base: ImportStats,
     /// Games skipped because they are empty (0 plies).
     pub empty_skipped: u64,
-    /// Games skipped because their mainline contains null moves
-    /// (unrepresentable in movetext encoding v1; DECISIONS_NEEDED.md #2).
-    pub null_move_skipped: u64,
-    /// Annotations counted but not stored (DECISIONS_NEEDED.md #1).
-    pub comments_dropped: u64,
-    pub nags_dropped: u64,
-    pub variations_dropped: u64,
+    /// Annotations stored inline in encoding v2.
+    pub comments_stored: u64,
+    pub nags_stored: u64,
+    pub variations_stored: u64,
 }
 
 fn prepare_entry(
@@ -39,17 +40,29 @@ fn prepare_entry(
         .get(start..end)
         .ok_or_else(|| anyhow::anyhow!("game record beyond .sg4 EOF"))?;
     let decoded = decode_game(record)?;
-    if !decoded.null_plies.is_empty() {
-        anyhow::bail!("mainline contains null moves");
-    }
     let board: Board = match decoded.start_fen.as_deref() {
         Some(fen) => fen
             .parse()
             .map_err(|e| anyhow::anyhow!("bad start FEN: {e:?}"))?,
         None => Board::default(),
     };
-    let (movetext, hashes, moves_hash) =
-        PreparedGame::from_moves(&board, &decoded.moves).map_err(|m| anyhow::anyhow!(m))?;
+    // Map the sg4 token stream onto encoding-v2 tokens, resolving comment
+    // references (missing texts become empty comments, defensively).
+    let tokens: Vec<Token> = decoded
+        .tokens
+        .iter()
+        .map(|t| match t {
+            GameToken::Move(mv) => Token::Move(*mv),
+            GameToken::Null => Token::Null,
+            GameToken::Nag(n) => Token::Nag(*n),
+            GameToken::Comment(i) => {
+                Token::Comment(decoded.comments.get(*i).cloned().unwrap_or_default())
+            }
+            GameToken::VarStart => Token::VarStart,
+            GameToken::VarEnd => Token::VarEnd,
+        })
+        .collect();
+    let built = PreparedGame::build(&board, &tokens).map_err(|m| anyhow::anyhow!(m))?;
 
     let header = db.game_header(entry)?;
     let result = match header.result {
@@ -90,10 +103,8 @@ fn prepare_entry(
             (!e.is_empty()).then(|| e.chars().take(3).collect())
         },
         start_fen: decoded.start_fen.clone(),
-        movetext,
-        position_hashes: hashes,
         header_sig,
-        moves_hash,
+        built,
     };
     Ok((
         prepared,
@@ -117,8 +128,13 @@ pub fn import_si4(
 
     crate::eco::ensure_openings(conn)?;
     conn.execute(
-        "INSERT INTO sources (name, origin, license) VALUES (?1, ?2, ?3)",
-        rusqlite::params![source.name, source.origin, source.license],
+        "INSERT INTO sources (name, origin, license, kind) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![
+            source.name,
+            source.origin,
+            source.license,
+            source.kind.as_str()
+        ],
     )?;
     let source_id = conn.last_insert_rowid();
 
@@ -130,13 +146,10 @@ pub fn import_si4(
         }
         match prepare_entry(&db, entry, &sg4) {
             Ok((prepared, comments, nags, variations)) => {
-                stats.comments_dropped += comments as u64;
-                stats.nags_dropped += nags as u64;
-                stats.variations_dropped += variations as u64;
+                stats.comments_stored += comments as u64;
+                stats.nags_stored += nags as u64;
+                stats.variations_stored += variations as u64;
                 insert_game(conn, source_id, &prepared, &mut stats.base)?;
-            }
-            Err(e) if e.to_string().contains("null moves") => {
-                stats.null_move_skipped += 1;
             }
             Err(e) => {
                 stats.base.games_failed += 1;

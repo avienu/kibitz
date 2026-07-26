@@ -21,7 +21,7 @@ pub mod twic;
 
 #[cfg(test)]
 mod tests {
-    use crate::import::{import_pgn, SourceInfo};
+    use crate::import::{import_pgn, SourceInfo, SourceKind};
     use crate::query::{find_fen, stats};
     use std::io::Cursor;
 
@@ -70,6 +70,7 @@ mod tests {
             name: "fixture".into(),
             origin: "unit test".into(),
             license: "public domain".into(),
+            kind: SourceKind::Personal,
         };
         let st = import_pgn(&conn, &source, Cursor::new(FIXTURE)).unwrap();
         assert_eq!(st.games_imported, 2, "failures: {:?}", st.failures);
@@ -132,6 +133,7 @@ mod tests {
             name: "fixture".into(),
             origin: "unit test".into(),
             license: "public domain".into(),
+            kind: SourceKind::Personal,
         };
         import_pgn(&conn, &source, Cursor::new(FIXTURE)).unwrap();
 
@@ -175,6 +177,7 @@ mod tests {
             name: "fixture".into(),
             origin: "unit test".into(),
             license: "public domain".into(),
+            kind: SourceKind::Personal,
         };
         import_pgn(&conn, &source, Cursor::new(FIXTURE)).unwrap();
         let (blob, ply_count): (Vec<u8>, i64) = conn
@@ -184,7 +187,8 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert_eq!(blob.len() as i64, ply_count);
+        // v2: one byte per ply plus the END token for an unannotated game.
+        assert_eq!(blob.len() as i64, ply_count + 1);
         let moves = crate::movebin::decode_game(&cozy_chess::Board::default(), &blob).unwrap();
         assert_eq!(moves.len(), 33, "Opera game is 33 plies");
     }

@@ -5,7 +5,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use silman_db::import::{import_pgn, SourceInfo};
+use silman_db::import::{import_pgn, SourceInfo, SourceKind};
 use silman_db::query::{find_fen, stats};
 
 #[derive(Parser)]
@@ -34,6 +34,9 @@ enum Command {
         /// Provenance: license of the imported data.
         #[arg(long, default_value = "unknown")]
         license: String,
+        /// Source kind for duplicate priority: personal|twic|online|other.
+        #[arg(long, default_value = "personal")]
+        kind: String,
     },
     /// Import a SCID database (.si4/.sg4/.sn4 base path).
     ImportSi4 {
@@ -44,6 +47,9 @@ enum Command {
         origin: String,
         #[arg(long, default_value = "personal data")]
         license: String,
+        /// Source kind for duplicate priority: personal|twic|online|other.
+        #[arg(long, default_value = "personal")]
+        kind: String,
     },
     /// List games that reached the given FEN, with query timing.
     FindFen { fen: String },
@@ -99,11 +105,13 @@ fn main() -> anyhow::Result<()> {
             source_name,
             origin,
             license,
+            kind,
         } => {
             let source = SourceInfo {
                 name: source_name,
                 origin,
                 license,
+                kind: SourceKind::from_str_lossy(&kind),
             };
             let reader = BufReader::with_capacity(1 << 20, File::open(&file)?);
             let st = import_pgn(&conn, &source, reader)?;
@@ -126,28 +134,27 @@ fn main() -> anyhow::Result<()> {
             source_name,
             origin,
             license,
+            kind,
         } => {
             let source = SourceInfo {
                 name: source_name,
                 origin,
                 license,
+                kind: SourceKind::from_str_lossy(&kind),
             };
             let st = silman_db::import_si4::import_si4(&conn, &source, &base)?;
             println!(
-                "imported {} games ({} duplicates, {} failed, {} empty, {} with null moves) \
-                 in {:.2?}",
+                "imported {} games ({} duplicates, {} failed, {} empty) in {:.2?}",
                 st.base.games_imported,
                 st.base.duplicates_skipped,
                 st.base.games_failed,
                 st.empty_skipped,
-                st.null_move_skipped,
                 st.base.elapsed
             );
-            if st.comments_dropped + st.nags_dropped + st.variations_dropped > 0 {
+            if st.comments_stored + st.nags_stored + st.variations_stored > 0 {
                 println!(
-                    "NOTE: {} comments, {} NAGs, {} variations present in the source were NOT \
-                     stored (annotation storage pending encoding v2 — see DECISIONS_NEEDED.md)",
-                    st.comments_dropped, st.nags_dropped, st.variations_dropped
+                    "stored inline: {} comments, {} NAGs, {} variations (encoding v2)",
+                    st.comments_stored, st.nags_stored, st.variations_stored
                 );
             }
             for f in &st.base.failures {
@@ -271,6 +278,11 @@ fn main() -> anyhow::Result<()> {
             year,
             month,
         } => {
+            println!(
+                "ficsgames.org is a volunteer-run, bandwidth-limited archive. Downloads are for \
+                 your personal use only and must never be redistributed; keep requests occasional \
+                 and consider contacting the maintainer (fics.ludens@gmail.com) if you rely on it."
+            );
             let fetcher = silman_db::net::UreqFetcher;
             let report = silman_db::net::fics::sync_user(&conn, &fetcher, &username, year, month)?;
             println!("{report:?}");
