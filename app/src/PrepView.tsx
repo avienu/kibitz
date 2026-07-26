@@ -4,7 +4,7 @@ import { matchingPlayers, prepView, type PlayerProfile, type WeakLine } from "./
 interface PrepViewProps {
   /** Load a database game into the game view at the given ply. */
   onLoadGameAt: (gameId: number, ply: number) => void;
-  /** Profile built in the Profile tab, if any (for the weaknesses strip). */
+  /** Profile built in the Player Profile view, if any (for the weaknesses strip). */
   profile: PlayerProfile | null;
 }
 
@@ -45,7 +45,7 @@ function ProfileWeaknessStrip({ profile }: { profile: PlayerProfile }) {
 /**
  * Opponent prep (Phase 2): pick an opponent + color, rank their weakest
  * opening spots, and surface master games reaching those exact positions.
- * Uses the database opened in the Database tab.
+ * Uses the database opened from the Database rail item.
  */
 export default function PrepView({ onLoadGameAt, profile }: PrepViewProps) {
   const [player, setPlayer] = useState("");
@@ -129,7 +129,7 @@ export default function PrepView({ onLoadGameAt, profile }: PrepViewProps) {
           <div className="error">
             {error}
             {error.includes("no database open") && (
-              <div className="hint">Open a database in the Database tab first.</div>
+              <div className="hint">Open a database from the Database rail item first.</div>
             )}
           </div>
         )}

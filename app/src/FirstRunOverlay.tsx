@@ -26,8 +26,8 @@ interface FirstRunOverlayProps {
 
 /**
  * One-time orientation overlay (run-5 item 6, discoverability): points out
- * the main tabs and where Help lives. Shown on first launch only; the
- * seen flag persists in localStorage.
+ * the nav-rail groups and where Help lives. Shown on first launch only;
+ * the seen flag persists in localStorage.
  */
 export default function FirstRunOverlay({ onClose, onOpenHelp }: FirstRunOverlayProps) {
   return (
@@ -35,42 +35,32 @@ export default function FirstRunOverlay({ onClose, onOpenHelp }: FirstRunOverlay
       <div className="modal first-run">
         <h3>Welcome to silman</h3>
         <p>
-          The <strong>left column</strong> is always the board, with move navigation, the
-          on-demand <strong>Engine</strong> panel, and the instant, engine-free{" "}
-          <strong>Explain</strong> panel.
+          The <strong>Game view</strong> is the centrepiece: eval bar + board on the left, the
+          engine-free <strong>Explain</strong> panel and the <strong>Moves</strong> panel on the
+          right. Use ←/→ to step, ↑/↓ to jump five plies, <strong>f</strong> to flip,{" "}
+          <strong>e</strong> to explain.
         </p>
-        <p>The tabs at the top of the right column switch what you work with:</p>
+        <p>Everything else lives in the navigation rail on the left edge:</p>
         <ul>
           <li>
-            <strong>Load PGN</strong> — paste or open a PGN file to review a game.
+            <strong>STUDY</strong> — Database, Game, Opening tree, and Position search.
           </li>
           <li>
-            <strong>Database</strong> — open a game database: browse and filter games, opening
-            tree, annotate, run engine jobs, export PGN.
+            <strong>COACH</strong> — the Explain toggle, Profile (a player&rsquo;s
+            strengths/weaknesses report), and Opponent prep.
           </li>
           <li>
-            <strong>Opponent Prep</strong> — rank an opponent&rsquo;s weakest opening spots and
-            study master games from them.
+            <strong>TRAIN</strong> — Openings SRS (spaced repetition), Tactics drills, and the
+            Endgames curriculum.
           </li>
           <li>
-            <strong>Player Profile</strong> — a full strengths/weaknesses report for any player
-            in the database.
-          </li>
-          <li>
-            <strong>Train</strong> — spaced-repetition review of your opening repertoires.
-          </li>
-          <li>
-            <strong>Tactics</strong> — puzzle drills: rated, by motif, weakness-weighted,
-            Woodpecker cycles, speed.
-          </li>
-          <li>
-            <strong>Endgames</strong> — a tiered curriculum of theoretical endgames, played out
-            to the end.
+            <strong>DATA IN / OUT</strong> — Import PGN / SCID, TWIC ingest, Account syncs, and
+            the engine Jobs queue.
           </li>
         </ul>
         <p>
-          The <strong>Help</strong> button at the right end of the tab bar opens the full user
-          guide any time.
+          <strong>Help &amp; tour</strong> at the bottom of the rail opens the full user guide
+          any time; <strong>Settings</strong> sits beside it.
         </p>
         <div className="modal-buttons">
           <button onClick={onOpenHelp}>Open the user guide</button>

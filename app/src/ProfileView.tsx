@@ -23,7 +23,7 @@ function ExampleLinks({ ids, onLoadGameAt }: { ids: number[]; onLoadGameAt: Prof
         <button
           key={id}
           className="pf-ex"
-          title={`Load game #${id} in the Database tab`}
+          title={`Load game #${id} from the Database view`}
           onClick={() => onLoadGameAt(id, 1)}
         >
           #{id}
@@ -121,7 +121,7 @@ export default function ProfileView({ profile, onProfileBuilt, onLoadGameAt }: P
           <div className="error">
             {error}
             {error.includes("no database open") && (
-              <div className="hint">Open a database in the Database tab first.</div>
+              <div className="hint">Open a database from the Database rail item first.</div>
             )}
           </div>
         )}

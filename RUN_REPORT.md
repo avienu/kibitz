@@ -1,3 +1,120 @@
+# Run 6 — 2026-07-26
+
+## Headline
+
+**The design system is in, whole.** The old tab UI is gone; the app now
+runs the handoff-1 game view end to end — nav rail with live badges,
+Studio Walnut and Instrument board treatments on the real chessground,
+the shared evidence-overlay language with the reference's exact
+filled-polygon arrows, bidirectional prose⇄board linkage, the specced
+keyboard map, and a status strip driven by the real job queue. All three
+design-gap rulings (eval-bar states, annotation editing, resize) are
+implemented, the run-5 residuals are fixed, and the committed
+screenshots (docs/screenshots/run6/) show YOUR game — Jacobs–O'Connor,
+Pauba Library 2012 — through the full pipeline in both themes and both
+treatments. 349 tests (189 Rust + 160 vitest) green; scale test skipped
+(no ≥5M corpus present).
+
+## Item 1 — the design system
+
+- **Tokens & typography**: full custom-property set, dark default and
+  the derived light theme; Public Sans / Source Serif 4 / JetBrains Mono
+  bundled locally as woff2 with their OFL license texts (LICENSES.md
+  rows added). Every panel, label and prose block sits on the tokens.
+- **Board treatments**: Studio Walnut (default) + Instrument as
+  chessground container theming — exact square colors, frame gradient
+  and shadows, per-square grain/seam, gutter coordinates (walnut
+  uppercase on-frame, instrument lowercase outside), piece drop-shadows,
+  geometry as f(size), sizes snapped to multiples of 8. Treatment 1c not
+  built (rejected, per the handoff).
+- **Evidence-overlay language**: ONE module (app/src/lib/evidence.ts)
+  produces every ring/wedge/wash/arrow. Marks follow the spec paint
+  order under the pieces; arrows are the module's own SVG layer with the
+  reference's exact filled-polygon geometry — 33u offsets, 27u×17u head,
+  5.2u shaft, contrast outline, opacity 0.42+0.44i — verified
+  point-for-point against the reference math including black
+  orientation. Semantic hues identical in both themes (tested
+  byte-identical across treatment/theme).
+- **Explanation data contract (schema v3)**: `Explanation{tag, eval
+  (White-POV readout), headline{coach,neutral}, blocks[{kind,
+  text{coach,neutral}, evidence{alerts,attackers,defenders,imbalance,
+  key,arrows}}]}` built by silman-verbalize from the SAME renderers the
+  narration uses — the voice toggle is instant and can never change the
+  evidence. Documented in SILMAN_ENGINE_SPEC.md; the UI never
+  synthesizes explanations.
+- **Game view**: rail → header → board column (eval bar, 656 board,
+  move controls, keyboard hint) → Explain-above-Moves → status strip,
+  all to the README's paddings and type sizes. The Explain panel
+  auto-runs the free static screen each ply (the ENGINE still never
+  runs uninvited — the empty state and its copy survive on quiet
+  positions until you press E). Sentence hover isolates that sentence's
+  evidence at intensity 1.0; square click filters the prose; stepping
+  clears both. Keyboard map as specced with the focused-input exception.
+- **Every capability has a rail home** — including the CLI-only ones
+  (TWIC ingest and Account syncs get placeholder panels that document
+  their exact CLI invocations until real UI exists; honest, not fake).
+
+## Item 2 — design-gap rulings
+
+- **2a Eval bar**: per-ply evals prefer fresh analyses over legacy;
+  NO-DATA renders an empty track with a muted "—" (never a fake 0.0);
+  MATE pins the bar to the winner with a winner-colored #N readout;
+  hover tooltip states the source ("Stockfish 18 · depth 24" / "legacy
+  import · <engine>" / "no analysis"). State derivation unit-tested.
+- **2b Annotation editing**, inside the Moves-panel patterns: click a
+  comment row to edit in place (serif textarea; Enter commits, Esc
+  cancels, empty deletes); click the current move again or right-click
+  any move for the NAG/comment popover (!, !!, ?, ??, !?, ?!, clear);
+  play a non-mainline legal move on the board and the app offers "add
+  as a variation"; × deletes a variation. Save/Revert drive the
+  encoding-v2 token IPC; nothing new invented in storage. Walkthrough
+  above is the taste-review script.
+- **2c Resize**: minimum window 1180×760; the board column absorbs
+  extra space with the board snapping to the largest multiple-of-8 that
+  fits (floor 496); right pane fixed at 472px; the rail collapses to
+  56px icons below 1280px window width.
+
+## Item 3 — run-5 residuals
+
+- Wandering-king repetition: WeakKing narration keys by side, not
+  square — a king hunt is one story.
+- Eval phrasing bands: at ±5.00 pawns (DECISIVE_CP) prose says "simply
+  winning" / "completely winning for White" and the number stays in the
+  eval readout; boundary-tested at 499/500; mate wording still outranks
+  every band.
+- Underpromotion: a promotion picker (Q/R/B/N, keys 1–4, Esc) now
+  guards every board that accepts moves; the tactics caveat is gone.
+
+## Screenshots (committed, real data)
+
+docs/screenshots/run6/: 01 dark+walnut (the approved target), 02
+light+walnut, 03 dark+instrument, 04 light+instrument — all the same
+position (ply 25 of your Jacobs game, database #3680, 35 confirmed / 42
+refuted / 16 unclear verdicts folded) so the treatments can be compared
+on identical evidence: d7/e5/g5 alert rings, attacker arrows into e5
+and d7, coach-voice blocks, +1.9 eval bar, legacy variation rows in the
+moves list. Taken from the running app via deep link
+(#game=3680&ply=25&theme=…&treatment=…), which is now a real feature.
+
+## Honest deviations & judgment calls (review welcome)
+
+- Variation provenance (ENGINE d24 vs LEGACY 2011 rows) is classified
+  by a tested heuristic over the variation's comments (engine names /
+  years) because provenance is not stored in the token stream; storing
+  it structurally is the clean fix and a run-7 candidate.
+- Fresh mate analyses store a ±10000 sentinel without a distance, so
+  the eval BAR shows "#" pinned (the Explain readout shows #N when the
+  explanation supplies it); storing mate distance in analyses is the
+  companion run-7 fix.
+- The old live-analysis panel has no home in the new shell — engine use
+  flows through Re-analyze + Jobs, which matches the engine-off
+  principle; flag if you want a live-analysis surface back.
+- Header meta shows site/year · ECO · plies · provenance; no opening
+  NAME lookup exists yet (ECO-to-name table is a small run-7 item).
+- The nav-rail "Explain on" badge, profile findings count, and SRS/
+  tactics badges are real data; TWIC "wk" and syncs badges are omitted
+  (no data source) rather than faked.
+
 # Run 5 — 2026-07-26
 
 ## Headline

@@ -22,7 +22,7 @@ import {
   type SessionSummary,
 } from "./lib/train";
 
-/** What the Train tab wants shown on the main board during a session.
+/** What the Openings SRS view wants shown on the main board during a session.
  * `onMove` accepts the promotion-picker role (run-6 item 3); the board
  * host guards drags with the picker before invoking it. */
 export interface TrainMovable extends BoardMovable {

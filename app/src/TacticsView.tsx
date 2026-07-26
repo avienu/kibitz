@@ -141,7 +141,7 @@ export default function TacticsView({ profile }: { profile: PlayerProfile | null
         return;
       }
       if (mode === "weakness" && !profile) {
-        setStatus("Weakness drill needs your profile — build it in the Profile tab first.");
+        setStatus("Weakness drill needs your profile — build it in the Player Profile view first.");
         return;
       }
       const sp = await nextPuzzle(

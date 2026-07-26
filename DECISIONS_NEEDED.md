@@ -3,6 +3,13 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+Run-6 note: no parked decisions; the design system is in whole. Four
+judgment calls documented for review in RUN_REPORT.md run-6 ("Honest
+deviations"): heuristic variation provenance, mate-distance sentinel in
+analyses, no live-analysis surface in the new shell (engine-off
+reading), ECO-name lookup absent. All have clean run-7 fixes if you
+want them.
+
 Run-5 note: no new parked decisions from the core feedback items. Two
 judgment calls made on the data and documented for review rather than
 parked: (a) the WSUI firing-rule study kept the incumbent solo rule as
