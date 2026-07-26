@@ -3,6 +3,7 @@
 /app/dist
 /tools/
 /testdata/private/
+/testdata/corpus/
 *.sqlite
 *.sqlite-journal
 *.db
