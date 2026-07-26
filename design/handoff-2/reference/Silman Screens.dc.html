@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0e1113; --panel: #15191c; --panel2: #1a1f23; --panel3: #202629;
+      --line: rgba(233,241,246,0.09); --line2: rgba(233,241,246,0.16);
+      --tx: #e6ebee; --dim: #9ba5ac; --faint: #6c767d;
+      --accent: #d6a04a; --good: #6fb894; --bad: #de6f5e; --info: #6aa8dd; --violet: #a98bd4;
+      --desk: radial-gradient(120% 90% at 50% -20%, #1b2024 0%, #0c0f11 70%);
+    }
+    [data-theme="light"] {
+      --bg: #f2f0ec; --panel: #fbfaf8; --panel2: #f1efeb; --panel3: #e9e6e1;
+      --line: rgba(24,30,34,0.10); --line2: rgba(24,30,34,0.20);
+      --tx: #1a1e21; --dim: #5e666b; --faint: #8b9297;
+      --accent: #a9762a; --good: #3f8a66; --bad: #c1503f; --info: #35709f; --violet: #7b5cad;
+      --desk: radial-gradient(120% 90% at 50% -20%, #ffffff 0%, #eae7e2 70%);
+    }
+    body { margin: 0; background: #08090a; }
+    button { white-space: nowrap; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--tx); text-decoration: underline; }
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-thumb { background: rgba(150,165,175,0.28); border-radius: 6px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="min-height:100vh;padding:24px;display:flex;flex-direction:column;align-items:flex-start;gap:14px;width:max-content;margin:0;background:#08090a;font-family:'Public Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased">
+
+  <div style="width:1540px;display:flex;align-items:center;gap:14px;color:#e6ebee">
+    <span style="font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:0.2em;color:#6c767d">SILMAN · ROUND 2 · CLICK THE RAIL</span>
+    <div style="flex:1;height:1px;background:rgba(233,241,246,0.09)"></div>
+    <button onClick="{{ toggleTheme }}" style="padding:7px 12px;background:#1a1f23;color:#e6ebee;border:1px solid rgba(233,241,246,0.16);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">{{ themeLabel }}</button>
+  </div>
+
+  <div style="width:1540px;display:flex;height:952px;background:var(--bg);color:var(--tx);border:1px solid var(--line2);border-radius:10px;overflow:hidden;box-shadow:0 30px 70px -40px rgba(0,0,0,0.7)">
+
+    <nav style="flex:0 0 204px;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line)">
+      <div style="padding:16px 16px 14px;border-bottom:1px solid var(--line)">
+        <div style="font:700 13px/1 'JetBrains Mono',monospace;letter-spacing:0.16em">SILMAN</div>
+        <div style="margin-top:5px;font:400 10.5px/1 'Public Sans',sans-serif;color:var(--faint)">scid.sqlite · 121,438 games</div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:12px 8px">
+        <sc-for list="{{ navGroups }}" as="grp" hint-placeholder-count="4">
+          <div>
+            <div style="padding:8px 8px 6px;font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">{{ grp.title }}</div>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <sc-for list="{{ grp.items }}" as="it" hint-placeholder-count="4">
+                <div onClick="{{ it.onClick }}" style="{{ it.st }}"><span>{{ it.label }}</span><span style="font:500 9.5px/1 'JetBrains Mono',monospace;color:var(--faint);letter-spacing:0.04em">{{ it.badge }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="padding:10px 8px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:1px">
+        <sc-for list="{{ navFoot }}" as="it" hint-placeholder-count="2">
+          <div onClick="{{ it.onClick }}" style="{{ it.st }}"><span>{{ it.label }}</span><span style="font:500 9.5px/1 'JetBrains Mono',monospace;color:var(--faint)">{{ it.badge }}</span></div>
+        </sc-for>
+      </div>
+    </nav>
+
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+      <header style="display:flex;align-items:center;gap:18px;padding:13px 20px;background:var(--panel);border-bottom:1px solid var(--line)">
+        <div style="min-width:0">
+          <div style="font:600 15px/1.2 'Public Sans',sans-serif">{{ title }}</div>
+          <div style="margin-top:4px;font:400 11.5px/1 'Public Sans',sans-serif;color:var(--faint)">{{ subtitle }}</div>
+        </div>
+        <div style="flex:1"></div>
+        <sc-if value="{{ hasSeg }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:5px;overflow:hidden">
+            <sc-for list="{{ segChips }}" as="ch" hint-placeholder-count="2">
+              <button onClick="{{ ch.onClick }}" style="{{ ch.st }}">{{ ch.label }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="display:flex;gap:6px">
+          <sc-for list="{{ actions }}" as="ac" hint-placeholder-count="2">
+            <button style="padding:7px 12px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:5px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer" style-hover="background:var(--panel3)">{{ ac.label }}</button>
+          </sc-for>
+        </div>
+      </header>
+
+      <div style="flex:1;overflow:auto;min-height:0">
+
+        <sc-if value="{{ sHome }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:22px 24px 26px">
+            <sc-if value="{{ homeA }}" hint-placeholder-val="{{ true }}">
+              <div>
+                <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px">
+                  <h2 style="margin:0;font:600 22px/1.2 'Source Serif 4',serif">Sunday, 26 July</h2>
+                  <span style="font:400 13px/1.4 'Source Serif 4',serif;color:var(--dim)">Club night Thursday — no prep started for R. Halvorsen yet.</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px">
+                  <div style="padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:inset 2px 0 0 var(--accent)">
+                    <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">CONTINUE</div>
+                    <div style="margin:10px 0 4px;font:600 15px/1.3 'Public Sans',sans-serif">sounix — christoforo</div>
+                    <div style="font:400 12.5px/1.5 'Source Serif 4',serif;color:var(--dim)">Stopped at ply 21 of 89. Three unreviewed blunders after it.</div>
+                    <button onClick="{{ goGame }}" style="margin-top:12px;padding:8px 13px;background:var(--accent);color:#14181b;border:0;border-radius:6px;font:600 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Resume review</button>
+                  </div>
+                  <div style="padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                    <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">DUE TODAY</div>
+                    <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px"><span style="font:700 28px/1 'JetBrains Mono',monospace">24</span><span style="font:500 12px/1 'Public Sans',sans-serif;color:var(--dim)">openings</span><span style="font:700 28px/1 'JetBrains Mono',monospace;margin-left:10px">12</span><span style="font:500 12px/1 'Public Sans',sans-serif;color:var(--dim)">tactics</span></div>
+                    <div style="font:400 12.5px/1.5 'Source Serif 4',serif;color:var(--dim)">4 lapses waiting in the French, Winawer.</div>
+                    <div style="display:flex;gap:6px;margin-top:12px">
+                      <button onClick="{{ goSrs }}" style="padding:8px 13px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Review openings</button>
+                      <button onClick="{{ goTactics }}" style="padding:8px 13px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Solve tactics</button>
+                    </div>
+                  </div>
+                  <div style="padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                    <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">PREP AN OPPONENT</div>
+                    <div style="margin:10px 0 10px;display:flex;gap:6px">
+                      <div style="flex:1;padding:8px 10px;background:var(--panel2);border:1px solid var(--line2);border-radius:6px;font:400 12px/1.2 'Public Sans',sans-serif;color:var(--faint)">Search a name, or paste a Lichess handle…</div>
+                      <button onClick="{{ goPrep }}" style="padding:8px 13px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Go</button>
+                    </div>
+                    <div style="font:400 11px/1.5 'Public Sans',sans-serif;color:var(--faint)">Recent: R. Halvorsen · christoforo · M. Sæther</div>
+                  </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:14px">
+                  <div style="padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                      <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">YOUR CHESS · LAST 90 DAYS</span>
+                      <span style="padding:3px 7px;background:var(--panel2);box-shadow:inset 0 0 0 1px var(--line);border-radius:4px;font:700 9px/1 'JetBrains Mono',monospace;color:var(--dim)">148 GAMES</span>
+                      <div style="flex:1"></div>
+                      <button onClick="{{ goProfile }}" style="padding:6px 10px;background:transparent;color:var(--dim);border:1px solid var(--line);border-radius:5px;font:500 11px/1 'Public Sans',sans-serif;cursor:pointer">Full profile</button>
+                    </div>
+                    <p style="margin:0 0 14px;font:400 14.5px/1.55 'Source Serif 4',serif;text-wrap:pretty">You lose most of your rating to <b style="font-weight:600">knight forks you allow in the middlegame</b> and to <b style="font-weight:600">converting won rook endings</b>. Both are already seeded into today's tactics queue.</p>
+                    <div style="display:flex;flex-direction:column;gap:1px">
+                      <sc-for list="{{ findings }}" as="fd" hint-placeholder-count="4">
+                        <div onClick="{{ fd.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 10px;margin:0 -10px;border-radius:6px;cursor:pointer" style-hover="background:var(--panel2)">
+                          <span style="{{ fd.dotSt }}"></span>
+                          <span style="flex:1;font:500 13px/1.3 'Public Sans',sans-serif">{{ fd.label }}</span>
+                          <span style="{{ fd.valSt }}">{{ fd.value }}</span>
+                          <span style="font:400 11px/1 'Public Sans',sans-serif;color:var(--faint);min-width:74px;text-align:right">{{ fd.evidence }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;flex-direction:column;gap:14px">
+                    <div style="padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                      <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">NEW SINCE FRIDAY</div>
+                      <div style="display:flex;flex-direction:column;gap:9px">
+                        <sc-for list="{{ newGames }}" as="ng" hint-placeholder-count="3">
+                          <div style="display:flex;align-items:baseline;gap:9px">
+                            <span style="{{ ng.srcSt }}">{{ ng.source }}</span>
+                            <span style="flex:1;font:500 12.5px/1.3 'Public Sans',sans-serif">{{ ng.title }}</span>
+                            <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--dim)">{{ ng.result }}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font:400 11.5px/1.5 'Public Sans',sans-serif;color:var(--faint)">8 games · 6 annotated automatically · 2 queued</div>
+                    </div>
+                    <div style="padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                      <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">RUNNING</div>
+                      <div style="display:flex;align-items:center;gap:10px;font:500 11px/1 'JetBrains Mono',monospace;color:var(--dim)">
+                        <span>TWIC 1601</span>
+                        <span style="position:relative;flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="position:absolute;inset:0 32% 0 0;background:var(--good)"></span></span>
+                        <span style="color:var(--faint)">68%</span>
+                      </div>
+                      <div style="margin-top:12px;font:400 11.5px/1.55 'Source Serif 4',serif;color:var(--dim)">Weekly ingest, started 06:00. Nothing else is running — the engine is cold.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ homeB }}" hint-placeholder-val="{{ false }}">
+              <div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+                  <sc-for list="{{ homeBand }}" as="bd" hint-placeholder-count="4">
+                    <div onClick="{{ bd.onClick }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;cursor:pointer" style-hover="background:var(--panel2)">
+                      <span style="font:700 22px/1 'JetBrains Mono',monospace">{{ bd.value }}</span>
+                      <span style="font:400 12px/1.35 'Public Sans',sans-serif;color:var(--dim)">{{ bd.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:12px">
+                  <sc-for list="{{ filters }}" as="fl" hint-placeholder-count="6">
+                    <span style="padding:7px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:5px;font:500 11.5px/1 'Public Sans',sans-serif;color:var(--dim)">{{ fl }}</span>
+                  </sc-for>
+                  <div style="flex:1"></div>
+                  <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--faint)">121,438 games · 4 filters available</span>
+                </div>
+                <div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+                  <div style="display:grid;grid-template-columns:26px 1.6fr 1.6fr 58px 1.2fr 92px 64px 96px;gap:10px;padding:9px 14px;background:var(--panel2);border-bottom:1px solid var(--line);font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.12em;color:var(--faint)">
+                    <span></span><span>WHITE</span><span>BLACK</span><span>RES</span><span>EVENT</span><span>DATE</span><span>ECO</span><span>SOURCE</span>
+                  </div>
+                  <sc-for list="{{ games }}" as="gm" hint-placeholder-count="9">
+                    <div onClick="{{ gm.onClick }}" style="display:grid;grid-template-columns:26px 1.6fr 1.6fr 58px 1.2fr 92px 64px 96px;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;font:500 12.5px/1.35 'Public Sans',sans-serif" style-hover="background:var(--panel2)">
+                      <span style="{{ gm.flagSt }}">{{ gm.flag }}</span>
+                      <span>{{ gm.white }}</span><span>{{ gm.black }}</span>
+                      <span style="font:700 12px/1.35 'JetBrains Mono',monospace;color:var(--dim)">{{ gm.result }}</span>
+                      <span style="color:var(--dim)">{{ gm.event }}</span>
+                      <span style="font:400 11.5px/1.35 'JetBrains Mono',monospace;color:var(--faint)">{{ gm.date }}</span>
+                      <span style="font:500 11.5px/1.35 'JetBrains Mono',monospace;color:var(--dim)">{{ gm.eco }}</span>
+                      <span style="{{ gm.srcSt }}">{{ gm.source }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="margin-top:18px;display:flex;gap:14px">
+              <div style="flex:1;padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:inset 2px 0 0 var(--violet)">
+                <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--violet);margin-bottom:9px">RECOMMENDATION — DIRECTION A</div>
+                <p style="margin:0 0 8px;font:400 14px/1.6 'Source Serif 4',serif;text-wrap:pretty">The real week is three recurring jobs — prep before club night, review the games that just synced, clear the daily queues — and A puts all three one click from launch. B makes the two time-boxed jobs (training, prep) require navigation every single day, and the database is the one surface you always reach deliberately anyway.</p>
+                <p style="margin:0;font:400 13px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty"><b style="color:var(--tx);font-weight:600">What B does better:</b> it makes 121k games feel present, is instantly legible to anyone from ChessBase or SCID, and needs no “today” logic to be correct — A is only as good as its due-counts and findings. Mitigation: A's <i>Continue</i> card and the rail's Database item stay at the top of the rail, and A degrades to a short, honest list when nothing is due.</p>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sDatabase }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:18px 24px 26px">
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:12px">
+              <sc-for list="{{ filters }}" as="fl" hint-placeholder-count="6">
+                <span style="padding:7px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:5px;font:500 11.5px/1 'Public Sans',sans-serif;color:var(--dim)">{{ fl }}</span>
+              </sc-for>
+              <div style="flex:1"></div>
+              <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--faint)">1–9 of 121,438</span>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:12px;box-shadow:inset 2px 0 0 var(--info)">
+              <span style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--info)">ANNOTATING DATABASE</span>
+              <span style="position:relative;flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="position:absolute;inset:0 59% 0 0;background:var(--info)"></span></span>
+              <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--dim)">41% · 49,780 / 121,438 · ~2 h 10 m left</span>
+              <button style="padding:6px 10px;background:var(--panel2);color:var(--dim);border:1px solid var(--line2);border-radius:5px;font:500 11px/1 'Public Sans',sans-serif;cursor:pointer">Pause</button>
+            </div>
+
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:26px 1.6fr 1.6fr 58px 1.2fr 92px 64px 96px 84px;gap:10px;padding:9px 14px;background:var(--panel2);border-bottom:1px solid var(--line);font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.12em;color:var(--faint)">
+                <span></span><span>WHITE</span><span>BLACK</span><span>RES</span><span>EVENT</span><span>DATE</span><span>ECO</span><span>SOURCE</span><span>ANALYSIS</span>
+              </div>
+              <sc-for list="{{ games }}" as="gm" hint-placeholder-count="9">
+                <div onClick="{{ gm.onClick }}" style="display:grid;grid-template-columns:26px 1.6fr 1.6fr 58px 1.2fr 92px 64px 96px 84px;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;font:500 12.5px/1.35 'Public Sans',sans-serif" style-hover="background:var(--panel2)">
+                  <span style="{{ gm.flagSt }}">{{ gm.flag }}</span>
+                  <span>{{ gm.white }}</span><span>{{ gm.black }}</span>
+                  <span style="font:700 12px/1.35 'JetBrains Mono',monospace;color:var(--dim)">{{ gm.result }}</span>
+                  <span style="color:var(--dim)">{{ gm.event }}</span>
+                  <span style="font:400 11.5px/1.35 'JetBrains Mono',monospace;color:var(--faint)">{{ gm.date }}</span>
+                  <span style="font:500 11.5px/1.35 'JetBrains Mono',monospace;color:var(--dim)">{{ gm.eco }}</span>
+                  <span style="{{ gm.srcSt }}">{{ gm.source }}</span>
+                  <span style="{{ gm.anaSt }}">{{ gm.analysis }}</span>
+                </div>
+              </sc-for>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px">
+                <button style="padding:7px 11px;background:var(--panel2);color:var(--dim);border:1px solid var(--line2);border-radius:5px;font:500 11.5px/1 'JetBrains Mono',monospace;cursor:pointer">◀</button>
+                <span style="font:500 11.5px/1 'JetBrains Mono',monospace;color:var(--dim)">page 1 of 13,494</span>
+                <button style="padding:7px 11px;background:var(--panel2);color:var(--dim);border:1px solid var(--line2);border-radius:5px;font:500 11.5px/1 'JetBrains Mono',monospace;cursor:pointer">▶</button>
+                <div style="flex:1"></div>
+                <span style="font:400 11px/1.5 'Public Sans',sans-serif;color:var(--faint)">⑂ marks a duplicate — linked to its higher-priority copy, never deleted. Source priority: personal &gt; TWIC &gt; online.</span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sTree }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;height:100%;min-height:0">
+            <div style="flex:1;min-width:0;padding:18px 20px;overflow:auto">
+              <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+                <span style="font:500 13px/1.4 'JetBrains Mono',monospace">1. e4 e5 2. Nf3 Nc6 3. Bc4</span>
+                <span style="font:400 12px/1.4 'Source Serif 4',serif;color:var(--faint)">Italian Game · C50 · follows the board</span>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+                <div style="display:grid;grid-template-columns:74px 84px 1fr 78px 74px;gap:10px;padding:9px 14px;background:var(--panel2);border-bottom:1px solid var(--line);font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.12em;color:var(--faint)">
+                  <span>MOVE</span><span>GAMES</span><span>W / D / L</span><span>AVG ELO</span><span>PERF</span>
+                </div>
+                <sc-for list="{{ treeRows }}" as="tr" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:74px 84px 1fr 78px 74px;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer" style-hover="background:var(--panel2)">
+                    <span style="font:700 13px/1.3 'JetBrains Mono',monospace">{{ tr.move }}</span>
+                    <span style="font:500 12px/1.3 'JetBrains Mono',monospace;color:var(--dim)">{{ tr.games }}</span>
+                    <span style="display:flex;height:9px;border-radius:3px;overflow:hidden;background:var(--panel3)">
+                      <span style="{{ tr.wSt }}"></span><span style="{{ tr.dSt }}"></span><span style="{{ tr.lSt }}"></span>
+                    </span>
+                    <span style="font:500 12px/1.3 'JetBrains Mono',monospace;color:var(--dim)">{{ tr.elo }}</span>
+                    <span style="{{ tr.perfSt }}">{{ tr.perf }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="margin:14px 2px 0;font:400 13px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">Transposition-aware: these counts merge every move order that reaches this position, so 3. Bc4 here includes games that began 1. e4 e5 2. Bc4 Nc6 3. Nf3.</p>
+            </div>
+            <aside style="flex:0 0 520px;display:flex;flex-direction:column;gap:14px;padding:18px 20px;background:var(--panel);border-left:1px solid var(--line);overflow:auto">
+              <dc-import name="Board" fen="{{ italianFen }}" treatment="walnut" theme="{{ theme }}" size="{{ midBoard }}" evidence="{{ emptyEv }}" intensity="0.5" hint-size="472px,472px"></dc-import>
+              <div>
+                <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:10px">GAMES REACHING THIS POSITION</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ treeGames }}" as="tg" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:baseline;gap:9px;font:500 12px/1.35 'Public Sans',sans-serif" style-hover="color:var(--accent)">
+                      <span style="flex:1">{{ tg.title }}</span>
+                      <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--faint)">{{ tg.meta }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sSearch }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;height:100%;min-height:0">
+            <div style="flex:0 0 560px;padding:20px;background:var(--desk);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:14px">
+              <dc-import name="Board" fen="{{ italianFen }}" treatment="walnut" theme="{{ theme }}" size="{{ midBoard }}" evidence="{{ emptyEv }}" intensity="0.5" hint-size="472px,472px"></dc-import>
+              <div style="width:100%;display:flex;gap:6px">
+                <div style="flex:1;padding:9px 11px;background:var(--panel2);border:1px solid var(--line2);border-radius:6px;font:400 11px/1.3 'JetBrains Mono',monospace;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R</div>
+                <button style="padding:9px 13px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Paste FEN</button>
+              </div>
+              <div style="width:100%;display:flex;gap:6px;align-items:center">
+                <span style="font:400 11px/1.4 'Public Sans',sans-serif;color:var(--faint)">Set the position by dragging pieces, or step into it from any game.</span>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0;padding:18px 20px;overflow:auto">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">RESULTS</span>
+                <span style="padding:3px 7px;background:var(--panel2);box-shadow:inset 0 0 0 1px var(--line);border-radius:4px;font:700 9px/1 'JetBrains Mono',monospace;color:var(--dim)">1,204 GAMES · 31 ms</span>
+                <div style="flex:1"></div>
+                <sc-for list="{{ searchFilters }}" as="sf" hint-placeholder-count="3">
+                  <span style="padding:6px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:5px;font:500 11px/1 'Public Sans',sans-serif;color:var(--dim)">{{ sf }}</span>
+                </sc-for>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+                <sc-for list="{{ games }}" as="gm" hint-placeholder-count="9">
+                  <div onClick="{{ gm.onClick }}" style="display:grid;grid-template-columns:26px 1.5fr 1.5fr 58px 1fr 92px 96px;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;font:500 12.5px/1.35 'Public Sans',sans-serif" style-hover="background:var(--panel2)">
+                    <span style="{{ gm.flagSt }}">{{ gm.flag }}</span>
+                    <span>{{ gm.white }}</span><span>{{ gm.black }}</span>
+                    <span style="font:700 12px/1.35 'JetBrains Mono',monospace;color:var(--dim)">{{ gm.result }}</span>
+                    <span style="color:var(--dim)">{{ gm.event }}</span>
+                    <span style="font:400 11.5px/1.35 'JetBrains Mono',monospace;color:var(--faint)">{{ gm.date }}</span>
+                    <span style="{{ gm.srcSt }}">{{ gm.source }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sProfile }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;height:100%;min-height:0">
+            <div style="flex:1;min-width:0;padding:18px 20px 26px;overflow:auto">
+              <p style="margin:0 0 16px;font:400 15px/1.6 'Source Serif 4',serif;max-width:840px;text-wrap:pretty">{{ profileLede }}</p>
+
+              <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-bottom:14px">
+                <div style="padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+                    <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">MOTIF MATRIX</span>
+                    <span style="font:400 11px/1 'Public Sans',sans-serif;color:var(--faint)">missed = you didn't play it · allowed = opponent got it</span>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 66px 66px 74px;gap:8px;padding:0 0 8px;border-bottom:1px solid var(--line);font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.12em;color:var(--faint)">
+                    <span>MOTIF</span><span style="text-align:right">MISSED</span><span style="text-align:right">ALLOWED</span><span style="text-align:right">VS PEERS</span>
+                  </div>
+                  <sc-for list="{{ motifs }}" as="mo" hint-placeholder-count="6">
+                    <div onClick="{{ mo.onClick }}" style="{{ mo.rowSt }}">
+                      <span style="font:500 12.5px/1.3 'Public Sans',sans-serif">{{ mo.name }}</span>
+                      <span style="{{ mo.missSt }}">{{ mo.missed }}</span>
+                      <span style="{{ mo.allowSt }}">{{ mo.allowed }}</span>
+                      <span style="{{ mo.peerSt }}">{{ mo.peers }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <div style="padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                  <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">STRUCTURE REPORT</div>
+                  <div style="display:flex;flex-direction:column;gap:11px">
+                    <sc-for list="{{ structures }}" as="st" hint-placeholder-count="5">
+                      <div onClick="{{ st.onClick }}" style="cursor:pointer" style-hover="opacity:0.85">
+                        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+                          <span style="flex:1;font:500 12.5px/1.3 'Public Sans',sans-serif">{{ st.name }}</span>
+                          <span style="font:500 11.5px/1 'JetBrains Mono',monospace;color:var(--dim)">{{ st.score }}</span>
+                          <span style="{{ st.deltaSt }}">{{ st.delta }}</span>
+                        </div>
+                        <div style="position:relative;height:7px;background:var(--panel3);border-radius:3px;overflow:hidden">
+                          <span style="{{ st.barSt }}"></span>
+                          <span style="position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:var(--line2)"></span>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="margin-top:12px;font:400 11px/1.5 'Public Sans',sans-serif;color:var(--faint)">Bar = your score in that structure; the tick is the 1800-band baseline.</div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:14px">
+                <div style="padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                  <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">PHASE ACCURACY</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+                    <sc-for list="{{ phases }}" as="ph" hint-placeholder-count="3">
+                      <div onClick="{{ ph.onClick }}" style="padding:12px;background:var(--panel2);border-radius:7px;cursor:pointer" style-hover="background:var(--panel3)">
+                        <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint)">{{ ph.name }}</div>
+                        <div style="display:flex;align-items:baseline;gap:6px;margin:9px 0 4px"><span style="font:700 24px/1 'JetBrains Mono',monospace">{{ ph.acpl }}</span><span style="font:500 11px/1 'Public Sans',sans-serif;color:var(--faint)">ACPL</span></div>
+                        <div style="font:400 11.5px/1.4 'Public Sans',sans-serif;color:var(--dim)">{{ ph.errors }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+                  <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">CONVERSION &amp; DEFENCE</div>
+                  <div style="display:flex;gap:14px">
+                    <sc-for list="{{ rates }}" as="ra" hint-placeholder-count="2">
+                      <div onClick="{{ ra.onClick }}" style="flex:1;padding:12px;background:var(--panel2);border-radius:7px;cursor:pointer" style-hover="background:var(--panel3)">
+                        <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint)">{{ ra.name }}</div>
+                        <div style="display:flex;align-items:baseline;gap:6px;margin:9px 0 4px"><span style="font:700 24px/1 'JetBrains Mono',monospace">{{ ra.value }}</span><span style="{{ ra.deltaSt }}">{{ ra.delta }}</span></div>
+                        <div style="font:400 11.5px/1.4 'Public Sans',sans-serif;color:var(--dim)">{{ ra.note }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside style="flex:0 0 420px;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0">
+              <div style="padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px">
+                <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">EVIDENCE</span>
+                <span style="padding:3px 7px;background:var(--panel2);box-shadow:inset 0 0 0 1px var(--line);border-radius:4px;font:700 9px/1 'JetBrains Mono',monospace;color:var(--dim)">{{ claimCount }}</span>
+              </div>
+              <div style="flex:1;overflow:auto;padding:16px 18px">
+                <p style="margin:0 0 14px;font:400 14px/1.6 'Source Serif 4',serif;text-wrap:pretty">{{ claimProse }}</p>
+                <div style="display:flex;flex-direction:column;gap:1px">
+                  <sc-for list="{{ claimGames }}" as="cg" hint-placeholder-count="5">
+                    <div onClick="{{ cg.onClick }}" style="display:flex;align-items:baseline;gap:9px;padding:9px 10px;margin:0 -10px;border-radius:6px;cursor:pointer" style-hover="background:var(--panel2)">
+                      <span style="flex:1;font:500 12.5px/1.35 'Public Sans',sans-serif">{{ cg.title }}</span>
+                      <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--bad)">{{ cg.ply }}</span>
+                      <span style="font:400 11px/1 'JetBrains Mono',monospace;color:var(--faint)">{{ cg.date }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font:400 10.5px/1.5 'Public Sans',sans-serif;color:var(--faint)">Every number on this screen opens its supporting games here; opening one jumps straight to the ply that produced the claim.</div>
+              </div>
+              <div style="padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:6px">
+                <button onClick="{{ goTactics }}" style="flex:1;padding:9px 12px;background:var(--accent);color:#14181b;border:0;border-radius:6px;font:600 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Train this weakness</button>
+                <button onClick="{{ goGame }}" style="padding:9px 12px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Open game</button>
+              </div>
+            </aside>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sPrep }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;height:100%;min-height:0">
+            <div style="display:flex;align-items:center;gap:0;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line)">
+              <sc-for list="{{ prepSteps }}" as="ps" hint-placeholder-count="4">
+                <div onClick="{{ ps.onClick }}" style="{{ ps.st }}"><span style="{{ ps.numSt }}">{{ ps.num }}</span><span>{{ ps.label }}</span><span style="font:400 11px/1 'Public Sans',sans-serif;color:var(--faint)">{{ ps.pick }}</span></div>
+              </sc-for>
+            </div>
+
+            <div style="flex:1;display:flex;min-height:0">
+              <div style="flex:1;min-width:0;padding:18px 20px;overflow:auto">
+                <sc-if value="{{ prep1 }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="display:flex;gap:8px;margin-bottom:14px">
+                      <div style="flex:1;padding:10px 12px;background:var(--panel2);border:1px solid var(--line2);border-radius:6px;font:400 12.5px/1.2 'Public Sans',sans-serif;color:var(--tx)">Halvorsen</div>
+                      <button style="padding:10px 14px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Search local</button>
+                      <button style="padding:10px 14px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Fetch from Lichess</button>
+                      <button style="padding:10px 14px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Fetch from chess.com</button>
+                    </div>
+                    <div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+                      <sc-for list="{{ opponents }}" as="op" hint-placeholder-count="4">
+                        <div onClick="{{ op.onClick }}" style="{{ op.st }}">
+                          <span style="flex:1;font:600 13px/1.3 'Public Sans',sans-serif">{{ op.name }}</span>
+                          <span style="font:500 11.5px/1 'JetBrains Mono',monospace;color:var(--dim)">{{ op.elo }}</span>
+                          <span style="font:400 11.5px/1 'Public Sans',sans-serif;color:var(--faint)">{{ op.games }}</span>
+                          <span style="{{ op.srcSt }}">{{ op.source }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <p style="margin:14px 2px 0;font:400 13px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">Local hits come from your own database first. Fetching pulls that player's public games on demand — the engine stays cold; nothing is analysed until you ask for it.</p>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ prep2 }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                      <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">REPERTOIRE FINGERPRINT</span>
+                      <div style="display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:5px;overflow:hidden">
+                        <sc-for list="{{ colorChips }}" as="cc" hint-placeholder-count="2">
+                          <button onClick="{{ cc.onClick }}" style="{{ cc.st }}">{{ cc.label }}</button>
+                        </sc-for>
+                      </div>
+                      <span style="font:400 11.5px/1 'Public Sans',sans-serif;color:var(--faint)">148 games as Black · 2019–2026</span>
+                    </div>
+                    <div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+                      <div style="display:grid;grid-template-columns:64px 1.4fr 78px 1fr 84px 1fr;gap:10px;padding:9px 14px;background:var(--panel2);border-bottom:1px solid var(--line);font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.12em;color:var(--faint)">
+                        <span>ECO</span><span>OPENING</span><span>SHARE</span><span>SCORE</span><span>AVG ELO</span><span>BOOK EXIT</span>
+                      </div>
+                      <sc-for list="{{ fingerprint }}" as="fp" hint-placeholder-count="5">
+                        <div style="display:grid;grid-template-columns:64px 1.4fr 78px 1fr 84px 1fr;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font:500 12.5px/1.35 'Public Sans',sans-serif;cursor:pointer" style-hover="background:var(--panel2)">
+                          <span style="font:500 12px/1.3 'JetBrains Mono',monospace;color:var(--dim)">{{ fp.eco }}</span>
+                          <span>{{ fp.name }}</span>
+                          <span style="font:500 12px/1.3 'JetBrains Mono',monospace;color:var(--dim)">{{ fp.share }}</span>
+                          <span style="display:flex;align-items:center;gap:8px"><span style="position:relative;flex:1;height:7px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="{{ fp.barSt }}"></span></span><span style="{{ fp.scoreSt }}">{{ fp.score }}</span></span>
+                          <span style="font:500 12px/1.3 'JetBrains Mono',monospace;color:var(--dim)">{{ fp.elo }}</span>
+                          <span style="font:400 12px/1.35 'Source Serif 4',serif;color:var(--dim)">{{ fp.exit }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ prep3 }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">WEAKEST LINES — RANKED</div>
+                    <div style="display:flex;flex-direction:column;gap:10px">
+                      <sc-for list="{{ weakLines }}" as="wl" hint-placeholder-count="4">
+                        <div onClick="{{ wl.onClick }}" style="{{ wl.st }}">
+                          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px">
+                            <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--accent)">{{ wl.rank }}</span>
+                            <span style="font:600 13.5px/1.3 'Public Sans',sans-serif">{{ wl.name }}</span>
+                            <span style="font:500 11.5px/1 'JetBrains Mono',monospace;color:var(--dim)">{{ wl.line }}</span>
+                            <div style="flex:1"></div>
+                            <span style="{{ wl.scoreSt }}">{{ wl.score }}</span>
+                          </div>
+                          <p style="margin:0;font:400 13px/1.55 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">{{ wl.prose }}</p>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ prep4 }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">MASTER GAMES IN THIS EXACT POSITION</div>
+                    <div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+                      <sc-for list="{{ masterGames }}" as="mg" hint-placeholder-count="5">
+                        <div onClick="{{ mg.onClick }}" style="display:grid;grid-template-columns:1.4fr 1.4fr 58px 1fr 74px 96px;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;font:500 12.5px/1.35 'Public Sans',sans-serif" style-hover="background:var(--panel2)">
+                          <span>{{ mg.white }}</span><span>{{ mg.black }}</span>
+                          <span style="font:700 12px/1.35 'JetBrains Mono',monospace;color:var(--dim)">{{ mg.result }}</span>
+                          <span style="color:var(--dim)">{{ mg.event }}</span>
+                          <span style="font:400 11.5px/1.35 'JetBrains Mono',monospace;color:var(--faint)">{{ mg.year }}</span>
+                          <span style="font:400 11.5px/1.35 'JetBrains Mono',monospace;color:var(--faint)">{{ mg.plies }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <p style="margin:14px 2px 0;font:400 13px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">Ranked by how closely each game follows the position Halvorsen actually reaches, then by the strength of the side you will be playing.</p>
+                  </div>
+                </sc-if>
+              </div>
+
+              <aside style="flex:0 0 520px;display:flex;flex-direction:column;gap:14px;padding:18px 20px;background:var(--panel);border-left:1px solid var(--line);overflow:auto">
+                <dc-import name="Board" fen="{{ prepFen }}" treatment="walnut" theme="{{ theme }}" size="{{ midBoard }}" evidence="{{ prepEv }}" intensity="1" hint-size="472px,472px"></dc-import>
+                <div>
+                  <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--violet);margin-bottom:8px">PROFILE FINDING · THIS OPPONENT</div>
+                  <p style="margin:0 0 10px;font:400 13.5px/1.6 'Source Serif 4',serif;text-wrap:pretty">{{ prepFinding }}</p>
+                  <div style="display:flex;gap:6px">
+                    <button onClick="{{ goProfile }}" style="padding:8px 12px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Open his profile</button>
+                    <button onClick="{{ goGame }}" style="padding:8px 12px;background:var(--accent);color:#14181b;border:0;border-radius:6px;font:600 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Study in game view</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sTactics }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;height:100%;min-height:0">
+            <div style="flex:0 0 230px;padding:16px 14px;background:var(--panel);border-right:1px solid var(--line);overflow:auto">
+              <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint);padding:0 6px 10px">MODE</div>
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <sc-for list="{{ tacticModes }}" as="tm" hint-placeholder-count="5">
+                  <div onClick="{{ tm.onClick }}" style="{{ tm.st }}">
+                    <div style="display:flex;align-items:baseline;gap:8px"><span style="flex:1;font:600 12.5px/1.3 'Public Sans',sans-serif">{{ tm.name }}</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:var(--faint)">{{ tm.badge }}</span></div>
+                    <div style="margin-top:4px;font:400 11.5px/1.45 'Source Serif 4',serif;color:var(--dim)">{{ tm.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:16px;padding:12px;background:var(--panel2);border-radius:7px">
+                <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint);margin-bottom:9px">WOODPECKER · CYCLE 3</div>
+                <div style="display:flex;flex-direction:column;gap:7px">
+                  <sc-for list="{{ woodpecker }}" as="wp" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:8px;font:500 11px/1 'JetBrains Mono',monospace;color:var(--dim)">
+                      <span style="width:46px">{{ wp.label }}</span>
+                      <span style="position:relative;flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="{{ wp.barSt }}"></span></span>
+                      <span style="color:var(--faint)">{{ wp.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;background:var(--desk)">
+              <div style="display:flex;align-items:center;gap:16px;width:640px">
+                <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--dim)">BLACK TO MOVE</span>
+                <div style="flex:1"></div>
+                <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--good)">STREAK 7</span>
+                <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--dim)">RATING 1842 <span style="color:var(--good)">+8</span></span>
+                <span style="font:700 15px/1 'JetBrains Mono',monospace;color:var(--accent)">0:24</span>
+              </div>
+              <dc-import name="Board" fen="{{ puzzleFen }}" treatment="walnut" theme="{{ theme }}" size="{{ bigBoard }}" evidence="{{ puzzleEv }}" intensity="1" flipped="{{ true }}" hint-size="560px,560px"></dc-import>
+              <div style="display:flex;align-items:center;gap:10px">
+                <button style="padding:9px 15px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:7px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Hint <span style="font-family:'JetBrains Mono',monospace;color:var(--faint)">H</span></button>
+                <button style="padding:9px 15px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:7px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Skip <span style="font-family:'JetBrains Mono',monospace;color:var(--faint)">S</span></button>
+                <button style="padding:9px 15px;background:var(--accent);color:#14181b;border:0;border-radius:7px;font:600 12px/1 'Public Sans',sans-serif;cursor:pointer">Give up <span style="font-family:'JetBrains Mono',monospace;opacity:0.6">G</span></button>
+                <span style="font:400 11px/1.4 'Public Sans',sans-serif;color:var(--faint);max-width:210px">Play the move on the board, or type it — ⏎ submits, H hint, S skip.</span>
+              </div>
+            </div>
+
+            <aside style="flex:0 0 400px;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0">
+              <div style="padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px">
+                <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">WHY THIS PUZZLE</span>
+                <div style="flex:1"></div>
+                <div style="display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:5px;overflow:hidden">
+                  <sc-for list="{{ voiceChips }}" as="vc" hint-placeholder-count="2">
+                    <button onClick="{{ vc.onClick }}" style="{{ vc.st }}">{{ vc.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="flex:1;overflow:auto;padding:16px 18px">
+                <p style="margin:0 0 14px;font:600 16px/1.45 'Source Serif 4',serif;text-wrap:pretty">{{ whyHeadline }}</p>
+                <p style="margin:0 0 14px;font:400 14px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">{{ whyBody }}</p>
+                <div style="display:flex;flex-direction:column;gap:9px;padding:12px;background:var(--panel2);border-radius:7px">
+                  <div style="display:flex;align-items:baseline;gap:9px"><span style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint);width:78px">MOTIF</span><span style="font:500 12.5px/1 'Public Sans',sans-serif">Knight fork</span></div>
+                  <div style="display:flex;align-items:baseline;gap:9px"><span style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint);width:78px">SOURCE</span><span style="font:500 12.5px/1 'Public Sans',sans-serif">Your profile · allowed 31×</span></div>
+                  <div style="display:flex;align-items:baseline;gap:9px"><span style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint);width:78px">RATING</span><span style="font:500 12.5px/1 'JetBrains Mono',monospace">1795 · from a 2024 club game</span></div>
+                </div>
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font:400 10.5px/1.5 'Public Sans',sans-serif;color:var(--faint)">Queue order comes from your motif matrix, not from a generic ladder. Solve or fail, the result feeds straight back into it.</div>
+              </div>
+              <div style="padding:12px 16px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px">
+                <span style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint)">QUEUE</span>
+                <span style="position:relative;flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="position:absolute;inset:0 42% 0 0;background:var(--accent)"></span></span>
+                <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--dim)">7 / 12</span>
+              </div>
+            </aside>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sSrs }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;height:100%;min-height:0">
+            <div style="flex:0 0 292px;padding:16px 14px;background:var(--panel);border-right:1px solid var(--line);overflow:auto">
+              <div style="display:flex;align-items:center;gap:8px;padding:0 6px 10px">
+                <span style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">REPERTOIRE</span>
+                <div style="flex:1"></div>
+                <div style="display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:5px;overflow:hidden">
+                  <sc-for list="{{ colorChips }}" as="cc" hint-placeholder-count="2">
+                    <button onClick="{{ cc.onClick }}" style="{{ cc.st }}">{{ cc.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:1px">
+                <sc-for list="{{ repertoire }}" as="rp" hint-placeholder-count="6">
+                  <div style="{{ rp.st }}">
+                    <span style="flex:1;font:500 12.5px/1.3 'Public Sans',sans-serif">{{ rp.name }}</span>
+                    <span style="{{ rp.dueSt }}">{{ rp.due }}</span>
+                    <span style="font:400 10.5px/1 'JetBrains Mono',monospace;color:var(--faint)">{{ rp.total }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <button style="margin-top:14px;width:100%;padding:9px 12px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Import PGN or Lichess study</button>
+              <p style="margin:12px 6px 0;font:400 11.5px/1.55 'Source Serif 4',serif;color:var(--faint);text-wrap:pretty">FSRS scheduling. Lapses re-enter the queue the same session; new lines are capped at 15 a day.</p>
+            </div>
+
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;background:var(--desk)">
+              <div style="display:flex;align-items:center;gap:16px;width:600px">
+                <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--dim)">SICILIAN, OPEN · YOUR MOVE AS WHITE</span>
+                <div style="flex:1"></div>
+                <span style="padding:3px 8px;border-radius:4px;background:var(--panel2);box-shadow:inset 0 0 0 1px var(--line);font:700 9.5px/1 'JetBrains Mono',monospace;color:var(--bad)">LAPSE ×2</span>
+                <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--dim)">24 DUE · 9 DONE</span>
+              </div>
+              <dc-import name="Board" fen="{{ srsFen }}" treatment="walnut" theme="{{ theme }}" size="{{ bigBoard }}" evidence="{{ srsEv }}" intensity="0.7" hint-size="560px,560px"></dc-import>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="padding:10px 14px;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;font:500 13px/1 'JetBrains Mono',monospace;color:var(--faint);min-width:150px">type your move…</div>
+                  <span style="font:400 11px/1.4 'Public Sans',sans-serif;color:var(--faint)">or play it on the board</span>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <sc-for list="{{ grades }}" as="gr" hint-placeholder-count="4">
+                    <button style="{{ gr.st }}"><span>{{ gr.label }}</span><span style="font-family:'JetBrains Mono',monospace;opacity:0.6">{{ gr.key }}</span><span style="font:400 10px/1 'JetBrains Mono',monospace;opacity:0.65">{{ gr.next }}</span></button>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <aside style="flex:0 0 340px;padding:16px 18px;background:var(--panel);border-left:1px solid var(--line);overflow:auto">
+              <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">THIS SESSION</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+                <sc-for list="{{ srsStats }}" as="ss" hint-placeholder-count="4">
+                  <div style="padding:12px;background:var(--panel2);border-radius:7px">
+                    <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint)">{{ ss.label }}</div>
+                    <div style="margin-top:8px;font:700 20px/1 'JetBrains Mono',monospace">{{ ss.value }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="margin:0;font:400 13.5px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">You keep lapsing on the same branch — 6...e5 in the Najdorf. Silman will keep it in today's queue until you answer it twice cleanly, then push it out 9 days.</p>
+            </aside>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sEndgame }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;height:100%;min-height:0">
+            <div style="flex:0 0 300px;padding:16px 14px;background:var(--panel);border-right:1px solid var(--line);overflow:auto">
+              <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint);padding:0 6px 10px">CURRICULUM · 1800–2000</div>
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <sc-for list="{{ endgameTiers }}" as="et" hint-placeholder-count="6">
+                  <div style="{{ et.st }}">
+                    <div style="display:flex;align-items:baseline;gap:8px"><span style="flex:1;font:600 12.5px/1.3 'Public Sans',sans-serif">{{ et.name }}</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:var(--faint)">{{ et.count }}</span></div>
+                    <div style="margin-top:6px;position:relative;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="{{ et.barSt }}"></span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;background:var(--desk)">
+              <div style="width:600px;display:flex;align-items:baseline;gap:12px">
+                <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--dim)">LUCENA · BUILD THE BRIDGE</span>
+                <div style="flex:1"></div>
+                <span style="font:700 11px/1 'JetBrains Mono',monospace;color:var(--good)">TABLEBASE TRUTH · 5 PIECES</span>
+              </div>
+              <dc-import name="Board" fen="{{ endFen }}" treatment="walnut" theme="{{ theme }}" size="{{ bigBoard }}" evidence="{{ endEv }}" intensity="1" hint-size="560px,560px"></dc-import>
+              <div style="width:600px;display:flex;align-items:center;gap:10px">
+                <span style="font:400 13px/1.5 'Source Serif 4',serif;color:var(--dim)">Objective: win as White. Engine plays the toughest defence.</span>
+                <div style="flex:1"></div>
+                <button style="padding:9px 14px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:7px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Restart</button>
+                <button style="padding:9px 14px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:7px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Show the idea</button>
+              </div>
+            </div>
+            <aside style="flex:0 0 380px;padding:16px 18px;background:var(--panel);border-left:1px solid var(--line);overflow:auto">
+              <div style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;margin-bottom:12px">DRILL FEEDBACK</div>
+              <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:14px">
+                <sc-for list="{{ drillMoves }}" as="dm" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:baseline;gap:10px;padding:8px 10px;margin:0 -10px;border-radius:6px">
+                    <span style="width:34px;font:500 12px/1.3 'JetBrains Mono',monospace;color:var(--faint)">{{ dm.no }}</span>
+                    <span style="width:56px;font:600 13px/1.3 'JetBrains Mono',monospace">{{ dm.san }}</span>
+                    <span style="{{ dm.verdictSt }}">{{ dm.verdict }}</span>
+                    <span style="flex:1;font:400 12px/1.5 'Source Serif 4',serif;color:var(--dim)">{{ dm.note }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="margin:0;font:400 13.5px/1.6 'Source Serif 4',serif;text-wrap:pretty">Every move is graded against the tablebase, not an engine score: <b style="font-weight:600">still winning</b>, <b style="font-weight:600">throws the win</b>, or <b style="font-weight:600">slower but winning</b> with the DTZ cost.</p>
+            </aside>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sSettings }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:20px 24px 28px;max-width:1080px">
+            <sc-for list="{{ settingGroups }}" as="sg" hint-placeholder-count="4">
+              <div style="margin-bottom:16px;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+                <div style="padding:11px 16px;background:var(--panel2);border-bottom:1px solid var(--line);font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">{{ sg.title }}</div>
+                <sc-for list="{{ sg.rows }}" as="rw" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:230px 1fr 200px;gap:16px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+                    <div>
+                      <div style="font:500 12.5px/1.3 'Public Sans',sans-serif">{{ rw.label }}</div>
+                      <div style="margin-top:3px;font:400 11.5px/1.45 'Source Serif 4',serif;color:var(--faint)">{{ rw.help }}</div>
+                    </div>
+                    <div style="{{ rw.valueSt }}">{{ rw.value }}</div>
+                    <div style="display:flex;justify-content:flex-end;gap:6px"><span style="{{ rw.actionSt }}">{{ rw.action }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sHelp }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;height:100%;min-height:0">
+            <div style="flex:0 0 250px;padding:16px 14px;background:var(--panel);border-right:1px solid var(--line);overflow:auto">
+              <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint);padding:0 6px 10px">USER GUIDE</div>
+              <div style="display:flex;flex-direction:column;gap:1px">
+                <sc-for list="{{ helpToc }}" as="ht" hint-placeholder-count="8">
+                  <div style="{{ ht.st }}">{{ ht.label }}</div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0;padding:24px 30px;overflow:auto">
+              <div style="max-width:660px">
+                <h2 style="margin:0 0 6px;font:600 24px/1.25 'Source Serif 4',serif">The Explain panel</h2>
+                <div style="font:500 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--faint);margin-bottom:16px">GAME VIEW · SHORTCUT E · CLI: silman explain --fen</div>
+                <p style="margin:0 0 13px;font:400 15px/1.68 'Source Serif 4',serif;text-wrap:pretty">Explain reads a position the way a coach does: it runs a tactical screen and eight positional detectors, then writes what it found in plain prose. No engine is started for this — everything you see comes from static analysis of the position in front of you.</p>
+                <p style="margin:0 0 13px;font:400 15px/1.68 'Source Serif 4',serif;text-wrap:pretty">Each sentence owns its evidence. Hover one and the squares it is talking about light up on the board; click a square and the prose filters down to the sentences that mention it.</p>
+                <div style="margin:18px 0;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:inset 2px 0 0 var(--info)">
+                  <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.14em;color:var(--info);margin-bottom:8px">FROM THE COMMAND LINE</div>
+                  <div style="font:400 12.5px/1.7 'JetBrains Mono',monospace;color:var(--dim)">silman explain --fen "&lt;fen&gt;" --voice coach<br />silman annotate --db scid.sqlite --fresh</div>
+                </div>
+                <p style="margin:0;font:400 15px/1.68 'Source Serif 4',serif;text-wrap:pretty">If you have added an API key in Settings, the verbaliser will rewrite the same findings in longer prose. It is never allowed to add a claim the detectors did not make; if the key fails, Silman falls back to the templates silently.</p>
+              </div>
+            </div>
+            <aside style="flex:0 0 340px;padding:18px;background:var(--desk);border-left:1px solid var(--line)">
+              <div style="padding:16px;background:var(--panel);border:1px solid var(--accent);border-radius:9px;box-shadow:0 18px 40px -22px rgba(0,0,0,0.8)">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+                  <span style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--accent)">FIRST-RUN TOUR</span>
+                  <div style="flex:1"></div>
+                  <span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:var(--faint)">2 / 6</span>
+                </div>
+                <p style="margin:0 0 12px;font:400 14px/1.6 'Source Serif 4',serif;text-wrap:pretty">This is <b style="font-weight:600">Coach</b>. Everything Silman knows about your play lives in these three screens — Explain reads positions, Profile reads your games, Prep reads your opponent.</p>
+                <div style="display:flex;gap:6px">
+                  <button style="padding:8px 12px;background:var(--accent);color:#14181b;border:0;border-radius:6px;font:600 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Next</button>
+                  <button style="padding:8px 12px;background:transparent;color:var(--dim);border:1px solid var(--line2);border-radius:6px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Skip tour</button>
+                </div>
+              </div>
+              <p style="margin:14px 4px 0;font:400 12px/1.6 'Source Serif 4',serif;color:var(--faint);text-wrap:pretty">The tour anchors to rail groups, one card per group, and never covers the thing it is pointing at. It can be replayed from Help at any time.</p>
+            </aside>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sGame }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:26px 24px">
+            <div style="max-width:760px;padding:20px;background:var(--panel);border:1px solid var(--line);border-radius:8px">
+              <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint);margin-bottom:10px">SHIPPED IN ROUND 1</div>
+              <p style="margin:0 0 12px;font:400 14.5px/1.6 'Source Serif 4',serif;text-wrap:pretty">The game view — board, Explain panel, moves &amp; annotations, engine and jobs — is specified at full fidelity in the round-1 study, and is the density calibration for every screen here.</p>
+              <a href="Silman Board Study.dc.html" style="font:500 13px/1 'Public Sans',sans-serif">Open the round-1 game view →</a>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <footer style="flex:0 0 auto;display:flex;align-items:center;background:var(--panel2);border-top:1px solid var(--line);font:500 11px/1 'JetBrains Mono',monospace;color:var(--dim)">
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-right:1px solid var(--line)">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--faint)"></span>
+          <span>ENGINE IDLE</span>
+          <span style="color:var(--faint)">Stockfish 18 · nodes 2,000,000</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-right:1px solid var(--line)">
+          <span>JOBS</span>
+          <span style="color:var(--faint)">1 running · 264 done · 0 failed</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-right:1px solid var(--line);min-width:250px">
+          <span>TWIC 1601</span>
+          <span style="position:relative;flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="position:absolute;inset:0 32% 0 0;background:var(--good)"></span></span>
+          <span style="color:var(--faint)">68%</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="padding:9px 16px;color:var(--faint)">{{ footHint }}</div>
+      </footer>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const GAMES = [
+  { white: 'sounix', black: 'christoforo', result: '1–0', event: 'Lichess blitz', date: '2026.07.24', eco: 'B90', source: 'lichess', flag: '', analysis: 'fresh' },
+  { white: 'R. Halvorsen', black: 'sounix', result: '0–1', event: 'Bergens SK', date: '2026.07.17', eco: 'C18', source: 'personal', flag: '', analysis: 'fresh' },
+  { white: 'sounix', black: 'M. Sæther', result: '½–½', event: 'Bergens SK', date: '2026.07.10', eco: 'D37', source: 'personal', flag: '⑂', analysis: 'legacy' },
+  { white: 'Carlsen, M.', black: 'Firouzja, A.', result: '1–0', event: 'Norway Chess', date: '2026.06.03', eco: 'C54', source: 'twic', flag: '', analysis: 'fresh' },
+  { white: 'Gukesh, D.', black: 'Caruana, F.', result: '½–½', event: 'Candidates', date: '2026.04.19', eco: 'E06', source: 'twic', flag: '', analysis: 'none' },
+  { white: 'sounix', black: 'kasparovfan88', result: '1–0', event: 'chess.com rapid', date: '2026.03.28', eco: 'B22', source: 'chess.com', flag: '⑂', analysis: 'fresh' },
+  { white: 'Ju, W.', black: 'Goryachkina, A.', result: '1–0', event: 'Women\u2019s GP', date: '2026.02.11', eco: 'A05', source: 'twic', flag: '', analysis: 'none' },
+  { white: 'sounix', black: 'R. Halvorsen', result: '0–1', event: 'Bergens SK', date: '2025.11.06', eco: 'C18', source: 'personal', flag: '', analysis: 'legacy' },
+  { white: 'Morphy, P.', black: 'Duke of Brunswick', result: '1–0', event: 'Paris', date: '1858.??.??', eco: 'C41', source: 'twic', flag: '', analysis: 'fresh' }
+];
+
+const MOTIFS = [
+  { name: 'Knight fork', missed: 12, allowed: 31, peers: '+142%', bad: true },
+  { name: 'Back-rank mate', missed: 4, allowed: 9, peers: '+38%', bad: true },
+  { name: 'Discovered attack', missed: 9, allowed: 11, peers: '+12%' },
+  { name: 'Pin (absolute)', missed: 7, allowed: 6, peers: '−14%' },
+  { name: 'Deflection', missed: 6, allowed: 5, peers: '−22%' },
+  { name: 'Skewer', missed: 2, allowed: 3, peers: '−31%' }
+];
+
+const STRUCTURES = [
+  { name: 'Isolated queen\u2019s pawn (against)', score: '38%', delta: '−13', pct: 38, bad: true },
+  { name: 'Carlsbad, minority attack', score: '44%', delta: '−7', pct: 44, bad: true },
+  { name: 'Hanging pawns', score: '52%', delta: '+1', pct: 52 },
+  { name: 'French chain', score: '61%', delta: '+9', pct: 61 },
+  { name: 'Sicilian, open d-file', score: '64%', delta: '+12', pct: 64 }
+];
+
+const PHASES = [
+  { name: 'OPENING', acpl: '24', errors: '3 inaccuracies · 0 blunders / 100 moves' },
+  { name: 'MIDDLEGAME', acpl: '61', errors: '9 mistakes · 4 blunders / 100 moves' },
+  { name: 'ENDGAME', acpl: '48', errors: '6 mistakes · 2 blunders / 100 moves' }
+];
+
+const RATES = [
+  { name: 'CONVERSION FROM +2', value: '63%', delta: '−16 vs peers', bad: true, note: '41 winning positions · 15 not converted' },
+  { name: 'DEFENCE FROM −2', value: '21%', delta: '+4 vs peers', note: '38 worse positions · 8 held' }
+];
+
+const CLAIMS = {
+  fork: { count: '31 GAMES', prose: 'Knight forks you allowed, newest first. Opening one lands on the ply where the fork became available — not on the move you actually played.', games: [{ title: 'vs R. Halvorsen · Bergens SK', ply: 'ply 43', date: '2026.07.17' }, { title: 'vs kasparovfan88 · chess.com', ply: 'ply 29', date: '2026.03.28' }, { title: 'vs M. Sæther · Bergens SK', ply: 'ply 51', date: '2026.02.20' }, { title: 'vs bjornar_87 · Lichess', ply: 'ply 34', date: '2026.01.09' }, { title: 'vs T. Lie · Vestland open', ply: 'ply 38', date: '2025.12.14' }] },
+  iqp: { count: '22 GAMES', prose: 'Games played against an isolated queen\u2019s pawn. You score 38% here against a 51% baseline for your rating band — the losses cluster on move 25–35, when the blockade breaks.', games: [{ title: 'vs A. Nilsen · Bergens SK', ply: 'ply 47', date: '2026.05.22' }, { title: 'vs frank_dk · Lichess', ply: 'ply 33', date: '2026.04.02' }, { title: 'vs M. Sæther · club rapid', ply: 'ply 29', date: '2026.01.30' }] },
+  conv: { count: '15 GAMES', prose: 'Winning positions (+2 or better) that did not become wins. Ten of the fifteen were rook endings, which is why the endgame curriculum starts you at Lucena and Philidor.', games: [{ title: 'vs christoforo · Lichess', ply: 'ply 61', date: '2026.07.24' }, { title: 'vs R. Halvorsen · Bergens SK', ply: 'ply 55', date: '2025.11.06' }, { title: 'vs erik_no · chess.com', ply: 'ply 72', date: '2025.09.18' }] },
+  phase: { count: '148 GAMES', prose: 'Middlegame ACPL of 61 across 148 games. The distribution is bimodal: quiet positions sit near 30, and positions where a tactic existed for either side jump past 90.', games: [{ title: 'vs christoforo · Lichess', ply: 'ply 21', date: '2026.07.24' }, { title: 'vs R. Halvorsen · Bergens SK', ply: 'ply 43', date: '2026.07.17' }, { title: 'vs M. Sæther · Bergens SK', ply: 'ply 51', date: '2026.02.20' }] }
+};
+
+const FINGERPRINT = [
+  { eco: 'C18', name: 'French, Winawer', share: '34%', score: '61%', pct: 61, elo: '1904', exit: 'leaves book at 7... Qc7' },
+  { eco: 'C11', name: 'French, Classical', share: '19%', score: '54%', pct: 54, elo: '1878', exit: 'leaves book at 6... a6' },
+  { eco: 'B22', name: 'Sicilian, Alapin', share: '14%', score: '38%', pct: 38, elo: '1890', exit: 'leaves book at 5... Nc6', weak: true },
+  { eco: 'A45', name: 'Trompowsky', share: '11%', score: '33%', pct: 33, elo: '1861', exit: 'leaves book at 3... c5', weak: true },
+  { eco: 'D02', name: 'London System', share: '9%', score: '50%', pct: 50, elo: '1885', exit: 'leaves book at 5... Nbd7' }
+];
+
+const WEAK_LINES = [
+  { rank: '01', name: 'Sicilian, Alapin', line: '1. e4 c5 2. c3 Nf6 3. e5 Nd5 4. d4 cxd4 5. Nf3', score: '38% in 21', prose: 'He meets 2. c3 with 2... Nf6 every time and then drifts: after 5. Nf3 he has played 5... Nc6 in 17 of 21 games, transposing into a structure he scores 38% in. Two of his three losses to it were the same 12-move sequence.' },
+  { rank: '02', name: 'Trompowsky, 2... c5', line: '1. d4 Nf6 2. Bg5 c5 3. d5 Qb6', score: '33% in 12', prose: 'The queen sortie is his automatic answer, but he returns the queen to c7 within four moves in most games — a full tempo down. Master practice takes the pawn and gives it back for development.' },
+  { rank: '03', name: 'French, Winawer — 7. Qg4 sideline', line: '1. e4 e6 2. d4 d5 3. Nc3 Bb4 4. e5 c5 5. a3 Bxc3+ 6. bxc3 Ne7 7. Qg4', score: '47% in 15', prose: 'His main weapon overall, but the 7. Qg4 line is the one branch where his score drops below the rest — he castles into it in 11 of 15 games.' },
+  { rank: '04', name: 'London, early ...c5 and ...Qb6', line: '1. d4 d5 2. Bf4 c5 3. e3 Qb6', score: '44% in 9', prose: 'Small sample, but he has never played the critical 4. Nc3 answer as Black and spends the queen\u2019s time defending b2 instead.' }
+];
+
+const MASTER_GAMES = [
+  { white: 'Sveshnikov, E.', black: 'Kramnik, V.', result: '½–½', event: 'Russian Ch', year: '1998', plies: '74' },
+  { white: 'Rozentalis, E.', black: 'Adams, M.', result: '1–0', event: 'Bundesliga', year: '2003', plies: '61' },
+  { white: 'Tiviakov, S.', black: 'Sadler, M.', result: '1–0', event: 'Hoogeveen', year: '2007', plies: '55' },
+  { white: 'Pavasovic, D.', black: 'Kobalia, M.', result: '½–½', event: 'European Ch', year: '2011', plies: '88' },
+  { white: 'Naiditsch, A.', black: 'Bacrot, E.', result: '1–0', event: 'Sparkassen', year: '2014', plies: '49' }
+];
+
+const REPERTOIRE = [
+  { name: 'Sicilian, Open — Najdorf', due: '9 due', total: '112', hot: true },
+  { name: 'Sicilian, Open — Dragon', due: '4 due', total: '68' },
+  { name: 'Ruy López, Berlin', due: '6 due', total: '94', hot: true },
+  { name: 'Italian, Giuoco Pianissimo', due: '3 due', total: '57' },
+  { name: 'Anti-Sicilians', due: '2 due', total: '41' },
+  { name: 'Scandinavian', due: '', total: '23' }
+];
+
+const SETTINGS = [
+  { title: 'ENGINE & ANALYSIS', rows: [
+    { label: 'Engine path', help: 'Resolved automatically when empty.', value: '/Users/sounix/…/stockfish-macos-m1-apple-silicon', mono: true, action: 'Choose…' },
+    { label: 'Node budget', help: 'Per live analysis request.', value: '2,000,000 nodes', mono: true, action: 'Edit' },
+    { label: 'Spawn policy', help: 'Engine-off is the default: nothing runs unless a screen fires or you ask.', value: 'On explicit request only', action: 'Change' }
+  ] },
+  { title: 'COACH', rows: [
+    { label: 'Default voice', help: 'Applies to Explain, drill feedback and puzzle reasons.', value: 'Coach  ·  Neutral', action: 'Toggle' },
+    { label: 'LLM verbaliser', help: 'Optional. Strictly grounded in detector output; silent fallback to templates.', value: 'sk-ant-··············xR2f', mono: true, action: 'Replace' }
+  ] },
+  { title: 'DATA', rows: [
+    { label: 'Database', help: 'Duplicates are linked, never deleted.', value: '~/chess/scid.sqlite · 121,438 games', mono: true, action: 'Open…' },
+    { label: 'Account syncs', help: 'On-demand or weekly.', value: 'Lichess · chess.com · FICS', action: 'Manage' },
+    { label: 'TWIC ingest', help: 'Incremental weekly download with donation notice.', value: 'Weekly, Mondays 06:00 · at wk 1601', action: 'Change' },
+    { label: 'Tablebase', help: 'Local Syzygy up to 5 pieces; 6–7 via Lichess API.', value: '~/chess/syzygy · 5-piece', mono: true, action: 'Choose…' }
+  ] },
+  { title: 'APPEARANCE', rows: [
+    { label: 'Theme', help: 'Light is derived from the same tokens.', value: 'Dark  ·  Light  ·  Follow system', action: 'Change' },
+    { label: 'Board treatment', help: 'Studio Walnut is the default; Instrument is the neutral alternate.', value: 'Studio Walnut  ·  Instrument', action: 'Change' },
+    { label: 'Piece set', help: 'chessground sets.', value: 'cburnett', mono: true, action: 'Change' }
+  ] }
+];
+
+const HELP_TOC = ['Getting started', 'The game view', 'The Explain panel', 'Annotating games', 'Database & imports', 'Opponent prep', 'Your profile', 'Training queues', 'Endgame drills', 'Command line reference'];
+
+const SCREENS = {
+  home: { title: 'Home', subtitle: 'Two directions — pick a tab to compare, the recommendation sits below', actions: ['Sync now'] },
+  database: { title: 'Database', subtitle: 'scid.sqlite · 121,438 games · personal > TWIC > online', actions: ['Import PGN', 'Import SCID', 'Annotate all'] },
+  tree: { title: 'Opening tree', subtitle: 'Transposition-aware · follows the displayed position', actions: ['Open in game view'] },
+  search: { title: 'Position search', subtitle: 'Which games reached this position — warm index, ~30 ms on 121k games', actions: ['Clear board'] },
+  profile: { title: 'Profile', subtitle: 'Engine-derived findings · every number opens its supporting games', actions: ['Re-run analysis'] },
+  prep: { title: 'Opponent prep', subtitle: 'Pick an opponent, fingerprint the repertoire, find the soft lines', actions: ['Export prep sheet'] },
+  tactics: { title: 'Tactics', subtitle: 'Weakness-targeted queue · seeded from your motif matrix', actions: ['Session settings'] },
+  srs: { title: 'Openings SRS', subtitle: 'FSRS scheduling · 24 due today · 4 lapses', actions: ['Import repertoire'] },
+  endgame: { title: 'Endgames', subtitle: 'Rating-tiered curriculum · Syzygy tablebase truth', actions: ['Change tier'] },
+  settings: { title: 'Settings', subtitle: 'Engine, coach, data and appearance', actions: [] },
+  help: { title: 'Help', subtitle: 'Rendered user guide · every surface and CLI command', actions: ['Replay tour'] },
+  game: { title: 'Game', subtitle: 'Specified in round 1', actions: [] }
+};
+
+class Component extends DCLogic {
+  state = { screen: 'home', theme: null, home: 'A', claim: 'fork', prepStep: 1, color: 'black', voice: 'coach', tacticMode: 'weak' };
+
+  go(screen) { this.setState({ screen }); }
+  theme() { return this.state.theme || this.props.theme || 'dark'; }
+
+  chip(label, on, onClick) {
+    return { label, onClick, st: { padding: '6px 11px', border: 0, cursor: 'pointer', font: (on ? 600 : 500) + ' 11px/1 "Public Sans",sans-serif', color: on ? '#14181b' : 'var(--dim)', background: on ? 'var(--accent)' : 'transparent' } };
+  }
+  navItem(label, badge, screen) {
+    const active = this.state.screen === screen;
+    return {
+      label, badge: badge || '', onClick: () => this.go(screen),
+      st: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '7px 9px', borderRadius: '5px', cursor: 'pointer', font: (active ? 600 : 500) + ' 12.5px/1.2 "Public Sans",sans-serif', color: active ? 'var(--tx)' : 'var(--dim)', background: active ? 'var(--panel3)' : 'transparent', boxShadow: active ? 'inset 2px 0 0 var(--accent)' : 'none' }
+    };
+  }
+  srcStyle(src) {
+    const map = { personal: 'var(--accent)', twic: 'var(--info)', lichess: 'var(--violet)', 'chess.com': 'var(--good)' };
+    return { font: '600 9.5px/1 "JetBrains Mono",monospace', letterSpacing: '0.08em', textTransform: 'uppercase', color: map[src] || 'var(--faint)', alignSelf: 'center' };
+  }
+
+  renderVals() {
+    const s = this.state, theme = this.theme();
+    const sc = SCREENS[s.screen] || SCREENS.home;
+    const claim = CLAIMS[s.claim] || CLAIMS.fork;
+
+    const games = GAMES.map(g => ({
+      white: g.white, black: g.black, result: g.result, event: g.event, date: g.date, eco: g.eco,
+      source: g.source, flag: g.flag,
+      onClick: () => this.go('game'),
+      flagSt: { font: '600 12px/1.35 "JetBrains Mono",monospace', color: 'var(--faint)' },
+      srcSt: this.srcStyle(g.source),
+      analysis: g.analysis === 'fresh' ? 'fresh d24' : (g.analysis === 'legacy' ? 'legacy 2011' : '—'),
+      anaSt: { font: (g.analysis === 'legacy' ? '400' : '500') + ' 10.5px/1.35 "JetBrains Mono",monospace', color: g.analysis === 'fresh' ? 'var(--info)' : 'var(--faint)', fontStyle: g.analysis === 'legacy' ? 'italic' : 'normal', opacity: g.analysis === 'legacy' ? 0.75 : 1, alignSelf: 'center' }
+    }));
+
+    const num = (v, bad) => ({ font: '600 12.5px/1.3 "JetBrains Mono",monospace', textAlign: 'right', color: bad ? 'var(--bad)' : 'var(--dim)' });
+    const motifs = MOTIFS.map(m => ({
+      name: m.name, missed: m.missed, allowed: m.allowed, peers: m.peers,
+      onClick: () => this.setState({ claim: 'fork' }),
+      rowSt: { display: 'grid', gridTemplateColumns: '1fr 66px 66px 74px', gap: '8px', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line)', cursor: 'pointer' },
+      missSt: num(m.missed), allowSt: num(m.allowed, m.bad),
+      peerSt: { font: '600 11.5px/1.3 "JetBrains Mono",monospace', textAlign: 'right', color: m.bad ? 'var(--bad)' : 'var(--good)' }
+    }));
+
+    const structures = STRUCTURES.map(st => ({
+      name: st.name, score: st.score, delta: st.delta,
+      onClick: () => this.setState({ claim: 'iqp' }),
+      deltaSt: { font: '600 11px/1 "JetBrains Mono",monospace', color: st.bad ? 'var(--bad)' : 'var(--good)', minWidth: '30px', textAlign: 'right' },
+      barSt: { position: 'absolute', left: 0, top: 0, bottom: 0, width: st.pct + '%', background: st.bad ? 'var(--bad)' : 'var(--good)', opacity: 0.75 }
+    }));
+
+    const phases = PHASES.map(p => Object.assign({}, p, { onClick: () => this.setState({ claim: 'phase' }) }));
+    const rates = RATES.map(r => ({ name: r.name, value: r.value, delta: r.delta, note: r.note, onClick: () => this.setState({ claim: 'conv' }), deltaSt: { font: '600 11px/1 "JetBrains Mono",monospace', color: r.bad ? 'var(--bad)' : 'var(--good)' } }));
+
+    const prepSteps = ['Opponent', 'Fingerprint', 'Weak lines', 'Master games'].map((label, i) => {
+      const n = i + 1, active = s.prepStep === n, done = s.prepStep > n;
+      const picks = ['R. Halvorsen', 'as Black', 'Alapin', '5 games'];
+      return {
+        num: String(n), label, pick: done || active ? picks[i] : '',
+        onClick: () => this.setState({ prepStep: n }),
+        st: { display: 'flex', alignItems: 'center', gap: '9px', padding: '8px 14px', marginRight: '6px', borderRadius: '6px', cursor: 'pointer', font: (active ? 600 : 500) + ' 12.5px/1 "Public Sans",sans-serif', color: active ? 'var(--tx)' : (done ? 'var(--dim)' : 'var(--faint)'), background: active ? 'var(--panel3)' : 'transparent' },
+        numSt: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '19px', height: '19px', borderRadius: '50%', font: '700 10px/1 "JetBrains Mono",monospace', color: active ? '#14181b' : 'var(--faint)', background: active ? 'var(--accent)' : 'var(--panel3)' }
+      };
+    });
+
+    const opponents = [
+      { name: 'R. Halvorsen', elo: '1904', games: '148 games · 2019–2026', source: 'personal' },
+      { name: 'halvorsen_r', elo: '1935', games: '2,410 games · Lichess', source: 'lichess' },
+      { name: 'M. Sæther', elo: '1871', games: '96 games · 2020–2026', source: 'personal' },
+      { name: 'christoforo', elo: '1321', games: '38 games · Lichess', source: 'lichess' }
+    ].map((o, i) => ({
+      name: o.name, elo: o.elo, games: o.games, source: o.source,
+      onClick: () => this.setState({ prepStep: 2 }),
+      srcSt: this.srcStyle(o.source),
+      st: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderBottom: '1px solid var(--line)', cursor: 'pointer', background: i === 0 ? 'var(--panel2)' : 'transparent', boxShadow: i === 0 ? 'inset 2px 0 0 var(--accent)' : 'none' }
+    }));
+
+    const fingerprint = FINGERPRINT.map(f => ({
+      eco: f.eco, name: f.name, share: f.share, score: f.score, elo: f.elo, exit: f.exit,
+      barSt: { position: 'absolute', left: 0, top: 0, bottom: 0, width: f.pct + '%', background: f.weak ? 'var(--bad)' : 'var(--good)', opacity: 0.75 },
+      scoreSt: { font: '600 11.5px/1 "JetBrains Mono",monospace', color: f.weak ? 'var(--bad)' : 'var(--dim)', minWidth: '34px' }
+    }));
+
+    const weakLines = WEAK_LINES.map((w, i) => ({
+      rank: w.rank, name: w.name, line: w.line, prose: w.prose, score: w.score,
+      onClick: () => this.setState({ prepStep: 4 }),
+      scoreSt: { font: '600 11.5px/1 "JetBrains Mono",monospace', color: 'var(--bad)' },
+      st: { padding: '14px 16px', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer', boxShadow: i === 0 ? 'inset 2px 0 0 var(--accent)' : 'none' }
+    }));
+
+    const tacticModes = [
+      { id: 'weak', name: 'Weakness-targeted', badge: '12', note: 'Seeded from your motif matrix.' },
+      { id: 'rated', name: 'Rated drill', badge: '1842', note: 'Rating in, rating out.' },
+      { id: 'motif', name: 'Motif filter', badge: '', note: 'Pick a motif and grind it.' },
+      { id: 'speed', name: 'Heisman speed drill', badge: '', note: 'Easy positions, hard clock.' },
+      { id: 'wood', name: 'Woodpecker cycles', badge: 'c3', note: 'Same 200 puzzles, faster each pass.' }
+    ].map(m => ({
+      name: m.name, badge: m.badge, note: m.note,
+      onClick: () => this.setState({ tacticMode: m.id }),
+      st: { padding: '11px 10px', borderRadius: '6px', cursor: 'pointer', background: s.tacticMode === m.id ? 'var(--panel3)' : 'transparent', boxShadow: s.tacticMode === m.id ? 'inset 2px 0 0 var(--accent)' : 'none' }
+    }));
+
+    const bar = (pct, color) => ({ position: 'absolute', left: 0, top: 0, bottom: 0, width: pct + '%', background: color });
+    const woodpecker = [
+      { label: 'cycle 1', value: '4 h 20', pct: 100 }, { label: 'cycle 2', value: '2 h 55', pct: 67 }, { label: 'cycle 3', value: '1 h 12 · 61%', pct: 40 }
+    ].map(w => ({ label: w.label, value: w.value, barSt: bar(w.pct, 'var(--accent)') }));
+
+    const grades = [
+      { label: 'Again', key: '1', next: '<1 m', color: 'var(--bad)' },
+      { label: 'Hard', key: '2', next: '2 d', color: 'var(--dim)' },
+      { label: 'Good', key: '3', next: '9 d', color: 'var(--good)' },
+      { label: 'Easy', key: '4', next: '21 d', color: 'var(--info)' }
+    ].map(g => ({ label: g.label, key: g.key, next: g.next, st: { display: 'flex', alignItems: 'baseline', gap: '7px', padding: '10px 16px', background: 'var(--panel2)', color: g.color, border: '1px solid var(--line2)', borderRadius: '7px', font: '600 12px/1 "Public Sans",sans-serif', cursor: 'pointer' } }));
+
+    const repertoire = REPERTOIRE.map(r => ({
+      name: r.name, due: r.due, total: r.total,
+      st: { display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 10px', borderRadius: '6px', cursor: 'pointer', background: r.hot ? 'var(--panel2)' : 'transparent' },
+      dueSt: { font: '600 10.5px/1 "JetBrains Mono",monospace', color: r.hot ? 'var(--accent)' : 'var(--faint)' }
+    }));
+
+    const endgameTiers = [
+      { name: 'Rook endings · Lucena', count: '6 / 8', pct: 75, active: true },
+      { name: 'Rook endings · Philidor', count: '4 / 6', pct: 66 },
+      { name: 'Pawn endings · opposition', count: '9 / 9', pct: 100 },
+      { name: 'Q vs pawn on 7th', count: '2 / 7', pct: 28 },
+      { name: 'Minor piece · B vs N', count: '0 / 10', pct: 0 },
+      { name: 'Rook vs minor', count: '0 / 8', pct: 0 }
+    ].map(t => ({
+      name: t.name, count: t.count,
+      st: { padding: '11px 10px', borderRadius: '6px', cursor: 'pointer', background: t.active ? 'var(--panel3)' : 'transparent', boxShadow: t.active ? 'inset 2px 0 0 var(--accent)' : 'none' },
+      barSt: bar(t.pct, t.pct === 100 ? 'var(--good)' : 'var(--accent)')
+    }));
+
+    const drillMoves = [
+      { no: '1.', san: 'Rc4', verdict: 'WINNING', note: 'Building the bridge — the rook takes the fourth rank before the king steps out. DTZ 18.', good: true },
+      { no: '2.', san: 'Ra1', verdict: 'ENGINE', note: 'Checking from behind, the only real try.', neutral: true },
+      { no: '3.', san: 'Kc7', verdict: 'SLOWER', note: 'Still winning, but DTZ 18 → 26: Kb7 keeps the shield one move closer.', slow: true },
+      { no: '4.', san: 'Rb1+', verdict: 'ENGINE', note: '', neutral: true }
+    ].map(d => ({
+      no: d.no, san: d.san, verdict: d.verdict, note: d.note,
+      verdictSt: { width: '64px', font: '700 9.5px/1 "JetBrains Mono",monospace', letterSpacing: '0.1em', color: d.good ? 'var(--good)' : (d.slow ? 'var(--accent)' : 'var(--faint)') }
+    }));
+
+    const settingGroups = SETTINGS.map(g => ({
+      title: g.title,
+      rows: g.rows.map(r => ({
+        label: r.label, help: r.help, value: r.value, action: r.action,
+        valueSt: { font: (r.mono ? '400 11.5px/1.4 "JetBrains Mono",monospace' : '500 12.5px/1.4 "Public Sans",sans-serif'), color: 'var(--dim)', padding: '8px 11px', background: 'var(--panel2)', border: '1px solid var(--line)', borderRadius: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+        actionSt: { padding: '7px 12px', background: 'transparent', color: 'var(--dim)', border: '1px solid var(--line2)', borderRadius: '5px', font: '500 11.5px/1 "Public Sans",sans-serif', cursor: 'pointer' }
+      }))
+    }));
+
+    const helpToc = HELP_TOC.map((h, i) => ({ label: h, st: { padding: '8px 10px', borderRadius: '5px', cursor: 'pointer', font: (i === 2 ? 600 : 500) + ' 12.5px/1.3 "Public Sans",sans-serif', color: i === 2 ? 'var(--tx)' : 'var(--dim)', background: i === 2 ? 'var(--panel3)' : 'transparent', boxShadow: i === 2 ? 'inset 2px 0 0 var(--accent)' : 'none' } }));
+
+    const treeRows = [
+      { move: 'Bc5', games: '18,402', w: 34, d: 33, l: 33, elo: '2381', perf: '+4' },
+      { move: 'Nf6', games: '14,118', w: 36, d: 30, l: 34, elo: '2402', perf: '+9' },
+      { move: 'Be7', games: '3,204', w: 31, d: 39, l: 30, elo: '2298', perf: '−2' },
+      { move: 'd6', games: '1,860', w: 29, d: 34, l: 37, elo: '2251', perf: '−18' },
+      { move: 'h6', games: '742', w: 27, d: 31, l: 42, elo: '2190', perf: '−41' },
+      { move: 'Qf6', games: '318', w: 25, d: 28, l: 47, elo: '2104', perf: '−66' }
+    ].map(t => ({
+      move: t.move, games: t.games, elo: t.elo, perf: t.perf,
+      wSt: { width: t.w + '%', background: 'var(--good)', opacity: 0.8 },
+      dSt: { width: t.d + '%', background: 'var(--faint)', opacity: 0.5 },
+      lSt: { width: t.l + '%', background: 'var(--bad)', opacity: 0.8 },
+      perfSt: { font: '600 12px/1.3 "JetBrains Mono",monospace', color: t.perf.indexOf('−') === 0 ? 'var(--bad)' : 'var(--good)' }
+    }));
+
+    const homeBand = [
+      { value: '24', label: 'openings due', screen: 'srs' }, { value: '12', label: 'tactics due', screen: 'tactics' },
+      { value: '8', label: 'new games since Friday', screen: 'database' }, { value: '9', label: 'profile findings', screen: 'profile' }
+    ].map(b => ({ value: b.value, label: b.label, onClick: () => this.go(b.screen) }));
+
+    return {
+      theme, themeLabel: theme === 'dark' ? 'Light theme' : 'Dark theme',
+      toggleTheme: () => this.setState({ theme: theme === 'dark' ? 'light' : 'dark' }),
+      title: sc.title, subtitle: sc.subtitle, actions: (sc.actions || []).map(a => ({ label: a })),
+      hasSeg: s.screen === 'home' || s.screen === 'profile',
+      segChips: s.screen === 'home'
+        ? [this.chip('Direction A · coach-first', s.home === 'A', () => this.setState({ home: 'A' })), this.chip('Direction B · library-first', s.home === 'B', () => this.setState({ home: 'B' }))]
+        : [this.chip('You', true, () => {}), this.chip('R. Halvorsen', false, () => {})],
+
+      navGroups: [
+        { title: 'STUDY', items: [this.navItem('Database', '121k', 'database'), this.navItem('Game', '', 'game'), this.navItem('Opening tree', '', 'tree'), this.navItem('Position search', '', 'search')] },
+        { title: 'COACH', items: [this.navItem('Home', '', 'home'), this.navItem('Profile', '9 findings', 'profile'), this.navItem('Opponent prep', '', 'prep')] },
+        { title: 'TRAIN', items: [this.navItem('Openings SRS', '24 due', 'srs'), this.navItem('Tactics', '12 due', 'tactics'), this.navItem('Endgames', '', 'endgame')] },
+        { title: 'DATA IN / OUT', items: [this.navItem('Import PGN / SCID', '', 'database'), this.navItem('TWIC ingest', 'wk 1601', 'database'), this.navItem('Account syncs', '3', 'settings'), this.navItem('Jobs', '264', 'database')] }
+      ],
+      navFoot: [this.navItem('Settings', '', 'settings'), this.navItem('Help & tour', '', 'help')],
+
+      sHome: s.screen === 'home', sDatabase: s.screen === 'database', sTree: s.screen === 'tree', sSearch: s.screen === 'search',
+      sProfile: s.screen === 'profile', sPrep: s.screen === 'prep', sTactics: s.screen === 'tactics', sSrs: s.screen === 'srs',
+      sEndgame: s.screen === 'endgame', sSettings: s.screen === 'settings', sHelp: s.screen === 'help', sGame: s.screen === 'game',
+      homeA: s.screen === 'home' && s.home === 'A', homeB: s.screen === 'home' && s.home === 'B',
+
+      goGame: () => this.go('game'), goSrs: () => this.go('srs'), goTactics: () => this.go('tactics'),
+      goPrep: () => this.go('prep'), goProfile: () => this.go('profile'),
+
+      findings: [
+        { label: 'Knight forks allowed', value: '31', evidence: '31 games', bad: true, claim: 'fork' },
+        { label: 'Conversion from +2', value: '63%', evidence: '15 games', bad: true, claim: 'conv' },
+        { label: 'Isolated queen\u2019s pawn, against', value: '38%', evidence: '22 games', bad: true, claim: 'iqp' },
+        { label: 'Middlegame ACPL', value: '61', evidence: '148 games', bad: false, claim: 'phase' }
+      ].map(f => ({
+        label: f.label, value: f.value, evidence: f.evidence,
+        onClick: () => this.setState({ screen: 'profile', claim: f.claim }),
+        dotSt: { width: '7px', height: '7px', borderRadius: '50%', background: f.bad ? 'var(--bad)' : 'var(--good)' },
+        valSt: { font: '700 14px/1 "JetBrains Mono",monospace', color: f.bad ? 'var(--bad)' : 'var(--tx)', minWidth: '46px', textAlign: 'right' }
+      })),
+      newGames: [
+        { source: 'lichess', title: 'sounix — christoforo', result: '1–0' },
+        { source: 'personal', title: 'R. Halvorsen — sounix', result: '0–1' },
+        { source: 'chess.com', title: 'sounix — kasparovfan88', result: '1–0' }
+      ].map(n => ({ source: n.source, title: n.title, result: n.result, srcSt: this.srcStyle(n.source) })),
+      homeBand,
+      filters: ['Player', 'Event', 'Date', 'ECO', 'Result', 'Source'],
+      searchFilters: ['Elo ≥ 2200', 'Since 1990', 'Any result'],
+      games,
+
+      profileLede: 'Across 148 games in the last 90 days, two findings account for most of your lost rating: you allow knight forks far more often than your rating band, and you convert winning positions 16 points below peers — ten of the fifteen failures were rook endings.',
+      motifs, structures, phases, rates,
+      claimCount: claim.count, claimProse: claim.prose,
+      claimGames: claim.games.map(g => Object.assign({}, g, { onClick: () => this.go('game') })),
+
+      prepSteps, prep1: s.prepStep === 1, prep2: s.prepStep === 2, prep3: s.prepStep === 3, prep4: s.prepStep === 4,
+      opponents, fingerprint, weakLines, masterGames: MASTER_GAMES.map(m => Object.assign({}, m, { onClick: () => this.go('game') })),
+      colorChips: [this.chip('as White', s.color === 'white', () => this.setState({ color: 'white' })), this.chip('as Black', s.color === 'black', () => this.setState({ color: 'black' }))],
+      prepFinding: 'His profile agrees with the line ranking: against 2. c3 he allows the d4-break a tempo early in 14 of 21 games, and his conversion rate from a pawn up drops to 44% in these structures.',
+
+      tacticModes, woodpecker, grades, repertoire, endgameTiers, drillMoves, settingGroups, helpToc, treeRows,
+      treeGames: [
+        { title: 'Carlsen, M. — Firouzja, A.', meta: '1–0 · 2026' },
+        { title: 'Anand, V. — Kramnik, V.', meta: '½–½ · 2013' },
+        { title: 'Giri, A. — So, W.', meta: '½–½ · 2021' },
+        { title: 'sounix — M. Sæther', meta: '1–0 · 2025' }
+      ],
+      voiceChips: [this.chip('Coach', s.voice === 'coach', () => this.setState({ voice: 'coach' })), this.chip('Neutral', s.voice === 'neutral', () => this.setState({ voice: 'neutral' }))],
+      whyHeadline: s.voice === 'coach' ? 'You have allowed a knight fork 31 times this season — more than twice as often as players at your rating.' : 'Knight forks allowed: 31 occurrences in 148 games, 142% above the 1800-band baseline.',
+      whyBody: s.voice === 'coach' ? 'This one is from your own game against Halvorsen in July: same shape, same undefended pair on the second rank. Find the square where the knight hits both.' : 'Position drawn from your game vs R. Halvorsen, 2026.07.17, ply 43 — the fork was available and not played. Motif: knight fork, rating 1795.',
+
+      srsStats: [
+        { label: 'REVIEWED', value: '9' }, { label: 'CORRECT', value: '7' }, { label: 'LAPSES', value: '2' }, { label: 'TIME', value: '4:12' }
+      ],
+
+      italianFen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R',
+      prepFen: 'rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR',
+      puzzleFen: 'r3k2r/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R2QK2R',
+      srsFen: 'rnbqkbnr/pp2pppp/3p4/2p5/3PP3/5N2/PPP2PPP/RNBQKB1R',
+      endFen: '1K1k4/1P6/8/8/8/8/r7/2R5',
+      emptyEv: {},
+      prepEv: { imbalance: ['d4', 'e4'], key: ['c5', 'b4'], last: { from: 'f8', to: 'b4' } },
+      puzzleEv: {},
+      srsEv: { last: { from: 'd2', to: 'd4' } },
+      endEv: { key: ['c4'], alerts: [], imbalance: [] },
+      midBoard: 472, bigBoard: 560,
+      footHint: s.screen === 'tactics' ? '⏎ submit · H hint · S skip' : (s.screen === 'srs' ? '1–4 grade · ⏎ submit' : 'Openings SRS · 24 due today')
+    };
+  }
+}
+
+</script>
+</body>
+</html>
