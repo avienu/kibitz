@@ -21,11 +21,13 @@ interface BoardProps {
   movable?: BoardMovable;
   /** Auto-shapes overlaid on the board (explain-position evidence). */
   shapes?: BoardShape[];
+  /** Bottom side of the board (default white; Train flips for Black). */
+  orientation?: "white" | "black";
 }
 
 /** Chessground board that tracks the `fen` prop; optionally accepts move
  * input (a played move snaps back — the model decides what it means). */
-export default function Board({ fen, lastMove, movable, shapes }: BoardProps) {
+export default function Board({ fen, lastMove, movable, shapes, orientation }: BoardProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<Api | null>(null);
   const fenRef = useRef(fen);
@@ -39,6 +41,7 @@ export default function Board({ fen, lastMove, movable, shapes }: BoardProps) {
     if (!elRef.current) return;
     apiRef.current = Chessground(elRef.current, {
       fen,
+      orientation: orientation ?? "white",
       coordinates: true,
       animation: { enabled: true, duration: 150 },
       lastMove: lastMove as Key[] | undefined,
@@ -80,12 +83,13 @@ export default function Board({ fen, lastMove, movable, shapes }: BoardProps) {
   useEffect(() => {
     apiRef.current?.set({
       fen,
+      orientation: orientation ?? "white",
       lastMove: lastMove as Key[] | undefined,
       movable: movable
         ? { color: movable.color, dests: movable.dests as Map<Key, Key[]> }
         : { color: undefined, dests: new Map() },
     });
-  }, [fen, lastMove, movable]);
+  }, [fen, lastMove, movable, orientation]);
 
   useEffect(() => {
     apiRef.current?.setAutoShapes((shapes ?? []) as DrawShape[]);

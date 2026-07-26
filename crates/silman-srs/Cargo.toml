@@ -1,0 +1,13 @@
+[package]
+name = "silman-srs"
+description = "Pure FSRS-4.5 spaced-repetition scheduler (no I/O, no network)"
+license = "BSD-3-Clause"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
