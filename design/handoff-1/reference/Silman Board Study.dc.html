@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0e1113; --panel: #15191c; --panel2: #1a1f23; --panel3: #202629;
+      --line: rgba(233,241,246,0.09); --line2: rgba(233,241,246,0.16);
+      --tx: #e6ebee; --dim: #9ba5ac; --faint: #6c767d;
+      --accent: #d6a04a; --good: #6fb894; --bad: #de6f5e; --info: #6aa8dd; --violet: #a98bd4;
+      --desk: radial-gradient(120% 90% at 50% -20%, #1b2024 0%, #0c0f11 70%);
+    }
+    [data-theme="light"] {
+      --bg: #f2f0ec; --panel: #fbfaf8; --panel2: #f1efeb; --panel3: #e9e6e1;
+      --line: rgba(24,30,34,0.10); --line2: rgba(24,30,34,0.20);
+      --tx: #1a1e21; --dim: #5e666b; --faint: #8b9297;
+      --accent: #a9762a; --good: #3f8a66; --bad: #c1503f; --info: #35709f; --violet: #7b5cad;
+      --desk: radial-gradient(120% 90% at 50% -20%, #ffffff 0%, #eae7e2 70%);
+    }
+    body { margin: 0; background: #0a0c0d; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--tx); text-decoration: underline; }
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-thumb { background: rgba(150,165,175,0.28); border-radius: 6px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="padding:34px 40px 30px;background:var(--bg);color:var(--tx);font-family:'Public Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;max-width:1560px">
+    <div>
+      <div style="font:700 11px/1 'JetBrains Mono',monospace;letter-spacing:0.22em;color:var(--faint);text-transform:uppercase">Silman · design study</div>
+      <h1 style="margin:10px 0 6px;font:600 30px/1.15 'Source Serif 4',serif;letter-spacing:-0.01em">The board, treated like an instrument</h1>
+      <p style="margin:0;max-width:760px;font:400 15px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">Three board treatments on one shared evidence-overlay system, then the game view they live inside. Every board on this page steps together — use ← → or click a move.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex:0 0 auto">
+      <button onClick="{{ toggleTheme }}" style="padding:8px 14px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">{{ themeLabel }}</button>
+      <button onClick="{{ toggleFlip }}" style="padding:8px 14px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:6px;font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Flip</button>
+    </div>
+  </div>
+</div>
+
+<section style="padding:0 40px 90px;background:var(--bg);color:var(--tx);font-family:'Public Sans',system-ui,sans-serif" data-theme="{{ theme }}" data-screen-label="Turn 1">
+  <div style="display:flex;align-items:center;gap:14px;padding:0 0 22px">
+    <div style="height:1px;flex:1;background:var(--line)"></div>
+    <div style="font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:0.2em;color:var(--faint)">TURN 1 — BOARD TREATMENTS + GAME VIEW</div>
+    <div style="height:1px;flex:1;background:var(--line)"></div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;margin-bottom:30px">
+
+    <div id="1a" style="box-sizing:border-box;width:500px;padding:22px;background:var(--panel);border:1px solid var(--line);border-radius:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <span style="padding:3px 7px;background:var(--accent);color:#12161a;border-radius:4px;font:700 10px/1 'JetBrains Mono',monospace">1a</span>
+        <span style="font:600 15px/1 'Public Sans',sans-serif">Studio Walnut</span>
+      </div>
+      <p style="margin:0 0 16px;font:400 13px/1.55 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">A real board on a desk. Bevelled frame, engraved coordinates, faint grain, soft cast shadows under the pieces.</p>
+      <dc-import name="Board" fen="{{ fen }}" treatment="walnut" theme="{{ theme }}" size="{{ cardSize }}" evidence="{{ cardEvidence }}" intensity="{{ intensity }}" piece-scale="{{ pieceScale }}" flipped="{{ flipped }}" on-square="{{ onSquare }}" hint-size="456px,456px"></dc-import>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font:400 12px/1.55 'Public Sans',sans-serif;color:var(--faint)"><b style="color:var(--dim);font-weight:600">Costs.</b> Warmth competes with the evidence colours — reds and greens sit on a brown field, so overlays need higher contrast. Least neutral for screenshots and lessons.</div>
+    </div>
+
+    <div id="1b" style="box-sizing:border-box;width:500px;padding:22px;background:var(--panel);border:1px solid var(--line);border-radius:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <span style="padding:3px 7px;background:var(--accent);color:#12161a;border-radius:4px;font:700 10px/1 'JetBrains Mono',monospace">1b</span>
+        <span style="font:600 15px/1 'Public Sans',sans-serif">Instrument</span>
+      </div>
+      <p style="margin:0 0 16px;font:400 13px/1.55 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">Matte neutral squares, hairline seams, coordinates set outside the board in mono. Zero ornament — the position is the only thing rendered.</p>
+      <dc-import name="Board" fen="{{ fen }}" treatment="instrument" theme="{{ theme }}" size="{{ cardSize }}" evidence="{{ cardEvidence }}" intensity="{{ intensity }}" piece-scale="{{ pieceScale }}" flipped="{{ flipped }}" on-square="{{ onSquare }}" hint-size="456px,456px"></dc-import>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font:400 12px/1.55 'Public Sans',sans-serif;color:var(--faint)"><b style="color:var(--dim);font-weight:600">Costs.</b> Reads as a tool, not a pleasure — nothing to enjoy on a long session. Needs the surrounding panels to carry all the character.</div>
+    </div>
+
+    <div id="1c" style="box-sizing:border-box;width:500px;padding:22px;background:var(--panel);border:1px solid var(--line);border-radius:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <span style="padding:3px 7px;background:var(--accent);color:#12161a;border-radius:4px;font:700 10px/1 'JetBrains Mono',monospace">1c</span>
+        <span style="font:600 15px/1 'Public Sans',sans-serif">Graphite Depth</span>
+      </div>
+      <p style="margin:0 0 16px;font:400 13px/1.55 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">Tournament-photo depth: cool slate squares with a top sheen, inset rim, pieces lifted off the surface by real shadow. Coordinates inside the edge squares.</p>
+      <dc-import name="Board" fen="{{ fen }}" treatment="graphite" theme="{{ theme }}" size="{{ cardSize }}" evidence="{{ cardEvidence }}" intensity="{{ intensity }}" piece-scale="{{ pieceScale }}" flipped="{{ flipped }}" on-square="{{ onSquare }}" hint-size="456px,456px"></dc-import>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font:400 12px/1.55 'Public Sans',sans-serif;color:var(--faint)"><b style="color:var(--dim);font-weight:600">Costs.</b> The strongest shadows make dense positions slightly noisier, and the darker light-square value narrows the range left for overlay fills.</div>
+    </div>
+
+    <div style="box-sizing:border-box;width:500px;padding:22px;background:var(--panel);border:1px solid var(--line);border-radius:10px">
+      <div style="font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:0.18em;color:var(--faint);margin-bottom:14px">EVIDENCE LANGUAGE — ONE SYSTEM, EVERY SURFACE</div>
+      <div style="display:grid;grid-template-columns:1fr;gap:12px">
+        <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex:0 0 26px;height:26px;border-radius:50%;border:2px solid var(--bad);box-sizing:border-box"></span><div><div style="font:600 12.5px/1.3 'Public Sans',sans-serif">Alert target — ring</div><div style="font:400 12px/1.5 'Source Serif 4',serif;color:var(--faint)">The piece or square a tactic is aimed at. Only ever a ring, only ever red.</div></div></div>
+        <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex:0 0 26px;height:26px;border-radius:3px;background:linear-gradient(135deg,rgba(232,161,60,0.75) 0 45%,rgba(0,0,0,0) 45%);box-shadow:inset 0 0 0 1px var(--line2)"></span><div><div style="font:600 12.5px/1.3 'Public Sans',sans-serif">Attacker — corner wedge + arrow</div><div style="font:400 12px/1.5 'Source Serif 4',serif;color:var(--faint)">Amber. Arrows always point attacker → target, never the reverse.</div></div></div>
+        <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex:0 0 26px;height:26px;border-radius:3px;background:linear-gradient(135deg,rgba(79,154,216,0.7) 0 45%,rgba(0,0,0,0) 45%);box-shadow:inset 0 0 0 1px var(--line2)"></span><div><div style="font:600 12.5px/1.3 'Public Sans',sans-serif">Defender — corner wedge</div><div style="font:400 12px/1.5 'Source Serif 4',serif;color:var(--faint)">Blue. Count of defenders is what makes an overload legible.</div></div></div>
+        <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex:0 0 26px;height:26px;border-radius:3px;background:rgba(95,176,138,0.55);box-shadow:inset 0 0 0 1px var(--line2)"></span><div><div style="font:600 12.5px/1.3 'Public Sans',sans-serif">Imbalance — square wash</div><div style="font:400 12px/1.5 'Source Serif 4',serif;color:var(--faint)">Green. Positional, not forcing: structure, space, development.</div></div></div>
+        <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex:0 0 26px;height:26px;border-radius:3px;background:linear-gradient(135deg,rgba(169,139,212,0.7) 0 45%,rgba(0,0,0,0) 45%);box-shadow:inset 0 0 0 1px var(--line2)"></span><div><div style="font:600 12.5px/1.3 'Public Sans',sans-serif">Key square — violet wedge</div><div style="font:400 12px/1.5 'Source Serif 4',serif;color:var(--faint)">Where the plan wants to go. Shared with prep and profile drill-down.</div></div></div>
+        <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex:0 0 26px;height:26px;border-radius:3px;background:rgba(238,206,102,0.3);box-shadow:inset 0 0 0 1px var(--line2)"></span><div><div style="font:600 12.5px/1.3 'Public Sans',sans-serif">Last move — pale wash</div><div style="font:400 12px/1.5 'Source Serif 4',serif;color:var(--faint)">Never competes: lowest saturation in the system.</div></div></div>
+      </div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font:400 12px/1.55 'Public Sans',sans-serif;color:var(--faint)">Default state is dimmed. Hovering a sentence in the Explain panel brings only that sentence's evidence to full strength; clicking a square filters the prose to sentences about it.</div>
+    </div>
+  </div>
+
+  <div id="1d" style="width:1540px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="padding:3px 7px;background:var(--accent);color:#12161a;border-radius:4px;font:700 10px/1 'JetBrains Mono',monospace">1d</span>
+      <span style="font:600 15px/1 'Public Sans',sans-serif">Game view — board dominant, Explain as the lead panel</span>
+      <span style="font:400 13px/1 'Source Serif 4',serif;color:var(--faint)">every capability gets a named home in the rail; treatment is switchable in the toolbar</span>
+    </div>
+
+    <div style="display:flex;height:952px;background:var(--bg);border:1px solid var(--line2);border-radius:10px;overflow:hidden;box-shadow:0 30px 70px -40px rgba(0,0,0,0.7)">
+
+      <nav style="flex:0 0 204px;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line)">
+        <div style="padding:16px 16px 14px;border-bottom:1px solid var(--line)">
+          <div style="font:700 13px/1 'JetBrains Mono',monospace;letter-spacing:0.16em">SILMAN</div>
+          <div style="margin-top:5px;font:400 10.5px/1 'Public Sans',sans-serif;color:var(--faint)">scid.sqlite · 121,438 games</div>
+        </div>
+        <div style="flex:1;overflow:auto;padding:12px 8px">
+          <div style="padding:8px 8px 6px;font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">STUDY</div>
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{ navStudy }}" as="n" hint-placeholder-count="3">
+              <div style="{{ n.style }}"><span>{{ n.label }}</span><span style="{{ n.badgeStyle }}">{{ n.badge }}</span></div>
+            </sc-for>
+          </div>
+          <div style="padding:14px 8px 6px;font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">COACH</div>
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{ navCoach }}" as="n" hint-placeholder-count="3">
+              <div style="{{ n.style }}"><span>{{ n.label }}</span><span style="{{ n.badgeStyle }}">{{ n.badge }}</span></div>
+            </sc-for>
+          </div>
+          <div style="padding:14px 8px 6px;font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">TRAIN</div>
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{ navTrain }}" as="n" hint-placeholder-count="3">
+              <div style="{{ n.style }}"><span>{{ n.label }}</span><span style="{{ n.badgeStyle }}">{{ n.badge }}</span></div>
+            </sc-for>
+          </div>
+          <div style="padding:14px 8px 6px;font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:0.16em;color:var(--faint)">DATA IN / OUT</div>
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{ navData }}" as="n" hint-placeholder-count="4">
+              <div style="{{ n.style }}"><span>{{ n.label }}</span><span style="{{ n.badgeStyle }}">{{ n.badge }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="padding:10px 8px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:1px">
+          <sc-for list="{{ navFoot }}" as="n" hint-placeholder-count="2">
+            <div style="{{ n.style }}"><span>{{ n.label }}</span><span style="{{ n.badgeStyle }}">{{ n.badge }}</span></div>
+          </sc-for>
+        </div>
+      </nav>
+
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+        <header style="display:flex;align-items:center;gap:18px;padding:13px 20px;background:var(--panel);border-bottom:1px solid var(--line)">
+          <div style="min-width:0">
+            <div style="display:flex;align-items:baseline;gap:9px">
+              <span style="font:600 15px/1.2 'Public Sans',sans-serif">Morphy — Duke of Brunswick &amp; Count Isouard</span>
+              <span style="font:700 12px/1 'JetBrains Mono',monospace;color:var(--dim)">1–0</span>
+            </div>
+            <div style="margin-top:4px;font:400 11.5px/1 'Public Sans',sans-serif;color:var(--faint)">Paris, 1858 · Philidor Defence, C41 · 33 plies · personal &gt; TWIC provenance</div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:6px">
+            <sc-for list="{{ treatmentChips }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+            </sc-for>
+          </div>
+          <div style="width:1px;height:26px;background:var(--line)"></div>
+          <div style="display:flex;gap:6px">
+            <button style="padding:7px 12px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:5px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer" style-hover="background:var(--panel3);border-color:var(--line2)">Annotate</button>
+            <button style="padding:7px 12px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:5px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer" style-hover="background:var(--panel3);border-color:var(--line2)">Re-analyze</button>
+            <button style="padding:7px 12px;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:5px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer" style-hover="background:var(--panel3);border-color:var(--line2)">Export PGN</button>
+          </div>
+        </header>
+
+        <div style="flex:1;display:flex;min-height:0">
+
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:22px 26px;background:var(--desk)">
+            <div style="display:flex;gap:16px;align-items:stretch">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+                <div style="font:700 9px/1 'JetBrains Mono',monospace;color:var(--faint)">EVAL</div>
+                <div style="position:relative;width:12px;flex:1;background:#2c343a;box-shadow:inset 0 0 0 1px var(--line2);border-radius:3px;overflow:hidden">
+                  <div style="{{ evalFillStyle }}"></div>
+                </div>
+                <div style="font:700 10px/1 'JetBrains Mono',monospace;color:{{ evalColor }}">{{ evalText }}</div>
+              </div>
+              <dc-import name="Board" fen="{{ fen }}" treatment="{{ treatment }}" theme="{{ theme }}" size="{{ boardSize }}" evidence="{{ evidence }}" intensity="{{ liveIntensity }}" piece-scale="{{ pieceScale }}" flipped="{{ flipped }}" on-square="{{ onSquare }}" hint-size="660px,660px"></dc-import>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="display:flex;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;overflow:hidden">
+                <button onClick="{{ toStart }}" style="padding:9px 15px;background:transparent;color:var(--tx);border:0;border-right:1px solid var(--line);font:500 12px/1 'JetBrains Mono',monospace;cursor:pointer">|◀</button>
+                <button onClick="{{ prev }}" style="padding:9px 17px;background:transparent;color:var(--tx);border:0;border-right:1px solid var(--line);font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">◀ Prev</button>
+                <button onClick="{{ next }}" style="padding:9px 17px;background:transparent;color:var(--tx);border:0;border-right:1px solid var(--line);font:500 12px/1 'Public Sans',sans-serif;cursor:pointer">Next ▶</button>
+                <button onClick="{{ toEnd }}" style="padding:9px 15px;background:transparent;color:var(--tx);border:0;font:500 12px/1 'JetBrains Mono',monospace;cursor:pointer">▶|</button>
+              </div>
+              <div style="padding:9px 13px;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;font:500 11.5px/1 'JetBrains Mono',monospace;color:var(--dim)">{{ plyText }}</div>
+              <button onClick="{{ toggleFlip }}" style="padding:9px 13px;background:var(--panel2);color:var(--dim);border:1px solid var(--line2);border-radius:7px;font:500 11.5px/1 'Public Sans',sans-serif;cursor:pointer">Flip</button>
+              <div style="font:400 11px/1.4 'Public Sans',sans-serif;color:var(--faint);max-width:200px">← → step · ↑ ↓ jump 5 · f flip · e explain</div>
+            </div>
+          </div>
+
+          <aside style="flex:0 0 472px;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0">
+
+            <div style="flex:0 0 auto;display:flex;flex-direction:column;max-height:58%;border-bottom:1px solid var(--line)">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)">
+                <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">EXPLAIN</span>
+                <span style="{{ verdictStyle }}">{{ verdictLabel }}</span>
+                <div style="flex:1"></div>
+                <div style="display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:5px;overflow:hidden">
+                  <button onClick="{{ setCoach }}" style="{{ coachChipStyle }}">Coach</button>
+                  <button onClick="{{ setNeutral }}" style="{{ neutralChipStyle }}">Neutral</button>
+                </div>
+              </div>
+              <div style="flex:1;overflow:auto;padding:16px 18px 18px">
+                <sc-if value="{{ hasExplain }}" hint-placeholder-val="{{ true }}">
+                  <div>
+                    <p style="margin:0 0 14px;font:600 17px/1.42 'Source Serif 4',serif;letter-spacing:-0.005em;text-wrap:pretty">{{ explainHeadline }}</p>
+                    <div style="display:flex;flex-direction:column;gap:2px">
+                      <sc-for list="{{ explainBlocks }}" as="b" hint-placeholder-count="4">
+                        <div onMouseEnter="{{ b.onEnter }}" onMouseLeave="{{ b.onLeave }}" style="{{ b.style }}">
+                          <span style="{{ b.dotStyle }}"></span>
+                          <div>
+                            <div style="{{ b.kindStyle }}">{{ b.kind }}</div>
+                            <p style="{{ b.textStyle }}">{{ b.text }}</p>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:14px;font:400 10.5px/1.5 'Public Sans',sans-serif;color:var(--faint)">
+                      <span>Static screen · no engine spawned</span>
+                      <span>·</span>
+                      <span>{{ sourceLabel }}</span>
+                      <span>·</span>
+                      <span>{{ selectionLabel }}</span>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ noExplain }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:14px 0 6px">
+                    <p style="margin:0 0 14px;font:400 14px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty">No screen has fired on this position. Silman keeps the engine cold until you ask, or until a tactical screen actually trips.</p>
+                    <button onClick="{{ explainNow }}" style="padding:9px 15px;background:var(--accent);color:#14181b;border:0;border-radius:6px;font:600 12px/1 'Public Sans',sans-serif;cursor:pointer">Explain position <span style="font-family:'JetBrains Mono',monospace;opacity:0.65">E</span></button>
+                    <div style="margin-top:12px;font:400 11.5px/1.5 'Public Sans',sans-serif;color:var(--faint)">Explained plies on this game: 18 · 24 · 25 · 31</div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+
+            <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)">
+                <span style="font:700 10.5px/1 'JetBrains Mono',monospace;letter-spacing:0.18em">MOVES</span>
+                <div style="flex:1"></div>
+                <div style="display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:5px;overflow:hidden">
+                  <sc-for list="{{ annChips }}" as="a" hint-placeholder-count="3">
+                    <button onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</button>
+                  </sc-for>
+                </div>
+                <button style="padding:6px 10px;background:transparent;color:var(--faint);border:1px solid var(--line);border-radius:5px;font:500 11px/1 'Public Sans',sans-serif;cursor:default">Save</button>
+              </div>
+              <div style="flex:1;overflow:auto;padding:8px 10px 16px">
+                <sc-for list="{{ movePairs }}" as="p" hint-placeholder-count="17">
+                  <div style="display:grid;grid-template-columns:34px 1fr 1fr;align-items:start;column-gap:4px;padding:1px 0">
+                    <div style="padding:5px 4px 0 6px;font:500 12px/1.4 'JetBrains Mono',monospace;color:var(--faint);text-align:right">{{ p.no }}</div>
+                    <button onClick="{{ p.w.onClick }}" style="{{ p.w.style }}"><span>{{ p.w.san }}</span><span style="{{ p.w.nagStyle }}">{{ p.w.nag }}</span><span style="{{ p.w.evalStyle }}">{{ p.w.eval }}</span></button>
+                    <button onClick="{{ p.b.onClick }}" style="{{ p.b.style }}"><span>{{ p.b.san }}</span><span style="{{ p.b.nagStyle }}">{{ p.b.nag }}</span><span style="{{ p.b.evalStyle }}">{{ p.b.eval }}</span></button>
+                    <sc-if value="{{ p.comment }}" hint-placeholder-val="{{ false }}">
+                      <p style="{{ p.commentStyle }}">{{ p.comment }}</p>
+                    </sc-if>
+                    <sc-if value="{{ p.variation }}" hint-placeholder-val="{{ false }}">
+                      <div style="{{ p.varStyle }}">
+                        <span style="font:500 10px/1 'JetBrains Mono',monospace;color:var(--faint);letter-spacing:0.08em">{{ p.varTag }}</span>
+                        <span style="font:400 11.5px/1.55 'JetBrains Mono',monospace;color:var(--dim)">{{ p.variation }}</span>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <footer style="flex:0 0 auto;display:flex;align-items:center;gap:0;background:var(--panel2);border-top:1px solid var(--line);font:500 11px/1 'JetBrains Mono',monospace;color:var(--dim)">
+          <div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-right:1px solid var(--line)">
+            <span style="width:7px;height:7px;border-radius:50%;background:var(--faint)"></span>
+            <span>ENGINE IDLE</span>
+            <span style="color:var(--faint)">Stockfish 18 · nodes 2,000,000</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-right:1px solid var(--line)">
+            <span>JOBS</span>
+            <span style="color:var(--faint)">0 pending · 0 running · 264 done · 0 failed</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-right:1px solid var(--line);min-width:250px">
+            <span>TWIC 1601</span>
+            <span style="position:relative;flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden"><span style="position:absolute;inset:0 32% 0 0;background:var(--good)"></span></span>
+            <span style="color:var(--faint)">68%</span>
+          </div>
+          <div style="flex:1"></div>
+          <div style="padding:9px 16px;color:var(--faint)">Openings SRS · 24 due today</div>
+        </footer>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:26px;margin-top:16px;max-width:1540px">
+      <p style="flex:1;margin:0;font:400 13px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty"><b style="color:var(--tx);font-weight:600">Recommendation.</b> Ship <a href="#1a">1a</a> as the default board and <a href="#1b">1b</a> as the "clean" alternate — walnut earns the pleasure you're after, instrument stays for screenshots, lessons and light theme. <a href="#1c">1c</a> is the one to drop: the shadows fight dense annotated positions.</p>
+      <p style="flex:1;margin:0;font:400 13px/1.6 'Source Serif 4',serif;color:var(--dim);text-wrap:pretty"><b style="color:var(--tx);font-weight:600">Layout.</b> Board dominant, Explain directly above the move list so prose and notation share one column and one hover model. Engine and jobs sit in a permanent status strip, so nothing long-running is invisible. The rail names every capability — including the four CLI-only syncs — which is the discoverability fix.</p>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;treatment&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;walnut&quot;,&quot;instrument&quot;,&quot;graphite&quot;],&quot;default&quot;:&quot;walnut&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;pieceScale&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.87,&quot;min&quot;:0.72,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;unit&quot;:&quot;×&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Board&quot;},&quot;evidenceIntensity&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1,&quot;min&quot;:0.3,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Evidence&quot;}}">
+const FILES = ['a','b','c','d','e','f','g','h'];
+const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+
+const GAME = [
+  { san: 'e4' }, { san: 'e5' }, { san: 'Nf3' }, { san: 'd6' }, { san: 'd4' },
+  { san: 'Bg4', nag: '?!', ev: '+0.7', comment: 'Delta: the bishop leaves the queenside to pin a knight that is not yet pinned — White simply breaks the pin with tempo.' },
+  { san: 'dxe5' }, { san: 'Bxf3' }, { san: 'Qxf3' }, { san: 'dxe5' }, { san: 'Bc4' }, { san: 'Nf6' },
+  { san: 'Qb3', nag: '!', comment: 'Battery on f7. Only the king defends it, and the king cannot move.' },
+  { san: 'Qe7' }, { san: 'Nc3' }, { san: 'c6' },
+  { san: 'Bg5', nag: '!', legacyEval: '19:+0.84', variation: '9. Nd5 Qd8 10. Bg5 Nbd7 11. O-O-O ±', varTag: 'LEGACY 2011' },
+  { san: 'b5', nag: '?', ev: '+2.1', comment: 'The losing try. b5 gains a tempo but hands White the c6 square and opens the a4–e8 diagonal onto the king.', variation: '9... Qc7 10. O-O-O Nbd7 11. Rhe1 h6 ⩲', varTag: 'ENGINE d24' },
+  { san: 'Nxb5', nag: '!' }, { san: 'cxb5' }, { san: 'Bxb5+', nag: '!' },
+  { san: 'Nbd7', comment: 'Forced — the knight is now the only thing holding the position together.' },
+  { san: 'O-O-O', nag: '!' }, { san: 'Rd8' },
+  { san: 'Rxd7', nag: '!!', ev: '+4.6', comment: 'Removes the overloaded defender. The point is 13... Rxd7 14. Rd1, when the pin comes back with an extra attacker.' },
+  { san: 'Rxd7' }, { san: 'Rd1', nag: '!' },
+  { san: 'Qe6', ev: '+6.4', comment: 'Defending d7 a third time. It is one defender short.' },
+  { san: 'Bxd7+', nag: '!' }, { san: 'Nxd7' },
+  { san: 'Qb8+', nag: '!!', ev: '#2', comment: 'Clearing b8 for the rook. Every Black reply is forced from here.' },
+  { san: 'Nxb8' }, { san: 'Rd8#', nag: '#' }
+];
+
+const EXPLAIN = {
+  18: {
+    tag: 'TACTICAL SCREEN FIRED', eval: '+2.1',
+    headline: { coach: 'Black just handed White the c6 square — and the light-squared bishop has been waiting for exactly this.', neutral: '9... b5 loosens the queenside; c6 is now weak and the a4–e8 diagonal opens toward the black king.' },
+    blocks: [
+      { kind: 'ALERT', k: 'alert', text: { coach: 'The b5-pawn is attacked by the c3-knight and defended by nothing but goodwill — and taking it is not a pawn grab, it is a diagonal opening.', neutral: 'b5 is attacked once (Nc3) and undefended. The capture opens the a4–e8 diagonal.' }, ev: { alerts: ['b5'], attackers: ['c3'], arrows: [{ from: 'c3', to: 'b5', kind: 'attacker' }] } },
+      { kind: 'ALERT', k: 'alert', text: { coach: 'Meanwhile f7 is already under a battery: the c4-bishop and the b3-queen both stare at it, and only the king answers.', neutral: 'f7 is attacked twice (Bc4, Qb3) and defended once (Ke8).' }, ev: { alerts: ['f7'], attackers: ['c4', 'b3'], defenders: ['e8'], arrows: [{ from: 'c4', to: 'f7', kind: 'attacker' }, { from: 'b3', to: 'f7', kind: 'attacker' }] } },
+      { kind: 'IMBALANCE', k: 'imbalance', text: { coach: 'Development: White has four pieces out and a rook still to bring; Black has a queen, a knight and a lot of good intentions.', neutral: 'White leads development by two pieces in a fully open centre.' }, ev: { imbalance: ['c4', 'b3', 'c3', 'g5'], key: ['b8', 'f8'] } },
+      { kind: 'PLAN', k: 'plan', text: { coach: 'Plan: cash in immediately. 10.Nxb5 cxb5 11.Bxb5+ drags the king into the open and every check afterwards gains time.', neutral: 'Plan: 10.Nxb5 cxb5 11.Bxb5+ converts the development lead into a forcing attack on the king.' }, ev: { key: ['b5', 'e8'], alerts: ['e8'], arrows: [{ from: 'c4', to: 'f7', kind: 'key' }] } }
+    ]
+  },
+  24: {
+    tag: 'TACTICAL SCREEN FIRED', eval: '+2.6',
+    headline: { coach: 'Everything Black owns is being held up by one knight on d7 — and White has one more attacker than Black has defenders.', neutral: 'The d7-knight is overloaded: it is attacked twice and defended twice, while also being the only cover for b8 and f6.' },
+    blocks: [
+      { kind: 'ALERT', k: 'alert', text: { coach: 'The d7-knight is doing three jobs at once: blocking the d-file, shielding the king, and standing between the rooks. It is attacked by Rd1 and Bb5, defended by Rd8 and the king.', neutral: "Black's knight on d7 is attacked twice (Rd1, Bb5) and defended twice (Rd8, Ke8) — a one-move overload once a third attacker arrives." }, ev: { alerts: ['d7'], attackers: ['d1', 'b5'], defenders: ['d8', 'e8'], arrows: [{ from: 'd1', to: 'd7', kind: 'attacker' }, { from: 'b5', to: 'd7', kind: 'attacker' }, { from: 'd8', to: 'd7', kind: 'defender' }, { from: 'e8', to: 'd7', kind: 'defender' }] } },
+      { kind: 'ALERT', k: 'alert', text: { coach: 'The g5-bishop pins the f6-knight to the queen, so that knight cannot come to the rescue either. The defenders are tied to one another.', neutral: 'Nf6 is pinned to Qe7 by Bg5 and cannot defend d7 or interpose.' }, ev: { alerts: ['f6'], attackers: ['g5'], key: ['e7'], arrows: [{ from: 'g5', to: 'f6', kind: 'attacker' }] } },
+      { kind: 'IMBALANCE', k: 'imbalance', text: { coach: 'King safety: Black is still on e8 with the centre wide open, while White castled long two moves ago. That is the whole game in one sentence.', neutral: 'Black king on e8, uncastled, on an open file. White king safe on c1.' }, ev: { alerts: ['e8'], imbalance: ['c1'], key: ['d8', 'd7'] } },
+      { kind: 'IMBALANCE', k: 'imbalance', text: { coach: "Black's kingside has not moved at all — f8, g8 and h8 are asleep. There are no reinforcements coming.", neutral: "Black's f8-bishop, g8 and h8 are undeveloped; no defensive reserves available." }, ev: { imbalance: ['f8', 'g8', 'h8'] } },
+      { kind: 'PLAN', k: 'plan', text: { coach: 'Composite plan: strip the defender by force. 13.Rxd7! Rxd7 14.Rd1 restores the pin with an extra attacker, and 15.Bxd7+ collects. Every move is a check or a threat, so Black never gets to develop.', neutral: 'Ranked plan: 13.Rxd7 Rxd7 14.Rd1 renews the attack on d7 with a second heavy piece; forcing sequence, no counterplay available.' }, ev: { alerts: ['d7'], key: ['d1', 'd7', 'd8'], arrows: [{ from: 'd1', to: 'd7', kind: 'key' }] } }
+    ]
+  },
+  25: {
+    tag: 'FRESH ANALYSIS', eval: '+4.6',
+    headline: { coach: 'The rook is gone but the file is not — Black recaptured into the same pin, one tempo poorer.', neutral: 'After 13.Rxd7 the d-file remains White\'s; the recapture keeps the defender pinned to the king.' },
+    blocks: [
+      { kind: 'ALERT', k: 'alert', text: { coach: 'Whatever lands on d7 is still pinned to the king on e8, so it defends nothing at all.', neutral: 'Any piece on d7 is pinned along the d-file against Ke8.' }, ev: { alerts: ['d7', 'e8'], attackers: ['b5'], key: ['d1'], arrows: [{ from: 'b5', to: 'd7', kind: 'attacker' }] } },
+      { kind: 'PLAN', k: 'plan', text: { coach: 'Plan: bring the last rook. 14.Rd1 and there is no third defender to find.', neutral: 'Plan: 14.Rd1 adds the second heavy piece to the pinned target.' }, ev: { key: ['d1', 'd7'], arrows: [{ from: 'd1', to: 'd7', kind: 'key' }] } }
+    ]
+  },
+  31: {
+    tag: 'FORCED MATE', eval: '#1',
+    headline: { coach: 'The queen sacrifice was not a flourish — it was the only way to clear b8 so the rook can finish on d8.', neutral: 'Forced mate in 1 after the compulsory recapture: 16... Nxb8 17.Rd8#.' },
+    blocks: [
+      { kind: 'ALERT', k: 'alert', text: { coach: 'Black has exactly one legal move: 16... Nxb8. Nothing else answers the check.', neutral: 'Only legal reply: 16... Nxb8.' }, ev: { alerts: ['b8'], attackers: ['d7'], arrows: [{ from: 'd7', to: 'b8', kind: 'attacker' }] } },
+      { kind: 'PLAN', k: 'plan', text: { coach: 'Then 17.Rd8 is mate — the knight on b8 is no longer looking at d8, and the king has no square.', neutral: 'Mate: 17.Rd8#. The d8 square is undefended once the knight leaves d7.' }, ev: { alerts: ['e8'], key: ['d8'], arrows: [{ from: 'd1', to: 'd8', kind: 'key' }] } }
+    ]
+  }
+};
+
+const NAV = {
+  study: [{ label: 'Database', badge: '121k' }, { label: 'Game', badge: '', active: true }, { label: 'Opening tree', badge: '' }, { label: 'Position search', badge: '' }],
+  coach: [{ label: 'Explain', badge: 'on' }, { label: 'Profile', badge: '9 findings' }, { label: 'Opponent prep', badge: '' }],
+  train: [{ label: 'Openings SRS', badge: '24 due' }, { label: 'Tactics', badge: '12 due' }, { label: 'Endgames', badge: '' }],
+  data: [{ label: 'Import PGN / SCID', badge: '' }, { label: 'TWIC ingest', badge: 'wk 1601' }, { label: 'Account syncs', badge: '3' }, { label: 'Jobs', badge: '264' }],
+  foot: [{ label: 'Settings', badge: '' }, { label: 'Help & tour', badge: '' }]
+};
+
+class Component extends DCLogic {
+  state = { ply: 24, theme: null, flipped: false, treatment: 'walnut', hover: null, selected: null, voice: 'coach', annMode: 'full', forced: {} };
+
+  componentDidMount() {
+    this._key = (e) => {
+      const k = e.key;
+      if (k === 'ArrowRight') { this.step(1); e.preventDefault(); }
+      else if (k === 'ArrowLeft') { this.step(-1); e.preventDefault(); }
+      else if (k === 'ArrowUp') { this.step(-5); e.preventDefault(); }
+      else if (k === 'ArrowDown') { this.step(5); e.preventDefault(); }
+      else if (k === 'f' || k === 'F') this.setState(s => ({ flipped: !s.flipped }));
+      else if (k === 'e' || k === 'E') this.setState(s => ({ forced: Object.assign({}, s.forced, { [s.ply]: true }) }));
+    };
+    window.addEventListener('keydown', this._key);
+    this.positions = this.buildPositions();
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._key); }
+
+  step(n) { this.setState(s => ({ ply: Math.max(0, Math.min(GAME.length, s.ply + n)), hover: null, selected: null })); }
+  theme() { return this.state.theme || this.props.theme || 'dark'; }
+
+  boardFromFen(fen) {
+    const rows = fen.split(' ')[0].split('/');
+    return rows.map(r => {
+      const line = [];
+      for (const ch of r) { if (/\d/.test(ch)) { for (let i = 0; i < +ch; i++) line.push(null); } else line.push((ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase()); }
+      return line;
+    });
+  }
+  fenFromBoard(b) {
+    return b.map(row => {
+      let out = '', empty = 0;
+      for (const c of row) {
+        if (!c) { empty++; continue; }
+        if (empty) { out += empty; empty = 0; }
+        out += c[0] === 'w' ? c[1] : c[1].toLowerCase();
+      }
+      return out + (empty ? empty : '');
+    }).join('/');
+  }
+  attacks(b, r, c, tr, tc) {
+    const p = b[r][c]; if (!p) return false;
+    const type = p[1], col = p[0];
+    const dr = tr - r, dc = tc - c, ar = Math.abs(dr), ac = Math.abs(dc);
+    if (type === 'P') return dr === (col === 'w' ? -1 : 1) && ac === 1;
+    if (type === 'N') return (ar === 1 && ac === 2) || (ar === 2 && ac === 1);
+    if (type === 'K') return ar <= 1 && ac <= 1 && (ar + ac) > 0;
+    const diag = ar === ac && ar > 0, straight = (dr === 0) !== (dc === 0);
+    if (type === 'B' && !diag) return false;
+    if (type === 'R' && !straight) return false;
+    if (type === 'Q' && !diag && !straight) return false;
+    const sr = Math.sign(dr), sc = Math.sign(dc), steps = Math.max(ar, ac);
+    for (let i = 1; i < steps; i++) if (b[r + sr * i][c + sc * i]) return false;
+    return true;
+  }
+  isAttacked(b, tr, tc, by) {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c];
+      if (p && p[0] === by && this.attacks(b, r, c, tr, tc)) return true;
+    }
+    return false;
+  }
+  canReach(b, r, c, tr, tc) {
+    const p = b[r][c], col = p[0];
+    const target = b[tr][tc];
+    if (target && target[0] === col) return false;
+    if (p[1] === 'P') {
+      const dir = col === 'w' ? -1 : 1;
+      if (tc === c && !target) {
+        if (tr === r + dir) return true;
+        if (tr === r + 2 * dir && r === (col === 'w' ? 6 : 1) && !b[r + dir][c]) return true;
+        return false;
+      }
+      return !!target && Math.abs(tc - c) === 1 && tr === r + dir;
+    }
+    return this.attacks(b, r, c, tr, tc);
+  }
+  applySan(b0, san, col) {
+    const b = b0.map(r => r.slice());
+    const clean = san.replace(/[+#!?]/g, '');
+    const back = col === 'w' ? 7 : 0;
+    if (clean === 'O-O' || clean === 'O-O-O') {
+      const kc = 4, rc = clean === 'O-O' ? 7 : 0, nk = clean === 'O-O' ? 6 : 2, nr = clean === 'O-O' ? 5 : 3;
+      b[back][nk] = b[back][kc]; b[back][kc] = null;
+      b[back][nr] = b[back][rc]; b[back][rc] = null;
+      return { board: b, from: FILES[kc] + (8 - back), to: FILES[nk] + (8 - back) };
+    }
+    const m = clean.match(/^([KQRBN])?([a-h])?([1-8])?x?([a-h])([1-8])(?:=([QRBN]))?$/);
+    if (!m) return { board: b0, from: null, to: null };
+    const type = m[1] || 'P', hf = m[2], hr = m[3], tc = FILES.indexOf(m[4]), tr = 8 - (+m[5]), promo = m[6];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c];
+      if (!p || p[0] !== col || p[1] !== type) continue;
+      if (hf && FILES[c] !== hf) continue;
+      if (hr && (8 - r) !== +hr) continue;
+      if (!this.canReach(b, r, c, tr, tc)) continue;
+      const t = b.map(x => x.slice());
+      t[tr][tc] = promo ? col + promo : p; t[r][c] = null;
+      let kr = -1, kc2 = -1;
+      for (let a = 0; a < 8; a++) for (let d = 0; d < 8; d++) if (t[a][d] === col + 'K') { kr = a; kc2 = d; }
+      if (kr >= 0 && this.isAttacked(t, kr, kc2, col === 'w' ? 'b' : 'w')) continue;
+      return { board: t, from: FILES[c] + (8 - r), to: FILES[tc] + (8 - tr) };
+    }
+    return { board: b0, from: null, to: null };
+  }
+  buildPositions() {
+    let b = this.boardFromFen(START);
+    const list = [{ fen: START, last: null }];
+    for (let i = 0; i < GAME.length; i++) {
+      const res = this.applySan(b, GAME[i].san, i % 2 === 0 ? 'w' : 'b');
+      b = res.board;
+      list.push({ fen: this.fenFromBoard(b), last: res.from ? { from: res.from, to: res.to } : null });
+    }
+    return list;
+  }
+
+  mergeEv(list) {
+    const out = { alerts: [], attackers: [], defenders: [], imbalance: [], key: [], arrows: [] };
+    list.forEach(ev => {
+      if (!ev) return;
+      ['alerts', 'attackers', 'defenders', 'imbalance', 'key'].forEach(k => (ev[k] || []).forEach(s => { if (out[k].indexOf(s) < 0) out[k].push(s); }));
+      (ev.arrows || []).forEach(a => { if (!out.arrows.some(x => x.from === a.from && x.to === a.to)) out.arrows.push(a); });
+    });
+    return out;
+  }
+  evSquares(ev) {
+    const s = [];
+    ['alerts', 'attackers', 'defenders', 'imbalance', 'key'].forEach(k => (ev[k] || []).forEach(x => s.push(x)));
+    (ev.arrows || []).forEach(a => { s.push(a.from); s.push(a.to); });
+    return s;
+  }
+
+  navItem(n) {
+    const active = !!n.active;
+    return {
+      label: n.label, badge: n.badge || '',
+      style: {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+        padding: '7px 9px', borderRadius: '5px', cursor: 'pointer',
+        font: (active ? 600 : 500) + ' 12.5px/1.2 "Public Sans",sans-serif',
+        color: active ? 'var(--tx)' : 'var(--dim)',
+        background: active ? 'var(--panel3)' : 'transparent',
+        boxShadow: active ? 'inset 2px 0 0 var(--accent)' : 'none'
+      },
+      badgeStyle: { font: '500 9.5px/1 "JetBrains Mono",monospace', color: 'var(--faint)', letterSpacing: '0.04em' }
+    };
+  }
+
+  renderVals() {
+    const s = this.state, p = this.props;
+    const theme = this.theme();
+    const positions = this.positions || this.buildPositions();
+    const pos = positions[Math.min(s.ply, positions.length - 1)];
+    const ex = EXPLAIN[s.ply];
+    const voice = s.voice;
+    const treatment = s.treatment || p.treatment || 'walnut';
+    const intensityProp = p.evidenceIntensity == null ? 1 : p.evidenceIntensity;
+
+    const blockEvs = ex ? ex.blocks.map(b => b.ev) : [];
+    const hoverEv = (s.hover != null && ex) ? ex.blocks[s.hover].ev : null;
+    const baseEv = this.mergeEv(hoverEv ? [hoverEv] : blockEvs);
+    baseEv.last = pos.last;
+    baseEv.selected = s.selected;
+    const liveIntensity = (hoverEv ? 1 : 0.44) * intensityProp;
+
+    const cardEv = this.mergeEv(EXPLAIN[24].blocks.slice(0, 2).map(b => b.ev));
+    cardEv.last = positions[24].last;
+
+    const explainBlocks = ex ? ex.blocks.map((b, i) => {
+      const color = b.k === 'alert' ? 'var(--bad)' : (b.k === 'plan' ? 'var(--violet)' : 'var(--good)');
+      const on = s.hover === i;
+      const squares = this.evSquares(b.ev);
+      const filteredOut = s.selected && squares.indexOf(s.selected) < 0;
+      return {
+        kind: b.k === 'plan' ? 'PLAN' : (b.k === 'alert' ? 'TACTICAL ALERT' : 'IMBALANCE'),
+        text: b.text[voice],
+        onEnter: () => this.setState({ hover: i }),
+        onLeave: () => this.setState({ hover: null }),
+        style: {
+          display: 'flex', gap: '11px', padding: '9px 11px', margin: '0 -11px', borderRadius: '7px',
+          cursor: 'default', transition: 'background 120ms ease, opacity 120ms ease',
+          background: on ? 'var(--panel2)' : 'transparent',
+          opacity: filteredOut ? 0.34 : 1,
+          boxShadow: b.k === 'plan' ? 'inset 0 0 0 1px var(--line)' : 'none'
+        },
+        dotStyle: { flex: '0 0 7px', width: '7px', height: '7px', marginTop: '7px', borderRadius: '50%', background: color, boxShadow: on ? '0 0 0 4px ' + (b.k === 'alert' ? 'rgba(222,111,94,0.18)' : b.k === 'plan' ? 'rgba(169,139,212,0.18)' : 'rgba(111,184,148,0.18)') : 'none' },
+        kindStyle: { font: '700 9px/1 "JetBrains Mono",monospace', letterSpacing: '0.16em', color: color, marginBottom: '5px' },
+        textStyle: { margin: 0, font: '400 14px/1.6 "Source Serif 4",serif', color: b.k === 'plan' ? 'var(--tx)' : 'var(--dim)', textWrap: 'pretty' }
+      };
+    }) : [];
+
+    const movePairs = [];
+    for (let i = 0; i < GAME.length; i += 2) {
+      const mk = (idx) => {
+        const g = GAME[idx];
+        if (!g) return { san: '', nag: '', eval: '', style: { display: 'none' }, nagStyle: {}, evalStyle: {}, onClick: null };
+        const active = s.ply === idx + 1;
+        return {
+          san: g.san, nag: g.nag || '', eval: g.ev || '',
+          onClick: () => this.setState({ ply: idx + 1, hover: null, selected: null }),
+          style: {
+            display: 'flex', alignItems: 'baseline', gap: '5px', width: '100%', textAlign: 'left',
+            padding: '5px 7px', borderRadius: '5px', border: 0, cursor: 'pointer',
+            font: (active ? 700 : 500) + ' 13px/1.3 "JetBrains Mono",monospace',
+            color: active ? '#14181b' : 'var(--tx)',
+            background: active ? 'var(--accent)' : 'transparent'
+          },
+          nagStyle: { font: '700 12px/1 "JetBrains Mono",monospace', color: active ? '#14181b' : (g.nag === '?' || g.nag === '??' || g.nag === '?!' ? 'var(--bad)' : 'var(--accent)') },
+          evalStyle: { font: '500 10.5px/1 "JetBrains Mono",monospace', color: active ? 'rgba(20,24,27,0.7)' : 'var(--faint)' }
+        };
+      };
+      const w = GAME[i], b = GAME[i + 1];
+      const comment = s.annMode === 'hidden' ? null : ((w && w.comment) || (b && b.comment) || null);
+      const variation = s.annMode === 'hidden' ? null : ((w && w.variation) || (b && b.variation) || null);
+      const legacy = !!((w && w.legacyEval) || (b && b.legacyEval));
+      movePairs.push({
+        no: (i / 2 + 1) + '.', w: mk(i), b: mk(i + 1),
+        comment,
+        commentStyle: { gridColumn: '2 / span 2', margin: '2px 0 8px', padding: '0 7px', font: '400 12.5px/1.6 "Source Serif 4",serif', color: 'var(--dim)', textWrap: 'pretty', opacity: s.annMode === 'hover' ? 0.42 : 1 },
+        variation,
+        varTag: ((w && w.varTag) || (b && b.varTag) || ''),
+        varStyle: { gridColumn: '2 / span 2', display: 'flex', gap: '8px', alignItems: 'baseline', margin: '0 0 9px', padding: '7px 9px', background: 'var(--panel2)', borderRadius: '6px', boxShadow: legacy ? 'inset 2px 0 0 var(--faint)' : 'inset 2px 0 0 var(--info)', opacity: legacy ? 0.72 : 1, fontStyle: legacy ? 'italic' : 'normal' }
+      });
+    }
+
+    const chip = (label, on, onClick) => ({
+      label, onClick,
+      style: {
+        padding: '6px 11px', border: 0, cursor: 'pointer',
+        font: (on ? 600 : 500) + ' 11px/1 "Public Sans",sans-serif',
+        color: on ? '#14181b' : 'var(--dim)', background: on ? 'var(--accent)' : 'transparent'
+      }
+    });
+
+    const evalNum = ex ? (String(ex.eval).indexOf('#') === 0 ? 9 : parseFloat(ex.eval)) : 2.6;
+    const whitePct = Math.max(6, Math.min(94, 50 + evalNum * 9));
+
+    return {
+      theme, themeLabel: theme === 'dark' ? 'Light theme' : 'Dark theme',
+      toggleTheme: () => this.setState({ theme: theme === 'dark' ? 'light' : 'dark' }),
+      toggleFlip: () => this.setState(st => ({ flipped: !st.flipped })),
+      flipped: s.flipped,
+      fen: pos.fen,
+      treatment,
+      boardSize: 656, cardSize: 442,
+      pieceScale: p.pieceScale || 0.87,
+      intensity: 0.5 * intensityProp,
+      liveIntensity,
+      evidence: baseEv, cardEvidence: cardEv,
+      onSquare: (sq) => this.setState(st => ({ selected: st.selected === sq ? null : sq, hover: null })),
+      plyText: 'ply ' + s.ply + ' / ' + GAME.length,
+      next: () => this.step(1), prev: () => this.step(-1),
+      toStart: () => this.setState({ ply: 0, hover: null, selected: null }),
+      toEnd: () => this.setState({ ply: GAME.length, hover: null, selected: null }),
+      hasExplain: !!ex, noExplain: !ex,
+      explainHeadline: ex ? ex.headline[voice] : '',
+      explainBlocks,
+      explainNow: () => this.setState(st => ({ forced: Object.assign({}, st.forced, { [st.ply]: true }) })),
+      verdictLabel: ex ? ex.tag + '  ' + ex.eval : '',
+      verdictStyle: { padding: '4px 8px', borderRadius: '4px', font: '700 9.5px/1 "JetBrains Mono",monospace', letterSpacing: '0.1em', color: ex && ex.tag === 'FORCED MATE' ? 'var(--bad)' : 'var(--accent)', background: 'var(--panel2)', boxShadow: 'inset 0 0 0 1px var(--line)' },
+      sourceLabel: voice === 'coach' ? 'Coach voice · templates' : 'Neutral voice · templates',
+      selectionLabel: s.selected ? 'filtered to ' + s.selected : 'hover a line to isolate its evidence',
+      setCoach: () => this.setState({ voice: 'coach' }), setNeutral: () => this.setState({ voice: 'neutral' }),
+      coachChipStyle: chip('', voice === 'coach').style, neutralChipStyle: chip('', voice === 'neutral').style,
+      annChips: [chip('full', s.annMode === 'full', () => this.setState({ annMode: 'full' })), chip('hover', s.annMode === 'hover', () => this.setState({ annMode: 'hover' })), chip('hidden', s.annMode === 'hidden', () => this.setState({ annMode: 'hidden' }))],
+      treatmentChips: ['walnut', 'instrument', 'graphite'].map(t => chip(t, treatment === t, () => this.setState({ treatment: t }))),
+      movePairs,
+      navStudy: NAV.study.map(n => this.navItem(n)), navCoach: NAV.coach.map(n => this.navItem(n)),
+      navTrain: NAV.train.map(n => this.navItem(n)), navData: NAV.data.map(n => this.navItem(n)), navFoot: NAV.foot.map(n => this.navItem(n)),
+      evalText: ex ? ex.eval : '+2.6',
+      evalColor: 'var(--dim)',
+      evalFillStyle: { position: 'absolute', left: 0, right: 0, bottom: 0, height: whitePct + '%', background: theme === 'light' ? '#fbfaf8' : '#e8ecee', boxShadow: '0 -1px 0 rgba(0,0,0,0.35)' }
+    };
+  }
+}
+
+</script>
+</body>
+</html>

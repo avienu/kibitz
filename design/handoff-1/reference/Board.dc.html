@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="{{ shellStyle }}">
+  <div style="{{ frameStyle }}">
+    <div style="{{ gridStyle }}">
+      <sc-for list="{{ cells }}" as="cel" hint-placeholder-count="64">
+        <div style="{{ cel.st }}" onClick="{{ cel.onClick }}">
+          <sc-for list="{{ cel.marks }}" as="m" hint-placeholder-count="0">
+            <div style="{{ m.style }}"></div>
+          </sc-for>
+          <sc-if value="{{ cel.piece }}" hint-placeholder-val="{{ false }}">
+            <img src="{{ cel.piece }}" alt="" style="{{ cel.pieceStyle }}" />
+          </sc-if>
+          <sc-if value="{{ cel.innerCoord }}" hint-placeholder-val="{{ false }}">
+            <span style="{{ cel.innerCoordStyle }}">{{ cel.innerCoord }}</span>
+          </sc-if>
+        </div>
+      </sc-for>
+      <svg style="{{ svgStyle }}">
+        <sc-for list="{{ arrows }}" as="a" hint-placeholder-count="0">
+          <polygon points="{{ a.points }}" fill="{{ a.fill }}" stroke="{{ a.stroke }}" strokeWidth="{{ a.sw }}" opacity="{{ a.opacity }}"></polygon>
+        </sc-for>
+      </svg>
+    </div>
+    <sc-for list="{{ fileLabels }}" as="f" hint-placeholder-count="0">
+      <span style="{{ f.style }}">{{ f.label }}</span>
+    </sc-for>
+    <sc-for list="{{ rankLabels }}" as="r" hint-placeholder-count="0">
+      <span style="{{ r.style }}">{{ r.label }}</span>
+    </sc-for>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:560,&quot;height&quot;:560},&quot;fen&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;treatment&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;walnut&quot;,&quot;instrument&quot;,&quot;graphite&quot;],&quot;default&quot;:&quot;walnut&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:520,&quot;min&quot;:240,&quot;max&quot;:900,&quot;tsType&quot;:&quot;number&quot;},&quot;pieceScale&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.86,&quot;min&quot;:0.7,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;},&quot;intensity&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;},&quot;coords&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;flipped&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;evidence&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;}}">
+const FILES = ['a','b','c','d','e','f','g','h'];
+
+const PALETTES = {
+  walnut: {
+    dark: {
+      light: '#e6cda2', darkSq: '#a5703e',
+      frame: 'linear-gradient(155deg,#4b3421 0%,#31210f 55%,#241708 100%)',
+      frameRing: 'inset 0 0 0 1px rgba(255,232,190,0.16), inset 0 2px 0 rgba(255,236,198,0.14), 0 26px 60px -24px rgba(0,0,0,0.85)',
+      coord: '#d8b989', grain: 0.055, sheen: 'none',
+      pieceShadow: 'drop-shadow(0 3px 3px rgba(28,16,6,0.42))',
+      boardRing: 'inset 0 0 0 1px rgba(38,22,8,0.55), 0 0 22px -6px rgba(0,0,0,0.6)'
+    },
+    light: {
+      light: '#f3e2c0', darkSq: '#b98552',
+      frame: 'linear-gradient(155deg,#8a6039 0%,#6d4726 100%)',
+      frameRing: 'inset 0 0 0 1px rgba(255,246,226,0.34), 0 20px 44px -22px rgba(78,50,20,0.5)',
+      coord: '#f6e9cd', grain: 0.045, sheen: 'none',
+      pieceShadow: 'drop-shadow(0 3px 3px rgba(90,60,26,0.32))',
+      boardRing: 'inset 0 0 0 1px rgba(96,62,32,0.4)'
+    }
+  },
+  instrument: {
+    dark: {
+      light: '#c4ccd1', darkSq: '#59666f',
+      frame: 'none', frameRing: 'none',
+      coord: '#77848d', grain: 0, sheen: 'none',
+      pieceShadow: 'drop-shadow(0 1px 1px rgba(0,0,0,0.34))',
+      boardRing: 'inset 0 0 0 1px rgba(226,236,242,0.14), 0 0 0 1px rgba(9,12,14,0.9)'
+    },
+    light: {
+      light: '#eaeef0', darkSq: '#8d9ba4',
+      frame: 'none', frameRing: 'none',
+      coord: '#6a767e', grain: 0, sheen: 'none',
+      pieceShadow: 'drop-shadow(0 1px 1px rgba(60,72,80,0.22))',
+      boardRing: 'inset 0 0 0 1px rgba(52,66,76,0.22), 0 0 0 1px rgba(52,66,76,0.12)'
+    }
+  },
+  graphite: {
+    dark: {
+      light: '#98a3ab', darkSq: '#333d44',
+      frame: 'linear-gradient(180deg,#15191c,#0c0f11)',
+      frameRing: 'inset 0 0 0 1px rgba(190,208,220,0.1), 0 34px 70px -30px rgba(0,0,0,0.95)',
+      coord: '#8d99a2', grain: 0,
+      sheen: 'radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,0.13), rgba(255,255,255,0) 60%)',
+      pieceShadow: 'drop-shadow(0 7px 6px rgba(0,0,0,0.5)) drop-shadow(0 1px 1px rgba(0,0,0,0.6))',
+      boardRing: 'inset 0 0 0 1px rgba(6,9,11,0.9)'
+    },
+    light: {
+      light: '#d3d9dd', darkSq: '#59636a',
+      frame: 'linear-gradient(180deg,#e7eaec,#d3d8db)',
+      frameRing: 'inset 0 0 0 1px rgba(255,255,255,0.8), 0 22px 46px -26px rgba(40,50,58,0.5)',
+      coord: '#5d676e', grain: 0,
+      sheen: 'radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,0.4), rgba(255,255,255,0) 60%)',
+      pieceShadow: 'drop-shadow(0 6px 5px rgba(45,55,62,0.3))',
+      boardRing: 'inset 0 0 0 1px rgba(60,72,80,0.28)'
+    }
+  }
+};
+
+const EV = {
+  alert:     { line: '#e05c4b', fill: 'rgba(224,92,75,0.20)' },
+  attacker:  { line: '#e8a13c', fill: 'rgba(232,161,60,0.18)' },
+  defender:  { line: '#4f9ad8', fill: 'rgba(79,154,216,0.16)' },
+  imbalance: { line: '#5fb08a', fill: 'rgba(95,176,138,0.20)' },
+  key:       { line: '#a98bd4', fill: 'rgba(169,139,212,0.20)' }
+};
+
+class Component extends DCLogic {
+  fenBoard(fen) {
+    const rows = String(fen || '').split(' ')[0].split('/');
+    const out = [];
+    for (let r = 0; r < 8; r++) {
+      const line = [];
+      for (const ch of (rows[r] || '8')) {
+        if (/\d/.test(ch)) { for (let i = 0; i < +ch; i++) line.push(null); }
+        else line.push((ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase());
+      }
+      while (line.length < 8) line.push(null);
+      out.push(line);
+    }
+    return out;
+  }
+
+  sqToXY(sq, flip, cell) {
+    const f = FILES.indexOf(sq[0]);
+    const r = 8 - (+sq[1]);
+    const cx = (flip ? 7 - f : f) * cell + cell / 2;
+    const cy = (flip ? 7 - r : r) * cell + cell / 2;
+    return [cx, cy];
+  }
+
+  arrowPoly(from, to, flip, cell) {
+    const u = cell / 100;
+    const [x1, y1] = this.sqToXY(from, flip, cell);
+    const [x2, y2] = this.sqToXY(to, flip, cell);
+    let dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len; dy /= len;
+    const px = -dy, py = dx;
+    const start = 33 * u, headLen = 27 * u, headW = 17 * u, w = 5.2 * u;
+    const sx = x1 + dx * start, sy = y1 + dy * start;
+    const ex = x2 - dx * 33 * u, ey = y2 - dy * 33 * u;
+    const bx = ex - dx * headLen, by = ey - dy * headLen;
+    const p = [
+      [sx + px * w, sy + py * w],
+      [bx + px * w, by + py * w],
+      [bx + px * headW, by + py * headW],
+      [ex, ey],
+      [bx - px * headW, by - py * headW],
+      [bx - px * w, by - py * w],
+      [sx - px * w, sy - py * w]
+    ];
+    return p.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+  }
+
+  renderVals() {
+    const p = this.props;
+    const treatment = p.treatment || 'walnut';
+    const theme = p.theme === 'light' ? 'light' : 'dark';
+    const pal = (PALETTES[treatment] || PALETTES.walnut)[theme];
+    const size = p.size || 520;
+    const flip = !!p.flipped;
+    const coordMode = treatment === 'instrument' ? 'outside' : (treatment === 'graphite' ? 'inner' : 'frame');
+    const showCoords = p.coords !== false;
+    const ev = p.evidence || {};
+    const intensity = p.intensity == null ? 1 : p.intensity;
+    const pieceScale = p.pieceScale || 0.86;
+    const board = this.fenBoard(p.fen);
+
+    const gutter = !showCoords ? 0 : (coordMode === 'frame' ? Math.round(size * 0.052) : (coordMode === 'outside' ? Math.round(size * 0.038) : 0));
+    const framePad = treatment === 'walnut' ? Math.round(size * 0.028) : (treatment === 'graphite' ? Math.round(size * 0.018) : 0);
+    const cell = size / 8;
+
+    const markFor = (kind, mode) => {
+      const c = EV[kind] || EV.alert;
+      if (mode === 'ring') {
+        return { style: { position: 'absolute', inset: '9%', borderRadius: '50%', border: Math.max(2, cell * 0.045) + 'px solid ' + c.line, opacity: 0.42 + 0.5 * intensity, boxShadow: '0 0 ' + (cell * 0.18) + 'px ' + c.fill, pointerEvents: 'none' } };
+      }
+      if (mode === 'corner') {
+        return { style: { position: 'absolute', inset: 0, background: 'linear-gradient(135deg,' + c.fill + ' 0 28%, rgba(0,0,0,0) 28%)', opacity: 0.55 + 0.45 * intensity, pointerEvents: 'none' } };
+      }
+      return { style: { position: 'absolute', inset: 0, background: c.fill, opacity: 0.5 + 0.5 * intensity, pointerEvents: 'none' } };
+    };
+
+    const cells = [];
+    for (let vr = 0; vr < 8; vr++) {
+      for (let vc = 0; vc < 8; vc++) {
+        const r = flip ? 7 - vr : vr, c = flip ? 7 - vc : vc;
+        const sq = FILES[c] + (8 - r);
+        const isDark = (r + c) % 2 === 1;
+        const base = isDark ? pal.darkSq : pal.light;
+        const style = {
+          position: 'relative', width: '100%', height: '100%', background: base,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        };
+        if (treatment === 'walnut' && pal.grain) {
+          style.backgroundImage = 'repeating-linear-gradient(' + (isDark ? '92deg' : '88deg') + ', rgba(66,38,12,' + pal.grain + ') 0 1px, rgba(255,255,255,0) 1px 4px), radial-gradient(140% 100% at 30% 0%, rgba(255,255,255,0.10), rgba(0,0,0,0) 70%)';
+        }
+        if (treatment === 'graphite' && pal.sheen !== 'none') {
+          style.backgroundImage = pal.sheen;
+        }
+        if (treatment === 'instrument') {
+          style.boxShadow = 'inset -1px -1px 0 rgba(0,0,0,0.06)';
+        }
+
+        const marks = [];
+        if (ev.last && (ev.last.from === sq || ev.last.to === sq)) {
+          marks.push({ style: { position: 'absolute', inset: 0, background: theme === 'light' ? 'rgba(214,178,58,0.32)' : 'rgba(238,206,102,0.24)', boxShadow: 'inset 0 0 0 1px ' + (theme === 'light' ? 'rgba(160,124,20,0.4)' : 'rgba(238,206,102,0.3)'), pointerEvents: 'none' } });
+        }
+        if ((ev.imbalance || []).indexOf(sq) >= 0) marks.push(markFor('imbalance', 'fill'));
+        if ((ev.key || []).indexOf(sq) >= 0) marks.push(markFor('key', 'corner'));
+        if ((ev.defenders || []).indexOf(sq) >= 0) marks.push(markFor('defender', 'corner'));
+        if ((ev.attackers || []).indexOf(sq) >= 0) marks.push(markFor('attacker', 'corner'));
+        if ((ev.alerts || []).indexOf(sq) >= 0) marks.push(markFor('alert', 'ring'));
+
+        const piece = board[r] && board[r][c] ? 'pieces/' + board[r][c] + '.svg' : null;
+        if (p.onSquare) { style.cursor = 'pointer'; }
+        if (ev.selected === sq) {
+          marks.push({ style: { position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 ' + Math.max(2, cell * 0.035) + 'px ' + (theme === 'light' ? 'rgba(30,38,44,0.7)' : 'rgba(255,255,255,0.8)'), pointerEvents: 'none' } });
+        }
+        const cellObj = {
+          sq, marks, piece, st: style,
+          onClick: p.onSquare ? () => p.onSquare(sq) : null,
+          pieceStyle: { position: 'relative', width: (pieceScale * 100) + '%', height: (pieceScale * 100) + '%', filter: pal.pieceShadow, pointerEvents: 'none', userSelect: 'none' }
+        };
+        if (showCoords && coordMode === 'inner') {
+          if (vc === 0) cellObj.innerCoord = String(8 - r);
+          else if (vr === 7) cellObj.innerCoord = FILES[c];
+          if (cellObj.innerCoord) {
+            cellObj.innerCoordStyle = {
+              position: 'absolute', top: vc === 0 ? '3px' : 'auto', bottom: vc === 0 ? 'auto' : '2px',
+              left: vc === 0 ? '4px' : 'auto', right: vc === 0 ? 'auto' : '4px',
+              font: '600 ' + Math.max(8, Math.round(cell * 0.2)) + 'px/1 "JetBrains Mono", ui-monospace, monospace',
+              letterSpacing: '0.04em', color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(20,26,30,0.42)', pointerEvents: 'none'
+            };
+          }
+        }
+        cells.push(cellObj);
+      }
+    }
+
+    const arrows = (ev.arrows || []).map(a => ({
+      points: this.arrowPoly(a.from, a.to, flip, cell),
+      fill: (EV[a.kind] || EV.attacker).line,
+      stroke: theme === 'light' ? 'rgba(255,255,255,0.5)' : 'rgba(10,13,15,0.5)',
+      sw: Math.max(0.75, cell * 0.016),
+      opacity: (0.42 + 0.44 * intensity).toFixed(2)
+    }));
+
+    const labelFont = '600 ' + Math.max(9, Math.round(size * 0.0225)) + 'px/1 "JetBrains Mono", ui-monospace, monospace';
+    const fileLabels = [], rankLabels = [];
+    if (showCoords && coordMode !== 'inner') {
+      for (let i = 0; i < 8; i++) {
+        const f = flip ? FILES[7 - i] : FILES[i];
+        const rk = flip ? i + 1 : 8 - i;
+        fileLabels.push({
+          label: coordMode === 'frame' ? f.toUpperCase() : f,
+          style: { position: 'absolute', left: (framePad + gutter + i * cell + cell / 2) + 'px', bottom: Math.round(gutter * 0.28) + 'px', transform: 'translateX(-50%)', font: labelFont, letterSpacing: '0.1em', color: pal.coord, opacity: coordMode === 'frame' ? 0.92 : 0.75, pointerEvents: 'none' }
+        });
+        rankLabels.push({
+          label: String(rk),
+          style: { position: 'absolute', top: (framePad + i * cell + cell / 2) + 'px', left: Math.round(gutter * 0.32) + 'px', transform: 'translateY(-50%)', font: labelFont, color: pal.coord, opacity: coordMode === 'frame' ? 0.92 : 0.75, pointerEvents: 'none' }
+        });
+      }
+    }
+
+    return {
+      cells, arrows, fileLabels, rankLabels,
+      shellStyle: { display: 'inline-block', lineHeight: 0 },
+      frameStyle: {
+        position: 'relative', boxSizing: 'content-box',
+        padding: framePad + 'px', paddingLeft: (framePad + gutter) + 'px', paddingBottom: (framePad + gutter) + 'px',
+        background: pal.frame === 'none' ? 'transparent' : pal.frame,
+        borderRadius: treatment === 'walnut' ? '5px' : (treatment === 'graphite' ? '3px' : '2px'),
+        boxShadow: pal.frameRing === 'none' ? 'none' : pal.frameRing
+      },
+      gridStyle: {
+        position: 'relative', display: 'grid',
+        gridTemplateColumns: 'repeat(8,1fr)', gridTemplateRows: 'repeat(8,1fr)',
+        width: size + 'px', height: size + 'px', overflow: 'hidden',
+        borderRadius: treatment === 'walnut' ? '2px' : '1px',
+        boxShadow: pal.boardRing
+      },
+      svgStyle: { position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }
+    };
+  }
+}
+
+</script>
+</body>
+</html>
