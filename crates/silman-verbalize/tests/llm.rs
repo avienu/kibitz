@@ -57,6 +57,7 @@ fn fixture_record() -> FeatureRecord {
                     status: EngineCheckStatus::Confirmed,
                     pv: vec!["Bxc6".into(), "bxc6".into(), "Nxc6".into()],
                     score_delta_cp: Some(190),
+                    mate_in: None,
                     budget_nodes: 2_000_000,
                 }),
             }],
@@ -72,6 +73,7 @@ fn fixture_record() -> FeatureRecord {
                 squares: vec!["d4".into(), "d5".into()],
             }],
         }],
+        composite_plans: vec![],
         engine: None,
         provenance: Provenance {
             generator: "silman-core".into(),

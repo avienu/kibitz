@@ -46,6 +46,11 @@ pub(crate) fn lookup(keys: &[&str]) -> &'static str {
     ""
 }
 
+/// A template by exact key, or None — for optional per-token clauses.
+pub(crate) fn try_lookup(key: &str) -> Option<&'static str> {
+    store().get(key).map(String::as_str)
+}
+
 /// Replace each `{name}` placeholder with its value. Unknown placeholders
 /// are left in place so the snapshot tests can catch template drift.
 pub(crate) fn fill(template: &str, slots: &[(&str, &str)]) -> String {

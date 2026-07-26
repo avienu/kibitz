@@ -40,6 +40,7 @@ fn base_record(fen: &str, phase: Phase) -> FeatureRecord {
             screen_fired: false,
         },
         imbalances: vec![],
+        composite_plans: vec![],
         engine: None,
         provenance: provenance(),
     }
@@ -74,6 +75,7 @@ fn tactical_record() -> FeatureRecord {
                     status: EngineCheckStatus::Confirmed,
                     pv: vec!["Bxc6".into(), "bxc6".into(), "Nxc6".into()],
                     score_delta_cp: Some(190),
+                    mate_in: None,
                     budget_nodes: 2_000_000,
                 }),
             },
@@ -166,6 +168,7 @@ fn endgame_record() -> FeatureRecord {
     ];
     record.engine = Some(EngineEval {
         eval_cp: 350,
+        mate_in: None,
         best: "a6".into(),
         multipv: vec![],
     });
@@ -616,5 +619,94 @@ fn output_squares_all_come_from_the_record() {
             invented.is_empty(),
             "verbalizer invented squares {invented:?} in:\n{out}"
         );
+    }
+}
+
+/// Run-5 bug 1: the full mate/score rendering matrix. A mate score must
+/// NEVER render in pawn units.
+#[test]
+fn mate_scores_never_render_as_material() {
+    use silman_core::record::{CompositePlan, EngineEval};
+    let mk = |mate_in: Option<i32>, delta: Option<i32>| {
+        let mut r = tactical_record();
+        if let Some(a) = r.wsui.alerts.first_mut() {
+            if let Some(c) = a.engine_check.as_mut() {
+                c.mate_in = mate_in;
+                c.score_delta_cp = delta;
+            }
+        }
+        verbalize(&r)
+    };
+    // Positive cp: pawns wording allowed.
+    let cp = mk(None, Some(230));
+    assert!(cp.contains("pawns"), "{cp}");
+    // Mate for the beneficiary.
+    let m3 = mk(Some(3), None);
+    assert!(m3.contains("forced mate in 3"), "{m3}");
+    assert!(
+        !m3.contains("winning about"),
+        "no material units for a mate: {m3}"
+    );
+    // Defensive guard: even if a cp sentinel sneaks in beside the mate,
+    // the mate wording wins.
+    let m_and_cp = mk(Some(2), Some(10_000));
+    assert!(m_and_cp.contains("forced mate in 2"), "{m_and_cp}");
+    assert!(!m_and_cp.contains("100 pawns"), "{m_and_cp}");
+    // Mate against.
+    let against = mk(Some(-2), None);
+    assert!(against.contains("mates in 2"), "{against}");
+    assert!(!against.contains("winning about"), "{against}");
+    // Mate on the board.
+    let now = mk(Some(0), None);
+    assert!(now.to_lowercase().contains("checkmate"), "{now}");
+
+    // Whole-position eval with a mate.
+    let mut r = quiet_record();
+    r.engine = Some(EngineEval {
+        eval_cp: 10_000,
+        mate_in: Some(5),
+        best: "Qh7+".into(),
+        multipv: vec![],
+    });
+    let out = verbalize(&r);
+    assert!(out.contains("forced mate in 5"), "{out}");
+    assert!(!out.contains("+100"), "{out}");
+    let _ = CompositePlan {
+        target: String::new(),
+        hints: vec![],
+        supporting: vec![],
+        squares: vec![],
+        score: 0,
+        favors: silman_core::record::Favors::White,
+    };
+}
+
+/// Run-5 item 4: a composite plan narrates as ONE unified sentence and
+/// its member hints are not repeated as singles.
+#[test]
+fn composite_plan_narrates_unified() {
+    use silman_core::record::{CompositePlan, Favors, ImbalanceKind};
+    let mut r = quiet_record();
+    r.composite_plans = vec![CompositePlan {
+        target: "d5".into(),
+        hints: vec![
+            "ManeuverKnightToOutpost".into(),
+            "PressureBackwardPawn".into(),
+        ],
+        supporting: vec![ImbalanceKind::SquaresOutposts, ImbalanceKind::PawnStructure],
+        squares: vec!["d5".into(), "d6".into()],
+        score: 4,
+        favors: Favors::White,
+    }];
+    let out = verbalize(&r);
+    assert!(
+        out.contains("Everything points to d5"),
+        "unified lead: {out}"
+    );
+    assert!(out.contains("reroute the knight"), "{out}");
+    assert!(out.contains("backward pawn"), "{out}");
+    // Prose lints still hold in the composite path.
+    for ch in ['_', '[', ']', '{', '}', '"'] {
+        assert!(!out.contains(ch), "lint char {ch:?} in: {out}");
     }
 }

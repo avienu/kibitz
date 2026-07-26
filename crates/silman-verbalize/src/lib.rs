@@ -141,17 +141,70 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
         })
         .collect();
     if let Some(engine) = &record.engine {
-        let score = format!("{:+.1}", f64::from(engine.eval_cp) / 100.0);
-        imbalance_sentences.push(fill(
-            lookup(&["engine.eval"]),
-            &[("score", &score), ("best", &engine.best)],
-        ));
+        if let Some(mate) = engine.mate_in {
+            let side = side_name(if mate >= 0 {
+                SideColor::White
+            } else {
+                SideColor::Black
+            });
+            imbalance_sentences.push(fill(
+                lookup(&["engine.eval.mate"]),
+                &[
+                    ("mate", &mate.abs().to_string()),
+                    ("side", side),
+                    ("best", &engine.best),
+                ],
+            ));
+        } else {
+            let score = format!("{:+.1}", f64::from(engine.eval_cp) / 100.0);
+            imbalance_sentences.push(fill(
+                lookup(&["engine.eval"]),
+                &[("score", &score), ("best", &engine.best)],
+            ));
+        }
     }
     let imbalances = imbalance_sentences.join(" ");
 
-    // Plans from the rendered imbalances only, deduplicated by hint token.
+    // Plans: composite plans (schema v2) lead when present — the top
+    // convergence as a unified sentence, the runner-up briefly, the rest
+    // dropped. Hints already consumed by a narrated composite are not
+    // repeated as singles.
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     let mut plan_sentences: Vec<String> = Vec::new();
+    for (i, cp) in record.composite_plans.iter().take(2).enumerate() {
+        if cp.supporting.len() < 2 {
+            continue;
+        }
+        for h in &cp.hints {
+            seen.insert(h.as_str());
+        }
+        if i == 0 {
+            let clauses: Vec<String> = cp
+                .hints
+                .iter()
+                .filter_map(|h| {
+                    templates::try_lookup(&format!("plan.composite.clause.{h}")).map(str::to_string)
+                })
+                .collect();
+            let clause_text = if clauses.is_empty() {
+                humanize(&cp.hints.join(", "))
+            } else {
+                join_and(&clauses)
+            };
+            plan_sentences.push(fill(
+                lookup(&["plan.composite.lead"]),
+                &[("target", &cp.target), ("clauses", &clause_text)],
+            ));
+        } else {
+            plan_sentences.push(fill(
+                lookup(&["plan.composite.runner_up"]),
+                &[
+                    ("target", &cp.target),
+                    ("side", side_name_favors(cp.favors)),
+                ],
+            ));
+        }
+    }
     for imbalance in &selected {
         for plan in &imbalance.plans {
             if seen.insert(plan.hint.as_str()) {
@@ -374,10 +427,34 @@ fn render_king_details(detail: &str) -> String {
     format!("{}.", capitalize_first(&join_and(&clauses)))
 }
 
+fn side_name_favors(favors: Favors) -> &'static str {
+    match favors_side(favors) {
+        Some(side) => side_name(side),
+        None => "both sides",
+    }
+}
+
 fn render_engine_check(check: &EngineCheck) -> String {
     match check.status {
         EngineCheckStatus::Confirmed => {
             let pv = check.pv.join(" ");
+            // Mate distances take absolute priority over material units
+            // (run-5 bug 1): a mate score must never read as pawns.
+            if let Some(mate) = check.mate_in {
+                let m = mate.abs().to_string();
+                return if mate == 0 {
+                    fill(lookup(&["engine.confirmed.pv_mate_now"]), &[("pv", &pv)])
+                } else if mate < 0 {
+                    fill(lookup(&["engine.confirmed.mate_against"]), &[("mate", &m)])
+                } else if pv.is_empty() {
+                    fill(lookup(&["engine.confirmed.mate"]), &[("mate", &m)])
+                } else {
+                    fill(
+                        lookup(&["engine.confirmed.pv_mate"]),
+                        &[("pv", &pv), ("mate", &m)],
+                    )
+                };
+            }
             match (check.pv.is_empty(), check.score_delta_cp) {
                 (false, Some(delta)) => fill(
                     lookup(&["engine.confirmed.pv_delta"]),

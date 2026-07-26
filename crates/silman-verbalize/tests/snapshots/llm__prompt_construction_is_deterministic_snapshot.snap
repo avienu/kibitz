@@ -1,5 +1,6 @@
 ---
 source: crates/silman-verbalize/tests/llm.rs
+assertion_line: 92
 expression: "format!(\"SYSTEM:\\n{system}\\n\\nUSER:\\n{user}\")"
 ---
 SYSTEM:
@@ -21,7 +22,7 @@ Write nothing else: no headings, no lists, no preamble.
 
 USER:
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "fen": "r1bqk2r/pp2bppp/2n2n2/1B1pN3/3P4/2N5/PPP2PPP/R1BQK2R w KQkq - 0 9",
   "side_to_move": "white",
   "phase": "middlegame",
