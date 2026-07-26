@@ -16,12 +16,30 @@ use crate::attack::{attacked_squares, attackers_of, pinned_piece_covers, pinned_
 use crate::record::{square_name, AlertKind, Severity, TacticAlert, WsuiReport};
 use crate::see::{piece_value, see};
 
+/// How alert lists become a fire/no-fire decision (run-5 feedback item 5:
+/// each variant was evaluated against the puzzle/quiet validation sets;
+/// the table lives in docs/VALIDATION.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FiringRule {
+    /// Any single alert at or above `fire_threshold` (the original rule).
+    AnyAtOrAbove,
+    /// At least two alerts at or above `fire_threshold`.
+    PairAtOrAbove,
+    /// One High alert, OR two alerts of DISTINCT kinds at or above
+    /// `fire_threshold`.
+    HighSoloOrTwoDistinct,
+    /// Severity-weighted sum (Low=1, Medium=2, High=4) reaches `fire_at`.
+    WeightedScore { fire_at: u32 },
+}
+
 /// Tunable thresholds (benchmarked/tuned by the Phase 3 validation
 /// harness; defaults are the tuned values recorded in docs/VALIDATION.md).
 #[derive(Debug, Clone)]
 pub struct WsuiConfig {
     /// Minimum severity at which the screen fires.
     pub fire_threshold: Severity,
+    /// The decision rule combining alerts into a firing decision.
+    pub rule: FiringRule,
     /// SEE gain (cp) for an I-alert to be medium / high.
     pub see_medium: i32,
     pub see_high: i32,
@@ -33,9 +51,34 @@ impl Default for WsuiConfig {
     fn default() -> Self {
         Self {
             fire_threshold: Severity::Medium,
+            rule: FiringRule::AnyAtOrAbove,
             see_medium: 100,
             see_high: 300,
             king_zone_surplus: 2,
+        }
+    }
+}
+
+/// Apply the configured firing rule to a sorted alert list.
+fn decide(alerts: &[TacticAlert], cfg: &WsuiConfig) -> bool {
+    let at_or_above = || alerts.iter().filter(|a| a.severity >= cfg.fire_threshold);
+    match cfg.rule {
+        FiringRule::AnyAtOrAbove => at_or_above().next().is_some(),
+        FiringRule::PairAtOrAbove => at_or_above().count() >= 2,
+        FiringRule::HighSoloOrTwoDistinct => {
+            alerts.iter().any(|a| a.severity >= Severity::High) || {
+                let kinds: std::collections::BTreeSet<_> =
+                    at_or_above().map(|a| a.kind).collect();
+                kinds.len() >= 2
+            }
+        }
+        FiringRule::WeightedScore { fire_at } => {
+            let weight = |s: Severity| match s {
+                Severity::Low => 1u32,
+                Severity::Medium => 2,
+                Severity::High => 4,
+            };
+            alerts.iter().map(|a| weight(a.severity)).sum::<u32>() >= fire_at
         }
     }
 }
@@ -55,7 +98,7 @@ pub fn screen(board: &Board, cfg: &WsuiConfig) -> WsuiReport {
     }
     // Most severe first within the stable side order.
     alerts.sort_by_key(|a| std::cmp::Reverse(a.severity));
-    let screen_fired = alerts.iter().any(|a| a.severity >= cfg.fire_threshold);
+    let screen_fired = decide(&alerts, cfg);
     WsuiReport {
         alerts,
         screen_fired,
@@ -488,5 +531,71 @@ fn rank_distance_from_home(side: Color, rank: Rank) -> u8 {
     match side {
         Color::White => rank as u8,
         Color::Black => 7 - rank as u8,
+    }
+}
+
+#[cfg(test)]
+mod firing_rule_tests {
+    use super::*;
+    use crate::record::SideColor;
+
+    fn alert(kind: AlertKind, severity: Severity) -> TacticAlert {
+        TacticAlert {
+            kind,
+            side: SideColor::White,
+            target: None,
+            attackers: vec![],
+            defenders: vec![],
+            see: None,
+            severity,
+            detail: None,
+            engine_check: None,
+        }
+    }
+
+    fn cfg(rule: FiringRule) -> WsuiConfig {
+        WsuiConfig {
+            rule,
+            ..WsuiConfig::default()
+        }
+    }
+
+    #[test]
+    fn rules_decide_as_specified() {
+        let one_med = vec![alert(AlertKind::Undefended, Severity::Medium)];
+        let two_med_same = vec![
+            alert(AlertKind::Undefended, Severity::Medium),
+            alert(AlertKind::Undefended, Severity::Medium),
+        ];
+        let two_med_distinct = vec![
+            alert(AlertKind::Undefended, Severity::Medium),
+            alert(AlertKind::TrappedPiece, Severity::Medium),
+        ];
+        let one_high = vec![alert(AlertKind::WeakKing, Severity::High)];
+        let lows = vec![
+            alert(AlertKind::Undefended, Severity::Low),
+            alert(AlertKind::WeakKing, Severity::Low),
+        ];
+
+        let any = cfg(FiringRule::AnyAtOrAbove);
+        assert!(decide(&one_med, &any));
+        assert!(!decide(&lows, &any));
+
+        let pair = cfg(FiringRule::PairAtOrAbove);
+        assert!(!decide(&one_med, &pair));
+        assert!(decide(&two_med_same, &pair));
+        assert!(!decide(&one_high, &pair), "one alert is one alert");
+
+        let hstd = cfg(FiringRule::HighSoloOrTwoDistinct);
+        assert!(decide(&one_high, &hstd));
+        assert!(!decide(&one_med, &hstd));
+        assert!(!decide(&two_med_same, &hstd), "same kind twice is one story");
+        assert!(decide(&two_med_distinct, &hstd));
+
+        let weighted = cfg(FiringRule::WeightedScore { fire_at: 4 });
+        assert!(!decide(&one_med, &weighted)); // 2 < 4
+        assert!(decide(&two_med_same, &weighted)); // 2+2
+        assert!(decide(&one_high, &weighted)); // 4
+        assert!(!decide(&lows, &weighted)); // 1+1
     }
 }

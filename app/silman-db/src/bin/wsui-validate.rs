@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use cozy_chess::Board;
 use silman_core::record::Severity;
-use silman_core::wsui::{screen, WsuiConfig};
+use silman_core::wsui::{screen, FiringRule, WsuiConfig};
 
 #[derive(Parser)]
 struct Args {
@@ -152,20 +152,51 @@ fn main() -> anyhow::Result<()> {
     let (pos_train, pos_hold) = positives.split_at(positives.len() / 2);
     let (neg_train, neg_hold) = negatives.split_at(negatives.len() / 2);
 
-    // Threshold grid, tuned on TRAIN only.
-    let mut candidates = Vec::new();
+    // Rule-variant grid (run-5 feedback item 5), tuned on TRAIN only.
+    // For each firing rule family, sweep thresholds; report the best
+    // operating point per family on the HOLDOUT as a markdown table.
+    let mut candidates: Vec<(String, WsuiConfig)> = Vec::new();
+    let sees = [(60, 200), (100, 300), (150, 400)];
     for fire in [Severity::Low, Severity::Medium, Severity::High] {
-        for (see_med, see_high) in [(60, 200), (100, 300), (150, 400)] {
-            candidates.push(WsuiConfig {
+        for (see_medium, see_high) in sees {
+            let base = WsuiConfig {
                 fire_threshold: fire,
-                see_medium: see_med,
+                rule: FiringRule::AnyAtOrAbove,
+                see_medium,
                 see_high,
                 king_zone_surplus: 2,
-            });
+            };
+            candidates.push(("solo (any ≥ threshold)".into(), base.clone()));
+            candidates.push((
+                "pair (two ≥ threshold)".into(),
+                WsuiConfig {
+                    rule: FiringRule::PairAtOrAbove,
+                    ..base.clone()
+                },
+            ));
+            candidates.push((
+                "high-solo-or-two-distinct".into(),
+                WsuiConfig {
+                    rule: FiringRule::HighSoloOrTwoDistinct,
+                    ..base.clone()
+                },
+            ));
+            for fire_at in [3u32, 4, 5, 6] {
+                candidates.push((
+                    format!("weighted score ≥ {fire_at}"),
+                    WsuiConfig {
+                        rule: FiringRule::WeightedScore { fire_at },
+                        ..base.clone()
+                    },
+                ));
+            }
         }
     }
-    let mut best: Option<(f64, WsuiConfig, f64, f64)> = None;
-    for cfg in candidates {
+
+    // Best-per-family on train (objective: recall − false-positive rate).
+    let mut best_per_family: std::collections::BTreeMap<String, (f64, WsuiConfig, f64, f64)> =
+        Default::default();
+    for (family, cfg) in candidates {
         let recall = rate(
             pos_train.iter().filter(|b| fired(b, &cfg)).count(),
             pos_train.len(),
@@ -174,39 +205,51 @@ fn main() -> anyhow::Result<()> {
             neg_train.iter().filter(|b| fired(b, &cfg)).count(),
             neg_train.len(),
         );
-        // Balanced objective: maximize recall − false-positive rate.
         let objective = recall - fp;
         eprintln!(
-            "train: fire>={:?} see {}/{} -> recall {recall:.1}% fp {fp:.1}% (obj {objective:.1})",
+            "train: {family:<28} fire>={:?} see {}/{} -> recall {recall:.1}% fp {fp:.1}% (obj {objective:.1})",
             cfg.fire_threshold, cfg.see_medium, cfg.see_high
         );
-        if best.as_ref().map(|(o, ..)| objective > *o).unwrap_or(true) {
-            best = Some((objective, cfg, recall, fp));
+        let entry = best_per_family.entry(family).or_insert((f64::MIN, cfg.clone(), 0.0, 0.0));
+        if objective > entry.0 {
+            *entry = (objective, cfg, recall, fp);
         }
     }
-    let (_, cfg, train_recall, train_fp) = best.expect("candidates nonempty");
 
-    // Holdout report.
-    let tp = pos_hold.iter().filter(|b| fired(b, &cfg)).count();
-    let fp = neg_hold.iter().filter(|b| fired(b, &cfg)).count();
-    let recall = rate(tp, pos_hold.len());
-    let fp_rate = rate(fp, neg_hold.len());
-    let precision = if tp + fp == 0 {
-        0.0
-    } else {
-        tp as f64 / (tp + fp) as f64 * 100.0
-    };
+    // Holdout table, one row per family's chosen operating point.
+    println!("| rule | operating point | holdout recall | holdout FP rate | precision |");
+    println!("|---|---|---|---|---|");
+    let mut overall: Option<(f64, String, WsuiConfig)> = None;
+    for (family, (_, cfg, _, _)) in &best_per_family {
+        let tp = pos_hold.iter().filter(|b| fired(b, cfg)).count();
+        let fp = neg_hold.iter().filter(|b| fired(b, cfg)).count();
+        let recall = rate(tp, pos_hold.len());
+        let fp_rate = rate(fp, neg_hold.len());
+        let precision = if tp + fp == 0 {
+            0.0
+        } else {
+            tp as f64 / (tp + fp) as f64 * 100.0
+        };
+        let point = format!(
+            "fire≥{:?}, SEE {}/{}",
+            cfg.fire_threshold, cfg.see_medium, cfg.see_high
+        );
+        println!(
+            "| {family} | {point} | {recall:.1}% | {fp_rate:.1}% | {precision:.1}% |"
+        );
+        let objective = recall - fp_rate;
+        if overall.as_ref().map(|(o, ..)| objective > *o).unwrap_or(true) {
+            overall = Some((objective, family.clone(), cfg.clone()));
+        }
+    }
+    let (_, family, cfg) = overall.expect("families nonempty");
+    println!();
     println!(
-        "chosen config (tuned on train): fire>={:?} see_medium={} see_high={} zone={}",
-        cfg.fire_threshold, cfg.see_medium, cfg.see_high, cfg.king_zone_surplus
-    );
-    println!(
-        "train:   recall {train_recall:.1}%  false-positive rate {train_fp:.1}%  (n={}+{})",
-        pos_train.len(),
-        neg_train.len()
-    );
-    println!(
-        "holdout: recall {recall:.1}%  false-positive rate {fp_rate:.1}%  precision {precision:.1}%  (n={}+{})",
+        "best holdout operating point: {family} — rule {:?}, fire>={:?}, see {}/{} (n={}+{} holdout)",
+        cfg.rule,
+        cfg.fire_threshold,
+        cfg.see_medium,
+        cfg.see_high,
         pos_hold.len(),
         neg_hold.len()
     );

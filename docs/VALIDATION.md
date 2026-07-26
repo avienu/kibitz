@@ -82,3 +82,35 @@ Train-grid trade-off curve (recall / FP-rate):
 - SEE-band grid barely moves recall at fire ≥ Medium (the U/W/S detectors
   dominate firing); finer tuning belongs to a later pass with per-detector
   thresholds.
+
+## Firing-rule study (2026-07-26, run 5, silman-core @ run-5 detectors)
+
+Question (maintainer feedback item 5): should the screen fire on a solo
+element, a pair, high-solo-or-two-distinct, or a severity-weighted score?
+`WsuiConfig` gained a `rule: FiringRule` knob; the same train/holdout
+protocol as above evaluated every rule family × threshold × SEE-band
+combination on the TRAIN half (objective: recall − FP rate), and each
+family's best operating point was then scored once on the holdout:
+
+| rule | operating point | holdout recall | holdout FP rate | precision |
+|---|---|---|---|---|
+| solo (any ≥ threshold) | fire≥Medium, SEE 150/400 | 81.3% | 39.2% | 89.2% |
+| weighted score ≥ 3 | fire≥Low, SEE 150/400 | 83.6% | 49.2% | 87.2% |
+| weighted score ≥ 4 | fire≥Low, SEE 150/400 | 72.5% | 34.0% | 89.5% |
+| weighted score ≥ 5 | fire≥Low, SEE 150/400 | 59.2% | 23.6% | 90.9% |
+| weighted score ≥ 6 | fire≥Low, SEE 100/300 | 49.4% | 18.4% | 91.5% |
+| pair (two ≥ threshold) | fire≥Medium, SEE 100/300 | 52.8% | 15.6% | 93.1% |
+| high-solo-or-two-distinct | fire≥Medium, SEE 150/400 | 51.1% | 17.6% | 92.1% |
+
+**Adopted operating point: solo (AnyAtOrAbove), fire ≥ Medium — the
+incumbent.** It wins the balanced objective outright (42.1 vs 38.5 for
+the runner-up weighted ≥ 4): every stricter rule buys its FP reduction
+with a disproportionate recall loss (pair rules halve FP but drop ~28
+recall points — most real tactics present as ONE dominant alert, not
+two). The rule is now configurable; `FiringRule::PairAtOrAbove` (15.6%
+FP, 93.1% precision) is the recommended knob for latency-sensitive batch
+profiling over huge corpora, alongside the existing `fire ≥ High` option.
+
+Because the adopted default is unchanged, profile motif counts over the
+personal corpus are unaffected (re-verified after the study — see
+RUN_REPORT.md run-5).
