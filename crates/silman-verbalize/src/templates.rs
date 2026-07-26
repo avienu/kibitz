@@ -61,6 +61,25 @@ pub(crate) fn fill(template: &str, slots: &[(&str, &str)]) -> String {
     out
 }
 
+/// Like [`lookup`], but with deterministic phrasing variety: when `seed`
+/// is odd and the first matching key has an `.alt` sibling, the sibling
+/// is used. Seeded by the alert's target square so the same story on the
+/// same square always reads the same, while neighbouring alerts of the
+/// same kind on different squares phrase differently (run-5 item 2).
+pub(crate) fn lookup_var(keys: &[&str], seed: usize) -> &'static str {
+    for key in keys {
+        if let Some(value) = store().get(*key) {
+            if seed % 2 == 1 {
+                if let Some(alt) = store().get(&format!("{key}.alt")) {
+                    return alt;
+                }
+            }
+            return value;
+        }
+    }
+    ""
+}
+
 /// Deterministic sentence-start rotation: entry `index % n` of the
 /// `|`-separated list stored under `key` (first entry is empty).
 pub(crate) fn rotation(key: &str, index: usize) -> &'static str {

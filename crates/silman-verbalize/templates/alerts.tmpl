@@ -32,3 +32,10 @@ alert.WeakKing.low = {subject} shows a little draftiness{target_clause}.
 
 # Fallback for alert kinds this file does not know yet.
 alert.generic = {subject} deserves tactical attention{target_clause}.
+
+# .alt variants — deterministic phrasing variety keyed off the target
+# square, so consecutive same-kind alerts on different squares do not read
+# as copy-paste (run-5 feedback item 2).
+alert.Undefended.medium.alt = Nobody is watching {subject} right now.
+alert.InadequatelyDefended.medium.alt = {subject} has more attackers than its defenders can handle.
+alert.InadequatelyDefended.high.alt = The defense of {subject} simply does not hold together.

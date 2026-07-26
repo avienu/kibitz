@@ -18,6 +18,7 @@ pub mod import_si4;
 pub mod jobs;
 pub mod legacy;
 pub mod movebin;
+pub mod narrate;
 pub mod net;
 pub mod pgn;
 pub mod prep;

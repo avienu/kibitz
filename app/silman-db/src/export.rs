@@ -97,6 +97,11 @@ pub fn export_pgn(conn: &Connection, game_id: i64) -> Result<String, ExportError
 
     let tokens =
         decode_tokens(&start, &movetext).map_err(|e| ExportError::Movetext(e.to_string()))?;
+    // Generated narrations live beside the movetext; merge them in after
+    // the mainline move (past its NAGs and any human comment).
+    let narrations = crate::narrate::narrations(conn, game_id)
+        .map_err(|e| ExportError::Movetext(e.to_string()))?;
+    let tokens = merge_narrations(tokens, &narrations);
     let mut body = render_movetext(&start, &tokens);
     if !body.is_empty() {
         body.push(' ');
@@ -105,6 +110,42 @@ pub fn export_pgn(conn: &Connection, game_id: i64) -> Result<String, ExportError
     out.push_str(&wrap_80(&body));
     out.push('\n');
     Ok(out)
+}
+
+/// Splice generated narrations into the token stream: after the mainline
+/// move at each narrated ply, past its NAG tokens and any human comment.
+fn merge_narrations(
+    tokens: Vec<Token>,
+    narrations: &std::collections::HashMap<u32, String>,
+) -> Vec<Token> {
+    if narrations.is_empty() {
+        return tokens;
+    }
+    let mut out: Vec<Token> = Vec::with_capacity(tokens.len() + narrations.len());
+    let mut depth = 0u32;
+    let mut ply = 0u32;
+    let mut pending: Option<&str> = None;
+    for token in tokens {
+        // A pending narration flushes before anything that isn't a NAG or
+        // comment attached to the narrated move.
+        if pending.is_some() && !matches!(token, Token::Nag(_) | Token::Comment(_)) {
+            out.push(Token::Comment(pending.take().unwrap().to_string()));
+        }
+        match &token {
+            Token::VarStart => depth += 1,
+            Token::VarEnd => depth = depth.saturating_sub(1),
+            Token::Move(_) | Token::Null if depth == 0 => {
+                ply += 1;
+                pending = narrations.get(&ply).map(String::as_str);
+            }
+            _ => {}
+        }
+        out.push(token);
+    }
+    if let Some(text) = pending {
+        out.push(Token::Comment(text.to_string()));
+    }
+    out
 }
 
 /// Render the token stream as PGN movetext (no result, no wrapping).

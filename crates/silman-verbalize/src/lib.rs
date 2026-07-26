@@ -45,7 +45,7 @@ use phrase::{
     capitalize_first, decapitalize_first, favors_side, humanize, join_and, magnitude_key,
     pawns_amount, phase_key, see_key, severity_key, side_name,
 };
-use templates::{fill, lookup, rotation};
+use templates::{fill, lookup, lookup_var, rotation};
 
 /// The three prose sections of a verbalized position, in composition order.
 /// Each section is a single paragraph; empty strings mean the record had
@@ -105,10 +105,20 @@ pub fn verbalize_sections(record: &FeatureRecord) -> Sections {
     // Tactical alerts, most severe first (stable within a severity).
     let mut alerts: Vec<&TacticAlert> = record.wsui.alerts.iter().collect();
     alerts.sort_by_key(|alert| Reverse(alert.severity));
+    let mut seen_clauses: std::collections::HashSet<String> = Default::default();
     let tactics = alerts
         .iter()
         .enumerate()
-        .map(|(index, alert)| apply_starter("rotation.alert", index, render_alert(alert, &board)))
+        .map(|(index, alert)| {
+            // Two alerts often share evidence (the same attackers pressing
+            // the same square); state each clause once per comment.
+            let sentences: Vec<String> = render_alert_sentences(alert, &board)
+                .into_iter()
+                .filter(|sentence| seen_clauses.insert(sentence.clone()))
+                .collect();
+            apply_starter("rotation.alert", index, sentences.join(" "))
+        })
+        .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
 
@@ -238,8 +248,21 @@ fn apply_starter(rotation_key: &str, index: usize, paragraph: String) -> String 
     format!("{starter} {body}")
 }
 
-fn render_alert(alert: &TacticAlert, board: &Board) -> String {
+fn render_alert_sentences(alert: &TacticAlert, board: &Board) -> Vec<String> {
     let side = side_name(alert.side);
+    // Phrasing-variety seed: the target square's index, so the same alert
+    // on the same square always reads identically, while adjacent alerts
+    // of the same kind on different squares phrase differently.
+    let seed = alert
+        .target
+        .as_deref()
+        .and_then(|t| {
+            let mut bytes = t.bytes();
+            let file = bytes.next()?.checked_sub(b'a')?;
+            let rank = bytes.next()?.checked_sub(b'1')?;
+            Some(file as usize * 8 + rank as usize)
+        })
+        .unwrap_or(0);
     let subject = match (alert.kind, alert.target.as_deref()) {
         (AlertKind::WeakKing, _) => fill(lookup(&["phrase.kings"]), &[("side", side)]),
         (_, Some(target)) => piece_subject(board, target, side),
@@ -262,10 +285,10 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
         && alert.attackers.is_empty()
         && !alert.defenders.is_empty()
     {
-        return fill(
+        return vec![fill(
             lookup(&["alert.overloaded"]),
             &[("subject", &subject), ("defenders", &defenders)],
-        );
+        )];
     }
 
     // Lead sentence: a detail-specific lead absorbs the detail qualifier;
@@ -284,7 +307,7 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
     lead_keys.push(severity_lead_key.as_str());
     lead_keys.push("alert.generic");
     let mut sentences = vec![fill(
-        lookup(&lead_keys),
+        lookup_var(&lead_keys, seed),
         &[("subject", &subject), ("target_clause", &target_clause)],
     )];
 
@@ -306,7 +329,7 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
     } else {
         match (attackers.is_empty(), defenders.is_empty()) {
             (false, false) => sentences.push(fill(
-                lookup(&["clause.attack_defend.both"]),
+                lookup_var(&["clause.attack_defend.both"], seed),
                 &[("attackers", &attackers), ("defenders", &defenders)],
             )),
             (false, true) => sentences.push(fill(
@@ -346,7 +369,7 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
     if let Some(see) = alert.see {
         if see > 0 {
             sentences.push(fill(
-                lookup(&["clause.see"]),
+                lookup_var(&["clause.see"], seed),
                 &[("amount", lookup(&[see_key(see)]))],
             ));
         }
@@ -356,7 +379,7 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
         sentences.push(render_engine_check(check));
     }
 
-    sentences.join(" ")
+    sentences
 }
 
 /// WeakKing `detail` is a semicolon-joined compound ("zone-pressure+3;
@@ -816,6 +839,13 @@ fn pawn_owner(board: &Board, squares: &[String]) -> Option<SideColor> {
 }
 
 fn render_plan(plan: &PlanHint, favors: Favors, index: usize) -> String {
+    // A blockade is the DEFENDER's plan: attribute it to the side facing
+    // the passer, whatever the parent imbalance favors.
+    let favors = match plan.hint.as_str() {
+        "BlockadeWhitePasser" => Favors::Black,
+        "BlockadeBlackPasser" => Favors::White,
+        _ => favors,
+    };
     let hint_key = format!("plan.{}", plan.hint);
     let known = lookup(&[hint_key.as_str()]);
     let action = if known.is_empty() {

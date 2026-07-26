@@ -1136,6 +1136,7 @@ dependencies = [
  "anyhow",
  "clap",
  "cozy-chess",
+ "insta",
  "rusqlite",
  "serde",
  "serde_json",
