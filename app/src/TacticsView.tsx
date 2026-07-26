@@ -12,7 +12,9 @@ import { chessgroundDests } from "chessops/compat";
 import { parseFen } from "chessops/fen";
 import { makeUci, parseSquare, squareRank } from "chessops/util";
 import Board, { type BoardMovable } from "./Board";
+import { usePromotionPicker } from "./PromotionPicker";
 import type { PlayerProfile } from "./lib/db";
+import type { PromoRole } from "./lib/promotion";
 import {
   buildPuzzleModel,
   createWoodpeckerSet,
@@ -218,11 +220,19 @@ export default function TacticsView({ profile }: { profile: PlayerProfile | null
     [served, mode, cycle, loadState],
   );
 
+  // Promotion picker (run-6 item 3): the drag defers to the overlay, which
+  // re-invokes the handler with the chosen role — underpromotions included.
+  const moveHandlerRef = useRef<(orig: string, dest: string, promoRole?: PromoRole) => void>(
+    () => {},
+  );
+  const promo = usePromotionPicker((orig, dest, role) => moveHandlerRef.current(orig, dest, role));
+
   const onBoardMove = useCallback(
-    (orig: string, dest: string) => {
+    (orig: string, dest: string, promoRole?: PromoRole) => {
       if (!served || !model || phase !== "solving" || !isSolverMove(lineIdx)) return;
       if (busyRef.current) return;
       const cur = model.fens[lineIdx];
+      if (!promoRole && promo.guard(cur, orig, dest)) return;
       const setup = parseFen(cur);
       if (setup.isErr) return;
       const p = Chess.fromSetup(setup.unwrap());
@@ -233,7 +243,7 @@ export default function TacticsView({ profile }: { profile: PlayerProfile | null
       if (from === undefined || to === undefined) return;
       const promotion =
         pos.board.get(from)?.role === "pawn" && (squareRank(to) === 0 || squareRank(to) === 7)
-          ? ("queen" as const)
+          ? (promoRole ?? "queen")
           : undefined;
       const move = normalizeMove(pos, { from, to, promotion });
       if (!pos.isLegal(move)) return;
@@ -268,8 +278,9 @@ export default function TacticsView({ profile }: { profile: PlayerProfile | null
           busyRef.current = false;
         });
     },
-    [served, model, phase, lineIdx, finish],
+    [served, model, phase, lineIdx, finish, promo],
   );
+  moveHandlerRef.current = onBoardMove;
 
   const movable = useMemo((): BoardMovable | undefined => {
     if (!model || phase !== "solving" || !isSolverMove(lineIdx)) return undefined;
@@ -397,7 +408,14 @@ export default function TacticsView({ profile }: { profile: PlayerProfile | null
         {served && model && (
           <>
             <div className="tactics-board">
-              <Board fen={fen ?? ""} lastMove={lastMove} movable={movable} orientation={model.solverColor} />
+              <Board
+                fen={fen ?? ""}
+                lastMove={lastMove}
+                movable={movable}
+                orientation={model.solverColor}
+                size={376}
+              />
+              {promo.element}
             </div>
             <div className="tactics-line">
               <span className={`tactics-phase ${phase}`}>

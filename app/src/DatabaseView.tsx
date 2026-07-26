@@ -27,6 +27,12 @@ interface DatabaseViewProps {
   onLoadGame: (detail: GameDetail) => void;
   /** Advance the game view by one mainline ply. */
   onAdvance: () => void;
+  /** Open-database summary — owned by App (rail badge, auto-open). */
+  summary: DbSummary | null;
+  onSummary: (s: DbSummary | null) => void;
+  /** Which sections render: the rail routes Database ("all"),
+   * Opening tree ("tree") and Position search ("search") here. */
+  focus?: "all" | "tree" | "search";
 }
 
 /** Strip decorations so tree SANs compare against game SANs. */
@@ -45,9 +51,11 @@ export default function DatabaseView({
   ply,
   onLoadGame,
   onAdvance,
+  summary,
+  onSummary,
+  focus = "all",
 }: DatabaseViewProps) {
   const [path, setPath] = useState(getSavedDbPath);
-  const [summary, setSummary] = useState<DbSummary | null>(null);
   const [opening, setOpening] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
 
@@ -66,19 +74,19 @@ export default function DatabaseView({
     setDbError(null);
     try {
       const s = await openDatabase(path);
-      setSummary(s);
+      onSummary(s);
       saveDbPath(path);
       setPage(0);
       // Cosmetics (verdict 4): reflect the open database in the title bar.
       const filename = s.path.split(/[\\/]/).pop() ?? s.path;
       setWindowTitle(`silman — ${filename}`).catch(() => {});
     } catch (e) {
-      setSummary(null);
+      onSummary(null);
       setDbError(String(e));
     } finally {
       setOpening(false);
     }
-  }, [path]);
+  }, [path, onSummary]);
 
   // Game list: refetch on open / filter (debounced) / page change.
   useEffect(() => {
@@ -174,7 +182,7 @@ export default function DatabaseView({
         )}
       </div>
 
-      {summary && (
+      {summary && focus !== "search" && (
         <div className="db-section">
           <h3>Opening tree (current position)</h3>
           {tree.length === 0 ? (
@@ -213,29 +221,33 @@ export default function DatabaseView({
             </table>
           )}
           {treeHint && <div className="hint">{treeHint}</div>}
-          {gamesAt && (
-            <div className="games-at">
-              <div className="games-at-count">
-                {gamesAt.total.toLocaleString()} game{gamesAt.total === 1 ? "" : "s"} reach
-                {gamesAt.total === 1 ? "es" : ""} this position
-              </div>
-              {gamesAt.rows.slice(0, 10).map((g) => (
-                <div key={g.id} className="games-at-row">
-                  <span className="ga-players">
-                    {g.white} — {g.black}
-                  </span>
-                  <span className="ga-meta">
-                    {g.result} {g.date} (ply {g.ply})
-                  </span>
-                  <button onClick={() => void loadById(g.id)}>load</button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
-      {summary && (
+      {summary && focus !== "tree" && gamesAt && (
+        <div className="db-section">
+          <h3>Position search — games reaching the board position</h3>
+          <div className="games-at">
+            <div className="games-at-count">
+              {gamesAt.total.toLocaleString()} game{gamesAt.total === 1 ? "" : "s"} reach
+              {gamesAt.total === 1 ? "es" : ""} this position
+            </div>
+            {gamesAt.rows.slice(0, 10).map((g) => (
+              <div key={g.id} className="games-at-row">
+                <span className="ga-players">
+                  {g.white} — {g.black}
+                </span>
+                <span className="ga-meta">
+                  {g.result} {g.date} (ply {g.ply})
+                </span>
+                <button onClick={() => void loadById(g.id)}>load</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {summary && focus === "all" && (
         <div className="db-section">
           <h3>Games</h3>
           <div className="db-filter-row">

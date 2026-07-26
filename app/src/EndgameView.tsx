@@ -8,6 +8,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Board, { type BoardMovable } from "./Board";
+import { usePromotionPicker } from "./PromotionPicker";
+import type { PromoRole } from "./lib/promotion";
 import {
   destsFor,
   endgameGiveUp,
@@ -94,10 +96,18 @@ export default function EndgameView() {
     }
   }, []);
 
+  // Promotion picker (run-6 item 3): defers pawn-to-last-rank drags to the
+  // overlay, which re-invokes the handler with the chosen role.
+  const moveHandlerRef = useRef<(orig: string, dest: string, promoRole?: PromoRole) => void>(
+    () => {},
+  );
+  const promo = usePromotionPicker((orig, dest, role) => moveHandlerRef.current(orig, dest, role));
+
   const onBoardMove = useCallback(
-    (orig: string, dest: string) => {
+    (orig: string, dest: string, promoRole?: PromoRole) => {
       if (!play || play.phase !== "playing" || busyRef.current) return;
-      const uci = uciForDrag(play.fen, orig, dest);
+      if (!promoRole && promo.guard(play.fen, orig, dest)) return;
+      const uci = uciForDrag(play.fen, orig, dest, promoRole);
       if (!uci) return;
       busyRef.current = true;
       endgameMove(uci)
@@ -119,8 +129,9 @@ export default function EndgameView() {
           busyRef.current = false;
         });
     },
-    [play, finish],
+    [play, finish, promo],
   );
+  moveHandlerRef.current = onBoardMove;
 
   const giveUp = useCallback(async () => {
     try {
@@ -178,7 +189,9 @@ export default function EndgameView() {
               lastMove={play.lastMove}
               movable={movable}
               orientation={play.started.userSide}
+              size={376}
             />
+            {promo.element}
           </div>
           {play.outcomeText && <div className="tactics-outcome">{play.outcomeText}</div>}
           <div className="engine-row">

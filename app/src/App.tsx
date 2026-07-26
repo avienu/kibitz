@@ -1,205 +1,253 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/**
+ * App shell (design/handoff-1 §Screen 2): nav rail → main column
+ * (header + view + status strip). The game view is the centrepiece;
+ * every other capability keeps a rail home. The old tab bar is gone.
+ */
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Chess, normalizeMove } from "chessops/chess";
 import { chessgroundDests } from "chessops/compat";
 import { parseFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
-import { parseSquare, squareRank } from "chessops/util";
-import AnnotatedMoves from "./AnnotatedMoves";
+import { parseSquare } from "chessops/util";
 import Board, { type BoardMovable } from "./Board";
 import DatabaseView from "./DatabaseView";
 import EndgameView from "./EndgameView";
 import FirstRunOverlay, { markFirstRunSeen, shouldShowFirstRun } from "./FirstRunOverlay";
-import GameTools from "./GameTools";
+import GameView from "./GameView";
 import Help from "./Help";
+import ImportView from "./ImportView";
+import JobsView from "./JobsView";
+import { SyncsPlaceholder, TwicPlaceholder } from "./PlaceholderView";
 import PrepView from "./PrepView";
 import ProfileView from "./ProfileView";
+import { usePromotionPicker } from "./PromotionPicker";
+import SettingsView from "./SettingsView";
 import TacticsView from "./TacticsView";
 import TrainView, { type TrainBoardState } from "./TrainView";
-import { evalsByPly, type PlyEval } from "./lib/analyses";
+import NavRail from "./shell/NavRail";
+import StatusStrip from "./shell/StatusStrip";
+import type { AnalysisRow } from "./lib/analyses";
+import { getSavedAnnotationDisplay, saveAnnotationDisplay } from "./lib/annotationDisplay";
 import {
-  clampPly,
-  gameFromSans,
-  lastMoveAt,
-  loadGame,
-  numberedSans,
-  type LoadedGame,
-} from "./lib/game";
-import {
+  explainPosition,
   gameAnalyses,
   getGame,
   getGameTokens,
   getNarrationVoice,
+  getSavedDbPath,
   getSavedVoice,
-  explainPosition,
+  jobsStatus,
+  openDatabase,
+  runJobs,
   saveVoice,
   setNarrationVoice,
   trainAddLine,
   trainSummary,
   updateGameTokens,
-  type Explanation,
+  type DbSummary,
   type GameDetail,
-  type NarrationVoice,
+  type JobsStatus,
   type PlayerProfile,
   type TrainSummary,
 } from "./lib/db";
-import { shapesFromRecord } from "./lib/explainView";
+import { getSavedNodes } from "./lib/engine";
+import { onEngineDone, onEngineInfo } from "./lib/engine";
+import {
+  clampPly,
+  gameFromSans,
+  lastMoveAt,
+  loadGame,
+  type LoadedGame,
+} from "./lib/game";
+import {
+  isEditableTarget,
+  keyboardAction,
+  railCollapsed,
+  reduceGameView,
+  type EditableTargetLike,
+  type ExplanationJson,
+  type GameViewState,
+} from "./lib/gameView";
+import type { PromoRole } from "./lib/promotion";
+import type { ViewId } from "./lib/shell";
+import { tacticsState as fetchTacticsState, type TacticsState } from "./lib/tactics";
 import { insertVariation, type JsonToken } from "./lib/tokens";
-import {
-  formatScore,
-  pvToSan,
-  summarizeInfo,
-  type EngineDone,
-  type EngineInfo,
-} from "./lib/engineView";
-import {
-  analyzePosition,
-  getSavedEnginePath,
-  getSavedNodes,
-  onEngineDone,
-  onEngineInfo,
-  resolveEnginePath,
-  saveEnginePath,
-  saveNodes,
-  stopAnalysis,
-} from "./lib/engine";
-
-const SAMPLE_PGN = `[Event "London"]
-[Site "London ENG"]
-[Date "1851.06.21"]
-[White "Adolf Anderssen"]
-[Black "Lionel Kieseritzky"]
-[Result "1-0"]
-
-1. e4 e5 2. f4 exf4 3. Bc4 Qh4+ 4. Kf1 b5 5. Bxb5 Nf6 6. Nf3 Qh6
-7. d3 Nh5 8. Nh4 Qg5 9. Nf5 c6 10. g4 Nf6 11. Rg1 cxb5 12. h4 Qg6
-13. h5 Qg5 14. Qf3 Ng8 15. Bxf4 Qf6 16. Nc3 Bc5 17. Nd5 Qxb2
-18. Bd6 Bxg1 19. e5 Qxa1+ 20. Ke2 Na6 21. Nxg7+ Kd8 22. Qf6+ Nxf6
-23. Be7# 1-0`;
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-type Mode = "analyze" | "database" | "prep" | "profile" | "train" | "tactics" | "endgames";
+const THEME_KEY = "silman.theme";
+const TREATMENT_KEY = "silman.boardTreatment";
+const EXPLAIN_KEY = "silman.explainOn";
+
+function initialGameView(): GameViewState {
+  return {
+    ply: 0,
+    hoverSentence: null,
+    selectedSquare: null,
+    voice: getSavedVoice(),
+    annotationMode: getSavedAnnotationDisplay(),
+    boardTreatment: localStorage.getItem(TREATMENT_KEY) === "instrument" ? "instrument" : "walnut",
+    theme: localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
+    flipped: false,
+  };
+}
 
 /** Annotation-edit state for the currently loaded database game. */
 interface AnnotState {
   gameId: number;
   startFen: string;
   tokens: JsonToken[];
-  /** The last-persisted stream (dirty = tokens !== saved). */
   saved: JsonToken[];
 }
 
-/** A board-entered alternative to a mainline move, awaiting confirmation. */
 interface PendingVariation {
-  /** 1-based mainline ply the variation would replace. */
   ply: number;
   san: string;
   label: string;
 }
 
+const VIEW_TITLES: Record<ViewId, string> = {
+  database: "Database",
+  game: "Game",
+  tree: "Opening tree",
+  search: "Position search",
+  profile: "Player profile",
+  prep: "Opponent prep",
+  train: "Openings SRS",
+  tactics: "Tactics",
+  endgames: "Endgames",
+  import: "Import PGN / SCID",
+  twic: "TWIC ingest",
+  syncs: "Account syncs",
+  jobs: "Jobs",
+  settings: "Settings",
+};
+
 export default function App() {
-  const [mode, setMode] = useState<Mode>("analyze");
-  const [pgnText, setPgnText] = useState("");
-  const [game, setGame] = useState<LoadedGame | null>(null);
-  const [ply, setPly] = useState(0);
-  const [status, setStatus] = useState(
-    "Paste a PGN (or open a file) and press Load — the Help button (top right) has a full guide.",
-  );
+  const [view, setView] = useState<ViewId>("game");
+  const [gv, dispatch] = useReducer(reduceGameView, undefined, initialGameView);
   const [showHelp, setShowHelp] = useState(false);
   const [showTour, setShowTour] = useState(shouldShowFirstRun);
+  const [winWidth, setWinWidth] = useState(() => window.innerWidth);
 
+  const [game, setGame] = useState<LoadedGame | null>(null);
+  const [status, setStatus] = useState(
+    "Open a game from the Database, or paste a PGN under Import.",
+  );
   const [annot, setAnnot] = useState<AnnotState | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingVar, setPendingVar] = useState<PendingVariation | null>(null);
-  /** Stored engine evals for the loaded database game (White-POV, per ply). */
-  const [evals, setEvals] = useState<Map<number, PlyEval> | null>(null);
-  /** Last built player profile (survives tab switches; used by Prep too). */
+  const [analysisRows, setAnalysisRows] = useState<AnalysisRow[]>([]);
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
 
-  const [explanation, setExplanation] = useState<Explanation | null>(null);
+  const [explainOn, setExplainOn] = useState(() => localStorage.getItem(EXPLAIN_KEY) !== "off");
+  const [explanations, setExplanations] = useState<Map<number, ExplanationJson>>(new Map());
   const [explaining, setExplaining] = useState(false);
-  /** Repertoire Trainer: due counts (tab badge) and, while a review
-   * session runs, the training position shown on the main board. */
+
+  const [dbSummary, setDbSummary] = useState<DbSummary | null>(null);
   const [trainSum, setTrainSum] = useState<TrainSummary | null>(null);
+  const [tacticsSt, setTacticsSt] = useState<TacticsState | null>(null);
+  const [jobs, setJobs] = useState<JobsStatus | null>(null);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+  const [engineRunning, setEngineRunning] = useState(false);
   const [trainBoard, setTrainBoard] = useState<TrainBoardState | null>(null);
-  /** Narration voice: coach (default) or neutral. Mirrors the open
-   * database's stored setting; the local copy covers the no-db case. */
-  const [voice, setVoice] = useState<NarrationVoice>(getSavedVoice);
 
-  const [enginePath, setEnginePath] = useState(getSavedEnginePath);
-  const [resolvedPath, setResolvedPath] = useState<string>("");
-  const [nodes, setNodes] = useState(getSavedNodes);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [info, setInfo] = useState<EngineInfo | null>(null);
-  const [done, setDone] = useState<EngineDone | null>(null);
-  /** FEN the current/last analysis was started on (for POV-correct display). */
-  const [analyzedFen, setAnalyzedFen] = useState<string>(START_FEN);
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  /** Monotonic id so a slow get_game_tokens response can't attach to a
-   * different game loaded in the meantime. */
   const tokenReqRef = useRef(0);
+  /** pending+running when the jobs worker went active (progress base). */
+  const batchTotalRef = useRef<number | null>(null);
 
-  const fen = game ? game.fens[ply] : START_FEN;
-  const lastMove = game ? lastMoveAt(game, ply) : undefined;
-  const moveList = useMemo(() => (game ? numberedSans(game) : []), [game]);
+  const plyCount = game?.sans.length ?? 0;
+  const fen = game ? game.fens[gv.ply] : START_FEN;
+  const lastMove = game ? lastMoveAt(game, gv.ply) : undefined;
 
-  // Engine event subscriptions (Tauri events from the Rust UCI manager).
+  /* ---- persisted view preferences ---- */
+  useEffect(() => {
+    document.documentElement.dataset.theme = gv.theme;
+    localStorage.setItem(THEME_KEY, gv.theme);
+  }, [gv.theme]);
+  useEffect(() => {
+    localStorage.setItem(TREATMENT_KEY, gv.boardTreatment);
+  }, [gv.boardTreatment]);
+  useEffect(() => {
+    saveAnnotationDisplay(gv.annotationMode);
+  }, [gv.annotationMode]);
+  useEffect(() => {
+    saveVoice(gv.voice);
+    setNarrationVoice(gv.voice).catch(() => {}); // no database open — local only
+  }, [gv.voice]);
+  useEffect(() => {
+    localStorage.setItem(EXPLAIN_KEY, explainOn ? "on" : "off");
+  }, [explainOn]);
+
+  /* ---- window resize (rail collapse) ---- */
+  useEffect(() => {
+    const onResize = () => setWinWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  /* ---- shell data: db auto-open, badges, jobs polling ---- */
+  const refreshCounts = useCallback(() => {
+    trainSummary().then(setTrainSum).catch(() => setTrainSum(null));
+    fetchTacticsState().then(setTacticsSt).catch(() => setTacticsSt(null));
+  }, []);
+
+  useEffect(() => {
+    // Auto-open the saved database so the shell shows real data at launch.
+    openDatabase(getSavedDbPath())
+      .then((s) => {
+        setDbSummary(s);
+        refreshCounts();
+        getNarrationVoice()
+          .then((v) => dispatch({ type: "setVoice", voice: v }))
+          .catch(() => {});
+      })
+      .catch(() => {}); // no database yet — badges stay empty
+  }, [refreshCounts]);
+
+  useEffect(() => {
+    // Counts go stale while training; refresh on every view switch.
+    refreshCounts();
+  }, [view, refreshCounts]);
+
+  useEffect(() => {
+    const tick = () => {
+      jobsStatus()
+        .then((j) => {
+          setJobs(j);
+          if (j.workerActive && batchTotalRef.current === null) {
+            batchTotalRef.current = j.pending + j.running;
+          } else if (!j.workerActive) {
+            batchTotalRef.current = null;
+          }
+        })
+        .catch(() => setJobs(null));
+    };
+    tick();
+    const t = setInterval(tick, 3000);
+    return () => clearInterval(t);
+  }, [dbSummary]);
+
+  // Engine activity (the status-strip dot) from the UCI manager's events.
   useEffect(() => {
     const unsubs: Array<() => void> = [];
-    onEngineInfo((i) => setInfo(i)).then((u) => unsubs.push(u));
-    onEngineDone((d) => {
-      setDone(d);
-      setAnalyzing(false);
-    }).then((u) => unsubs.push(u));
+    onEngineInfo(() => setEngineRunning(true))
+      .then((u) => unsubs.push(u))
+      .catch(() => {}); // not running inside Tauri (vite-only dev)
+    onEngineDone(() => setEngineRunning(false))
+      .then((u) => unsubs.push(u))
+      .catch(() => {});
     return () => unsubs.forEach((u) => u());
   }, []);
 
-  // Show which engine binary would be used, whenever the override changes.
-  useEffect(() => {
-    let cancelled = false;
-    resolveEnginePath(enginePath)
-      .then((p) => !cancelled && setResolvedPath(p))
-      .catch((e) => !cancelled && setResolvedPath(`unresolved: ${e}`));
-    return () => {
-      cancelled = true;
-    };
-  }, [enginePath]);
-
-  // Position-bound overlays don't survive a position change.
-  useEffect(() => {
-    setExplanation(null);
+  /* ---- game loading ---- */
+  const applyGame = useCallback((g: LoadedGame, label: string, warning?: string, atPly = 0) => {
+    setGame(g);
+    dispatch({ type: "gameLoaded", ply: clampPly(atPly, g), plyCount: g.sans.length });
+    setStatus(label + (warning ? ` ${warning}` : ""));
+    setExplanations(new Map());
     setPendingVar(null);
-  }, [fen]);
-
-  // Adopt the open database's stored voice, when one is open (best-effort).
-  useEffect(() => {
-    getNarrationVoice()
-      .then((v) => {
-        setVoice(v);
-        saveVoice(v);
-      })
-      .catch(() => {}); // no database open yet — keep the local setting
   }, []);
-
-  /** Change the voice everywhere: state, local save, open db (best-effort). */
-  const changeVoice = useCallback((v: NarrationVoice) => {
-    setVoice(v);
-    saveVoice(v);
-    setExplanation(null); // stale prose is in the old voice
-    setNarrationVoice(v).catch(() => {}); // no database open — local only
-  }, []);
-
-  /** Install a freshly built game model and reset the stepper. */
-  const applyGame = useCallback(
-    (g: LoadedGame, label: string, warning?: string, atPly = 0) => {
-      setGame(g);
-      setPly(clampPly(atPly, g));
-      setStatus(label + (warning ? ` ${warning}` : ""));
-      if (analyzing) void stopAnalysis();
-    },
-    [analyzing],
-  );
 
   const doLoad = useCallback(
     (text: string) => {
@@ -210,15 +258,15 @@ export default function App() {
       }
       const w = res.game.headers["White"] ?? "?";
       const b = res.game.headers["Black"] ?? "?";
-      tokenReqRef.current++; // invalidate any in-flight token fetch
+      tokenReqRef.current++;
       setAnnot(null);
-      setEvals(null);
+      setAnalysisRows([]);
       applyGame(res.game, `${w} — ${b}, ${res.game.sans.length} plies.`, res.warning);
+      setView("game");
     },
     [applyGame],
   );
 
-  /** A game fetched from the database (Database tab / prep master game). */
   const loadDbGame = useCallback(
     (detail: GameDetail, atPly = 0) => {
       const headers: Record<string, string> = {
@@ -241,41 +289,35 @@ export default function App() {
           ? ` (${detail.whiteElo ?? "?"}–${detail.blackElo ?? "?"})`
           : "";
       setAnnot(null);
-      setEvals(null);
+      setAnalysisRows([]);
       applyGame(
         res.game,
         `#${detail.id} ${detail.white} — ${detail.black}${elos}, ${detail.result}, ${res.game.sans.length} plies.`,
         res.warning,
         atPly,
       );
+      setView("game");
       const req = ++tokenReqRef.current;
       getGameTokens(detail.id)
         .then((gt) => {
-          if (tokenReqRef.current !== req) return; // another game loaded since
-          setAnnot({
-            gameId: detail.id,
-            startFen: gt.startFen,
-            tokens: gt.tokens,
-            saved: gt.tokens,
-          });
+          if (tokenReqRef.current !== req) return;
+          setAnnot({ gameId: detail.id, startFen: gt.startFen, tokens: gt.tokens, saved: gt.tokens });
         })
         .catch((e) => setStatus((s) => `${s} (annotations unavailable: ${e})`));
       gameAnalyses(detail.id)
         .then((rows) => {
           if (tokenReqRef.current !== req) return;
-          setEvals(evalsByPly(rows));
+          setAnalysisRows(rows);
         })
         .catch(() => {}); // eval display is best-effort
     },
     [applyGame],
   );
 
-  /** Prep view: load a master game and jump to the prep position's ply. */
   const loadDbGameAt = useCallback(
     async (gameId: number, atPly: number) => {
       try {
-        const detail = await getGame(gameId);
-        loadDbGame(detail, atPly);
+        loadDbGame(await getGame(gameId), atPly);
       } catch (e) {
         setStatus(String(e));
       }
@@ -283,59 +325,58 @@ export default function App() {
     [loadDbGame],
   );
 
-  /** Reload the loaded db game in place (after annotate / job fold-back). */
   const reloadCurrent = useCallback(() => {
-    if (annot) void loadDbGameAt(annot.gameId, ply);
-  }, [annot, ply, loadDbGameAt]);
+    if (annot) void loadDbGameAt(annot.gameId, gv.ply);
+  }, [annot, gv.ply, loadDbGameAt]);
 
-  /** Profile drill-down: show the example game in the Database tab. */
-  const loadProfileExample = useCallback(
-    (gameId: number, atPly: number) => {
-      void loadDbGameAt(gameId, atPly);
-      setMode("database");
-    },
-    [loadDbGameAt],
-  );
-
+  /* ---- stepping ---- */
   const step = useCallback(
     (delta: number) => {
-      if (!game) return;
-      setPly((p) => clampPly(p + delta, game));
-      if (analyzing) void stopAnalysis();
+      if (game) dispatch({ type: "step", delta, plyCount: game.sans.length });
     },
-    [game, analyzing],
+    [game],
+  );
+  const setPlyTo = useCallback(
+    (ply: number) => {
+      if (game) dispatch({ type: "setPly", ply, plyCount: game.sans.length });
+    },
+    [game],
   );
 
-  // Arrow-key navigation (ignored while typing in inputs/textareas).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) return;
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        step(1);
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        step(-1);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [step]);
+  /* ---- explain (cache per ply; both voices arrive at once) ---- */
+  const currentExplanation = explainOn ? (explanations.get(gv.ply) ?? null) : null;
+  const explainedPlies = useMemo(
+    () => [...explanations.keys()].sort((a, b) => a - b),
+    [explanations],
+  );
 
-  const openFile = (f: File) => {
-    f.text().then((text) => {
-      setPgnText(text);
-      doLoad(text);
-    });
-  };
+  const doExplain = useCallback(async () => {
+    if (explaining || explanations.has(gv.ply)) return;
+    const ply = gv.ply;
+    setExplaining(true);
+    try {
+      const res = await explainPosition(fen, gv.voice);
+      setExplanations((m) => new Map(m).set(ply, res.explanation));
+    } catch (e) {
+      setStatus(`Explain failed: ${e}`);
+    } finally {
+      setExplaining(false);
+    }
+  }, [explaining, explanations, gv.ply, fen, gv.voice]);
 
-  /** Board move input (enabled for annotatable database games): the
-   * mainline move advances; any other legal move is offered as a variation. */
+  const toggleExplain = useCallback(() => setExplainOn((v) => !v), []);
+
+  /* ---- board move input (annotatable db games → variations) ---- */
+  const boardMoveRef = useRef<(orig: string, dest: string, promoRole?: PromoRole) => void>(
+    () => {},
+  );
+  const promo = usePromotionPicker((orig, dest, role) => boardMoveRef.current(orig, dest, role));
+
   const handleBoardMove = useCallback(
-    (orig: string, dest: string) => {
+    (orig: string, dest: string, promoRole?: PromoRole) => {
       if (!game || !annot) return;
-      const setup = parseFen(game.fens[ply]);
+      if (!promoRole && promo.guard(game.fens[gv.ply], orig, dest)) return;
+      const setup = parseFen(game.fens[gv.ply]);
       if (setup.isErr) return;
       const p = Chess.fromSetup(setup.unwrap());
       if (p.isErr) return;
@@ -343,27 +384,24 @@ export default function App() {
       const from = parseSquare(orig);
       const to = parseSquare(dest);
       if (from === undefined || to === undefined) return;
-      const promotion =
-        pos.board.get(from)?.role === "pawn" && (squareRank(to) === 0 || squareRank(to) === 7)
-          ? ("queen" as const)
-          : undefined;
-      // Normalize castling (king-two-squares vs king-onto-rook input forms).
+      const promotion = pos.board.get(from)?.role === "pawn" && promoRole ? promoRole : undefined;
       const move = normalizeMove(pos, { from, to, promotion });
       if (!pos.isLegal(move)) return;
       const san = makeSan(pos, move);
-      if (ply < game.sans.length && san === game.sans[ply]) {
+      if (gv.ply < game.sans.length && san === game.sans[gv.ply]) {
         step(1);
         return;
       }
-      if (ply >= game.sans.length) {
+      if (gv.ply >= game.sans.length) {
         setStatus("End of the mainline — a board move can only vary an existing move.");
         return;
       }
       const num = pos.turn === "white" ? `${pos.fullmoves}.` : `${pos.fullmoves}...`;
-      setPendingVar({ ply: ply + 1, san, label: `${num} ${san}` });
+      setPendingVar({ ply: gv.ply + 1, san, label: `${num} ${san}` });
     },
-    [game, annot, ply, step],
+    [game, annot, gv.ply, step, promo],
   );
+  boardMoveRef.current = handleBoardMove;
 
   const movable = useMemo((): BoardMovable | undefined => {
     if (!game || !annot) return undefined;
@@ -388,43 +426,25 @@ export default function App() {
     setSaving(true);
     try {
       await updateGameTokens(annot.gameId, annot.tokens);
-      const detail = await getGame(annot.gameId);
-      loadDbGame(detail, ply);
+      loadDbGame(await getGame(annot.gameId), gv.ply);
       setStatus(`Annotations saved for game #${annot.gameId}.`);
     } catch (e) {
       setStatus(`Save failed: ${e}`);
     } finally {
       setSaving(false);
     }
-  }, [annot, ply, loadDbGame]);
+  }, [annot, gv.ply, loadDbGame]);
 
   const revertAnnotations = useCallback(() => {
     setAnnot((a) => (a ? { ...a, tokens: a.saved } : a));
     setPendingVar(null);
   }, []);
 
-  const doExplain = useCallback(async () => {
-    setExplaining(true);
-    try {
-      setExplanation(await explainPosition(fen, voice));
-    } catch (e) {
-      setStatus(`Explain failed: ${e}`);
-    } finally {
-      setExplaining(false);
-    }
-  }, [fen, voice]);
-
-  const shapes = useMemo(
-    () => (explanation ? shapesFromRecord(explanation.record) : undefined),
-    [explanation],
-  );
-
-  /** Send the loaded line (up to the current ply; the whole mainline at
-   * ply 0) to the color's repertoire for spaced-repetition training. */
+  /* ---- repertoire ---- */
   const addLineToRepertoire = useCallback(
     async (color: "white" | "black") => {
       if (!game) return;
-      const sans = ply > 0 ? game.sans.slice(0, ply) : game.sans;
+      const sans = gv.ply > 0 ? game.sans.slice(0, gv.ply) : game.sans;
       if (sans.length === 0) return;
       try {
         const res = await trainAddLine(color, sans, game.fens[0]);
@@ -432,317 +452,259 @@ export default function App() {
           `Repertoire "${res.repertoire}": ${res.cardsAdded} new cards, ` +
             `${res.cardsExisting} positions already covered (${sans.length} plies).`,
         );
-        trainSummary().then(setTrainSum).catch(() => {});
+        refreshCounts();
       } catch (e) {
         setStatus(`Add to repertoire failed: ${e}`);
       }
     },
-    [game, ply],
+    [game, gv.ply, refreshCounts],
   );
 
-  const startAnalysis = async () => {
-    setInfo(null);
-    setDone(null);
-    setAnalyzedFen(fen);
-    setAnalyzing(true);
+  /* ---- keyboard map (game view only; never in inputs/modals) ---- */
+  useEffect(() => {
+    if (view !== "game") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (showHelp || showTour || promo.active) return;
+      const act = keyboardAction(e.key, {
+        editable: isEditableTarget(e.target as EditableTargetLike | null),
+        modifier: e.metaKey || e.ctrlKey || e.altKey,
+      });
+      if (!act) return;
+      e.preventDefault();
+      switch (act) {
+        case "next":
+          step(1);
+          break;
+        case "prev":
+          step(-1);
+          break;
+        case "fwd5":
+          step(5);
+          break;
+        case "back5":
+          step(-5);
+          break;
+        case "start":
+          setPlyTo(0);
+          break;
+        case "end":
+          setPlyTo(plyCount);
+          break;
+        case "flip":
+          dispatch({ type: "toggleFlip" });
+          break;
+        case "explain":
+          if (!explainOn) setExplainOn(true);
+          void doExplain();
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, showHelp, showTour, promo.active, step, setPlyTo, plyCount, explainOn, doExplain]);
+
+  /* ---- jobs (view + strip) ---- */
+  const doRunJobs = useCallback(async () => {
+    setJobsError(null);
     try {
-      await analyzePosition(fen, nodes, enginePath);
+      await runJobs();
+      const j = await jobsStatus();
+      setJobs(j);
+      batchTotalRef.current = j.pending + j.running;
     } catch (e) {
-      setAnalyzing(false);
-      setDone({ error: String(e) });
+      setJobsError(String(e));
     }
+  }, []);
+
+  const batchProgress = useMemo(() => {
+    if (!jobs?.workerActive || batchTotalRef.current === null || batchTotalRef.current === 0) {
+      return null;
+    }
+    const remaining = jobs.pending + jobs.running;
+    return {
+      label: "ENGINE JOBS",
+      fraction: Math.max(0, Math.min(1, 1 - remaining / batchTotalRef.current)),
+    };
+  }, [jobs]);
+
+  /* ---- train board (main-area board while a review session runs) ---- */
+  const trainPromo = usePromotionPicker((orig, dest, role) => {
+    trainBoard?.movable?.onMove(orig, dest, role);
+  });
+  const trainMovable = useMemo((): BoardMovable | undefined => {
+    if (!trainBoard?.movable) return undefined;
+    const m = trainBoard.movable;
+    return {
+      ...m,
+      onMove: (orig, dest) => {
+        if (!trainPromo.guard(trainBoard.fen, orig, dest)) m.onMove(orig, dest);
+      },
+    };
+  }, [trainBoard, trainPromo]);
+
+  /* ---- shell chrome data ---- */
+  const collapsed = railCollapsed(winWidth);
+  const dbLine = dbSummary
+    ? `${dbSummary.path.split(/[\\/]/).pop() ?? dbSummary.path} · ${dbSummary.games.toLocaleString()} games`
+    : null;
+  const railData = {
+    dbGames: dbSummary?.games ?? null,
+    explainOn,
+    profile,
+    train: trainSum,
+    tactics: tacticsSt,
+    jobs,
   };
+  const engineDetail = `${jobs?.engine ?? "Stockfish"} · nodes ${getSavedNodes().toLocaleString()}`;
 
-  const evalStr = info ? formatScore(info, analyzedFen) : "—";
-  const pvSan = info?.pv ? pvToSan(analyzedFen, info.pv) : "";
-  const bestmoveSan =
-    done?.bestmove && !done.error ? pvToSan(analyzedFen, [done.bestmove]) : undefined;
-
-  const annotDirty = annot !== null && annot.tokens !== annot.saved;
-
-  return (
-    <div className="layout">
-      <div className="left">
-        <Board
-          fen={mode === "train" && trainBoard ? trainBoard.fen : fen}
-          lastMove={mode === "train" && trainBoard ? undefined : lastMove}
-          movable={mode === "train" && trainBoard ? trainBoard.movable : movable}
-          shapes={mode === "train" && trainBoard ? trainBoard.shapes : shapes}
-          orientation={mode === "train" && trainBoard ? trainBoard.orientation : undefined}
-        />
-        <div className="nav">
-          <button onClick={() => setPly(0)} disabled={!game} title="Jump to the start">
-            |&lt;
-          </button>
-          <button onClick={() => step(-1)} disabled={!game || ply === 0}>
-            ◀ Prev
-          </button>
-          <button onClick={() => step(1)} disabled={!game || ply >= (game?.sans.length ?? 0)}>
-            Next ▶
-          </button>
-          <button
-            onClick={() => game && setPly(game.sans.length)}
-            disabled={!game}
-            title="Jump to the end"
-          >
-            &gt;|
-          </button>
-          <span className="ply">{game ? `ply ${ply}/${game.sans.length}` : "no game"}</span>
-        </div>
-        {game && game.sans.length > 0 && (
-          <div className="rep-add">
-            <span title="Adds the moves up to the current ply (whole game at ply 0) as training cards">
-              {ply > 0 ? `Line (first ${ply} plies)` : "Mainline"} → repertoire:
-            </span>
-            <button onClick={() => void addLineToRepertoire("white")}>as White</button>
-            <button onClick={() => void addLineToRepertoire("black")}>as Black</button>
-          </div>
-        )}
-        {pendingVar && game && (
-          <div className="var-offer">
-            <span>
-              Add {pendingVar.label} as a variation of {game.sans[pendingVar.ply - 1]}?
-            </span>
-            <button onClick={acceptPendingVar}>Add as variation</button>
-            <button onClick={() => setPendingVar(null)}>Dismiss</button>
-          </div>
-        )}
-        <div className="status">{status}</div>
-
-        <div className="engine">
-          <h3>Engine</h3>
-          <div className="engine-row">
-            <button
-              onClick={startAnalysis}
-              disabled={analyzing}
-              title="Run Stockfish on the current position (the engine only runs on demand)"
-            >
-              Analyze
-            </button>
-            <button onClick={() => void stopAnalysis()} disabled={!analyzing}>
-              Stop
-            </button>
-            <label>
-              nodes{" "}
-              <input
-                type="number"
-                min={1}
-                value={nodes}
-                onChange={(e) => {
-                  const n = parseInt(e.target.value, 10);
-                  if (Number.isFinite(n) && n > 0) {
-                    setNodes(n);
-                    saveNodes(n);
-                  }
-                }}
-              />
-            </label>
-          </div>
-          <div className="engine-row">
-            <label>
-              engine path (optional override){" "}
-              <input
-                type="text"
-                placeholder="resolved automatically if empty"
-                value={enginePath}
-                onChange={(e) => {
-                  setEnginePath(e.target.value);
-                  saveEnginePath(e.target.value);
-                }}
-              />
-            </label>
-          </div>
-          <div className="engine-resolved">using: {resolvedPath || "…"}</div>
-          <div className="eval">
-            <span className="score">{evalStr}</span>
-            {info && <span className="detail">{summarizeInfo(info, analyzedFen)}</span>}
-            {analyzing && <span className="running">searching…</span>}
-          </div>
-          {pvSan && <div className="pv">PV: {pvSan}</div>}
-          {bestmoveSan && <div className="best">bestmove: {bestmoveSan}</div>}
-          {done?.error && <div className="error">engine error: {done.error}</div>}
-        </div>
-
-        <div className="explain">
-          <h3>Explain (static, no engine)</h3>
-          <div className="engine-row">
-            <button onClick={() => void doExplain()} disabled={explaining}>
-              {explaining ? "Explaining…" : "Explain position"}
-            </button>
-            {explanation && <button onClick={() => setExplanation(null)}>Clear</button>}
-            <label>
-              voice{" "}
-              <select
-                value={voice}
-                onChange={(e) => changeVoice(e.target.value as NarrationVoice)}
-              >
-                <option value="coach">Coach</option>
-                <option value="neutral">Neutral</option>
-              </select>
-            </label>
-          </div>
-          {explanation && (
-            <div className="explain-prose">
-              {explanation.prose.split("\n\n").map((p, i) => (
-                <p key={i}>{p}</p>
-              ))}
-              <div className="explain-legend">
-                <span className="lg lg-red">alert targets</span>
-                <span className="lg lg-orange">attackers</span>
-                <span className="lg lg-green">imbalance evidence</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className={mode === "analyze" ? "right" : "right db"}>
-        <div className="tabs">
-          <button
-            className={mode === "analyze" ? "cur" : ""}
-            onClick={() => setMode("analyze")}
-            title="Paste or open a PGN file to review a game"
-          >
-            Load PGN
-          </button>
-          <button
-            className={mode === "database" ? "cur" : ""}
-            onClick={() => setMode("database")}
-            title="Open a game database: browse, annotate, run engine jobs, export"
-          >
-            Database
-          </button>
-          <button
-            className={mode === "prep" ? "cur" : ""}
-            onClick={() => setMode("prep")}
-            title="Rank an opponent's weakest opening spots (uses the open database)"
-          >
-            Opponent Prep
-          </button>
-          <button
-            className={mode === "profile" ? "cur" : ""}
-            onClick={() => setMode("profile")}
-            title="Strengths/weaknesses report for any player in the database"
-          >
-            Player Profile
-          </button>
-          <button
-            className={mode === "train" ? "cur" : ""}
-            onClick={() => setMode("train")}
-            title="Repertoire Trainer: spaced-repetition review of your opening lines"
-          >
-            Train
-            {trainSum && trainSum.white.due + trainSum.black.due > 0 && (
-              <span className="tab-badge">{trainSum.white.due + trainSum.black.due}</span>
-            )}
-          </button>
-          <button
-            className={mode === "tactics" ? "cur" : ""}
-            onClick={() => setMode("tactics")}
-            title="Tactics trainer: rated, motif, weakness-weighted and Woodpecker drills"
-          >
-            Tactics
-          </button>
-          <button
-            className={mode === "endgames" ? "cur" : ""}
-            onClick={() => setMode("endgames")}
-            title="Endgame trainer: classic theoretical positions vs a tablebase/heuristic opponent"
-          >
-            Endgames
-          </button>
-          <button
-            className="help-btn"
-            onClick={() => setShowHelp(true)}
-            title="Open the user guide"
-          >
-            Help
-          </button>
-        </div>
-
-        {mode === "analyze" && (
-          <>
-            <h3>PGN</h3>
-            <textarea
-              value={pgnText}
-              onChange={(e) => setPgnText(e.target.value)}
-              placeholder="Paste PGN here…"
-              spellCheck={false}
-            />
-            <div className="pgn-buttons">
-              <button onClick={() => doLoad(pgnText)}>Load</button>
-              <button onClick={() => fileInputRef.current?.click()}>Open file…</button>
-              <button
-                onClick={() => {
-                  setPgnText(SAMPLE_PGN);
-                  doLoad(SAMPLE_PGN);
-                }}
-              >
-                Sample game
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pgn,.txt"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) openFile(f);
-                  e.target.value = "";
-                }}
-              />
-            </div>
-          </>
-        )}
-        {mode === "database" && (
+  const pageView = (() => {
+    switch (view) {
+      case "database":
+      case "tree":
+      case "search":
+        return (
           <DatabaseView
             currentFen={fen}
             game={game}
-            ply={ply}
+            ply={gv.ply}
             onLoadGame={loadDbGame}
             onAdvance={() => step(1)}
+            summary={dbSummary}
+            onSummary={setDbSummary}
+            focus={view === "database" ? "all" : view}
           />
-        )}
-        {mode === "prep" && <PrepView onLoadGameAt={loadDbGameAt} profile={profile} />}
-        {mode === "train" && <TrainView onSummary={setTrainSum} onBoard={setTrainBoard} />}
-        {mode === "tactics" && <TacticsView profile={profile} />}
-        {mode === "endgames" && <EndgameView />}
-        {mode === "profile" && (
+        );
+      case "profile":
+        return (
           <ProfileView
             profile={profile}
             onProfileBuilt={setProfile}
-            onLoadGameAt={loadProfileExample}
+            onLoadGameAt={(id, ply) => void loadDbGameAt(id, ply)}
           />
-        )}
+        );
+      case "prep":
+        return <PrepView onLoadGameAt={(id, ply) => void loadDbGameAt(id, ply)} profile={profile} />;
+      case "train":
+        return (
+          <div className="trainer-layout">
+            {trainBoard && (
+              <div className="trainer-board">
+                <Board
+                  fen={trainBoard.fen}
+                  orientation={trainBoard.orientation}
+                  movable={trainMovable}
+                  shapes={trainBoard.shapes}
+                  treatment={gv.boardTreatment}
+                  size={488}
+                />
+                {trainPromo.element}
+              </div>
+            )}
+            <TrainView onSummary={setTrainSum} onBoard={setTrainBoard} />
+          </div>
+        );
+      case "tactics":
+        return <TacticsView profile={profile} />;
+      case "endgames":
+        return <EndgameView />;
+      case "import":
+        return <ImportView onLoad={doLoad} status={status} />;
+      case "twic":
+        return <TwicPlaceholder />;
+      case "syncs":
+        return <SyncsPlaceholder />;
+      case "jobs":
+        return (
+          <JobsView
+            jobs={jobs}
+            running={jobs?.workerActive ?? false}
+            onRunJobs={() => void doRunJobs()}
+            error={jobsError}
+          />
+        );
+      case "settings":
+        return (
+          <SettingsView
+            voice={gv.voice}
+            onVoice={(v) => dispatch({ type: "setVoice", voice: v })}
+            annotationMode={gv.annotationMode}
+            onAnnotationMode={(m) => dispatch({ type: "setAnnotationMode", mode: m })}
+            treatment={gv.boardTreatment}
+            onTreatment={(t) => dispatch({ type: "setTreatment", treatment: t })}
+            theme={gv.theme}
+            onTheme={(t) => dispatch({ type: "setTheme", theme: t })}
+          />
+        );
+      case "game":
+        return null;
+    }
+  })();
 
-        {game && annot && <GameTools gameId={annot.gameId} onReload={reloadCurrent} />}
-        {game &&
-          (annot ? (
-            <AnnotatedMoves
-              startFen={annot.startFen}
-              tokens={annot.tokens}
-              currentPly={ply}
-              evals={evals}
-              dirty={annotDirty}
-              saving={saving}
-              onSelectPly={(p) => {
-                setPly(clampPly(p, game));
-                if (analyzing) void stopAnalysis();
-              }}
-              onChange={(tokens) => setAnnot((a) => (a ? { ...a, tokens } : a))}
-              onSave={() => void saveAnnotations()}
-              onRevert={revertAnnotations}
-            />
-          ) : (
-            <ol className="moves">
-              {moveList.map((m, i) => (
-                <li key={i}>
-                  <button className={i + 1 === ply ? "cur" : ""} onClick={() => setPly(i + 1)}>
-                    {m}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          ))}
+  return (
+    <div className="shell">
+      <NavRail
+        active={view}
+        collapsed={collapsed}
+        dbLine={dbLine}
+        data={railData}
+        onNavigate={setView}
+        onToggleExplain={toggleExplain}
+        onHelp={() => setShowHelp(true)}
+      />
+      <div className="shell-main">
+        {view === "game" ? (
+          <GameView
+            game={game}
+            fen={fen}
+            lastMove={lastMove}
+            movable={movable}
+            promoElement={promo.element}
+            gv={gv}
+            dispatch={dispatch}
+            plyCount={plyCount}
+            gameId={annot?.gameId ?? null}
+            editing={
+              annot
+                ? {
+                    tokens: annot.tokens,
+                    onChange: (tokens) => setAnnot((a) => (a ? { ...a, tokens } : a)),
+                    dirty: annot.tokens !== annot.saved,
+                    saving,
+                    onSave: () => void saveAnnotations(),
+                    onRevert: revertAnnotations,
+                  }
+                : null
+            }
+            analysisRows={analysisRows}
+            explainOn={explainOn}
+            explanation={currentExplanation}
+            explaining={explaining}
+            explainedPlies={explainedPlies}
+            onExplain={() => void doExplain()}
+            pendingVar={pendingVar}
+            onAcceptVar={acceptPendingVar}
+            onDismissVar={() => setPendingVar(null)}
+            onAddToRepertoire={(c) => void addLineToRepertoire(c)}
+            onReload={reloadCurrent}
+            onStatus={setStatus}
+          />
+        ) : (
+          <>
+            <header className="header-bar simple">
+              <span className="header-title">{VIEW_TITLES[view]}</span>
+            </header>
+            <div className="page-scroll">{pageView}</div>
+          </>
+        )}
+        <StatusStrip
+          engineRunning={engineRunning}
+          engineDetail={engineDetail}
+          jobs={jobs}
+          batchProgress={batchProgress}
+          train={trainSum}
+          message={status}
+          onNudge={() => setView("train")}
+        />
       </div>
 
       {showHelp && <Help onClose={() => setShowHelp(false)} />}

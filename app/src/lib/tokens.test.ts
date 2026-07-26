@@ -9,6 +9,7 @@ import {
   mainlineMoveTokenIndex,
   nagSuffix,
   setComment,
+  setNag,
   type JsonToken,
   type MoveItem,
 } from "./tokens";
@@ -206,5 +207,15 @@ describe("cycleNag", () => {
     expect(nagSuffix(42)).toBe(" $42");
     expect(nagSuffix(3)).toBe("!!");
     expect(nagSuffix(null)).toBe("");
+  });
+});
+
+describe("setNag (picker direct selection)", () => {
+  it("sets, replaces and clears the NAG after a move", () => {
+    const plain: JsonToken[] = [m("e4"), m("e5")];
+    expect(setNag(plain, 0, 5)).toEqual([m("e4"), n(5), m("e5")]);
+    expect(setNag([m("e4"), n(1), m("e5")], 0, 4)).toEqual([m("e4"), n(4), m("e5")]);
+    expect(setNag([m("e4"), n(1), m("e5")], 0, null)).toEqual(plain);
+    expect(setNag(plain, 0, null)).toEqual(plain); // clearing nothing: no-op
   });
 });

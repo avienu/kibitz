@@ -112,10 +112,15 @@ export function endgameGiveUp(): Promise<{ progress: DrillProgress }> {
 
 /**
  * Turn a chessground drag on `fen` into a UCI move, or null when the drag
- * is not a legal move. Pawn drags onto the last rank promote to a queen
- * (the curriculum never needs underpromotion).
+ * is not a legal move. Pawn drags onto the last rank promote to the role
+ * chosen in the promotion picker (queen when the caller bypasses it).
  */
-export function uciForDrag(fen: string, orig: string, dest: string): string | null {
+export function uciForDrag(
+  fen: string,
+  orig: string,
+  dest: string,
+  promoRole?: "queen" | "rook" | "bishop" | "knight",
+): string | null {
   const setup = parseFen(fen);
   if (setup.isErr) return null;
   const p = Chess.fromSetup(setup.unwrap());
@@ -124,9 +129,11 @@ export function uciForDrag(fen: string, orig: string, dest: string): string | nu
   const from = parseSquare(orig);
   const to = parseSquare(dest);
   if (from === undefined || to === undefined) return null;
+  // Promotion role comes from the picker overlay (run-6 item 3); queen is
+  // only the fallback for callers that bypass it.
   const promotion =
     pos.board.get(from)?.role === "pawn" && (squareRank(to) === 0 || squareRank(to) === 7)
-      ? ("queen" as const)
+      ? (promoRole ?? "queen")
       : undefined;
   const move = normalizeMove(pos, { from, to, promotion });
   if (!pos.isLegal(move)) return null;

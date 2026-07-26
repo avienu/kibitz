@@ -34,15 +34,22 @@ export function trainDests(fen: string): Map<string, string[]> {
  * is accepted in both king-two-squares and king-onto-rook input forms
  * (same normalization as the game view). Pawns auto-promote to a queen.
  */
-export function sanForBoardMove(fen: string, orig: string, dest: string): string | null {
+export function sanForBoardMove(
+  fen: string,
+  orig: string,
+  dest: string,
+  promoRole?: "queen" | "rook" | "bishop" | "knight",
+): string | null {
   const pos = positionFromFen(fen);
   if (!pos) return null;
   const from = parseSquare(orig);
   const to = parseSquare(dest);
   if (from === undefined || to === undefined) return null;
+  // Promotion role comes from the picker overlay (run-6 item 3); queen is
+  // only the fallback for callers that bypass it.
   const promotion =
     pos.board.get(from)?.role === "pawn" && (squareRank(to) === 0 || squareRank(to) === 7)
-      ? ("queen" as const)
+      ? (promoRole ?? "queen")
       : undefined;
   const move = normalizeMove(pos, { from, to, promotion });
   if (!pos.isLegal(move)) return null;

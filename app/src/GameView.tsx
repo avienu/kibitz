@@ -1,0 +1,397 @@
+/**
+ * The game view (design/handoff-1 §Screen 2): header bar → board column
+ * (eval bar + walnut board + move controls) → right pane (Explain over
+ * Moves). Owns the prose⇄board linkage wiring; all derivations live in
+ * lib/gameView.ts.
+ */
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import Board, { type BoardMovable } from "./Board";
+import EvalBar from "./EvalBar";
+import ExplainPanel from "./ExplainPanel";
+import MovesPanel, { type MovesEditing } from "./MovesPanel";
+import { evalsByPly, type AnalysisRow } from "./lib/analyses";
+import { annotateGame, exportGamePgn, reanalyzeGame, type AnnotateSummary } from "./lib/db";
+import { boardGeometry } from "./lib/evidence";
+import {
+  deriveEvidence,
+  deriveIntensity,
+  fitBoardSize,
+  selectPlyAnalysis,
+  type ExplanationJson,
+  type GameViewAction,
+  type GameViewState,
+} from "./lib/gameView";
+import type { LoadedGame } from "./lib/game";
+import { gameEngines, movesRows, movesRowsFromSans, type MovesRow } from "./lib/movesView";
+import { buildAnnView } from "./lib/tokens";
+
+interface PendingVariation {
+  ply: number;
+  san: string;
+  label: string;
+}
+
+interface GameViewProps {
+  game: LoadedGame | null;
+  fen: string;
+  lastMove?: [string, string];
+  movable?: BoardMovable;
+  /** Promotion picker overlay element (rendered over the board). */
+  promoElement: React.ReactNode;
+  gv: GameViewState;
+  dispatch: (a: GameViewAction) => void;
+  plyCount: number;
+  /** Database-game context (annotation editing + header actions). */
+  gameId: number | null;
+  editing: MovesEditing | null;
+  analysisRows: AnalysisRow[];
+  explainOn: boolean;
+  explanation: ExplanationJson | null;
+  explaining: boolean;
+  explainedPlies: number[];
+  onExplain: () => void;
+  pendingVar: PendingVariation | null;
+  onAcceptVar: () => void;
+  onDismissVar: () => void;
+  onAddToRepertoire: (color: "white" | "black") => void;
+  onReload: () => void;
+  onStatus: (s: string) => void;
+}
+
+/** Percent position of a square in the grid for an orientation. */
+function squarePos(square: string, flipped: boolean): CSSProperties {
+  const f = square.charCodeAt(0) - 97;
+  const r = square.charCodeAt(1) - 49;
+  const x = flipped ? 7 - f : f;
+  const y = flipped ? r : 7 - r;
+  return { left: `${x * 12.5}%`, top: `${y * 12.5}%` };
+}
+
+/** Square name from a click position inside the grid overlay. */
+function squareAt(xFrac: number, yFrac: number, flipped: boolean): string | null {
+  if (xFrac < 0 || xFrac >= 1 || yFrac < 0 || yFrac >= 1) return null;
+  let file = Math.floor(xFrac * 8);
+  let rank = 7 - Math.floor(yFrac * 8);
+  if (flipped) {
+    file = 7 - file;
+    rank = 7 - rank;
+  }
+  return `${String.fromCharCode(97 + file)}${rank + 1}`;
+}
+
+export default function GameView({
+  game,
+  fen,
+  lastMove,
+  movable,
+  promoElement,
+  gv,
+  dispatch,
+  plyCount,
+  gameId,
+  editing,
+  analysisRows,
+  explainOn,
+  explanation,
+  explaining,
+  explainedPlies,
+  onExplain,
+  pendingVar,
+  onAcceptVar,
+  onDismissVar,
+  onAddToRepertoire,
+  onReload,
+  onStatus,
+}: GameViewProps) {
+  const colRef = useRef<HTMLDivElement | null>(null);
+  const [boardSize, setBoardSize] = useState(656);
+  const [exportText, setExportText] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+
+  // Resize (deliverable 2c): the board column absorbs extra width; the
+  // board snaps to the largest multiple of 8 that fits (min 496).
+  useLayoutEffect(() => {
+    const el = colRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      // Horizontal: column padding (26×2) + eval bar (~46px incl. gap).
+      // Vertical: padding (22×2) + gaps (18×2) + move-controls row (~40px).
+      setBoardSize(fitBoardSize(r.width - 52 - 46, r.height - 120, gv.boardTreatment));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [gv.boardTreatment]);
+
+  const evidence = useMemo(
+    () => (explainOn ? deriveEvidence(explanation, gv.hoverSentence) : null),
+    [explainOn, explanation, gv.hoverSentence],
+  );
+  const intensity = deriveIntensity(gv.hoverSentence);
+
+  const geo = boardGeometry(boardSize, gv.boardTreatment);
+  const gridOffset = { top: geo.framePad, left: geo.framePad + geo.gutter };
+
+  // Square click → selection (ring + prose filter). The overlay covers
+  // exactly the grid; clicks bubble up from chessground untouched.
+  const gridOverlayRef = useRef<HTMLDivElement | null>(null);
+  const onBoardClick = useCallback(
+    (e: React.MouseEvent) => {
+      const el = gridOverlayRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const sq = squareAt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, gv.flipped);
+      if (sq) dispatch({ type: "selectSquare", square: sq });
+    },
+    [dispatch, gv.flipped],
+  );
+
+  const rows: MovesRow[] = useMemo(() => {
+    if (editing && game) {
+      const view = buildAnnView(game.fens[0], editing.tokens);
+      if (!view.error || view.items.length > 0) {
+        return movesRows(view, game.fens[0], gameEngines(analysisRows));
+      }
+    }
+    return game ? movesRowsFromSans(game.sans, game.fens[0]) : [];
+  }, [editing, game, analysisRows]);
+
+  const evalsMap = useMemo(() => evalsByPly(analysisRows), [analysisRows]);
+  const evalRow = useMemo(() => selectPlyAnalysis(analysisRows, gv.ply), [analysisRows, gv.ply]);
+  // Mate distance for the eval bar, when the current explanation knows it.
+  const mate = explanation?.eval?.mate ?? null;
+
+  const step = (delta: number) => dispatch({ type: "step", delta, plyCount });
+  const setPly = (ply: number) => dispatch({ type: "setPly", ply, plyCount });
+
+  const headers = game?.headers ?? {};
+  const title = game ? `${headers["White"] ?? "?"} — ${headers["Black"] ?? "?"}` : "No game loaded";
+  const meta = game
+    ? [
+        [headers["Site"], headers["Date"]?.slice(0, 4)].filter(Boolean).join(", "),
+        headers["ECO"],
+        `${game.sans.length} plies`,
+        gameId !== null ? `database #${gameId}` : "pasted PGN",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "Open a game from the Database, or paste a PGN under Import.";
+
+  const doAnnotate = async () => {
+    if (gameId === null) return;
+    setActing(true);
+    try {
+      const s: AnnotateSummary = await annotateGame(gameId);
+      onStatus(
+        `Annotated: ${s.positionsAnalyzed} positions, ${s.screensFired} screens fired, ` +
+          `${s.commentsAdded} comments, ${s.jobsEnqueued} confirm jobs enqueued.`,
+      );
+      onReload();
+    } catch (e) {
+      onStatus(`Annotate failed: ${e}`);
+    } finally {
+      setActing(false);
+    }
+  };
+  const doReanalyze = async () => {
+    if (gameId === null) return;
+    setActing(true);
+    try {
+      const n = await reanalyzeGame(gameId);
+      onStatus(`${n} eval jobs enqueued — run them from Jobs (the engine only runs on demand).`);
+    } catch (e) {
+      onStatus(`Re-analyze failed: ${e}`);
+    } finally {
+      setActing(false);
+    }
+  };
+  const doExport = async () => {
+    if (gameId === null) return;
+    try {
+      setExportText(await exportGamePgn(gameId));
+    } catch (e) {
+      onStatus(`Export failed: ${e}`);
+    }
+  };
+
+  return (
+    <div className="game-view">
+      <header className="header-bar">
+        <div className="header-title-block">
+          <div className="header-title-row">
+            <span className="header-title">{title}</span>
+            {game && <span className="header-result">{headers["Result"] ?? ""}</span>}
+          </div>
+          <div className="header-meta">{meta}</div>
+        </div>
+        <div className="header-actions">
+          <span className="seg" role="group" aria-label="Board treatment">
+            {(["walnut", "instrument"] as const).map((t) => (
+              <button
+                key={t}
+                className={gv.boardTreatment === t ? "cur" : ""}
+                onClick={() => dispatch({ type: "setTreatment", treatment: t })}
+              >
+                {t}
+              </button>
+            ))}
+          </span>
+          <span className="header-divider" />
+          <button className="btn" onClick={() => void doAnnotate()} disabled={gameId === null || acting}>
+            Annotate
+          </button>
+          <button className="btn" onClick={() => void doReanalyze()} disabled={gameId === null || acting}>
+            Re-analyze
+          </button>
+          <button className="btn" onClick={() => void doExport()} disabled={gameId === null}>
+            Export PGN
+          </button>
+        </div>
+      </header>
+
+      <div className="game-main">
+        <div className="board-column" ref={colRef}>
+          <div className="board-row">
+            <EvalBar row={evalRow} mate={mate} height={boardSize} />
+            <div className="board-wrap" onClick={onBoardClick}>
+              <Board
+                fen={fen}
+                lastMove={lastMove}
+                movable={movable}
+                orientation={gv.flipped ? "black" : "white"}
+                treatment={gv.boardTreatment}
+                size={boardSize}
+                evidence={evidence}
+                intensity={intensity}
+              />
+              {/* Selection ring overlay — aligned to the grid, above it. */}
+              <div
+                ref={gridOverlayRef}
+                className="board-sel-overlay"
+                style={
+                  {
+                    top: gridOffset.top,
+                    left: gridOffset.left,
+                    width: geo.size,
+                    height: geo.size,
+                    "--sb-cell": `${geo.cell}px`,
+                  } as CSSProperties
+                }
+                aria-hidden
+              >
+                {gv.selectedSquare && (
+                  <div
+                    className="silman-mark silman-mark-selected"
+                    style={squarePos(gv.selectedSquare, gv.flipped)}
+                  />
+                )}
+              </div>
+              {promoElement}
+            </div>
+          </div>
+
+          <div className="move-controls">
+            <span className="btn-group">
+              <button onClick={() => setPly(0)} disabled={!game || gv.ply === 0} title="Start (Home)">
+                |◀
+              </button>
+              <button onClick={() => step(-1)} disabled={!game || gv.ply === 0}>
+                ◀ Prev
+              </button>
+              <button onClick={() => step(1)} disabled={!game || gv.ply >= plyCount}>
+                Next ▶
+              </button>
+              <button
+                onClick={() => setPly(plyCount)}
+                disabled={!game || gv.ply >= plyCount}
+                title="End (End)"
+              >
+                ▶|
+              </button>
+            </span>
+            <span className="ply-pill">
+              ply {gv.ply} / {plyCount}
+            </span>
+            <button className="btn" onClick={() => dispatch({ type: "toggleFlip" })}>
+              Flip
+            </button>
+            <span className="kbd-hint">← → step · ↑ ↓ jump 5 · f flip · e explain</span>
+          </div>
+
+          {pendingVar && (
+            <div className="var-offer">
+              <span>
+                Add {pendingVar.label} as a variation of {game?.sans[pendingVar.ply - 1]}?
+              </span>
+              <button className="btn" onClick={onAcceptVar}>
+                Add as variation
+              </button>
+              <button className="btn" onClick={onDismissVar}>
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="right-pane">
+          {explainOn && (
+            <ExplainPanel
+              explanation={explanation}
+              explaining={explaining}
+              voice={gv.voice}
+              onVoice={(v) => dispatch({ type: "setVoice", voice: v })}
+              hoverSentence={gv.hoverSentence}
+              onHoverSentence={(i) => dispatch({ type: "hoverSentence", index: i })}
+              selectedSquare={gv.selectedSquare}
+              onExplain={onExplain}
+              explainedPlies={explainedPlies}
+            />
+          )}
+          <MovesPanel
+            rows={rows}
+            currentPly={gv.ply}
+            evals={evalsMap}
+            annotationMode={gv.annotationMode}
+            onAnnotationMode={(m) => dispatch({ type: "setAnnotationMode", mode: m })}
+            onSelectPly={setPly}
+            editing={editing}
+          />
+          {game && game.sans.length > 0 && (
+            <div className="rep-footer">
+              <span title="Adds the moves up to the current ply (whole game at ply 0) as training cards">
+                {gv.ply > 0 ? `Line (first ${gv.ply} plies)` : "Mainline"} → repertoire:
+              </span>
+              <button onClick={() => onAddToRepertoire("white")}>as White</button>
+              <button onClick={() => onAddToRepertoire("black")}>as Black</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {exportText !== null && (
+        <div className="modal-overlay" onClick={() => setExportText(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Export PGN</h3>
+            <textarea readOnly value={exportText} spellCheck={false} />
+            <div className="modal-buttons">
+              <button
+                className="btn"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(exportText);
+                }}
+              >
+                Copy
+              </button>
+              <button className="btn" onClick={() => setExportText(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

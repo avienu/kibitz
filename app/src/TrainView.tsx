@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BoardMovable } from "./Board";
 import type { BoardShape } from "./lib/explainView";
+import type { PromoRole } from "./lib/promotion";
 import {
   trainGrade,
   trainQueue,
@@ -21,11 +22,17 @@ import {
   type SessionSummary,
 } from "./lib/train";
 
-/** What the Train tab wants shown on the main board during a session. */
+/** What the Train tab wants shown on the main board during a session.
+ * `onMove` accepts the promotion-picker role (run-6 item 3); the board
+ * host guards drags with the picker before invoking it. */
+export interface TrainMovable extends BoardMovable {
+  onMove: (orig: string, dest: string, promoRole?: PromoRole) => void;
+}
+
 export interface TrainBoardState {
   fen: string;
   orientation: TrainColor;
-  movable?: BoardMovable;
+  movable?: TrainMovable;
   shapes?: BoardShape[];
 }
 
@@ -89,9 +96,9 @@ export default function TrainView({ onSummary, onBoard }: TrainViewProps) {
   }, []);
 
   const handleMove = useCallback(
-    (orig: string, dest: string) => {
+    (orig: string, dest: string, promoRole?: PromoRole) => {
       if (!card) return;
-      const san = sanForBoardMove(card.fen, orig, dest);
+      const san = sanForBoardMove(card.fen, orig, dest, promoRole);
       if (!san) return;
       if (sanMatches(card.expectedSan, san)) {
         setSession((s) => (s ? { ...s, phase: "correct" } : s));

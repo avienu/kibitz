@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "Silman - Phase 0 Demo",
-        "width": 1160,
-        "height": 820,
+        "title": "silman",
+        "width": 1540,
+        "height": 952,
+        "minWidth": 1180,
+        "minHeight": 760,
         "resizable": true
       }
     ],

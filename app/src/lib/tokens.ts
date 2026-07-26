@@ -291,6 +291,20 @@ export function deleteComment(tokens: JsonToken[], commentIndex: number): JsonTo
 }
 
 /**
+ * Set (or clear, with null) the move-suffix NAG of the move at
+ * `moveIndex` — the NAG-picker popover's direct-selection path.
+ */
+export function setNag(tokens: JsonToken[], moveIndex: number, value: number | null): JsonToken[] {
+  const j = moveIndex + 1;
+  const has = tokens[j]?.t === "nag";
+  if (value === null) {
+    return has ? [...tokens.slice(0, j), ...tokens.slice(j + 1)] : tokens;
+  }
+  if (has) return tokens.map((t, i): JsonToken => (i === j ? { t: "nag", value } : t));
+  return [...tokens.slice(0, j), { t: "nag", value }, ...tokens.slice(j)];
+}
+
+/**
  * Cycle the move-suffix NAG of the move at `moveIndex` through
  * none → ! → ? → !! → ?? → !? → ?! → none. A NAG outside the cycle is
  * cleared (treated as the last stop).

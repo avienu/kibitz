@@ -6,6 +6,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AnalysisRow } from "./analyses";
 import type { FeatureRecordJson } from "./explainView";
+import type { ExplanationJson } from "./gameView";
 import type { JsonToken } from "./tokens";
 
 const DB_PATH_KEY = "silman.dbPath";
@@ -182,6 +183,9 @@ export function updateGameTokens(gameId: number, tokens: JsonToken[]): Promise<v
 export interface Explanation {
   record: FeatureRecordJson;
   prose: string;
+  /** The game-view contract (schema v3, snake_case): tag, eval readout,
+   * dual-voice headline and blocks with per-block evidence. */
+  explanation: ExplanationJson;
 }
 
 /** Narration voice (run-5 item 3): coach (default) or neutral. */
