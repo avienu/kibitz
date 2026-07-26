@@ -2,8 +2,13 @@
 //! #6), queue resumability, and gated live confirmation.
 
 use std::io::Cursor;
+use std::sync::Mutex;
 
 use silman_db::engine::{resolve_engine_path, spawn_count};
+
+/// spawn_count() is process-global; tests that assert on it must not
+/// overlap with the live test that really spawns an engine.
+static SPAWN_LOCK: Mutex<()> = Mutex::new(());
 use silman_db::import::{import_pgn, SourceInfo, SourceKind};
 use silman_db::jobs;
 
@@ -26,6 +31,7 @@ fn setup(pgn: &str) -> (tempfile::TempDir, rusqlite::Connection) {
 /// still spawn nothing, even with a bogus engine path (lazy spawn).
 #[test]
 fn engine_stays_off_for_a_quiet_game() {
+    let _g = SPAWN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     const QUIET: &str = "[White \"A\"]\n[Black \"B\"]\n[Result \"*\"]\n\n\
         1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3 Nf6 5. Nc3 d6 *\n";
     let (_dir, conn) = setup(QUIET);
@@ -52,6 +58,7 @@ fn engine_stays_off_for_a_quiet_game() {
 /// nothing runs until a worker is invoked.
 #[test]
 fn fired_screen_enqueues_but_does_not_run() {
+    let _g = SPAWN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // Blackburne Shilling Gambit: after 4.Nxe5?? Qg5 the e5 knight is
     // loose and attacked (source: standard trap theory).
     const TRAP: &str = "[White \"A\"]\n[Black \"B\"]\n[Result \"*\"]\n\n\
@@ -96,6 +103,7 @@ fn live_confirmation_grades_the_alert() {
         1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4 4. Nxe5 Qg5 *\n";
     let (_dir, conn) = setup(TRAP);
     silman_db::annotate::annotate_game(&conn, 1, 100_000, 12).unwrap();
+    let _g = SPAWN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let spawns_before = spawn_count();
     let run = jobs::run_pending(&conn, &engine, 100).unwrap();
     assert!(run.done > 0, "{run:?}");
