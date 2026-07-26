@@ -1,5 +1,107 @@
 # RUN_REPORT.md
 
+# Run 3 — 2026-07-25/26
+
+## Headline
+
+**Phase 2 complete** (prep view shipped end-to-end). **Annotation-editing
+UI shipped** (the last run-2 Phase 1 leftover — Phase 1 is now fully done
+except the ≥5M scale acceptance, which was conditional and skipped: no
+corpus in testdata/private/). **Phase 3 reached its checkpoint**: full WSUI
++ 8 imbalance detectors with cited golden tests, FeatureRecord v1,
+SQLite job queue with the engine-off principle asserted in tests,
+verbalize template mode, and a published validation number:
+**holdout recall 81.3% / FP 39.2% / precision 89.2%** (docs/VALIDATION.md).
+
+## Step 0 + standing rulings
+
+Everything reproduced green (110 workspace + 18 src-tauri + 40 vitest at
+run end). Added the missing explicit in-check-null truncation test;
+fully-truncated variations no longer persist as empty `()`. Item 4 CLOSED
+empirically: the si4 Elo top nibble is zero in all 95,066 rating fields
+across the ten real databases (SI4_FORMAT_NOTES.md §6.8). Scale track
+skipped (condition not met).
+
+## Built
+
+1. **silman-core**: attack/defense maps with x-ray pins; SEE; WSUI screen
+   (W/S/U/I per spec: zone pressure, flank-king shield defects, back-rank,
+   trapped-with-attackable-in-one, loose pieces, SEE-graded inadequate
+   defense with pin-aware attacker AND defender discounting, overloaded
+   sole defenders); all eight imbalance detectors with structured evidence
+   and plan hints (incl. the spec's BFS knight-route, piece-safety-aware);
+   phase classifier; `analyze()` → FeatureRecord v1 (spec-exact JSON,
+   snapshot-tested). 33 tests on cited positions (Sveshnikov d5 tabiya,
+   French bad bishop, Noah's Ark trap, LPDO, back-rank pattern, Giuoco
+   quiet control, CPW mutual-hang position asserted as NOT quiet).
+2. **silman-verbalize** (subagent): data-file templates with fallback
+   chains, spec composition order, FEN-derived piece attribution, 4 prose
+   snapshots + a no-invention property test (every square in the output
+   provably present in the record).
+3. **Job queue** (migration 0005): purposes wsui-confirm/user-analysis/
+   batch-annotate, resumable (running→pending reset), serial worker with
+   ONE lazily-spawned engine per batch; blocking UCI client with a spawn
+   counter. **Engine-off asserted**: a quiet game annotates with 0 jobs
+   and 0 spawns even when a worker runs afterward; a trap-position game
+   enqueues without spawning; a gated live test proves one process grades
+   a fired alert.
+4. **Batch annotator**: static analysis per mainline position, comments
+   only when the tactical/positional story changes, one bounded confirm
+   job per fired screen. CLI: annotate-game / run-jobs / explain.
+5. **Prep view**: backend ranking (frequency-weighted underperformance,
+   depth-discounted, deviation-boosted) + master-games-at-hash; UI cards
+   with click-through to the game at the right ply. Hand-computable
+   fixture test (the Villain Scandinavian corpus).
+6. **Annotation editing**: silman-db edit API (token update + index
+   rebuild) and UI (inline comments/NAGs/variations, board-input variation
+   capture); round-trip tests UI-shape → db → exported PGN.
+7. **Validation harness** + docs/VALIDATION.md (numbers above, train-only
+   tuning, reproduction commands, honest caveats). CC0 500-puzzle fixture
+   committed; TWIC-derived quiet set deliberately NOT committed.
+8. **Explain panel** (stretch): prose + evidence-square overlays.
+
+## Detector iteration (documented, per the brief)
+
+Real-game prose exposed noise the golden tests could not: three iterations
+on the same B92 game took fired screens 51 → 44 → 34 (home-rank loose/
+trapped suppression, boxed-by-own-army suppression, space floor + side
+attribution, story-change comment gating, open-file plan square fix). The
+symmetric-perft-position finding from run 2 ("engine-quiet ≠ statically
+quiet") became a documented validation caveat: the 39% quiet-side fire
+rate is largely real defended tension that the bounded engine step is
+designed to refute.
+
+## Numbers
+
+| Metric | Value |
+|---|---|
+| WSUI holdout recall / FP / precision | 81.3% / 39.2% / 89.2% |
+| Screen speed | microseconds/position (static, zero search) |
+| Demo game (82 plies) | 34 fired screens → 34 bounded jobs, 0 failed |
+| Test totals | 110 workspace + 18 src-tauri + 40 vitest |
+
+## What a human must do or decide next
+
+1. Judge the demo annotations (below in the final session message; also:
+   `silman-cli --db <db> annotate-game <id> && run-jobs && export-pgn <id>`)
+   against the Phase 3 acceptance bar ("useful, not wrong" on 5 games).
+2. Visual pass over the three new UI surfaces (never seen on a screen):
+   Prep tab, annotation editing, explain overlays. `npm run tauri dev`.
+3. Verbalizer polish candidates: raw-ish evidence fallback phrasing
+   ("blocking_pawns [\"e5\",\"d6\"]"), space-plan phrasing in pure
+   endgames, subject-verb agreement on multi-defender sentences.
+4. Decide whether wsui-confirm verdicts should flow back INTO stored
+   annotations automatically (currently they land in jobs.result).
+5. Megabase for the scale track (still pending real data).
+
+## Deviations
+
+- WsuiConfig defaults keep SEE bands 100/300 (validation chose 150/400 by
+  +0.6 objective — within noise; revisit with per-detector thresholds).
+- Committed fixture is puzzles-only; quiet negatives are reproducible-not-
+  committed (TWIC redistribution rule).
+
+
 # Run 2 addendum — 2026-07-25 (maintainer rulings implemented)
 
 The maintainer decided items 1–3 and 7 (and accepted 6). All implemented,

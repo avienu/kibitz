@@ -3,6 +3,11 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+Run-3 note: no new parked decisions. Item 4 closed empirically; item 6's
+root-cache remains deferred (scale condition not met); new judgment calls
+(WSUI default thresholds, confirm-verdict fold-back into annotations) are
+listed in RUN_REPORT.md as review items, not blockers.
+
 **2026-07-25 (late): the maintainer ruled on items 1, 2, 3 and 7; 6 was
 accepted as-is for now. All rulings are implemented and tested. Remaining
 open items: 4 (low priority) and the deferred half of 6.** Item statuses
