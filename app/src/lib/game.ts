@@ -1,11 +1,13 @@
 /**
- * Pure PGN game model for the Phase 0 demo.
+ * Pure game model shared by the Analyze (PGN paste) and Database views.
  *
- * Parses a PGN (first game only), plays out the mainline, and precomputes
- * the FEN after every ply so the UI can step through moves with O(1) lookups.
- * No DOM, no Tauri — unit-testable in isolation.
+ * Builds a LoadedGame either from PGN text (first game's mainline) or from
+ * a SAN array + optional start FEN (as returned by the `get_game` command),
+ * precomputing the FEN after every ply so the UI can step through moves
+ * with O(1) lookups. No DOM, no Tauri — unit-testable in isolation.
  */
-import { makeFen } from "chessops/fen";
+import { Chess, type Position } from "chessops/chess";
+import { makeFen, parseFen } from "chessops/fen";
 import { parsePgn, startingPosition } from "chessops/pgn";
 import { parseSan } from "chessops/san";
 import { makeUci } from "chessops/util";
@@ -29,6 +31,35 @@ export type LoadGameResult =
   | { ok: false; error: string };
 
 /**
+ * Play `sans` out from `pos` (mutating it), collecting per-ply FENs/UCIs.
+ * Stops at the first illegal move, reporting it as a warning.
+ */
+function playMainline(
+  pos: Position,
+  sanMoves: Iterable<string>,
+): { fens: string[]; sans: string[]; ucis: string[]; warning?: string } {
+  const fens: string[] = [makeFen(pos.toSetup())];
+  const sans: string[] = [];
+  const ucis: string[] = [];
+  let warning: string | undefined;
+  for (const san of sanMoves) {
+    const move = parseSan(pos, san);
+    if (!move) {
+      warning = `Illegal or unparseable move "${san}" at ply ${sans.length + 1}; mainline truncated.`;
+      break;
+    }
+    sans.push(san);
+    ucis.push(makeUci(move));
+    pos.play(move);
+    fens.push(makeFen(pos.toSetup()));
+  }
+  if (sans.length === 0 && !warning) {
+    warning = "Game has no moves.";
+  }
+  return { fens, sans, ucis, warning };
+}
+
+/**
  * Parse PGN text and play out the mainline of the first game.
  * Tolerates trailing garbage; stops the mainline at the first illegal move
  * (returned as a warning rather than a hard error).
@@ -44,26 +75,38 @@ export function loadGame(pgnText: string): LoadGameResult {
     return { ok: false, error: `Bad starting position: ${start.error.message}` };
   }
   const pos = start.unwrap();
-  const fens: string[] = [makeFen(pos.toSetup())];
-  const sans: string[] = [];
-  const ucis: string[] = [];
-  let warning: string | undefined;
-  for (const node of g.moves.mainline()) {
-    const move = parseSan(pos, node.san);
-    if (!move) {
-      warning = `Illegal or unparseable move "${node.san}" at ply ${sans.length + 1}; mainline truncated.`;
-      break;
-    }
-    sans.push(node.san);
-    ucis.push(makeUci(move));
-    pos.play(move);
-    fens.push(makeFen(pos.toSetup()));
-  }
-  if (sans.length === 0 && !warning) {
-    warning = "Game has no moves.";
-  }
+  const sanMoves = Array.from(g.moves.mainline(), (node) => node.san);
+  const { fens, sans, ucis, warning } = playMainline(pos, sanMoves);
   const headers: Record<string, string> = {};
   for (const [k, v] of g.headers) headers[k] = v;
+  return { ok: true, game: { headers, fens, sans, ucis }, warning };
+}
+
+/**
+ * Build a game from a SAN array + optional start FEN (null/undefined =
+ * standard initial position), e.g. from the database `get_game` command.
+ * Same tolerance as loadGame: an illegal SAN truncates with a warning.
+ */
+export function gameFromSans(
+  sanMoves: string[],
+  startFen?: string | null,
+  headers: Record<string, string> = {},
+): LoadGameResult {
+  let pos: Position;
+  if (startFen) {
+    const setup = parseFen(startFen);
+    if (setup.isErr) {
+      return { ok: false, error: `Bad start FEN: ${setup.error.message}` };
+    }
+    const p = Chess.fromSetup(setup.unwrap());
+    if (p.isErr) {
+      return { ok: false, error: `Illegal start position: ${p.error.message}` };
+    }
+    pos = p.unwrap();
+  } else {
+    pos = Chess.default();
+  }
+  const { fens, sans, ucis, warning } = playMainline(pos, sanMoves);
   return { ok: true, game: { headers, fens, sans, ucis }, warning };
 }
 

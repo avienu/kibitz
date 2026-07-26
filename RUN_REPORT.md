@@ -72,8 +72,16 @@ timings were warm-cache; a cold first query on the 11k-hit Sicilian is
     as Black; deviation points with example games. Transposition-aware by
     position hash, split by color, per-ECO scores, first-book-exit
     deviations — exactly the shape the Phase 2 prep view needs.
-11. **Game browser UI**: see addendum below (built by a subagent in
-    parallel; status recorded when its verification completed).
+11. **Game browser UI** (read-only, per the parked-decision ruling): a
+    Database tab beside the existing Analyze tab — open db, paged/filtered
+    game list, click-to-replay on the board with the existing stepper, an
+    opening-tree panel that follows the displayed position (W/D/L bars,
+    avg elo, perf; clicking a tree row advances along the mainline), and a
+    "games reaching this position" list. Verified: clippy/fmt clean, 12
+    Rust tests (list SQL, filters, full Opera-game SAN decode), 23 vitest
+    tests, tsc + vite green, macOS debug bundle builds. Not verified:
+    visual click-through (no screen access) — same caveat as run 1's demo,
+    same remedy: `cd app && npm run tauri dev`.
 
 ## Numbers (details in docs/BENCHMARKS.md, run-2 section)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampPly, lastMoveAt, loadGame, numberedSans } from "./game";
+import { clampPly, gameFromSans, lastMoveAt, loadGame, numberedSans } from "./game";
 
 const SHORT_PGN = `[Event "Test"]
 [White "A"]
@@ -52,6 +52,64 @@ describe("loadGame", () => {
     if (!res.ok) return;
     expect(res.game.fens[0]).toBe("8/8/8/8/8/4k3/4p3/4K3 b - - 0 60");
     expect(res.game.sans).toEqual(["Kd3", "Kf2"]);
+  });
+});
+
+describe("gameFromSans", () => {
+  it("builds the same model as loadGame from a bare SAN array", () => {
+    const res = gameFromSans(["e4", "e5", "Nf3", "Nc6", "Bb5"]);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const pgn = loadGame(SHORT_PGN);
+    if (!pgn.ok) throw new Error("fixture");
+    expect(res.game.fens).toEqual(pgn.game.fens);
+    expect(res.game.sans).toEqual(pgn.game.sans);
+    expect(res.game.ucis).toEqual(pgn.game.ucis);
+    expect(res.warning).toBeUndefined();
+  });
+
+  it("starts from a custom FEN (db games with start_fen)", () => {
+    const res = gameFromSans(["Kd3", "Kf2"], "8/8/8/8/8/4k3/4p3/4K3 b - - 0 60");
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.game.fens[0]).toBe("8/8/8/8/8/4k3/4p3/4K3 b - - 0 60");
+    expect(res.game.fens).toHaveLength(3);
+    expect(res.game.ucis).toEqual(["e3d3", "e1f2"]);
+    expect(numberedSans(res.game)).toEqual(["60... Kd3", "61. Kf2"]);
+  });
+
+  it("carries caller-supplied headers through", () => {
+    const res = gameFromSans(["e4"], null, { White: "A", Black: "B" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.game.headers).toEqual({ White: "A", Black: "B" });
+  });
+
+  it("truncates at an illegal SAN with a warning", () => {
+    const res = gameFromSans(["e4", "e5", "Nf7"]);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.game.sans).toEqual(["e4", "e5"]);
+    expect(res.game.fens).toHaveLength(3);
+    expect(res.warning).toMatch(/Illegal/);
+  });
+
+  it("warns on an empty move list", () => {
+    const res = gameFromSans([]);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.warning).toMatch(/no moves/);
+  });
+
+  it("rejects a malformed start FEN", () => {
+    const res = gameFromSans(["e4"], "not a fen");
+    expect(res.ok).toBe(false);
+  });
+
+  it("rejects an illegal start position", () => {
+    // Two white kings.
+    const res = gameFromSans([], "KK6/8/8/8/8/8/8/4k3 w - - 0 1");
+    expect(res.ok).toBe(false);
   });
 });
 

@@ -1,13 +1,17 @@
-//! Silman Phase 0 spike — Tauri shell.
+//! Silman Tauri shell.
 //!
-//! Exposes three IPC commands over the UCI manager (src/uci.rs):
-//! `resolve_engine_path`, `analyze_position`, `stop_analysis`.
+//! Exposes IPC commands over the UCI manager (src/uci.rs) —
+//! `resolve_engine_path`, `analyze_position`, `stop_analysis` — and the
+//! read-only database browser (src/browse.rs) — `open_database`,
+//! `list_games`, `get_game`, `opening_tree`, `find_games_at`.
 //! Search progress streams to the frontend as `engine-info` events and the
 //! run terminates with a single `engine-done` event.
 //!
 //! Product principle (CLAUDE.md #6): the engine is spawned lazily on the
 //! first user-initiated `analyze_position` and never runs unprompted.
+//! Database browsing never touches the engine.
 
+pub mod browse;
 pub mod uci;
 
 use std::sync::Arc;
@@ -137,10 +141,16 @@ async fn run_search(
 pub fn run() {
     tauri::Builder::default()
         .manage(EngineState::default())
+        .manage(browse::DbState::default())
         .invoke_handler(tauri::generate_handler![
             resolve_engine_path,
             analyze_position,
-            stop_analysis
+            stop_analysis,
+            browse::open_database,
+            browse::list_games,
+            browse::get_game,
+            browse::opening_tree,
+            browse::find_games_at
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -176,3 +176,168 @@ textarea {
   background: #6b5f3f;
   border-color: #8a7c52;
 }
+
+/* Database browser */
+.right.db {
+  max-width: 900px;
+}
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tabs button {
+  padding: 5px 14px;
+}
+.tabs button.cur {
+  background: #6b5f3f;
+  border-color: #8a7c52;
+}
+.db-section {
+  margin-bottom: 16px;
+  padding: 10px;
+  border: 1px solid #4a4740;
+  border-radius: 6px;
+}
+.db-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.db-open-row,
+.db-filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.db-open-row input,
+.db-filter-row input {
+  flex: 1 1 auto;
+}
+.db-summary {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+  word-break: break-all;
+}
+.db-total {
+  font-size: 12px;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+.db-empty {
+  font-size: 13px;
+  opacity: 0.6;
+}
+.tree-table,
+.games-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tree-table th,
+.games-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+  padding: 3px 8px;
+  border-bottom: 1px solid #4a4740;
+}
+.tree-table td,
+.games-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid #3a3833;
+  white-space: nowrap;
+}
+.tree-table th.num,
+.tree-table td.num,
+.games-table th.num,
+.games-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.games-table td.ev {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-table tbody tr,
+.games-table tbody tr {
+  cursor: pointer;
+}
+.tree-table tbody tr:hover,
+.games-table tbody tr:hover {
+  background: #3a3833;
+}
+.games-table tbody tr.sel {
+  background: #4a4030;
+}
+.tree-table td.san {
+  font-weight: 600;
+}
+.wdl {
+  display: flex;
+  width: 160px;
+  height: 12px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #201f1d;
+}
+.wdl .w {
+  background: #d6d3cd;
+}
+.wdl .d {
+  background: #6e6a62;
+}
+.wdl .b {
+  background: #35332f;
+}
+.hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #cfa85a;
+}
+.games-at {
+  margin-top: 12px;
+  border-top: 1px solid #4a4740;
+  padding-top: 8px;
+}
+.games-at-count {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+.games-at-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.games-at-row .ga-players {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.games-at-row .ga-meta {
+  opacity: 0.6;
+  white-space: nowrap;
+}
+.games-at-row button {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+.pager {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+}

@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Board from "./Board";
-import { clampPly, lastMoveAt, loadGame, numberedSans, type LoadedGame } from "./lib/game";
+import DatabaseView from "./DatabaseView";
+import {
+  clampPly,
+  gameFromSans,
+  lastMoveAt,
+  loadGame,
+  numberedSans,
+  type LoadedGame,
+} from "./lib/game";
+import type { GameDetail } from "./lib/db";
 import {
   formatScore,
   pvToSan,
@@ -35,7 +44,10 @@ const SAMPLE_PGN = `[Event "London"]
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+type Mode = "analyze" | "database";
+
 export default function App() {
+  const [mode, setMode] = useState<Mode>("analyze");
   const [pgnText, setPgnText] = useState("");
   const [game, setGame] = useState<LoadedGame | null>(null);
   const [ply, setPly] = useState(0);
@@ -78,6 +90,17 @@ export default function App() {
     };
   }, [enginePath]);
 
+  /** Install a freshly built game model and reset the stepper. */
+  const applyGame = useCallback(
+    (g: LoadedGame, label: string, warning?: string) => {
+      setGame(g);
+      setPly(0);
+      setStatus(label + (warning ? ` ${warning}` : ""));
+      if (analyzing) void stopAnalysis();
+    },
+    [analyzing],
+  );
+
   const doLoad = useCallback(
     (text: string) => {
       const res = loadGame(text);
@@ -85,16 +108,42 @@ export default function App() {
         setStatus(res.error);
         return;
       }
-      setGame(res.game);
-      setPly(0);
       const w = res.game.headers["White"] ?? "?";
       const b = res.game.headers["Black"] ?? "?";
-      setStatus(
-        `${w} — ${b}, ${res.game.sans.length} plies.` + (res.warning ? ` ${res.warning}` : ""),
-      );
-      if (analyzing) void stopAnalysis();
+      applyGame(res.game, `${w} — ${b}, ${res.game.sans.length} plies.`, res.warning);
     },
-    [analyzing],
+    [applyGame],
+  );
+
+  /** A game fetched from the database (Database tab row click / load). */
+  const loadDbGame = useCallback(
+    (detail: GameDetail) => {
+      const headers: Record<string, string> = {
+        White: detail.white,
+        Black: detail.black,
+        Event: detail.event,
+        Site: detail.site,
+        Date: detail.date ?? "?",
+        Round: detail.round ?? "?",
+        Result: detail.result,
+      };
+      if (detail.eco) headers["ECO"] = detail.eco;
+      const res = gameFromSans(detail.sans, detail.startFen, headers);
+      if (!res.ok) {
+        setStatus(`Failed to load game #${detail.id}: ${res.error}`);
+        return;
+      }
+      const elos =
+        detail.whiteElo || detail.blackElo
+          ? ` (${detail.whiteElo ?? "?"}–${detail.blackElo ?? "?"})`
+          : "";
+      applyGame(
+        res.game,
+        `#${detail.id} ${detail.white} — ${detail.black}${elos}, ${detail.result}, ${res.game.sans.length} plies.`,
+        res.warning,
+      );
+    },
+    [applyGame],
   );
 
   const step = useCallback(
@@ -220,37 +269,59 @@ export default function App() {
         </div>
       </div>
 
-      <div className="right">
-        <h3>PGN</h3>
-        <textarea
-          value={pgnText}
-          onChange={(e) => setPgnText(e.target.value)}
-          placeholder="Paste PGN here…"
-          spellCheck={false}
-        />
-        <div className="pgn-buttons">
-          <button onClick={() => doLoad(pgnText)}>Load</button>
-          <button onClick={() => fileInputRef.current?.click()}>Open file…</button>
-          <button
-            onClick={() => {
-              setPgnText(SAMPLE_PGN);
-              doLoad(SAMPLE_PGN);
-            }}
-          >
-            Sample game
+      <div className={mode === "database" ? "right db" : "right"}>
+        <div className="tabs">
+          <button className={mode === "analyze" ? "cur" : ""} onClick={() => setMode("analyze")}>
+            Analyze
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pgn,.txt"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) openFile(f);
-              e.target.value = "";
-            }}
-          />
+          <button className={mode === "database" ? "cur" : ""} onClick={() => setMode("database")}>
+            Database
+          </button>
         </div>
+
+        {mode === "analyze" ? (
+          <>
+            <h3>PGN</h3>
+            <textarea
+              value={pgnText}
+              onChange={(e) => setPgnText(e.target.value)}
+              placeholder="Paste PGN here…"
+              spellCheck={false}
+            />
+            <div className="pgn-buttons">
+              <button onClick={() => doLoad(pgnText)}>Load</button>
+              <button onClick={() => fileInputRef.current?.click()}>Open file…</button>
+              <button
+                onClick={() => {
+                  setPgnText(SAMPLE_PGN);
+                  doLoad(SAMPLE_PGN);
+                }}
+              >
+                Sample game
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pgn,.txt"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) openFile(f);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          </>
+        ) : (
+          <DatabaseView
+            currentFen={fen}
+            game={game}
+            ply={ply}
+            onLoadGame={loadDbGame}
+            onAdvance={() => step(1)}
+          />
+        )}
+
         {game && (
           <ol className="moves">
             {moveList.map((m, i) => (
