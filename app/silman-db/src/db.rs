@@ -12,7 +12,10 @@ use crate::movebin::ENCODING_VERSION;
 /// the index; `open` refuses databases whose recorded version differs.
 pub const POSITION_HASH_VERSION: u32 = 1;
 
-const MIGRATIONS: &[(i64, &str)] = &[(1, include_str!("../migrations/0001_init.sql"))];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("../migrations/0001_init.sql")),
+    (2, include_str!("../migrations/0002_openings_tree_twic.sql")),
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {

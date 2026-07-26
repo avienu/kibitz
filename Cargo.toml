@@ -26,6 +26,9 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tempfile = "3"
 criterion = "0.5"
+ureq = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+insta = "1"
 
 [profile.bench]
 lto = "thin"

@@ -16,6 +16,10 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 
+si4-read = { path = "../../crates/si4-read" }
+ureq = { workspace = true }
+zip = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 

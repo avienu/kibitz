@@ -21,6 +21,15 @@ versions.
 | tempfile | 3 | MIT OR Apache-2.0 | dev-deps | Tests only. |
 | criterion | 0.5 | MIT OR Apache-2.0 | bench (dev) | Benchmarks only. |
 | shakmaty | 0.27 | **GPL-3.0-or-later** | bench ONLY | Comparison baseline for the Phase 0 benchmark. Must never appear in crates/* or be shipped. |
+| ureq | 2 | MIT OR Apache-2.0 | app | Blocking HTTP for TWIC/Lichess/chess.com ingesters. Network is app-layer only. |
+| zip | 2 | MIT | app | TWIC issue archives. |
+| insta | 1 | Apache-2.0 | dev-deps | Snapshot tests (silman-profile). |
+
+## Bundled data
+
+| Name | License | Location | Notes |
+|---|---|---|---|
+| lichess-org/chess-openings | CC0-1.0 | data/openings/*.tsv | ECO classification dataset; bundled and redistributable per CLAUDE.md ground rules. |
 
 ## app/ npm dependencies (GPL layer)
 
