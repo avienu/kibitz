@@ -72,3 +72,6 @@ versions.
 
 `cargo license` is run per `crates/*` member in CI; the build fails if any
 GPL/AGPL/LGPL-licensed crate appears in their dependency trees.
+| Public Sans (font, bundled woff2) | v21 latin | SIL OFL 1.1 (license bundled) | app (UI asset) |
+| Source Serif 4 (font, bundled woff2) | v14 latin | SIL OFL 1.1 (license bundled) | app (UI asset) |
+| JetBrains Mono (font, bundled woff2) | v24 latin | SIL OFL 1.1 (license bundled) | app (UI asset) |
