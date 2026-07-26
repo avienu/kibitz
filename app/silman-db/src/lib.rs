@@ -24,7 +24,9 @@ pub mod pgn;
 pub mod prep;
 pub mod profile;
 pub mod query;
+pub mod repertoire;
 pub mod san;
+pub mod tactics;
 pub mod twic;
 
 #[cfg(test)]

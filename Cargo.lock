@@ -1143,6 +1143,7 @@ dependencies = [
  "si4-read",
  "silman-core",
  "silman-profile",
+ "silman-srs",
  "silman-verbalize",
  "tempfile",
  "thiserror",
@@ -1158,6 +1159,14 @@ dependencies = [
  "serde",
  "serde_json",
  "silman-core",
+]
+
+[[package]]
+name = "silman-srs"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

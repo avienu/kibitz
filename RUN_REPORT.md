@@ -111,7 +111,97 @@ Draw, promotion-position root move a7a8=Q dtz 1. Tests skip cleanly when
 the files are absent (CI-safe). License gate extended and green for all
 five BSD crates.
 
-<!-- AGENT-ADDENDA -->
+## Agent addenda (verified)
+
+- **Item 3 — Silman voice (agent, verified):** `Voice { Coach, Neutral }`
+  in silman-verbalize as a pure template overlay — 69 `coach.*` keys in
+  `templates/coach.tmpl`; lookups resolve `coach.<key>` then fall back to
+  the base key, so both voices state identical facts and every lint,
+  grounding test, and snapshot runs over BOTH voices. Coach is the
+  default per your spec; the setting persists in the existing `meta`
+  table (no migration), with Tauri get/set commands, a Coach/Neutral
+  select in the Explain panel, CLI honoring it, and the LLM prompt
+  voice-aware with a voice-respecting template fallback. Engine-verdict
+  clauses are deliberately NOT voiced — mate/eval text stays literal, so
+  the item-1 guarantees hold in both voices.
+- **Item 6 — discoverability (agent, verified):** docs/USER_GUIDE.md
+  (every tab/button/workflow + a CLI-only section with exact
+  invocations), in-app Help modal rendering the bundled guide, first-run
+  overlay, and four clarity renames: Analyze→**Load PGN**,
+  Prep→**Opponent Prep**, Profile→**Player Profile** (your complaint),
+  Run jobs→**Run engine jobs** — plus tooltips on every tab and the
+  engine Analyze button ("the engine only runs on demand"). Honest
+  findings it documented rather than hid: import/sync is CLI-only, the
+  eco/result filters exist in the backend but have no UI controls yet,
+  and export is clipboard-only.
+- **Phase 5 — Repertoire Trainer (agent, verified):** crates/silman-srs
+  (BSD) implements FSRS-4.5 DIRECTLY — the `fsrs` crate was rejected
+  because its tree pulls `priority-queue` (LGPL-3.0-or-later OR MPL-2.0),
+  which fails our license gate; evidence in docs/LICENSES.md's new
+  "evaluated and rejected" table. Scheduler tested against the published
+  reference numbers (Good-chain stability 3.71→14.09→46.92→139.63→377.30,
+  post-lapse ≈2.9188). Migration 0008: per-color repertoires, cards keyed
+  by the ep-normalized position hash, full review history. Train tab
+  drives the main board (flips for Black), "add line to repertoire"
+  from any loaded game, `import-repertoire` CLI. Not named MoveTrainer.
+- **Phase 5 — tactics trainer (agent, verified):** migration 0009 +
+  streaming import (the real 5,876,919-row Lichess dump: 127 s, ~9 MB
+  peak RSS, 0 malformed). Five modes: rated drill (Elo ledger, K=40→20),
+  motif-filtered (73 tags), **weakness-weighted** — theme→motif mapping
+  table onto your profile's AlertKind axes; with your actual profile
+  shape (Undefended allowed 1,318) the selection shifts loose-piece
+  puzzles from 33.3% to 52.7% of picks, and every pick shows its reason
+  ("picked because your games allow many loose-piece tactics…") —
+  Woodpecker cycles (fixed sets, per-cycle time/accuracy comparison),
+  and Heisman-style speed drill. No engine anywhere: verification is
+  exact-match + cozy-chess checkmate detection.
+- **Endgame trainer:** agent launched after the rest landed (Fathom risk
+  already retired); addendum below if it completes within this run,
+  otherwise it is the one Phase 5 item spilling into run 6 as you
+  allowed.
+
+## Acceptance sample — your game, full pipeline, coach voice
+
+Jacobs–O'Connor, MCC Swiss 2012 (C63 Schliemann, 0-1), imported fresh
+from mygames.pgn and run through the whole pipeline: 86 positions, 64
+screens fired, 64 bounded confirms (18 confirmed / 32 refuted / 14
+unclear), delta narration in coach voice with your 2011 legacy analysis
+preserved as variations. Excerpts (verbatim):
+
+> **13. Nxe5** *{Black's rook on d7 is calling for reinforcements — the
+> defense around it is stretched thin. It is attacked by White's knight
+> on e5 but defended only by Black's knight on f6, the queen on e7 and
+> the king on c8. A capture sequence here wins about two pawns. The
+> engine confirms it: Qxe5 Bxf6, winning about 1.9 pawns. Meanwhile,
+> White's knight on e5 hangs — it stands under attack with no friend in
+> sight…}*
+>
+> **23. Rae1** *{…White's heavy pieces have the open lines to
+> themselves. The d- and e-files are open. … Here is what White should
+> be dreaming about: double the heavy pieces on the open file and make
+> it their private highway.}* ← composite plan, coach voice
+>
+> **38. cxd5** *{In this endgame White's better pawn structure counts
+> for a great deal. White has passed pawns on e4 and d5. … Here is what
+> Black should be dreaming about: put a piece in front of White's passer
+> and put its dreams on hold (key squares: e5).}* ← blockade attributed
+> to the DEFENDER (fixed this run)
+>
+> **42. Kf6** *{…The engine confirms it: c3 b5 c2 — **forced mate in
+> 9**.}* ← bug 1, fixed, in production
+
+Honest residuals a reviewer should know about (run-6 candidates, listed
+in DECISIONS_NEEDED judgment items): (a) a wandering king in a lost
+endgame re-narrates its "draft" at each new square — the alert key
+includes the square, so each is technically news, but a coach would say
+"the king hunt is on" once; keying WeakKing deltas by side rather than
+square would compress moves 38–43 here. (b) Very large winning evals
+still read "winning about 9.1 pawns" — accurate but a "completely
+winning" phrasing band above ~5 pawns would read better. (c) The guide
+agent finished before the trainer tabs landed; USER_GUIDE.md needs a
+Train/Tactics(/Endgames) section — queued behind the endgame agent so
+one documentation pass covers all three.
+
 
 # RUN_REPORT.md
 

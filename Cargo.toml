@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/silman-core",
     "crates/silman-profile",
+    "crates/silman-srs",
     "crates/silman-verbalize",
     "crates/silman-tb",
     "crates/si4-read",

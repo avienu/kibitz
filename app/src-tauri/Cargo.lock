@@ -3004,6 +3004,7 @@ dependencies = [
  "silman-core",
  "silman-db",
  "silman-profile",
+ "silman-srs",
  "silman-verbalize",
  "tauri",
  "tauri-build",
@@ -3034,6 +3035,7 @@ dependencies = [
  "si4-read",
  "silman-core",
  "silman-profile",
+ "silman-srs",
  "silman-verbalize",
  "thiserror 2.0.19",
  "ureq",
@@ -3047,6 +3049,13 @@ dependencies = [
  "serde",
  "serde_json",
  "silman-core",
+]
+
+[[package]]
+name = "silman-srs"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

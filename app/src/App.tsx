@@ -7,9 +7,13 @@ import { parseSquare, squareRank } from "chessops/util";
 import AnnotatedMoves from "./AnnotatedMoves";
 import Board, { type BoardMovable } from "./Board";
 import DatabaseView from "./DatabaseView";
+import FirstRunOverlay, { markFirstRunSeen, shouldShowFirstRun } from "./FirstRunOverlay";
 import GameTools from "./GameTools";
+import Help from "./Help";
 import PrepView from "./PrepView";
 import ProfileView from "./ProfileView";
+import TacticsView from "./TacticsView";
+import TrainView, { type TrainBoardState } from "./TrainView";
 import { evalsByPly, type PlyEval } from "./lib/analyses";
 import {
   clampPly,
@@ -23,11 +27,19 @@ import {
   gameAnalyses,
   getGame,
   getGameTokens,
+  getNarrationVoice,
+  getSavedVoice,
   explainPosition,
+  saveVoice,
+  setNarrationVoice,
+  trainAddLine,
+  trainSummary,
   updateGameTokens,
   type Explanation,
   type GameDetail,
+  type NarrationVoice,
   type PlayerProfile,
+  type TrainSummary,
 } from "./lib/db";
 import { shapesFromRecord } from "./lib/explainView";
 import { insertVariation, type JsonToken } from "./lib/tokens";
@@ -65,7 +77,7 @@ const SAMPLE_PGN = `[Event "London"]
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-type Mode = "analyze" | "database" | "prep" | "profile";
+type Mode = "analyze" | "database" | "prep" | "profile" | "train" | "tactics";
 
 /** Annotation-edit state for the currently loaded database game. */
 interface AnnotState {
@@ -89,7 +101,11 @@ export default function App() {
   const [pgnText, setPgnText] = useState("");
   const [game, setGame] = useState<LoadedGame | null>(null);
   const [ply, setPly] = useState(0);
-  const [status, setStatus] = useState("Paste a PGN (or open a file) and press Load.");
+  const [status, setStatus] = useState(
+    "Paste a PGN (or open a file) and press Load — the Help button (top right) has a full guide.",
+  );
+  const [showHelp, setShowHelp] = useState(false);
+  const [showTour, setShowTour] = useState(shouldShowFirstRun);
 
   const [annot, setAnnot] = useState<AnnotState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -101,6 +117,13 @@ export default function App() {
 
   const [explanation, setExplanation] = useState<Explanation | null>(null);
   const [explaining, setExplaining] = useState(false);
+  /** Repertoire Trainer: due counts (tab badge) and, while a review
+   * session runs, the training position shown on the main board. */
+  const [trainSum, setTrainSum] = useState<TrainSummary | null>(null);
+  const [trainBoard, setTrainBoard] = useState<TrainBoardState | null>(null);
+  /** Narration voice: coach (default) or neutral. Mirrors the open
+   * database's stored setting; the local copy covers the no-db case. */
+  const [voice, setVoice] = useState<NarrationVoice>(getSavedVoice);
 
   const [enginePath, setEnginePath] = useState(getSavedEnginePath);
   const [resolvedPath, setResolvedPath] = useState<string>("");
@@ -147,6 +170,24 @@ export default function App() {
     setExplanation(null);
     setPendingVar(null);
   }, [fen]);
+
+  // Adopt the open database's stored voice, when one is open (best-effort).
+  useEffect(() => {
+    getNarrationVoice()
+      .then((v) => {
+        setVoice(v);
+        saveVoice(v);
+      })
+      .catch(() => {}); // no database open yet — keep the local setting
+  }, []);
+
+  /** Change the voice everywhere: state, local save, open db (best-effort). */
+  const changeVoice = useCallback((v: NarrationVoice) => {
+    setVoice(v);
+    saveVoice(v);
+    setExplanation(null); // stale prose is in the old voice
+    setNarrationVoice(v).catch(() => {}); // no database open — local only
+  }, []);
 
   /** Install a freshly built game model and reset the stepper. */
   const applyGame = useCallback(
@@ -364,17 +405,38 @@ export default function App() {
   const doExplain = useCallback(async () => {
     setExplaining(true);
     try {
-      setExplanation(await explainPosition(fen));
+      setExplanation(await explainPosition(fen, voice));
     } catch (e) {
       setStatus(`Explain failed: ${e}`);
     } finally {
       setExplaining(false);
     }
-  }, [fen]);
+  }, [fen, voice]);
 
   const shapes = useMemo(
     () => (explanation ? shapesFromRecord(explanation.record) : undefined),
     [explanation],
+  );
+
+  /** Send the loaded line (up to the current ply; the whole mainline at
+   * ply 0) to the color's repertoire for spaced-repetition training. */
+  const addLineToRepertoire = useCallback(
+    async (color: "white" | "black") => {
+      if (!game) return;
+      const sans = ply > 0 ? game.sans.slice(0, ply) : game.sans;
+      if (sans.length === 0) return;
+      try {
+        const res = await trainAddLine(color, sans, game.fens[0]);
+        setStatus(
+          `Repertoire "${res.repertoire}": ${res.cardsAdded} new cards, ` +
+            `${res.cardsExisting} positions already covered (${sans.length} plies).`,
+        );
+        trainSummary().then(setTrainSum).catch(() => {});
+      } catch (e) {
+        setStatus(`Add to repertoire failed: ${e}`);
+      }
+    },
+    [game, ply],
   );
 
   const startAnalysis = async () => {
@@ -400,9 +462,15 @@ export default function App() {
   return (
     <div className="layout">
       <div className="left">
-        <Board fen={fen} lastMove={lastMove} movable={movable} shapes={shapes} />
+        <Board
+          fen={mode === "train" && trainBoard ? trainBoard.fen : fen}
+          lastMove={mode === "train" && trainBoard ? undefined : lastMove}
+          movable={mode === "train" && trainBoard ? trainBoard.movable : movable}
+          shapes={mode === "train" && trainBoard ? trainBoard.shapes : shapes}
+          orientation={mode === "train" && trainBoard ? trainBoard.orientation : undefined}
+        />
         <div className="nav">
-          <button onClick={() => setPly(0)} disabled={!game}>
+          <button onClick={() => setPly(0)} disabled={!game} title="Jump to the start">
             |&lt;
           </button>
           <button onClick={() => step(-1)} disabled={!game || ply === 0}>
@@ -411,11 +479,24 @@ export default function App() {
           <button onClick={() => step(1)} disabled={!game || ply >= (game?.sans.length ?? 0)}>
             Next ▶
           </button>
-          <button onClick={() => game && setPly(game.sans.length)} disabled={!game}>
+          <button
+            onClick={() => game && setPly(game.sans.length)}
+            disabled={!game}
+            title="Jump to the end"
+          >
             &gt;|
           </button>
           <span className="ply">{game ? `ply ${ply}/${game.sans.length}` : "no game"}</span>
         </div>
+        {game && game.sans.length > 0 && (
+          <div className="rep-add">
+            <span title="Adds the moves up to the current ply (whole game at ply 0) as training cards">
+              {ply > 0 ? `Line (first ${ply} plies)` : "Mainline"} → repertoire:
+            </span>
+            <button onClick={() => void addLineToRepertoire("white")}>as White</button>
+            <button onClick={() => void addLineToRepertoire("black")}>as Black</button>
+          </div>
+        )}
         {pendingVar && game && (
           <div className="var-offer">
             <span>
@@ -430,7 +511,11 @@ export default function App() {
         <div className="engine">
           <h3>Engine</h3>
           <div className="engine-row">
-            <button onClick={startAnalysis} disabled={analyzing}>
+            <button
+              onClick={startAnalysis}
+              disabled={analyzing}
+              title="Run Stockfish on the current position (the engine only runs on demand)"
+            >
               Analyze
             </button>
             <button onClick={() => void stopAnalysis()} disabled={!analyzing}>
@@ -484,6 +569,16 @@ export default function App() {
               {explaining ? "Explaining…" : "Explain position"}
             </button>
             {explanation && <button onClick={() => setExplanation(null)}>Clear</button>}
+            <label>
+              voice{" "}
+              <select
+                value={voice}
+                onChange={(e) => changeVoice(e.target.value as NarrationVoice)}
+              >
+                <option value="coach">Coach</option>
+                <option value="neutral">Neutral</option>
+              </select>
+            </label>
           </div>
           {explanation && (
             <div className="explain-prose">
@@ -502,17 +597,57 @@ export default function App() {
 
       <div className={mode === "analyze" ? "right" : "right db"}>
         <div className="tabs">
-          <button className={mode === "analyze" ? "cur" : ""} onClick={() => setMode("analyze")}>
-            Analyze
+          <button
+            className={mode === "analyze" ? "cur" : ""}
+            onClick={() => setMode("analyze")}
+            title="Paste or open a PGN file to review a game"
+          >
+            Load PGN
           </button>
-          <button className={mode === "database" ? "cur" : ""} onClick={() => setMode("database")}>
+          <button
+            className={mode === "database" ? "cur" : ""}
+            onClick={() => setMode("database")}
+            title="Open a game database: browse, annotate, run engine jobs, export"
+          >
             Database
           </button>
-          <button className={mode === "prep" ? "cur" : ""} onClick={() => setMode("prep")}>
-            Prep
+          <button
+            className={mode === "prep" ? "cur" : ""}
+            onClick={() => setMode("prep")}
+            title="Rank an opponent's weakest opening spots (uses the open database)"
+          >
+            Opponent Prep
           </button>
-          <button className={mode === "profile" ? "cur" : ""} onClick={() => setMode("profile")}>
-            Profile
+          <button
+            className={mode === "profile" ? "cur" : ""}
+            onClick={() => setMode("profile")}
+            title="Strengths/weaknesses report for any player in the database"
+          >
+            Player Profile
+          </button>
+          <button
+            className={mode === "train" ? "cur" : ""}
+            onClick={() => setMode("train")}
+            title="Repertoire Trainer: spaced-repetition review of your opening lines"
+          >
+            Train
+            {trainSum && trainSum.white.due + trainSum.black.due > 0 && (
+              <span className="tab-badge">{trainSum.white.due + trainSum.black.due}</span>
+            )}
+          </button>
+          <button
+            className={mode === "tactics" ? "cur" : ""}
+            onClick={() => setMode("tactics")}
+            title="Tactics trainer: rated, motif, weakness-weighted and Woodpecker drills"
+          >
+            Tactics
+          </button>
+          <button
+            className="help-btn"
+            onClick={() => setShowHelp(true)}
+            title="Open the user guide"
+          >
+            Help
           </button>
         </div>
 
@@ -560,6 +695,8 @@ export default function App() {
           />
         )}
         {mode === "prep" && <PrepView onLoadGameAt={loadDbGameAt} profile={profile} />}
+        {mode === "train" && <TrainView onSummary={setTrainSum} onBoard={setTrainBoard} />}
+        {mode === "tactics" && <TacticsView profile={profile} />}
         {mode === "profile" && (
           <ProfileView
             profile={profile}
@@ -598,6 +735,21 @@ export default function App() {
             </ol>
           ))}
       </div>
+
+      {showHelp && <Help onClose={() => setShowHelp(false)} />}
+      {showTour && !showHelp && (
+        <FirstRunOverlay
+          onClose={() => {
+            markFirstRunSeen();
+            setShowTour(false);
+          }}
+          onOpenHelp={() => {
+            markFirstRunSeen();
+            setShowTour(false);
+            setShowHelp(true);
+          }}
+        />
+      )}
     </div>
   );
 }

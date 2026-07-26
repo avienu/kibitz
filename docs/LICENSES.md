@@ -27,11 +27,18 @@ versions.
 | Fathom (vendored C source) | commit `c9c6fef0dddc05d2e242c183acf5833149ab676d` | MIT | crates/silman-tb | Syzygy probing. Vendored verbatim from <https://github.com/jdart1/Fathom> into `crates/silman-tb/vendor/fathom/` with its LICENSE file (MIT, © 2013-2018 Ronald de Man, © 2015 basil00, © 2016-2025 Jon Dart — text verified at vendor time). Compiled and statically linked; the crate's SPDX is therefore `BSD-3-Clause AND MIT`. |
 | cc | 1 | MIT OR Apache-2.0 | build-deps (silman-tb) | Compiles the vendored Fathom C at build time. |
 
+## Evaluated and rejected
+
+| Name | Version checked | License | Would-be layer | Why rejected |
+|---|---|---|---|---|
+| fsrs (fsrs-rs) | 6.6.1 | BSD-3-Clause (crate itself) | crates/silman-srs | Dependency tree pulls `priority-queue` 2.7.0 (`LGPL-3.0-or-later OR MPL-2.0`), which fails `scripts/license_gate.sh` for BSD crates, plus a ~40-crate ML optimizer stack (ndarray, rayon, …) unneeded for scheduling. Verified 2026-07-26 via `cargo add fsrs` + `cargo tree -e normal --format "{p} | {l}"` in a scratch project. FSRS-4.5 scheduling is instead implemented directly in `crates/silman-srs` (BSD-3-Clause, serde-only) from the published algorithm description (parameters and formulas are public; see the crate's doc comment). |
+
 ## Bundled data
 
 | Name | License | Location | Notes |
 |---|---|---|---|
 | lichess-org/chess-openings | CC0-1.0 | data/openings/*.tsv | ECO classification dataset; bundled and redistributable per CLAUDE.md ground rules. |
+| Lichess puzzle database | CC0-1.0 | testdata/fixtures/puzzles_sample.csv (committed 500-row test fixture); full dump user-imported via `silman-cli import-puzzles` (testdata/corpus/, git-ignored) | Tactics trainer dataset from <https://database.lichess.org/#puzzles>; CC0, may be bundled/redistributed. Provenance recorded in the `sources` table on import. |
 
 ## app/ npm dependencies (GPL layer)
 

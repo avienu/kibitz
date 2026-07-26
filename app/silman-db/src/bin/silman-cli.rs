@@ -128,6 +128,43 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Import a PGN file as a Repertoire Trainer repertoire for one color:
+    /// every mainline move of that color becomes a training card.
+    ImportRepertoire {
+        file: PathBuf,
+        /// Training color: white|black.
+        color: String,
+        /// Repertoire name (created if missing; re-import is idempotent).
+        #[arg(long, default_value = "main")]
+        name: String,
+        /// Provenance: human-readable source name.
+        #[arg(long, default_value = "repertoire import")]
+        source_name: String,
+        /// Provenance: origin (URL or description).
+        #[arg(long, default_value = "local file")]
+        origin: String,
+        /// Provenance: license of the imported data.
+        #[arg(long, default_value = "personal data")]
+        license: String,
+    },
+    /// Import the Lichess puzzle database CSV (CC0) for the tactics
+    /// trainer — streaming with batched transactions; the 5M-row dump
+    /// imports in constant memory.
+    ImportPuzzles {
+        file: PathBuf,
+        /// Skip puzzles whose Popularity (-100..100) is below this value.
+        #[arg(long)]
+        min_popularity: Option<i64>,
+        /// Stop after importing this many puzzles (post-filter).
+        #[arg(long)]
+        max_rows: Option<u64>,
+        #[arg(long, default_value = "lichess-puzzles")]
+        source_name: String,
+        #[arg(long, default_value = "https://database.lichess.org/#puzzles")]
+        origin: String,
+        #[arg(long, default_value = "CC0-1.0")]
+        license: String,
+    },
     /// Print database summary counts.
     Stats,
 }
@@ -363,7 +400,8 @@ fn main() -> anyhow::Result<()> {
             let board: cozy_chess::Board =
                 fen.parse().map_err(|e| anyhow::anyhow!("bad FEN: {e:?}"))?;
             let record = silman_core::analyze(&board);
-            println!("{}", silman_verbalize::verbalize(&record));
+            let voice = silman_db::narrate::narration_voice(&conn)?;
+            println!("{}", silman_verbalize::verbalize_voiced(&record, voice));
             println!("---");
             println!("{}", serde_json::to_string_pretty(&record)?);
         }
@@ -373,7 +411,8 @@ fn main() -> anyhow::Result<()> {
                 fen.parse().map_err(|e| anyhow::anyhow!("bad FEN: {e:?}"))?;
             let record = silman_core::analyze(&board);
             let transport = silman_db::net::llm::AnthropicTransport::resolve(api_key)?;
-            let out = LlmVerbalizer::new(transport).verbalize_checked(&record);
+            let voice = silman_db::narrate::narration_voice(&conn)?;
+            let out = LlmVerbalizer::with_voice(transport, voice).verbalize_checked(&record);
             match &out.mode {
                 VerbalizeMode::Llm => println!("mode: llm"),
                 VerbalizeMode::TemplateFallback(reason) => {
@@ -436,6 +475,71 @@ fn main() -> anyhow::Result<()> {
                     p.conversion.held
                 );
             }
+        }
+        Command::ImportRepertoire {
+            file,
+            color,
+            name,
+            source_name,
+            origin,
+            license,
+        } => {
+            let color = match color.as_str() {
+                "white" => silman_profile::Color::White,
+                "black" => silman_profile::Color::Black,
+                other => anyhow::bail!("color must be white or black, got {other:?}"),
+            };
+            let source = SourceInfo {
+                name: source_name,
+                origin,
+                license,
+                kind: SourceKind::Personal,
+            };
+            let reader = BufReader::with_capacity(1 << 20, File::open(&file)?);
+            let st =
+                silman_db::repertoire::import_pgn_repertoire(&conn, color, &name, &source, reader)?;
+            println!(
+                "read {} lines ({} failed): {} new cards, {} positions already covered, {} plies walked",
+                st.games_read,
+                st.games_failed,
+                st.line.cards_added,
+                st.line.cards_existing,
+                st.line.plies_walked
+            );
+            for f in &st.failures {
+                eprintln!("  failed: {f}");
+            }
+        }
+        Command::ImportPuzzles {
+            file,
+            min_popularity,
+            max_rows,
+            source_name,
+            origin,
+            license,
+        } => {
+            let source = SourceInfo {
+                name: source_name,
+                origin,
+                license,
+                kind: SourceKind::Other,
+            };
+            let opts = silman_db::tactics::PuzzleImportOptions {
+                min_popularity,
+                max_rows,
+            };
+            let reader = BufReader::with_capacity(1 << 20, File::open(&file)?);
+            let st = silman_db::tactics::import_puzzles_csv(&conn, &source, reader, &opts)?;
+            println!(
+                "imported {} puzzles ({} duplicates skipped, {} filtered out, {} malformed) in {:.2?} ({:.0} rows/s)",
+                st.imported,
+                st.duplicates_skipped,
+                st.filtered_out,
+                st.malformed,
+                st.elapsed,
+                (st.imported + st.duplicates_skipped + st.filtered_out) as f64
+                    / st.elapsed.as_secs_f64().max(1e-9)
+            );
         }
         Command::Stats => {
             let s = stats(&conn)?;

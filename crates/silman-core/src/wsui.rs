@@ -67,8 +67,7 @@ fn decide(alerts: &[TacticAlert], cfg: &WsuiConfig) -> bool {
         FiringRule::PairAtOrAbove => at_or_above().count() >= 2,
         FiringRule::HighSoloOrTwoDistinct => {
             alerts.iter().any(|a| a.severity >= Severity::High) || {
-                let kinds: std::collections::BTreeSet<_> =
-                    at_or_above().map(|a| a.kind).collect();
+                let kinds: std::collections::BTreeSet<_> = at_or_above().map(|a| a.kind).collect();
                 kinds.len() >= 2
             }
         }
@@ -589,7 +588,10 @@ mod firing_rule_tests {
         let hstd = cfg(FiringRule::HighSoloOrTwoDistinct);
         assert!(decide(&one_high, &hstd));
         assert!(!decide(&one_med, &hstd));
-        assert!(!decide(&two_med_same, &hstd), "same kind twice is one story");
+        assert!(
+            !decide(&two_med_same, &hstd),
+            "same kind twice is one story"
+        );
         assert!(decide(&two_med_distinct, &hstd));
 
         let weighted = cfg(FiringRule::WeightedScore { fire_at: 4 });

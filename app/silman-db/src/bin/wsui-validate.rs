@@ -210,7 +210,9 @@ fn main() -> anyhow::Result<()> {
             "train: {family:<28} fire>={:?} see {}/{} -> recall {recall:.1}% fp {fp:.1}% (obj {objective:.1})",
             cfg.fire_threshold, cfg.see_medium, cfg.see_high
         );
-        let entry = best_per_family.entry(family).or_insert((f64::MIN, cfg.clone(), 0.0, 0.0));
+        let entry = best_per_family
+            .entry(family)
+            .or_insert((f64::MIN, cfg.clone(), 0.0, 0.0));
         if objective > entry.0 {
             *entry = (objective, cfg, recall, fp);
         }
@@ -234,11 +236,13 @@ fn main() -> anyhow::Result<()> {
             "fire≥{:?}, SEE {}/{}",
             cfg.fire_threshold, cfg.see_medium, cfg.see_high
         );
-        println!(
-            "| {family} | {point} | {recall:.1}% | {fp_rate:.1}% | {precision:.1}% |"
-        );
+        println!("| {family} | {point} | {recall:.1}% | {fp_rate:.1}% | {precision:.1}% |");
         let objective = recall - fp_rate;
-        if overall.as_ref().map(|(o, ..)| objective > *o).unwrap_or(true) {
+        if overall
+            .as_ref()
+            .map(|(o, ..)| objective > *o)
+            .unwrap_or(true)
+        {
             overall = Some((objective, family.clone(), cfg.clone()));
         }
     }

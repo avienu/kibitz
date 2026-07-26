@@ -19,7 +19,9 @@ pub mod browse;
 pub mod dbops;
 pub mod explain;
 pub mod prep;
+pub mod tactics;
 pub mod tokens;
+pub mod train;
 pub mod uci;
 
 use std::sync::Arc;
@@ -165,6 +167,21 @@ pub fn run() {
             tokens::get_game_tokens,
             tokens::update_game_tokens,
             explain::explain_position,
+            tactics::tactics_state,
+            tactics::tactics_import_puzzles,
+            tactics::tactics_next_puzzle,
+            tactics::tactics_verify_move,
+            tactics::tactics_record_attempt,
+            tactics::tactics_woodpecker_sets,
+            tactics::tactics_create_woodpecker_set,
+            tactics::tactics_woodpecker_puzzles,
+            tactics::tactics_start_cycle,
+            tactics::tactics_finish_cycle,
+            tactics::tactics_cycle_stats,
+            train::train_summary,
+            train::train_queue,
+            train::train_grade,
+            train::train_add_line,
             dbops::game_analyses,
             dbops::annotate_game,
             dbops::reanalyze_game,
@@ -172,6 +189,8 @@ pub fn run() {
             dbops::jobs_status,
             dbops::export_game_pgn,
             dbops::build_profile,
+            dbops::get_narration_voice,
+            dbops::set_narration_voice,
             dbops::set_window_title
         ])
         .run(tauri::generate_context!())

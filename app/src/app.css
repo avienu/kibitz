@@ -746,3 +746,300 @@ textarea {
   opacity: 0.6;
   white-space: nowrap;
 }
+
+/* Help button (right end of the tab bar) */
+.tabs .help-btn {
+  margin-left: auto;
+  color: #cfa85a;
+}
+
+/* Help modal (in-app user guide) */
+.help-modal {
+  width: 780px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.help-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.help-header h3 {
+  margin: 0;
+}
+.help-body {
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  padding-right: 8px;
+}
+.help-body h1 {
+  font-size: 18px;
+  margin: 4px 0 10px;
+}
+.help-body h2 {
+  font-size: 15px;
+  margin: 18px 0 6px;
+  color: #cfa85a;
+}
+.help-body h3 {
+  font-size: 13px;
+  margin: 14px 0 4px;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 1;
+  color: #9fc267;
+}
+.help-body h4 {
+  font-size: 13px;
+  margin: 10px 0 4px;
+}
+.help-body p {
+  margin: 6px 0;
+}
+.help-body ul,
+.help-body ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+.help-body li {
+  margin: 2px 0;
+}
+.help-body code {
+  background: #201f1d;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+.help-body pre {
+  background: #201f1d;
+  border: 1px solid #4a4740;
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+.help-body pre code {
+  background: transparent;
+  padding: 0;
+}
+.help-body hr {
+  border: none;
+  border-top: 1px solid #4a4740;
+  margin: 14px 0;
+}
+
+/* First-run overlay */
+.first-run {
+  width: 560px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.first-run ul {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+.first-run li {
+  margin: 3px 0;
+}
+.modal-buttons .primary {
+  background: #6b5f3f;
+  border-color: #8a7c52;
+}
+
+/* Repertoire Trainer (Train tab) */
+.tab-badge {
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #3d5a3d;
+  color: #a8e0a8;
+  font-variant-numeric: tabular-nums;
+}
+.rep-add {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  opacity: 0.9;
+}
+.train-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.train-controls button.cur {
+  background: #4a4638;
+  border-color: #8a7c52;
+}
+.train-due {
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #3d5a3d;
+  color: #a8e0a8;
+}
+.train-start {
+  margin-left: auto;
+}
+.train-counts {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+.train-empty {
+  font-size: 13px;
+  opacity: 0.75;
+}
+.train-queue {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.train-queue th {
+  text-align: left;
+  opacity: 0.6;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-bottom: 1px solid #3a3833;
+}
+.train-queue td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #2c2b27;
+}
+.train-queue .tq-line {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.train-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.train-progress {
+  font-size: 12px;
+  opacity: 0.75;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.train-new {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #35506b;
+  color: #a8c8e8;
+}
+.train-rep {
+  margin-left: auto;
+  font-style: italic;
+}
+.train-prompt {
+  font-size: 15px;
+  line-height: 1.5;
+}
+.train-hint {
+  font-size: 13px;
+  opacity: 0.7;
+}
+.train-feedback {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.train-feedback.ok {
+  background: #2e4230;
+}
+.train-feedback.bad {
+  background: #4a3232;
+}
+.train-feedback span {
+  flex: 1 1 auto;
+}
+.train-abort {
+  align-self: flex-start;
+  opacity: 0.8;
+}
+.train-summary {
+  font-size: 14px;
+}
+
+/* ---- Tactics tab ---- */
+
+.tactics-board {
+  max-width: 380px;
+  margin: 0.5rem 0;
+}
+.tactics-board .cg-wrap {
+  width: 100%;
+  aspect-ratio: 1;
+}
+.tactics-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin: 0.25rem 0;
+}
+.tactics-phase {
+  font-weight: 600;
+}
+.tactics-phase.solved {
+  color: #2e7d32;
+}
+.tactics-phase.failed {
+  color: #c62828;
+}
+.tactics-meta {
+  color: #777;
+  font-size: 0.85em;
+}
+.tactics-outcome {
+  margin: 0.25rem 0;
+}
+.tactics-reason {
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.6rem;
+  background: rgba(230, 143, 0, 0.12);
+  border-left: 3px solid #e68f00;
+  font-size: 0.9em;
+}
+.tactics-session {
+  margin: 0.25rem 0;
+  color: #555;
+  font-size: 0.9em;
+}
+.tactics-nav {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.25rem 0;
+  font-size: 0.85em;
+  color: #777;
+}
+.tactics-hint {
+  color: #777;
+  font-size: 0.8em;
+  margin-top: 0.25rem;
+}
+.tactics-table {
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.9em;
+}
+.tactics-table th,
+.tactics-table td {
+  text-align: left;
+  padding: 0.2rem 0.6rem;
+  border-bottom: 1px solid #ddd;
+}
