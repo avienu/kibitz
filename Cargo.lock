@@ -1142,6 +1142,7 @@ dependencies = [
  "si4-read",
  "silman-core",
  "silman-profile",
+ "silman-verbalize",
  "tempfile",
  "thiserror",
  "ureq",

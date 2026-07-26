@@ -5,14 +5,17 @@
 //! position search. Lives in `app/` (GPL layer) per ARCHITECTURE.md; the
 //! BSD crates must never depend on this.
 
+pub mod annotate;
 pub mod db;
 pub mod eco;
 pub mod edit;
+pub mod engine;
 pub mod export;
 pub mod fingerprint;
 pub mod hash;
 pub mod import;
 pub mod import_si4;
+pub mod jobs;
 pub mod movebin;
 pub mod net;
 pub mod pgn;
