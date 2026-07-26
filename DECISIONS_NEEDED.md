@@ -56,10 +56,10 @@ below record the decisions for the history.
    flagged as duplicates. Acceptable? (TWIC vs SCID overlap testing in the
    full Phase 1 acceptance will tell.)
 
-4. **Elo top-4-bits in .si4 (cleanroom gap).** The community documentation
-   does not say what the top nibble of the Elo fields means (likely a rating
-   type). si4-read masks it off. All header dumps of the ten real bases
-   produced sensible ratings with the mask, so this stays low-priority.
+4. **CLOSED (run 3, empirical):** the top nibble is zero in all 95,066
+   rating fields across the ten real databases (incl. 39,628 ICC games).
+   Documented in SI4_FORMAT_NOTES.md §6.8 as documented-unknown-but-absent;
+   the 12-bit mask loses nothing on available data.
 
 5. ~~si4 `.sg4` movetext decoding gaps~~ **RESOLVED empirically in run 2**
    (docs/SI4_FORMAT_NOTES.md §6): rook table transposed in the community

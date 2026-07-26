@@ -152,5 +152,10 @@ signature). No SCID source consulted.
 7. **Empty games** (0 plies) may carry a stale full-material default
    (0x6A86A8) in the index's final-material field.
 
-Still open: meaning of Elo top nibble (§5.2); count-code table holes
-(§5.3); pre-v400 entries (§5.12).
+Still open: count-code table holes (§5.3); pre-v400 entries (§5.12).
+
+8. **Elo top nibble (§5.2), CLOSED as documented-unknown-empirically-absent
+   (run 3)**: across all 95,066 rating fields in the maintainer's ten real
+   databases — including 39,628 ICC league games where a rating-type tag
+   would be expected if one existed — the top nibble is always zero. The
+   reader masks to 12 bits; nothing is lost on available data.
