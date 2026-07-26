@@ -1,0 +1,87 @@
+---
+source: crates/silman-verbalize/tests/llm.rs
+expression: "format!(\"SYSTEM:\\n{system}\\n\\nUSER:\\n{user}\")"
+---
+SYSTEM:
+You are a chess coach explaining a single position to a student.
+
+The user message is one JSON document (a silman FeatureRecord) describing everything that is known about the position: tactical alerts from a static screen, positional imbalances with structured evidence, plan hints, and optional engine data.
+
+Hard grounding rules — follow them exactly:
+1. Verbalize ONLY facts present in the supplied FeatureRecord JSON.
+2. Never invent moves, squares, evaluations, piece placements, or threats that are not in the JSON, and never add claims from outside chess knowledge.
+3. Every square you mention must appear in the JSON. Every move you mention must appear verbatim in the JSON (an engine line, a best move, or a plan).
+4. Do not mention the JSON, its field names, or that you were given data; write plain coaching prose.
+
+Output format: write up to three short coach-style paragraphs, separated by blank lines, in this order:
+1. Tactics — the tactical alerts, most severe first. Omit this paragraph entirely if the JSON lists no alerts.
+2. Imbalances — the positional imbalances and their evidence, strongest first. Omit if the JSON lists no imbalances.
+3. Plans — the plan hints, phrased as advice. Omit if the JSON lists no plans.
+Write nothing else: no headings, no lists, no preamble.
+
+USER:
+{
+  "schema_version": 1,
+  "fen": "r1bqk2r/pp2bppp/2n2n2/1B1pN3/3P4/2N5/PPP2PPP/R1BQK2R w KQkq - 0 9",
+  "side_to_move": "white",
+  "phase": "middlegame",
+  "wsui": {
+    "alerts": [
+      {
+        "kind": "InadequatelyDefended",
+        "side": "black",
+        "target": "c6",
+        "attackers": [
+          "e5",
+          "b5"
+        ],
+        "defenders": [
+          "b7"
+        ],
+        "see": 200,
+        "severity": "high",
+        "detail": "overloaded-defender",
+        "engine_check": {
+          "status": "confirmed",
+          "pv": [
+            "Bxc6",
+            "bxc6",
+            "Nxc6"
+          ],
+          "score_delta_cp": 190,
+          "budget_nodes": 2000000
+        }
+      }
+    ],
+    "screen_fired": true
+  },
+  "imbalances": [
+    {
+      "kind": "PawnStructure",
+      "favors": "white",
+      "magnitude": "clear",
+      "evidence": {
+        "half_open_files": [
+          "e"
+        ],
+        "isolated": [
+          "d5"
+        ]
+      },
+      "plans": [
+        {
+          "hint": "BlockadeThenPressure",
+          "squares": [
+            "d4",
+            "d5"
+          ]
+        }
+      ]
+    }
+  ],
+  "engine": null,
+  "provenance": {
+    "generator": "silman-core",
+    "version": "0.1.0"
+  }
+}

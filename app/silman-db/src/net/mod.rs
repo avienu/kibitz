@@ -17,6 +17,7 @@ pub mod chesscom;
 pub mod fics;
 pub mod icc;
 pub mod lichess;
+pub mod llm;
 
 use std::io::Read;
 use std::time::Duration;

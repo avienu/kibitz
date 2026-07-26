@@ -26,6 +26,8 @@
 //! rendered imbalances' hints, deduplicated by hint token.
 
 mod board;
+#[cfg(feature = "llm")]
+pub mod llm;
 mod phrase;
 mod templates;
 

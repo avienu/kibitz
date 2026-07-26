@@ -9,7 +9,7 @@ rust-version.workspace = true
 [dependencies]
 silman-core = { path = "../../crates/silman-core" }
 silman-profile = { path = "../../crates/silman-profile" }
-silman-verbalize = { path = "../../crates/silman-verbalize" }
+silman-verbalize = { path = "../../crates/silman-verbalize", features = ["llm"] }
 cozy-chess = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }

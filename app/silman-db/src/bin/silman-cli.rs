@@ -111,6 +111,15 @@ enum Command {
     },
     /// Analyze one FEN statically and print the coach prose + record JSON.
     Explain { fen: String },
+    /// Analyze one FEN and explain it via the Anthropic LLM verbalizer;
+    /// output is post-validated and falls back to template prose on any
+    /// hallucination or transport failure.
+    ExplainLlm {
+        fen: String,
+        /// Anthropic API key (defaults to $ANTHROPIC_API_KEY).
+        #[arg(long)]
+        api_key: Option<String>,
+    },
     /// Full player profile (motifs, structures, ACPL where evals exist).
     Profile {
         player: String,
@@ -357,6 +366,21 @@ fn main() -> anyhow::Result<()> {
             println!("{}", silman_verbalize::verbalize(&record));
             println!("---");
             println!("{}", serde_json::to_string_pretty(&record)?);
+        }
+        Command::ExplainLlm { fen, api_key } => {
+            use silman_verbalize::llm::{LlmVerbalizer, VerbalizeMode};
+            let board: cozy_chess::Board =
+                fen.parse().map_err(|e| anyhow::anyhow!("bad FEN: {e:?}"))?;
+            let record = silman_core::analyze(&board);
+            let transport = silman_db::net::llm::AnthropicTransport::resolve(api_key)?;
+            let out = LlmVerbalizer::new(transport).verbalize_checked(&record);
+            match &out.mode {
+                VerbalizeMode::Llm => println!("mode: llm"),
+                VerbalizeMode::TemplateFallback(reason) => {
+                    println!("mode: template-fallback ({reason})");
+                }
+            }
+            println!("{}", out.text);
         }
         Command::Profile {
             player,
