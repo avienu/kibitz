@@ -1,4 +1,124 @@
-# RUN_REPORT.md — autonomous run, 2026-07-25
+# RUN_REPORT.md
+
+# Run 2 — 2026-07-25 (later the same day)
+
+## ⚠ Headline: Phase 1 is complete EXCEPT annotation storage/editing
+
+Per this run's instructions, parked decisions that block acceptance were
+NOT decided. DECISIONS_NEEDED.md items 1–2 (annotation storage / encoding
+v2, null moves) gate exactly two Phase 1 deliverables: storing si4/PGN
+annotations and the annotation-EDITING half of the game view. Everything
+else in Phase 1 is built and verified; the game browser is read-only. The
+sg4 decoder already extracts all annotations (16,653 comments / 29,576
+NAGs / 8,680 variations counted in your two big SCID bases alone), so once
+encoding v2 is blessed, storage is a contained change.
+
+**Phase 2 checkpoint: reached** (network clients + repertoire fingerprint).
+
+## Step 0 — verification of run 1's claims
+
+All of run 1's claims reproduced: fmt/clippy/license-gate green, 28+9
+tests green, perft green, position search 30 ms warm / 64 µs miss on the
+121k corpus. One nuance the run-1 report under-stated: its find-fen
+timings were warm-cache; a cold first query on the 11k-hit Sicilian is
+~315 ms. No other discrepancies.
+
+## Built this run
+
+1. **Cleanroom .sg4 move decoding** (crates/si4-read): all documented
+   format gaps resolved empirically against your own databases — the
+   community doc's rook table is transposed; pawn double-push is code 15;
+   piece numbers are swap-remove list indices; null move is byte 0x00;
+   variation markers branch from before the previous move; tags ≥0xF1 are
+   coded. Findings recorded in docs/SI4_FORMAT_NOTES.md §6 with the
+   validation protocol. **7,905/7,905 real games decode** with every move
+   legal, ply counts matching the index, and final material matching the
+   index signature. No SCID source consulted at any point.
+2. **Full .si4 import** (`import-si4`): mypages + twictest = 7,786 games
+   in 3.9 s, zero failures; shared insert path with the PGN importer so
+   duplicate detection is cross-source; dropped annotations counted and
+   reported to the user at import time.
+3. **ECO tagging** via the bundled CC0 lichess openings dataset
+   (data/openings/, in LICENSES.md), deepest-book-position match by
+   position hash (transposition-aware); source tag as fallback.
+4. **Opening tree** (`opening-tree`): per-move games/W/D/L/avg-elo/perf
+   from the position index (ply-0 rows + next-move byte, migration 0002/3).
+   Hand-validated on a fixture; sane on real data (master vs blitz
+   segments separate cleanly). 22 ms typical, 956 ms worst-case (startpos).
+5. **TWIC ingester**: incremental, provenance-tagged, donation notice,
+   explicit --from on first run, 404 stop, no TWIC data in repo. Live
+   verification: issue 1650 = 11,027/11,027 games after the Latin-1 fix.
+6. **PGN encoding fix**: the reader now decodes UTF-8-else-Latin-1 per
+   line. Before the fix TWIC 1650 lost 420 games AND imported ~420
+   header-less fragments (run-1's reader was silently wrong on the PGN
+   spec's own canonical encoding — worth remembering as a class of bug).
+7. **Lichess + chess.com clients**: serial, resumable (since / month
+   cursors in meta), 429 backoff, descriptive UA with PLACEHOLDER_EMAIL
+   for you to fill in. Offline fixture tests (29); live tests env-gated
+   behind SILMAN_NET_TESTS=1 and run exactly once each during the build.
+8. **ICC & FICS** (user-requested): ICC has no scriptable HTTP surface
+   (SPA + websocket protocol; documented stub with manual PGN-export
+   path). FICS implemented via ficsgames.org download CGI with
+   documented usage caveats (DECISIONS_NEEDED #7).
+9. **PGN export** (`export-pgn`) + verification-bar tests: import→export→
+   reparse semantic equality on an annotated Latin-1 fixture (mainline +
+   headers; annotations excluded per parked decisions), export-reimport
+   dedup, and TWIC-vs-personal duplicate collision tests including a
+   same-players-same-day negative case.
+10. **Repertoire fingerprint** (Phase 2 checkpoint): pure aggregation in
+    silman-profile (insta-snapshot + property tests), db adapter + CLI.
+    Real output for `sounix` (1,031 games): 58.4% as White on 1.e4 with
+    Caro-Kann B12 at 73.7% and Modern B06 at 29.4%; Sicilian repertoire
+    as Black; deviation points with example games. Transposition-aware by
+    position hash, split by color, per-ECO scores, first-book-exit
+    deviations — exactly the shape the Phase 2 prep view needs.
+11. **Game browser UI**: see addendum below (built by a subagent in
+    parallel; status recorded when its verification completed).
+
+## Numbers (details in docs/BENCHMARKS.md, run-2 section)
+
+| Metric | Value |
+|---|---|
+| sg4 decode validation | 7,905/7,905 real games |
+| si4 import (7,786 games) | 3.9 s |
+| TWIC 1650 live ingest (11,027 games) | ~8 s, 0 failures |
+| 121k-corpus reimport with ECO | 111 s (1,093 games/s) |
+| Opening tree typical / worst | 22 ms / 956 ms (startpos) |
+| Fingerprint (1,031 games) | ~0.5 s |
+
+## Deviations / notes
+
+- ROADMAP says si4 import covers "annotations where representable" —
+  nothing is representable in encoding v1, so mainline-only import is
+  technically compliant, but I am not claiming the criterion in spirit;
+  it's the headline blocker above.
+- Duplicate-detection rule evolution: header signatures now prefer
+  UTCDate; 8 games of the Lichess corpus shifted from duplicate to unique
+  vs run 1 (dup rule is parked decision #3 — unchanged in substance).
+- The fingerprint's "example game" for a deviation shows any database game
+  reaching that position (context, not the player's own game) — labeled
+  "e.g." in the CLI.
+- New non-blocking decisions filed: opening-tree root-latency escalation
+  (#6), ficsgames.org usage posture (#7).
+
+## What a human must do or decide next
+
+1. **Decide encoding v2** (DECISIONS_NEEDED 1–2) — the only Phase 1
+   blocker. A concrete best-in-world design was discussed and is
+   referenced in the file.
+2. Fill in `PLACEHOLDER_EMAIL` in app/silman-db/src/net/mod.rs (User-Agent
+   contact) before real Lichess/chess.com use.
+3. Bless or tune the dup-detection definition (#3) and the ficsgames.org
+   posture (#7).
+4. Optional: run `silman-cli twic-sync --from <current-issue>` weekly (or
+   ask for a scheduled routine); TWIC scheduling inside the app is still
+   open.
+5. Scale test toward ≥5M games (megabase) — includes the opening-tree
+   root-cache decision (#6).
+
+---
+
+# Run 1 — 2026-07-25
 
 Hardware: Apple M1 Max, 10 cores, 64 GB, macOS (Darwin 25.5.0); rustc 1.94.1,
 node 25.9.0. History: 6 conventional commits from empty repo to checkpoint.
