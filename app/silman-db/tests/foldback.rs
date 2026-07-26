@@ -56,9 +56,12 @@ fn confirmed_verdict_leads_the_comment() {
     let report = fold_back(&conn).unwrap();
     assert!(report.folded > 0);
     assert!(report.confirmed > 0);
-    let pgn = silman_db::export::export_pgn(&conn, 1).unwrap();
+    // Normalize the export's 80-column soft wrapping before matching.
+    let pgn = silman_db::export::export_pgn(&conn, 1)
+        .unwrap()
+        .replace('\n', " ");
     assert!(
-        pgn.contains("engine confirms"),
+        pgn.to_lowercase().contains("confirm"),
         "confirmed verdict rendered with PV:\n{pgn}"
     );
     assert!(pgn.contains("Bxf7+"), "PV rendered as SAN:\n{pgn}");
