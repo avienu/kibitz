@@ -56,6 +56,17 @@ export default function FirstRunOverlay({ onClose, onOpenHelp }: FirstRunOverlay
             <strong>Player Profile</strong> — a full strengths/weaknesses report for any player
             in the database.
           </li>
+          <li>
+            <strong>Train</strong> — spaced-repetition review of your opening repertoires.
+          </li>
+          <li>
+            <strong>Tactics</strong> — puzzle drills: rated, by motif, weakness-weighted,
+            Woodpecker cycles, speed.
+          </li>
+          <li>
+            <strong>Endgames</strong> — a tiered curriculum of theoretical endgames, played out
+            to the end.
+          </li>
         </ul>
         <p>
           The <strong>Help</strong> button at the right end of the tab bar opens the full user

@@ -12,12 +12,19 @@ The window has two columns.
 
 - **Left column** — the board, move navigation, the status line, the
   **Engine** panel, and the **Explain (static, no engine)** panel. This column
-  is always visible.
-- **Right column** — four tabs plus Help:
+  is always visible (during a Train review session the board shows the
+  training position instead of the loaded game).
+- **Right column** — seven tabs plus Help:
   - **Load PGN** — paste or open a PGN file to review a game.
   - **Database** — open a SQLite database, browse games, opening tree.
   - **Opponent Prep** — rank an opponent's weakest opening spots.
   - **Player Profile** — a full strengths/weaknesses report for one player.
+  - **Train** — the Repertoire Trainer: spaced-repetition review of your
+    opening lines. A badge on the tab shows how many cards are due.
+  - **Tactics** — puzzle drills: rated, motif-filtered, weakness-weighted,
+    Woodpecker cycles, and a speed drill.
+  - **Endgames** — a tiered curriculum of classic theoretical positions,
+    played out against a tablebase or heuristic opponent.
   - **Help** — opens this guide.
 
 On first launch a one-time overlay points out the tabs; dismiss it with
@@ -37,7 +44,18 @@ On first launch a one-time overlay points out the tabs; dismiss it with
 
 **Moving pieces on the board** is enabled only for games loaded from the
 database (because board input is how you enter variations — see
-"Annotating a game" below). For pasted PGNs the board is display-only.
+"Annotating a game" below) and during Train review sessions. For pasted
+PGNs the board is display-only.
+
+**Line → repertoire:** whenever a game with moves is loaded, a row under
+the navigation buttons offers to send the current line to the Repertoire
+Trainer: at ply 0 it reads "Mainline → repertoire", after stepping forward
+"Line (first N plies) → repertoire". Press **as White** or **as Black** to
+add a training card for every position in that line where the chosen color
+is to move (the other side's moves only provide context). The status line
+reports how many cards were new and how many positions were already
+covered — re-adding a line never duplicates cards. See the Train tab
+section below.
 
 ---
 
@@ -190,6 +208,10 @@ Navigating to another position stops any running search.
   board: **red** = alert targets, **orange** = attackers, **green** =
   imbalance evidence.
 - **Clear** — remove the explanation and the board shapes.
+- **voice** — narration style for the prose: **Coach** (default) or
+  **Neutral**. Changing it clears any shown explanation (the old prose is in
+  the old voice). The choice is stored in the open database (and locally,
+  for when no database is open).
 
 This is instant and engine-free; it is the same analysis "Annotate game"
 applies to every position.
@@ -248,7 +270,200 @@ ACPL and conversion need stored engine evaluations. If coverage is 0%, run
 `reanalyze-game` / `run-jobs` in a batch).
 
 The built profile survives tab switches and also feeds the Opponent Prep
-weaknesses strip.
+weaknesses strip and the Tactics tab's weakness-weighted drill.
+
+---
+
+## Train tab (Repertoire Trainer)
+
+Spaced-repetition review of your opening repertoires, scheduled with
+FSRS-4.5. Uses the open database (open one in the Database tab first); each
+card is a position where it is your color's turn plus the repertoire move
+you must know there.
+
+### Building a repertoire
+
+- **From a loaded game:** use the **"→ repertoire: as White / as Black"**
+  row under the board (see "Board and move navigation" above). Lines land in
+  the default repertoire for that color ("main (white)" / "main (black)").
+- **From a PGN study (CLI-only):** import a whole PGN file, one card per
+  mainline move of the training color:
+
+```
+cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+  import-repertoire study.pgn white --name "main"
+```
+
+  `--name` defaults to `main`; re-importing is idempotent (positions that
+  already have a card are left untouched — first move in wins).
+
+### Reviewing
+
+- **White / Black** buttons switch repertoires; each shows its due count,
+  and the panel reports "N due of M cards". The **Train tab itself carries
+  a badge** with the combined due total.
+- **Start review** (enabled when cards are due) starts a session over the
+  due queue (up to 100 cards). The **main board takes over**: it flips to
+  your color and shows the card's position; the prompt gives the moves so
+  far ("Start position" for a first move) and asks for **your move**.
+- **Play your repertoire move on the board.**
+  - **Correct:** the board plays the move and asks "How well did you know
+    it?" — grade yourself **Good** or **Easy** (Easy pushes the next review
+    further out).
+  - **Wrong:** the card lapses immediately (graded Again), a green arrow
+    shows the expected move, and the message gives the answer and when the
+    card comes back ("The repertoire move is Nf3 — again in <1d"). Press
+    **Continue**.
+- **End session** aborts at any point. After the last card a summary shows
+  "N reviewed — X correct, Y to relearn", with **Back to queue**.
+- Below the controls, the queue table lists the next due cards (up to 20):
+  the line prefix, the due date (or "new" for unseen cards), and the
+  repetition count with lapses.
+
+Intervals display as days/months/years ("13d", "3mo", "1.5y"). New cards
+are marked "new" in the session header and the queue.
+
+---
+
+## Tactics tab
+
+Puzzle drills over the Lichess puzzle database, imported into the open
+database (open one in the Database tab first). The puzzle board lives in
+this tab, independent of the game in the left column, and **no engine is
+involved anywhere** — solving is checked against the stored solution line.
+
+The summary line shows your **tactics rating**, rated attempt count, and
+how many puzzles are imported.
+
+### Importing puzzles
+
+In the **Import puzzles** section: enter the CSV path (default
+`testdata/corpus/lichess_db_puzzle.csv`), optionally a **min popularity**
+cutoff (Lichess popularity is −100..100; the field defaults to 50), and
+press **Import CSV**. Download `lichess_db_puzzle.csv` from
+database.lichess.org (CC0; it may be bundled freely). The full 5M-row dump
+takes a few minutes and imports in constant memory.
+
+The same import exists on the command line, with an extra row cap:
+
+```
+cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+  import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000
+```
+
+### Solving flow
+
+Press **Next puzzle**: the opponent's setup move plays after a beat, the
+clock starts, and you play every move of the solution on the puzzle board
+(the board is oriented to your side; opponent replies play automatically).
+
+- A **wrong move fails the puzzle** — the answer and the full solution line
+  are shown. There are no retries on a rated attempt.
+- An **alternate checkmate is accepted**: if your differing move delivers
+  mate, the puzzle counts as solved.
+- **Underpromotion caveat:** board input auto-promotes to a queen, so a
+  solution that requires an underpromotion cannot be entered — the attempt
+  shows as failed with the solution revealed (unless queening happens to
+  mate too, which the alternate-mate rule accepts).
+- **Give up** reveals the solution and records a failed attempt.
+- After finishing, the puzzle's themes are revealed and **◀ / ▶** replay
+  the solution. The outcome line shows your time and any rating change.
+
+### The five modes
+
+- **Rated (±100 of your rating)** — an unsolved puzzle near your rating;
+  the band starts at ±100 and widens (up to ±1000) if nothing is left.
+- **Motif filter** — pick a **theme** from the dropdown (each shows its
+  puzzle count) and drill only that motif.
+- **Weakness-weighted (from your profile)** — needs your profile (build it
+  in the Player Profile tab first). Puzzles are chosen against the motifs
+  your games suffer from most, and every serve shows **"Why this puzzle"**
+  — e.g. "picked because your games allow many exposed-king tactics (4
+  allowed, 2 missed in your profile) — this puzzle's themes […] train that
+  motif".
+- **Woodpecker cycle** — solve the *same* fixed set repeatedly, aiming for
+  faster and cleaner cycles. In the **Woodpecker sets** section, name a set
+  and give it a size, press **Create set**, then **Start cycle**. The
+  session line tracks puzzle x/y, solved count, and total time; **Stats**
+  lists every past cycle with attempts, solved, accuracy, total and average
+  time.
+- **Speed (easy, against the clock)** — deliberately easy puzzles (rated
+  300–900 points below you) for fast pattern recognition. Already-solved
+  puzzles stay in the pool — repetition is the point. The session line
+  tracks solved/attempts and average time.
+
+### The tactics rating
+
+An Elo-style rating updated against the fixed puzzle ratings: K = 40 for
+your first 30 rated attempts, then K = 20. Only **rated, motif and
+weakness** attempts move it — Woodpecker cycles and speed drills are
+repetition training and record history only.
+
+---
+
+## Endgames tab
+
+A tiered curriculum of classic theoretical endgame positions (27 drills),
+played out on this tab's own board against an automatic opponent. Uses the
+open database for progress tracking; **no engine is involved**.
+
+### Tiers and drills
+
+The tier table shows each tier's rating band and your mastered count:
+
+- **Essentials** (up to ~1000) — the two basic mates, the square of the
+  pawn, king-and-pawn fundamentals.
+- **Building technique** (~1000–1500) — opposition, key squares, spare
+  tempi, queen vs pawn.
+- **Rook endings and tempo play** (~1500–1900) — Lucena, Philidor, and the
+  other rook endings that decide practical games.
+
+**Open** a tier to list its drills: title (hover for the full instruction),
+material (e.g. KQvK), goal, your attempt count, and mastery progress.
+**Start** launches a drill.
+
+### Playing a drill
+
+You play the side to move of the drill position — the task line says
+"Win with White" or "Hold the draw with Black" — and the instruction
+explains the idea. The opponent replies automatically:
+
+- **Tablebase opponent** ("Opponent: tablebase (optimal replies)"): where
+  Syzygy tables cover the piece count, replies are provably
+  result-optimal, and every move of yours is checked — a move that
+  forfeits the theoretical result (a win thrown away, a draw lost) fails
+  the drill immediately.
+- **Heuristic opponent** ("Opponent: heuristic sparring partner"): without
+  tables, a deterministic shallow-search sparring partner defends
+  sensibly but is not an oracle, and only actual game endings
+  (checkmate / stalemate / draw) are detected.
+
+**Give up** ends the attempt; after an attempt, **Retry** or **Back to
+drills**. The board input auto-promotes to a queen; the curriculum is
+designed so that no drill needs an underpromotion.
+
+### Mastery
+
+A drill is **mastered** after 2 clean completions (solving without
+failing in between); progress shows as "1/2 clean", then "mastered" with a
+✓ in the drill list. The summary line tracks total drills mastered.
+
+### Getting tablebases
+
+The Syzygy directory resolves from the `SILMAN_SYZYGY` environment
+variable, else by walking up from the working directory to
+`testdata/syzygy`. The repo script
+
+```
+scripts/fetch_syzygy_test_files.sh
+```
+
+downloads the complete 3-man set (under 100 KB, from the Lichess mirror)
+into `testdata/syzygy/` — enough for the test suite, but most curriculum
+drills have more pieces and then fall back to the heuristic opponent. For
+tablebase-verified play across the whole curriculum, point `SILMAN_SYZYGY`
+at a downloaded 3-4-5-man set. The note at the top of the tab always
+states which opponent you are getting.
 
 ---
 
@@ -284,13 +499,30 @@ weaknesses strip.
 3. Opponent Prep tab → name → **as White** or **as Black** → **Build prep**.
 4. Click a master game on a card to study the critical position.
 
+### Build and train an opening repertoire
+
+1. Load a model game (Load PGN or Database tab), step to where your line
+   ends, and press "→ repertoire: **as White**/**as Black**" — or bulk-import
+   a PGN study with the CLI `import-repertoire`.
+2. Train tab → pick the color → **Start review**.
+3. Play each prompted move on the board; grade **Good**/**Easy** when right,
+   read the arrow and press **Continue** when wrong.
+4. Come back when the tab badge shows cards due — FSRS schedules the rest.
+
+### Train tactics against your own weaknesses
+
+1. Tactics tab → **Import CSV** (once) with the Lichess puzzle dump.
+2. Player Profile tab → build your own profile.
+3. Tactics tab → mode **Weakness-weighted (from your profile)** →
+   **Next puzzle** — each serve explains why it was picked.
+
 ---
 
 ## CLI-only features
 
-Everything below has **no UI entry point** — it exists only in the developer
-CLI (`silman-cli`) or the validation harness (`wsui-validate`). Run them from
-the repository root. The general form is:
+Everything below has **no UI entry point** (exceptions are noted inline) —
+it exists only in the developer CLI (`silman-cli`) or the validation harness
+(`wsui-validate`). Run them from the repository root. The general form is:
 
 ```
 cargo run --release -p silman-db --bin silman-cli -- --db <path.sqlite> <subcommand> [args]
@@ -326,6 +558,26 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
 ```
 cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   import-si4 /path/to/scidbase --source-name "SCID import" --kind personal
+```
+
+- **Import a repertoire PGN** for the Train tab — every mainline move of
+  the chosen color becomes a training card (the UI can only add lines from
+  a loaded game, one at a time). `--name` defaults to `main`; re-import is
+  idempotent:
+
+```
+cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+  import-repertoire study.pgn white --name "main"
+```
+
+- **Import Lichess puzzles** for the Tactics tab. The Tactics tab's
+  "Import CSV" button does the same import; only `--max-rows` (stop after
+  importing that many puzzles) is CLI-exclusive. `--min-popularity` skips
+  puzzles below that Lichess popularity (−100..100):
+
+```
+cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+  import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000
 ```
 
 ### Downloading games (CLI-only)
@@ -453,7 +705,10 @@ cargo run --release -p silman-db --bin wsui-validate -- \
 ## Where things are stored
 
 - Everything lives in the SQLite database you open — games, annotations,
-  engine evaluations, the job queue, and the provenance (source, license,
-  date) of every import.
+  engine evaluations, the job queue, repertoire cards and their review
+  history, imported puzzles with your attempts and tactics rating, endgame
+  drill progress, the narration-voice setting, and the provenance (source,
+  license, date) of every import.
 - UI preferences (database path, engine path, node budget, comment display
-  mode, the first-run flag) persist in the app's local storage.
+  mode, narration voice fallback, the first-run flag) persist in the app's
+  local storage.

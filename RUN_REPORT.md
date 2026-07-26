@@ -155,10 +155,22 @@ five BSD crates.
   Woodpecker cycles (fixed sets, per-cycle time/accuracy comparison),
   and Heisman-style speed drill. No engine anywhere: verification is
   exact-match + cozy-chess checkmate detection.
-- **Endgame trainer:** agent launched after the rest landed (Fathom risk
-  already retired); addendum below if it completes within this run,
-  otherwise it is the one Phase 5 item spilling into run 6 as you
-  allowed.
+- **Phase 5 — endgame trainer (agent, verified):** landed within the
+  run — no spillover. 27 drills in three tiers (essentials → technique →
+  rook endings), defined in a data file with ZERO copyrighted text:
+  original one-line instructions over public-domain theory (opposition,
+  square of the pawn, Lucena's bridge, Philidor's third rank, Vancura,
+  wrong-bishop corner, Q vs 7th-rank pawn win/draw cases). Every FEN's
+  theoretical result was verified against Syzygy before inclusion.
+  Opponent play: DTZ-optimal tablebase moves via silman-tb wherever the
+  loaded files cover the position — with per-move policing that fails
+  the drill the moment your move flips the theoretical result — else a
+  documented deterministic heuristic; Stockfish never spawns (asserted).
+  With the 3-man test set 16/27 drills get the tablebase opponent; a
+  3-4-5 set covers all 27 (fetch script provided). Migration 0011
+  records attempts with opponent/verification provenance and mastery
+  streaks. It also fixed the migration runner to per-version bookkeeping
+  so the reserved-but-unused 0010 slot applies safely whenever it lands.
 
 ## Acceptance sample — your game, full pipeline, coach voice
 
