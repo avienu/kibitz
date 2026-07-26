@@ -88,14 +88,21 @@ impl<R: BufRead> PgnReader<R> {
         if let Some(l) = self.pending_line.take() {
             return Ok(Some(l));
         }
-        let mut buf = String::new();
-        let n = self.reader.read_line(&mut buf)?;
+        // PGN's canonical encoding is Latin-1, and real-world files (TWIC,
+        // old databases) contain it; decode UTF-8 when valid, else fall
+        // back to Latin-1 so no byte sequence can fail.
+        let mut buf = Vec::new();
+        let n = self.reader.read_until(b'\n', &mut buf)?;
         if n == 0 {
             self.eof = true;
             return Ok(None);
         }
         self.line_no += 1;
-        Ok(Some(buf))
+        let line = match String::from_utf8(buf) {
+            Ok(s) => s,
+            Err(e) => e.into_bytes().iter().map(|&b| b as char).collect(),
+        };
+        Ok(Some(line))
     }
 
     fn parse_tag_line(line: &str, line_no: u64) -> Result<(String, String), PgnError> {

@@ -7,6 +7,7 @@
 
 pub mod db;
 pub mod eco;
+pub mod export;
 pub mod fingerprint;
 pub mod hash;
 pub mod import;
