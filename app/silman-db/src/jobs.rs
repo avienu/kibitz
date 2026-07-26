@@ -138,26 +138,29 @@ pub fn run_pending(
             }
             if purpose == "wsui-confirm" {
                 // The eval is from the side to move's POV; translate to the
-                // claimed beneficiary and grade the alert.
+                // claimed beneficiary and grade the alert. Mate distances
+                // convert with the same sign flips and never masquerade as
+                // centipawns downstream.
                 let stm_is_white = p.fen.split_whitespace().nth(1) == Some("w");
-                let white_cp = if stm_is_white {
-                    line.score_cp
-                } else {
-                    -line.score_cp
+                let flip = |v: i32| -> i32 {
+                    let white = if stm_is_white { v } else { -v };
+                    match p.beneficiary.as_deref() {
+                        Some("black") => -white,
+                        _ => white,
+                    }
                 };
-                let benef_cp = match p.beneficiary.as_deref() {
-                    Some("black") => -white_cp,
-                    _ => white_cp,
-                };
-                let status = if benef_cp >= 150 {
+                let benef_cp = flip(line.score_cp);
+                let benef_mate = line.mate.map(flip);
+                let status = if benef_mate.is_some_and(|m| m >= 0) || benef_cp >= 150 {
                     "confirmed"
-                } else if benef_cp <= 50 {
+                } else if benef_mate.is_some_and(|m| m < 0) || benef_cp <= 50 {
                     "refuted"
                 } else {
                     "unclear-at-budget"
                 };
                 result["status"] = serde_json::json!(status);
                 result["score_delta_cp"] = serde_json::json!(benef_cp);
+                result["mate_for_beneficiary"] = serde_json::json!(benef_mate);
             }
             Ok(result)
         })();

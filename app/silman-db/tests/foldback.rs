@@ -127,3 +127,38 @@ fn legacy_engine_comments_become_structured_rows() {
     );
     assert!(pgn.contains("{Last book move}"), "{pgn}");
 }
+
+/// Run-5 bug 1: a mate verdict folds back as "forced mate in N", never as
+/// a material figure ("winning about 100 pawns").
+#[test]
+fn mate_verdict_renders_as_mate_not_material() {
+    let (_d, conn) = setup(TRAP);
+    silman_db::annotate::annotate_game(&conn, 1, 100_000, 12).unwrap();
+    let result = serde_json::json!({
+        "status": "confirmed",
+        "score_cp": 31900,
+        "score_delta_cp": 31900,
+        "mate_for_beneficiary": 3,
+        "pv": ["c4f7", "e8d8", "e5f3"],
+        "nodes": 100000,
+        "engine": "Stockfish 18",
+    });
+    conn.execute(
+        "UPDATE jobs SET status='done', result=?1 WHERE purpose='wsui-confirm'",
+        [result.to_string()],
+    )
+    .unwrap();
+    let report = fold_back(&conn).unwrap();
+    assert!(report.confirmed > 0);
+    let pgn = silman_db::export::export_pgn(&conn, 1)
+        .unwrap()
+        .replace('\n', " ");
+    assert!(
+        pgn.contains("forced mate in 3"),
+        "mate verdict must say mate:\n{pgn}"
+    );
+    assert!(
+        !pgn.contains("pawns"),
+        "mate must never render as material:\n{pgn}"
+    );
+}

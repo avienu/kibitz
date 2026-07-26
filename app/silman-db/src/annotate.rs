@@ -219,10 +219,17 @@ pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
             }
             sans
         };
+        let mate_in = v["mate_for_beneficiary"].as_i64().map(|m| m as i32);
         let check = EngineCheck {
             status,
             pv: pv_san,
-            score_delta_cp: v["score_delta_cp"].as_i64().map(|x| x as i32),
+            // A mate score must never render as material (run-5 bug 1).
+            score_delta_cp: if mate_in.is_some() {
+                None
+            } else {
+                v["score_delta_cp"].as_i64().map(|x| x as i32)
+            },
+            mate_in,
             budget_nodes: v["nodes"].as_u64().unwrap_or(0),
         };
         match status {
