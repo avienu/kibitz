@@ -109,6 +109,55 @@ fn import_export_round_trip_is_semantically_equal() {
     assert_eq!(st2.games_imported, 0);
 }
 
+/// RATIFIED design (run 3): a null move played while in check is
+/// unrepresentable as a legal position; the affected line is truncated at
+/// that point — never the whole game.
+#[test]
+fn in_check_null_truncates_the_line_not_the_game() {
+    // After 2.Qh5+ Black is in check; the variation tries a null move.
+    const PGN: &str = r#"[White "A"]
+[Black "B"]
+[Result "*"]
+
+1. e4 f6 2. Qh5+ g6 (2... -- 3. Qe5) 3. Qxg6+ hxg6 *
+"#;
+    let dir = tempfile::tempdir().unwrap();
+    let conn = silman_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+    let st = import_pgn(&conn, &source("nulls"), Cursor::new(PGN)).unwrap();
+    assert_eq!(st.games_imported, 1, "failures: {:?}", st.failures);
+
+    // The mainline survives in full; the truncated (now-empty) variation
+    // is dropped rather than stored as `()`.
+    let exported = export_pgn(&conn, 1).unwrap();
+    assert!(
+        exported.contains("3. Qxg6+ hxg6"),
+        "mainline intact:\n{exported}"
+    );
+    assert!(
+        !exported.contains('('),
+        "empty variation dropped:\n{exported}"
+    );
+    assert!(
+        !exported.contains("--"),
+        "in-check null not stored:\n{exported}"
+    );
+
+    // A LEGAL null in a variation is stored and round-trips as `--`.
+    const LEGAL_NULL: &str = r#"[White "C"]
+[Black "D"]
+[Result "*"]
+
+1. d4 d5 (1... -- 2. e4) 2. c4 *
+"#;
+    let st2 = import_pgn(&conn, &source("legal-null"), Cursor::new(LEGAL_NULL)).unwrap();
+    assert_eq!(st2.games_imported, 1, "failures: {:?}", st2.failures);
+    let exported2 = export_pgn(&conn, 2).unwrap();
+    assert!(
+        exported2.contains("(1... -- 2. e4)"),
+        "legal null kept:\n{exported2}"
+    );
+}
+
 /// The same OTB game as it appears in a TWIC issue and in a personal SCID
 /// export: different Event/Site spellings, same players/date/result/moves.
 #[test]

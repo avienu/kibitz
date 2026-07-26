@@ -206,11 +206,17 @@ fn tokens_from_pgn(
                             // Whole variation was swallowed (its VAR_START
                             // was never emitted): emit nothing.
                         } else {
-                            // Close of the truncated line itself.
+                            // Close of the truncated line itself. If the
+                            // variation lost ALL its content, drop it
+                            // entirely instead of storing an empty `()`.
                             if stack.len() > resume_depth {
                                 level = stack.pop().expect("depth checked");
                             }
-                            out.push(Token::VarEnd);
+                            if matches!(out.last(), Some(Token::VarStart)) {
+                                out.pop();
+                            } else {
+                                out.push(Token::VarEnd);
+                            }
                         }
                         skip_until_depth = None;
                     } else {
