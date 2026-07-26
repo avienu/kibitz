@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -65,6 +65,12 @@ pub struct EngineCheck {
     pub pv: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score_delta_cp: Option<i32>,
+    /// Forced mate distance from the BENEFICIARY's point of view:
+    /// positive = the beneficiary mates in N, negative = gets mated,
+    /// 0 = the position is already checkmate. When set, `score_delta_cp`
+    /// must not be rendered as material (schema v2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mate_in: Option<i32>,
     pub budget_nodes: u64,
 }
 
@@ -151,6 +157,9 @@ pub struct Imbalance {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EngineEval {
     pub eval_cp: i32,
+    /// Forced mate distance, White's point of view (schema v2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mate_in: Option<i32>,
     pub best: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub multipv: Vec<String>,
@@ -162,6 +171,24 @@ pub struct Provenance {
     pub version: String,
 }
 
+/// A composite plan: several PlanHints from independent imbalances that
+/// converge on one target (schema v2, run-5 feedback item 4).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompositePlan {
+    /// The convergence target ("d5", or a file like "d-file").
+    pub target: String,
+    /// The clustered hint tokens, strongest first.
+    pub hints: Vec<String>,
+    /// Distinct imbalance kinds supporting this plan.
+    pub supporting: Vec<ImbalanceKind>,
+    /// All evidence squares involved (for UI overlays).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub squares: Vec<String>,
+    /// Ranking score: distinct-support count weighted by magnitude.
+    pub score: u32,
+    pub favors: Favors,
+}
+
 /// The universal contract: everything silman knows about one position.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FeatureRecord {
@@ -171,6 +198,9 @@ pub struct FeatureRecord {
     pub phase: Phase,
     pub wsui: WsuiReport,
     pub imbalances: Vec<Imbalance>,
+    /// Synthesized composite plans, best first (schema v2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub composite_plans: Vec<CompositePlan>,
     pub engine: Option<EngineEval>,
     pub provenance: Provenance,
 }
@@ -217,6 +247,7 @@ mod tests {
                         status: EngineCheckStatus::Confirmed,
                         pv: vec!["Nxc6".into(), "bxc6".into(), "Qd4".into()],
                         score_delta_cp: Some(180),
+                        mate_in: None,
                         budget_nodes: 2_000_000,
                     }),
                 }],
@@ -232,6 +263,7 @@ mod tests {
                     squares: vec!["d4".into(), "d5".into()],
                 }],
             }],
+            composite_plans: vec![],
             engine: None,
             provenance: Provenance {
                 generator: "silman-core".into(),
@@ -241,7 +273,7 @@ mod tests {
         let json = serde_json::to_string_pretty(&record).unwrap();
         // Spec-sketch spellings must hold exactly.
         for needle in [
-            "\"schema_version\": 1",
+            "\"schema_version\": 2",
             "\"side_to_move\": \"white\"",
             "\"phase\": \"middlegame\"",
             "\"kind\": \"InadequatelyDefended\"",

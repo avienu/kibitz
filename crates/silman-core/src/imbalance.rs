@@ -323,6 +323,22 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
         evidence.insert("kingside_majority".into(), json!("white"));
     }
 
+    // Backward pawns invite pressure down their file onto the stop square.
+    for (ci, color) in [(0, Color::White), (1, Color::Black)] {
+        for p in backward[ci] {
+            if let Some(stop) = match color {
+                Color::White => p.try_offset(0, 1),
+                Color::Black => p.try_offset(0, -1),
+            } {
+                let _ = ci;
+                plans.push(PlanHint {
+                    hint: "PressureBackwardPawn".into(),
+                    squares: vec![square_name(p), square_name(stop)],
+                });
+            }
+        }
+    }
+
     // Blockade hint against the strongest enemy passer.
     for (ci, color) in [(0, Color::White), (1, Color::Black)] {
         for p in passed[ci] {

@@ -140,12 +140,29 @@ fn phase_classification() {
     );
 }
 
+/// Composite-plan synthesis (run-5): on the Sveshnikov tabiya the d5
+/// complex must merge into ONE plan — knight maneuver to the d5 hole plus
+/// pressure on the backward d6 pawn — supported by two independent
+/// imbalances. Source: Sveshnikov Sicilian after 6...d6, the canonical
+/// "everything points to d5" position in strategy literature.
+#[test]
+fn sveshnikov_composite_plan_converges_on_d5() {
+    let b = board("r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7");
+    let record = silman_core::analyze(&b);
+    let top = record.composite_plans.first().expect("composite plan");
+    assert_eq!(top.target, "d5");
+    assert!(top.supporting.len() >= 2, "{top:?}");
+    assert!(top.hints.contains(&"ManeuverKnightToOutpost".to_string()));
+    assert!(top.hints.contains(&"PressureBackwardPawn".to_string()));
+    assert_eq!(top.favors, Favors::White);
+}
+
 /// The full analyze() record on the Sveshnikov tabiya is JSON-stable.
 #[test]
 fn analyze_snapshot_sveshnikov() {
     let b = board("r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7");
     let record = silman_core::analyze(&b);
-    assert_eq!(record.schema_version, 1);
+    assert_eq!(record.schema_version, 2);
     insta::assert_json_snapshot!(record, {
         ".provenance.version" => "[version]",
     });
