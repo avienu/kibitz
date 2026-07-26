@@ -75,7 +75,8 @@ pub fn build_profile(
          WHERE (white_id = ?1 OR black_id = ?1) AND start_fen IS NULL
          ORDER BY id DESC LIMIT ?2",
     )?;
-    let rows: Vec<(i64, bool, i64, Option<String>, Vec<u8>)> = stmt
+    type GameRow = (i64, bool, i64, Option<String>, Vec<u8>);
+    let rows: Vec<GameRow> = stmt
         .query_map(params![player_id, max_games as i64], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })?

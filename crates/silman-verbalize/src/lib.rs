@@ -11,6 +11,14 @@
 //! in the record; that is the hard property the future LLM mode (the `llm`
 //! feature) will be validated against.
 //!
+//! The prose is prose: no serialized data may leak through. Every known
+//! evidence key has a dedicated grammatical rendering; unknown evidence
+//! keys are omitted entirely; bare counts (space, development, forcing
+//! moves, locked pawns) are folded into qualitative phrasing or dropped;
+//! centipawn figures are spoken as pawns. The snapshot tests enforce this
+//! with a lint over the rendered output (no underscores, no brackets, no
+//! braces, no quotes, no labeled numbers).
+//!
 //! Composition order, per the spec: tactical alerts first (most severe
 //! first), then dominant imbalances (winning > clear > minor, where minor
 //! ones are dropped when the record carries three or more imbalances and at
@@ -189,16 +197,50 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
         ),
         _ => String::new(),
     };
+    let attackers = owned_list(board, &alert.attackers);
+    let defenders = owned_list(board, &alert.defenders);
+    let detail = alert.detail.as_deref();
+
+    // A pure overload alert names the overworked defender itself: the
+    // `defenders` field carries the pieces it is holding together.
+    if detail == Some("overloaded-defender")
+        && alert.attackers.is_empty()
+        && !alert.defenders.is_empty()
+    {
+        return fill(
+            lookup(&["alert.overloaded"]),
+            &[("subject", &subject), ("defenders", &defenders)],
+        );
+    }
+
+    // Lead sentence: a detail-specific lead absorbs the detail qualifier;
+    // otherwise fall back to the severity lead and phrase the detail as a
+    // follow-on sentence below.
     let kind = format!("{:?}", alert.kind);
-    let lead_key = format!("alert.{kind}.{}", severity_key(alert.severity));
+    let detail_lead_key = detail.map(|token| format!("alert.{kind}.{token}"));
+    let detail_in_lead = detail_lead_key
+        .as_deref()
+        .is_some_and(|key| !lookup(&[key]).is_empty());
+    let severity_lead_key = format!("alert.{kind}.{}", severity_key(alert.severity));
+    let mut lead_keys: Vec<&str> = Vec::new();
+    if let Some(key) = detail_lead_key.as_deref() {
+        lead_keys.push(key);
+    }
+    lead_keys.push(severity_lead_key.as_str());
+    lead_keys.push("alert.generic");
     let mut sentences = vec![fill(
-        lookup(&[lead_key.as_str(), "alert.generic"]),
+        lookup(&lead_keys),
         &[("subject", &subject), ("target_clause", &target_clause)],
     )];
 
-    let attackers = owned_list(board, &alert.attackers);
-    let defenders = owned_list(board, &alert.defenders);
-    if alert.kind == AlertKind::Undefended {
+    if alert.kind == AlertKind::WeakKing {
+        if !attackers.is_empty() {
+            sentences.push(fill(
+                lookup(&["clause.king_attackers"]),
+                &[("attackers", &attackers)],
+            ));
+        }
+    } else if alert.kind == AlertKind::Undefended {
         // The lead sentence already states that nothing defends it.
         if !attackers.is_empty() {
             sentences.push(fill(
@@ -216,26 +258,34 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
                 lookup(&["clause.attack_defend.attackers"]),
                 &[("attackers", &attackers)],
             )),
-            (true, false) => sentences.push(fill(
-                lookup(&["clause.attack_defend.defenders"]),
-                &[("defenders", &defenders)],
-            )),
+            (true, false) => {
+                let key = if alert.defenders.len() > 1 {
+                    "clause.attack_defend.defenders.plural"
+                } else {
+                    "clause.attack_defend.defenders"
+                };
+                sentences.push(fill(lookup(&[key]), &[("defenders", &defenders)]));
+            }
             (true, true) => {}
         }
     }
 
-    if let Some(detail) = alert.detail.as_deref() {
-        let detail_key = format!("detail.{detail}");
-        let known = lookup(&[detail_key.as_str()]);
-        let detail_phrase = if known.is_empty() {
-            humanize(detail)
-        } else {
-            known.to_string()
-        };
-        sentences.push(fill(
-            lookup(&["clause.detail"]),
-            &[("detail", &detail_phrase)],
-        ));
+    if let Some(token) = detail {
+        if !detail_in_lead {
+            if alert.kind == AlertKind::WeakKing {
+                sentences.push(render_king_details(token));
+            } else {
+                let known = lookup(&[&format!("detail.{token}")]);
+                if known.is_empty() {
+                    sentences.push(fill(
+                        lookup(&["clause.detail"]),
+                        &[("detail", &humanize(token))],
+                    ));
+                } else {
+                    sentences.push(known.to_string());
+                }
+            }
+        }
     }
 
     if let Some(see) = alert.see {
@@ -252,6 +302,74 @@ fn render_alert(alert: &TacticAlert, board: &Board) -> String {
     }
 
     sentences.join(" ")
+}
+
+/// WeakKing `detail` is a semicolon-joined compound ("zone-pressure+3;
+/// g-file shield pawn missing; open-files:g; back-rank"). Each component is
+/// rewritten as a natural clause and the clauses joined into one sentence;
+/// the zone-pressure count is folded away, and a shield file already
+/// reported as wide open is not also reported as missing its pawn.
+fn render_king_details(detail: &str) -> String {
+    let mut zone_pressure = false;
+    let mut back_rank = false;
+    let mut missing: Vec<String> = Vec::new();
+    let mut advanced: Vec<String> = Vec::new();
+    let mut open: Vec<String> = Vec::new();
+    let mut extras: Vec<String> = Vec::new();
+    for part in detail.split(';').map(str::trim).filter(|p| !p.is_empty()) {
+        if part.starts_with("zone-pressure") {
+            zone_pressure = true;
+        } else if part == "back-rank" {
+            back_rank = true;
+        } else if let Some(files) = part.strip_prefix("open-files:") {
+            open.extend(
+                files
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|f| !f.is_empty())
+                    .map(str::to_string),
+            );
+        } else if let Some(file) = part.strip_suffix("-file shield pawn missing") {
+            missing.push(file.to_string());
+        } else if let Some(file) = part.strip_suffix("-file shield pawn advanced") {
+            advanced.push(file.to_string());
+        } else {
+            extras.push(humanize(part));
+        }
+    }
+    missing.retain(|file| !open.contains(file));
+
+    let mut clauses: Vec<String> = Vec::new();
+    if zone_pressure {
+        clauses.push(lookup(&["king.zone_pressure"]).to_string());
+    }
+    if !missing.is_empty() {
+        clauses.push(fill(
+            lookup(&["king.shield_missing"]),
+            &[("files", &file_phrase(&missing))],
+        ));
+    }
+    if !advanced.is_empty() {
+        let key = if advanced.len() > 1 {
+            "king.shield_advanced.plural"
+        } else {
+            "king.shield_advanced"
+        };
+        clauses.push(fill(lookup(&[key]), &[("files", &file_phrase(&advanced))]));
+    }
+    if !open.is_empty() {
+        let key = if open.len() > 1 {
+            "king.open_files.plural"
+        } else {
+            "king.open_files"
+        };
+        clauses.push(fill(lookup(&[key]), &[("files", &file_phrase(&open))]));
+    }
+    if back_rank {
+        clauses.push(lookup(&["king.back_rank"]).to_string());
+    }
+    clauses.extend(extras);
+    format!("{}.", capitalize_first(&join_and(&clauses)))
 }
 
 fn render_engine_check(check: &EngineCheck) -> String {
@@ -278,30 +396,29 @@ fn render_engine_check(check: &EngineCheck) -> String {
 
 fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase) -> String {
     let kind = format!("{:?}", imbalance.kind);
+
+    // Cross-key context: "open" flavors the bishop-pair phrase, and a named
+    // material pattern supersedes the raw centipawn figure.
+    let context = EvidenceContext {
+        open_position: imbalance.evidence.get("character").and_then(Value::as_str) == Some("open"),
+        has_pattern: imbalance.evidence.contains_key("pattern"),
+    };
+
     let order = lookup(&["evidence.order"]);
     let rank = |key: &str| {
         order
             .split('|')
-            .position(|known| known == key)
+            .position(|known| known == evidence_base_key(key))
             .unwrap_or(usize::MAX)
     };
     let mut entries: Vec<(&String, &Value)> = imbalance.evidence.iter().collect();
     entries.sort_by_key(|(key, _)| rank(key));
     let evidence: Vec<String> = entries
         .iter()
-        .filter_map(|(key, value)| render_evidence(key, value, board))
+        .filter_map(|(key, value)| render_evidence(key, value, board, &context))
+        .map(|clause| format!("{}.", capitalize_first(&clause)))
         .collect();
-    let evidence_clause = if evidence.is_empty() {
-        String::new()
-    } else {
-        format!(
-            " {}",
-            fill(
-                lookup(&["clause.evidence"]),
-                &[("list", &join_and(&evidence))],
-            )
-        )
-    };
+
     let aspect_key = format!("aspect.{kind}");
     let known_aspect = lookup(&[aspect_key.as_str()]);
     let aspect = if known_aspect.is_empty() {
@@ -310,12 +427,12 @@ fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase) -> Strin
         known_aspect.to_string()
     };
 
-    match favors_side(imbalance.favors) {
+    let headline = match favors_side(imbalance.favors) {
         None => {
             let balanced_key = format!("imbalance.{kind}.balanced");
             fill(
                 lookup(&[balanced_key.as_str(), "imbalance.balanced"]),
-                &[("aspect", &aspect), ("evidence_clause", &evidence_clause)],
+                &[("aspect", &aspect)],
             )
         }
         Some(side) => {
@@ -329,71 +446,277 @@ fn render_imbalance(imbalance: &Imbalance, board: &Board, phase: Phase) -> Strin
                     plain_key.as_str(),
                     generic_key.as_str(),
                 ]),
-                &[
-                    ("beneficiary", side_name(side)),
-                    ("aspect", &aspect),
-                    ("evidence_clause", &evidence_clause),
-                ],
+                &[("beneficiary", side_name(side)), ("aspect", &aspect)],
             )
         }
-    }
-}
-
-/// Evidence keys whose values are squares of the owner's pawns; for these
-/// the record's FEN is consulted so the phrase can say whose pawn it is.
-const PAWN_EVIDENCE_KEYS: &[&str] = &["isolated", "doubled", "backward", "passed", "hanging"];
-
-fn scalar(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        other => other.to_string(),
-    }
-}
-
-fn render_evidence(key: &str, value: &Value, board: &Board) -> Option<String> {
-    let items: Vec<String> = match value {
-        Value::Null | Value::Bool(false) => return None,
-        Value::Bool(true) => Vec::new(),
-        Value::Array(values) => values.iter().map(scalar).collect(),
-        Value::Object(map) => map
-            .iter()
-            .map(|(name, inner)| format!("{name} {}", scalar(inner)))
-            .collect(),
-        other => vec![scalar(other)],
     };
-    let list = join_and(&items);
-    let plural = items.len() > 1;
-    let owner = if PAWN_EVIDENCE_KEYS.contains(&key) {
-        pawn_owner(board, &items)
+    if evidence.is_empty() {
+        headline
+    } else {
+        format!("{headline} {}", evidence.join(" "))
+    }
+}
+
+/// Cross-key evidence context within a single imbalance.
+struct EvidenceContext {
+    open_position: bool,
+    has_pattern: bool,
+}
+
+/// The evidence key with any side/file suffix stripped, for ordering and
+/// dispatch ("isolated_black" -> "isolated", "doubled_majors_d" ->
+/// "doubled_majors", "holes_in_black_camp" -> "holes").
+fn evidence_base_key(key: &str) -> &str {
+    if key.starts_with("doubled_majors_") {
+        return "doubled_majors";
+    }
+    if key == "holes_in_white_camp" || key == "holes_in_black_camp" {
+        return "holes";
+    }
+    key.strip_suffix("_white")
+        .or_else(|| key.strip_suffix("_black"))
+        .unwrap_or(key)
+}
+
+/// The side named by an evidence key suffix, if any.
+fn evidence_key_side(key: &str) -> Option<SideColor> {
+    if key == "holes_in_white_camp" || key.ends_with("_white") {
+        Some(SideColor::White)
+    } else if key == "holes_in_black_camp" || key.ends_with("_black") {
+        Some(SideColor::Black)
     } else {
         None
-    };
+    }
+}
 
-    let mut chain: Vec<String> = Vec::new();
-    if owner.is_some() {
-        if plural {
-            chain.push(format!("evidence.{key}.owned.plural"));
-        }
-        chain.push(format!("evidence.{key}.owned"));
+fn side_from_value(value: &Value) -> Option<SideColor> {
+    match value.as_str() {
+        Some("white") => Some(SideColor::White),
+        Some("black") => Some(SideColor::Black),
+        _ => None,
     }
-    if plural {
-        chain.push(format!("evidence.{key}.plural"));
-    }
-    chain.push(format!("evidence.{key}"));
-    chain.push(if items.is_empty() {
-        "evidence.generic.bare".to_string()
+}
+
+/// A non-empty list of strings from an array value; `None` otherwise.
+/// Degenerate evidence (empty arrays, non-arrays) is thereby suppressed.
+fn string_list(value: &Value) -> Option<Vec<String>> {
+    let items: Vec<String> = value
+        .as_array()?
+        .iter()
+        .filter_map(|item| item.as_str().map(str::to_string))
+        .collect();
+    if items.is_empty() {
+        None
     } else {
-        "evidence.generic".to_string()
-    });
-    let keys: Vec<&str> = chain.iter().map(String::as_str).collect();
-    let template = lookup(&keys);
+        Some(items)
+    }
+}
 
-    let owner_name = owner.map(side_name).unwrap_or("");
-    let human_key = humanize(key);
-    Some(fill(
-        template,
-        &[("items", &list), ("owner", owner_name), ("key", &human_key)],
-    ))
+/// "the d-file" / "the d- and e-files".
+fn file_phrase(files: &[String]) -> String {
+    if files.len() == 1 {
+        fill(lookup(&["phrase.file"]), &[("items", &files[0])])
+    } else {
+        let dashed: Vec<String> = files.iter().map(|file| format!("{file}-")).collect();
+        fill(lookup(&["phrase.files"]), &[("items", &join_and(&dashed))])
+    }
+}
+
+/// One grammatical clause for a known evidence key, or `None` for keys that
+/// are suppressed (bare counts, degenerate values) or unknown. Unknown keys
+/// are omitted silently: serialized data must never leak into the prose.
+fn render_evidence(
+    key: &str,
+    value: &Value,
+    board: &Board,
+    context: &EvidenceContext,
+) -> Option<String> {
+    // Doubled majors carry the file in the key ("doubled_majors_d") and the
+    // owning side in the value.
+    if let Some(file) = key.strip_prefix("doubled_majors_") {
+        let side = side_from_value(value)?;
+        return Some(fill(
+            lookup(&["evidence.doubled_majors"]),
+            &[
+                ("side", side_name(side)),
+                ("files", &file_phrase(&[file.to_string()])),
+            ],
+        ));
+    }
+
+    let base = evidence_base_key(key);
+    let key_side = evidence_key_side(key);
+    match base {
+        // Bare counts: folded into the headline or the character clause,
+        // never printed as labeled numbers.
+        "locked_center_pawns"
+        | "white_space"
+        | "black_space"
+        | "white_developed"
+        | "black_developed"
+        | "white_forcing_moves"
+        | "black_forcing_moves" => None,
+
+        "character" => match value.as_str() {
+            // "open" flavors the bishop-pair clause instead (see below);
+            // on its own it is the unmarked case and stays unspoken.
+            Some("closed") => Some(lookup(&["evidence.character.closed"]).to_string()),
+            _ => None,
+        },
+
+        "bishop_pair" => {
+            let side = side_from_value(value).or(key_side)?;
+            let template_key = if context.open_position {
+                "evidence.bishop_pair.open"
+            } else {
+                "evidence.bishop_pair"
+            };
+            Some(fill(lookup(&[template_key]), &[("side", side_name(side))]))
+        }
+
+        "bad_bishop" => {
+            let side = key_side?;
+            let object = value.as_object()?;
+            let square = object.get("bishop")?.as_str()?;
+            let pawns = object
+                .get("blocking_pawns")
+                .and_then(string_list)
+                .unwrap_or_default();
+            if pawns.is_empty() {
+                Some(fill(
+                    lookup(&["evidence.bad_bishop.bare"]),
+                    &[("side", side_name(side)), ("square", square)],
+                ))
+            } else {
+                Some(fill(
+                    lookup(&["evidence.bad_bishop"]),
+                    &[
+                        ("side", side_name(side)),
+                        ("square", square),
+                        ("pawns", &join_and(&pawns)),
+                    ],
+                ))
+            }
+        }
+
+        "isolated" | "doubled" | "backward" | "passed" | "hanging" => {
+            let squares = string_list(value)?;
+            let side = key_side.or_else(|| pawn_owner(board, &squares));
+            let plural = squares.len() > 1;
+            let template_key = match (side.is_some(), plural) {
+                (true, true) => format!("evidence.{base}.plural"),
+                (true, false) => format!("evidence.{base}"),
+                (false, true) => format!("evidence.{base}.neutral.plural"),
+                (false, false) => format!("evidence.{base}.neutral"),
+            };
+            let owner = side.map(side_name).unwrap_or("");
+            Some(fill(
+                lookup(&[template_key.as_str()]),
+                &[("side", owner), ("items", &join_and(&squares))],
+            ))
+        }
+
+        "queenside_majority" | "kingside_majority" => {
+            let side = side_from_value(value)?;
+            Some(fill(
+                lookup(&[&format!("evidence.{base}")]),
+                &[("side", side_name(side))],
+            ))
+        }
+
+        "material_diff_cp" => {
+            if context.has_pattern {
+                return None; // "up the exchange" says it better
+            }
+            let diff = value.as_i64()?;
+            let side = if diff > 0 {
+                SideColor::White
+            } else {
+                SideColor::Black
+            };
+            let pawns = (diff.abs() + 50) / 100;
+            let template_key = match pawns {
+                0 => return None, // level material is headline territory
+                1 => "evidence.material.pawn_up",
+                2 => "evidence.material.two_pawns_up",
+                3 => "evidence.material.three_pawns_up",
+                _ => "evidence.material.many_pawns_up",
+            };
+            Some(fill(lookup(&[template_key]), &[("side", side_name(side))]))
+        }
+
+        "pattern" => {
+            let pattern = value.as_str()?;
+            let known = lookup(&[&format!("evidence.pattern.{pattern}")]);
+            if known.is_empty() {
+                None
+            } else {
+                Some(known.to_string())
+            }
+        }
+
+        "open_files" => {
+            let files = string_list(value)?;
+            let template_key = if files.len() > 1 {
+                "evidence.open_files.plural"
+            } else {
+                "evidence.open_files"
+            };
+            Some(fill(
+                lookup(&[template_key]),
+                &[("files", &file_phrase(&files))],
+            ))
+        }
+
+        "half_open_files" => {
+            let files = string_list(value)?;
+            let plural = files.len() > 1;
+            let template_key = match (key_side.is_some(), plural) {
+                (true, true) => "evidence.half_open_files.plural",
+                (true, false) => "evidence.half_open_files",
+                (false, true) => "evidence.half_open_files.neutral.plural",
+                (false, false) => "evidence.half_open_files.neutral",
+            };
+            let owner = key_side.map(side_name).unwrap_or("");
+            Some(fill(
+                lookup(&[template_key]),
+                &[("files", &file_phrase(&files)), ("side", owner)],
+            ))
+        }
+
+        "rook_on_seventh" => {
+            let side = side_from_value(value)?;
+            Some(fill(
+                lookup(&["evidence.rook_on_seventh"]),
+                &[("side", side_name(side))],
+            ))
+        }
+
+        "holes" => {
+            let squares = string_list(value)?;
+            let side = key_side?;
+            let template_key = if squares.len() > 1 {
+                "evidence.holes.plural"
+            } else {
+                "evidence.holes"
+            };
+            Some(fill(
+                lookup(&[template_key]),
+                &[("side", side_name(side)), ("items", &join_and(&squares))],
+            ))
+        }
+
+        "established_outpost" => {
+            let side = key_side?;
+            let square = value.as_str()?;
+            Some(fill(
+                lookup(&["evidence.established_outpost"]),
+                &[("side", side_name(side)), ("items", square)],
+            ))
+        }
+
+        _ => None,
+    }
 }
 
 /// `Some(side)` when every listed square holds a pawn of one color on the

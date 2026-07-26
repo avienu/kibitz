@@ -1,56 +1,78 @@
-# evidence.tmpl — phrasings for imbalance evidence keys. Slots:
-#   {items} — the evidence values, joined ("d5", "d4 and d5", "queenside")
-#   {owner} — "White"/"Black" when every listed square holds that side's
-#             pawn on the record's FEN (pawn-structure keys only)
-#   {key}   — the humanized evidence key (generic fallback only)
-# Lookup order: <key>.owned.plural, <key>.owned, <key>.plural, <key>, generic.
+# evidence.tmpl — grammatical renderings for imbalance evidence keys.
+# Every rendering is a full clause (no terminal period; the composing code
+# capitalizes it and adds the period). Slots:
+#   {side}   — "White"/"Black", from the key suffix, the value, or the FEN
+#   {items}  — squares joined ("d5", "c4 and d5")
+#   {files}  — a ready file phrase ("the d-file", "the d- and e-files")
+#   {square} — a single square ("f8")
+#   {pawns}  — a joined square list ("c5 and d6")
+# Keys the code does not recognize are omitted from the prose entirely —
+# raw evidence data must never leak into a sentence. Bare counts
+# (locked_center_pawns, space, development, forcing moves) are folded into
+# qualitative phrasing or suppressed by the code; they never appear as
+# labeled numbers.
 
-# Presentation order for evidence keys within one imbalance sentence
-# (pawn weaknesses before the lines/squares that exploit them). Keys not
-# listed here come last, in alphabetical order.
-evidence.order = passed|isolated|doubled|backward|hanging|bishop_pair|outposts|holes|open_files|half_open_files|majorities|breaks|space
+# Presentation order for evidence keys within one imbalance sentence,
+# by base key (side suffixes stripped). Unlisted keys come last.
+evidence.order = passed|isolated|doubled|backward|hanging|queenside_majority|kingside_majority|bishop_pair|bad_bishop|character|pattern|material_diff_cp|open_files|half_open_files|doubled_majors|rook_on_seventh|holes|established_outpost
 
-evidence.isolated = an isolated pawn on {items}
-evidence.isolated.plural = isolated pawns on {items}
-evidence.isolated.owned = {owner}'s isolated pawn on {items}
-evidence.isolated.owned.plural = {owner}'s isolated pawns on {items}
+# Pawn-structure weaknesses and assets. The .neutral variants are used
+# when no owner can be established from the key or the FEN.
+evidence.isolated = {side}'s {items}-pawn is isolated
+evidence.isolated.plural = {side}'s pawns on {items} are isolated
+evidence.isolated.neutral = the pawn on {items} is isolated
+evidence.isolated.neutral.plural = the pawns on {items} are isolated
 
-evidence.doubled = doubled pawns on {items}
-evidence.doubled.plural = doubled pawns on {items}
-evidence.doubled.owned = {owner}'s doubled pawn on {items}
-evidence.doubled.owned.plural = {owner}'s doubled pawns on {items}
+evidence.doubled = {side} has a doubled pawn on {items}
+evidence.doubled.plural = {side}'s pawns on {items} are doubled
+evidence.doubled.neutral = the pawn on {items} is doubled
+evidence.doubled.neutral.plural = the pawns on {items} are doubled
 
-evidence.backward = a backward pawn on {items}
-evidence.backward.plural = backward pawns on {items}
-evidence.backward.owned = {owner}'s backward pawn on {items}
-evidence.backward.owned.plural = {owner}'s backward pawns on {items}
+evidence.backward = {side}'s {items}-pawn is backward
+evidence.backward.plural = {side}'s pawns on {items} are backward
+evidence.backward.neutral = the pawn on {items} is backward
+evidence.backward.neutral.plural = the pawns on {items} are backward
 
-evidence.passed = a passed pawn on {items}
-evidence.passed.plural = passed pawns on {items}
-evidence.passed.owned = {owner}'s passed pawn on {items}
-evidence.passed.owned.plural = {owner}'s passed pawns on {items}
+evidence.passed = {side} has a passed pawn on {items}
+evidence.passed.plural = {side} has passed pawns on {items}
+evidence.passed.neutral = there is a passed pawn on {items}
+evidence.passed.neutral.plural = there are passed pawns on {items}
 
-evidence.hanging = hanging pawns on {items}
-evidence.hanging.plural = hanging pawns on {items}
-evidence.hanging.owned = {owner}'s hanging pawn on {items}
-evidence.hanging.owned.plural = {owner}'s hanging pawns on {items}
+evidence.hanging = {side} has a hanging pawn on {items}
+evidence.hanging.plural = {side}'s pawns on {items} are hanging
+evidence.hanging.neutral = the pawn on {items} is hanging
+evidence.hanging.neutral.plural = the pawns on {items} are hanging
 
-evidence.half_open_files = a half-open {items}-file
-evidence.half_open_files.plural = half-open files on {items}
-evidence.open_files = an open {items}-file
-evidence.open_files.plural = open files on {items}
+evidence.queenside_majority = {side} has a queenside pawn majority
+evidence.kingside_majority = {side} has a kingside pawn majority
 
-evidence.bishop_pair = the bishop pair
-evidence.outposts = an outpost on {items}
-evidence.outposts.plural = outposts on {items}
-evidence.holes = a hole on {items}
-evidence.holes.plural = holes on {items}
-evidence.space = a space count of {items}
-evidence.majorities = a pawn majority on the {items}
-evidence.majorities.plural = pawn majorities on the {items}
-evidence.breaks = the pawn break {items}
-evidence.breaks.plural = pawn breaks {items}
+# Minor pieces.
+evidence.bishop_pair = {side} owns the bishop pair
+evidence.bishop_pair.open = {side} owns the bishop pair in an open position
+evidence.bad_bishop = {side}'s {square}-bishop is a problem piece, hemmed in by its own pawns on {pawns}
+evidence.bad_bishop.bare = {side}'s {square}-bishop is a problem piece, hemmed in by its own pawns
+evidence.character.closed = the position is closed, with a locked center
 
-# Fallbacks for evidence keys this file does not know.
-evidence.generic = {key}: {items}
-evidence.generic.bare = {key}
+# Material. The raw centipawn figure is folded into pawn language; named
+# patterns take precedence over the figure.
+evidence.material.pawn_up = {side} is a pawn up
+evidence.material.two_pawns_up = {side} is two pawns up
+evidence.material.three_pawns_up = {side} is three pawns up
+evidence.material.many_pawns_up = {side} is up a decisive amount of material
+evidence.pattern.white-exchange-up = White is up the exchange
+evidence.pattern.black-exchange-up = Black is up the exchange
+
+# Files and the seventh rank.
+evidence.open_files = {files} is open
+evidence.open_files.plural = {files} are open
+evidence.half_open_files = {files} is half-open for {side}
+evidence.half_open_files.plural = {files} are half-open for {side}
+evidence.half_open_files.neutral = {files} is half-open
+evidence.half_open_files.neutral.plural = {files} are half-open
+evidence.doubled_majors = {side} has doubled heavy pieces on {files}
+evidence.rook_on_seventh = {side} has a rook on the seventh rank
+
+# Squares and outposts. For holes, {side} is the side whose camp has them.
+evidence.holes = {side}'s position has a hole on {items}
+evidence.holes.plural = {side}'s position has holes on {items}
+evidence.established_outpost = {side}'s knight is entrenched on {items}

@@ -23,15 +23,29 @@ phrase.side_piece = {side}'s piece on {square}
 phrase.some_piece = one of {side}'s pieces
 phrase.kings = {side}'s king
 
+# File phrases. {items} for the plural form is the pre-hyphenated joined
+# list ("d- and e-"), so the result reads "the d- and e-files".
+phrase.file = the {items}-file
+phrase.files = the {items}files
+
 # Alert body clauses.
 clause.weak_king_target = around {target}
 clause.attacked_by = It is under attack from {attackers}.
 clause.attack_defend.both = It is attacked by {attackers} but defended only by {defenders}.
 clause.attack_defend.attackers = It is attacked by {attackers}, and nothing defends it.
 clause.attack_defend.defenders = Only {defenders} keeps it defended.
-clause.detail = The underlying problem: {detail}.
+clause.attack_defend.defenders.plural = Only {defenders} keep it defended.
+clause.king_attackers = The pressure comes from {attackers}.
 clause.see = A capture sequence here wins {amount}.
-clause.evidence = — {list}
+
+# Weak-king detail clauses, joined into one sentence by the code.
+king.zone_pressure = enemy pieces are massing around it
+king.shield_missing = the pawn cover is gone on {files}
+king.shield_advanced = the shield pawn on {files} has pushed too far forward
+king.shield_advanced.plural = the shield pawns on {files} have pushed too far forward
+king.open_files = {files} in front of the king is wide open
+king.open_files.plural = {files} in front of the king are wide open
+king.back_rank = the back rank is airless
 
 # Static-exchange value bands (centipawns -> plain words).
 see.small = a small amount of material
@@ -56,11 +70,13 @@ engine.unclear = The engine could not confirm this at the given budget.
 # Whole-position engine verdict (only present when an engine actually ran).
 engine.eval = The engine's overall verdict: about {score}, and it likes {best} here.
 
-# Known alert detail qualifiers; unknown ones are humanized mechanically.
-detail.overloaded-defender = an overloaded defender
-detail.back-rank = a vulnerable back rank
-detail.pawn-shield = a damaged pawn shield
-detail.trapped-and-attacked = the piece is trapped and under attack
+# Known alert detail qualifiers, phrased as complete follow-on sentences.
+# The trapped/loose tokens are absorbed into the lead sentence instead
+# (alerts.tmpl); unknown tokens fall back to clause.detail, humanized.
+detail.overloaded-defender = That defender is overloaded — it cannot cover everything at once.
+detail.back-rank = Its back rank is a genuine weakness.
+detail.pawn-shield = Its pawn shield is damaged.
+clause.detail = The deeper problem here is {detail}.
 
 # Section-level lines.
 tactics.quiet = No immediate tactics jump out; the position will be decided by its long-term features.

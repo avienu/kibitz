@@ -1,19 +1,30 @@
-# alerts.tmpl — lead sentences for WSUI tactical alerts, one per
-# (kind, severity). Slots: {subject} is a full noun phrase built from the
-# record ("Black's knight on c6", "White's king"); {target_clause} is used
-# by WeakKing only and is either empty or " around <square>".
+# alerts.tmpl — lead sentences for WSUI tactical alerts. Slots: {subject}
+# is a full noun phrase built from the record ("Black's knight on c6",
+# "White's king"); {target_clause} is used by WeakKing only and is either
+# empty or " around <square>"; {defenders} (overload lead only) is the
+# joined list of pieces the overloaded piece defends.
+#
+# Lookup order per alert: `alert.<Kind>.<detail>` first (which absorbs the
+# detail into the lead), then `alert.<Kind>.<severity>`, then the generic.
 
 alert.Undefended.high = {subject} is simply hanging — nothing defends it.
 alert.Undefended.medium = {subject} is loose — nobody defends it.
 alert.Undefended.low = {subject} is undefended at the moment, which is worth keeping an eye on.
+alert.Undefended.loose = {subject} has been left without a defender — worth keeping an eye on.
+alert.Undefended.attacked-and-undefended = {subject} hangs — nobody defends it.
 
 alert.InadequatelyDefended.high = {subject} cannot be adequately defended.
 alert.InadequatelyDefended.medium = {subject} is under pressure — its defense is stretched thin.
 alert.InadequatelyDefended.low = {subject} is slightly short of defenders.
 
+# Pure overload alerts (the subject is itself the overworked defender).
+alert.overloaded = {subject} is overloaded — it is the only piece defending {defenders}.
+
 alert.TrappedPiece.high = {subject} is trapped, with no safe square to run to.
 alert.TrappedPiece.medium = {subject} is dangerously short of squares.
 alert.TrappedPiece.low = {subject} has very little room to move.
+alert.TrappedPiece.trapped-and-attacked = {subject} is trapped — it has no safe square to run to.
+alert.TrappedPiece.trapped-attackable = {subject} is running out of squares — it has no safe retreat, and the trap is ready to be sprung.
 
 alert.WeakKing.high = {subject} is seriously exposed{target_clause}.
 alert.WeakKing.medium = {subject} is not entirely safe{target_clause}.
