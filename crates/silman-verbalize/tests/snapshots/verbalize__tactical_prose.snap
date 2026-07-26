@@ -1,0 +1,5 @@
+---
+source: crates/silman-verbalize/tests/verbalize.rs
+expression: out
+---
+Black's knight on c6 cannot be adequately defended. It is attacked by White's knight on e5 and the bishop on b5 but defended only by Black's pawn on b7. The underlying problem: an overloaded defender. A capture sequence here wins about two pawns. The engine confirms it: Bxc6 bxc6 Nxc6, winning about 1.9 pawns. Meanwhile, Black's rook on a8 is loose — nobody defends it.

@@ -7,6 +7,7 @@
 
 pub mod db;
 pub mod eco;
+pub mod edit;
 pub mod export;
 pub mod fingerprint;
 pub mod hash;
@@ -15,6 +16,7 @@ pub mod import_si4;
 pub mod movebin;
 pub mod net;
 pub mod pgn;
+pub mod prep;
 pub mod query;
 pub mod san;
 pub mod twic;

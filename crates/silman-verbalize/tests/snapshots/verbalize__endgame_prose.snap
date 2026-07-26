@@ -1,0 +1,9 @@
+---
+source: crates/silman-verbalize/tests/verbalize.rs
+expression: out
+---
+No immediate tactics jump out; the position will be decided by its long-term features.
+
+In this endgame White's pawn structure should decide the game — White's passed pawn on a5. Meanwhile, as for material, the position is level. The engine's overall verdict: about +3.5, and it likes a6 here.
+
+A good plan for White: escort the passed pawn up the board with the king (key squares: a5, a6, a7 and a8).

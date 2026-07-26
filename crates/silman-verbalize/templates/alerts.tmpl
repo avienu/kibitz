@@ -1,0 +1,23 @@
+# alerts.tmpl — lead sentences for WSUI tactical alerts, one per
+# (kind, severity). Slots: {subject} is a full noun phrase built from the
+# record ("Black's knight on c6", "White's king"); {target_clause} is used
+# by WeakKing only and is either empty or " around <square>".
+
+alert.Undefended.high = {subject} is simply hanging — nothing defends it.
+alert.Undefended.medium = {subject} is loose — nobody defends it.
+alert.Undefended.low = {subject} is undefended at the moment, which is worth keeping an eye on.
+
+alert.InadequatelyDefended.high = {subject} cannot be adequately defended.
+alert.InadequatelyDefended.medium = {subject} is under pressure — its defense is stretched thin.
+alert.InadequatelyDefended.low = {subject} is slightly short of defenders.
+
+alert.TrappedPiece.high = {subject} is trapped, with no safe square to run to.
+alert.TrappedPiece.medium = {subject} is dangerously short of squares.
+alert.TrappedPiece.low = {subject} has very little room to move.
+
+alert.WeakKing.high = {subject} is seriously exposed{target_clause}.
+alert.WeakKing.medium = {subject} is not entirely safe{target_clause}.
+alert.WeakKing.low = {subject} shows a little draftiness{target_clause}.
+
+# Fallback for alert kinds this file does not know yet.
+alert.generic = {subject} deserves tactical attention{target_clause}.

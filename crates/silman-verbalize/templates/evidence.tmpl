@@ -1,0 +1,56 @@
+# evidence.tmpl — phrasings for imbalance evidence keys. Slots:
+#   {items} — the evidence values, joined ("d5", "d4 and d5", "queenside")
+#   {owner} — "White"/"Black" when every listed square holds that side's
+#             pawn on the record's FEN (pawn-structure keys only)
+#   {key}   — the humanized evidence key (generic fallback only)
+# Lookup order: <key>.owned.plural, <key>.owned, <key>.plural, <key>, generic.
+
+# Presentation order for evidence keys within one imbalance sentence
+# (pawn weaknesses before the lines/squares that exploit them). Keys not
+# listed here come last, in alphabetical order.
+evidence.order = passed|isolated|doubled|backward|hanging|bishop_pair|outposts|holes|open_files|half_open_files|majorities|breaks|space
+
+evidence.isolated = an isolated pawn on {items}
+evidence.isolated.plural = isolated pawns on {items}
+evidence.isolated.owned = {owner}'s isolated pawn on {items}
+evidence.isolated.owned.plural = {owner}'s isolated pawns on {items}
+
+evidence.doubled = doubled pawns on {items}
+evidence.doubled.plural = doubled pawns on {items}
+evidence.doubled.owned = {owner}'s doubled pawn on {items}
+evidence.doubled.owned.plural = {owner}'s doubled pawns on {items}
+
+evidence.backward = a backward pawn on {items}
+evidence.backward.plural = backward pawns on {items}
+evidence.backward.owned = {owner}'s backward pawn on {items}
+evidence.backward.owned.plural = {owner}'s backward pawns on {items}
+
+evidence.passed = a passed pawn on {items}
+evidence.passed.plural = passed pawns on {items}
+evidence.passed.owned = {owner}'s passed pawn on {items}
+evidence.passed.owned.plural = {owner}'s passed pawns on {items}
+
+evidence.hanging = hanging pawns on {items}
+evidence.hanging.plural = hanging pawns on {items}
+evidence.hanging.owned = {owner}'s hanging pawn on {items}
+evidence.hanging.owned.plural = {owner}'s hanging pawns on {items}
+
+evidence.half_open_files = a half-open {items}-file
+evidence.half_open_files.plural = half-open files on {items}
+evidence.open_files = an open {items}-file
+evidence.open_files.plural = open files on {items}
+
+evidence.bishop_pair = the bishop pair
+evidence.outposts = an outpost on {items}
+evidence.outposts.plural = outposts on {items}
+evidence.holes = a hole on {items}
+evidence.holes.plural = holes on {items}
+evidence.space = a space count of {items}
+evidence.majorities = a pawn majority on the {items}
+evidence.majorities.plural = pawn majorities on the {items}
+evidence.breaks = the pawn break {items}
+evidence.breaks.plural = pawn breaks {items}
+
+# Fallbacks for evidence keys this file does not know.
+evidence.generic = {key}: {items}
+evidence.generic.bare = {key}

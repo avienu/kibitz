@@ -1,0 +1,76 @@
+# common.tmpl — shared vocabulary, clauses and rotations for the template
+# verbalizer. Format: one `key = template` per line, `{slot}` placeholders,
+# `#` starts a comment. Leading/trailing whitespace around key and value is
+# trimmed; spacing between fragments is supplied by the composing code.
+
+# Side and piece vocabulary.
+side.white = White
+side.black = Black
+piece.pawn = pawn
+piece.knight = knight
+piece.bishop = bishop
+piece.rook = rook
+piece.queen = queen
+piece.king = king
+
+# Noun phrases for pieces and squares.
+# {side} / {piece} / {square} are always taken from the record (square lists)
+# or derived from the record's FEN (piece identity and color).
+phrase.owned_piece = {side}'s {piece} on {square}
+phrase.bare_piece = the {piece} on {square}
+phrase.unknown_piece = the piece on {square}
+phrase.side_piece = {side}'s piece on {square}
+phrase.some_piece = one of {side}'s pieces
+phrase.kings = {side}'s king
+
+# Alert body clauses.
+clause.weak_king_target = around {target}
+clause.attacked_by = It is under attack from {attackers}.
+clause.attack_defend.both = It is attacked by {attackers} but defended only by {defenders}.
+clause.attack_defend.attackers = It is attacked by {attackers}, and nothing defends it.
+clause.attack_defend.defenders = Only {defenders} keeps it defended.
+clause.detail = The underlying problem: {detail}.
+clause.see = A capture sequence here wins {amount}.
+clause.evidence = — {list}
+
+# Static-exchange value bands (centipawns -> plain words).
+see.small = a small amount of material
+see.pawn = roughly a pawn
+see.two_pawns = about two pawns
+see.minor = roughly a minor piece
+see.rook = roughly a rook
+see.queen = roughly a queen
+
+# Units for engine score deltas.
+unit.pawn = pawn
+unit.pawns = pawns
+
+# Engine-check verdicts attached to an alert.
+engine.confirmed.pv_delta = The engine confirms it: {pv}, winning about {delta}.
+engine.confirmed.pv = The engine confirms it: {pv}.
+engine.confirmed.delta = The engine confirms it, winning about {delta}.
+engine.confirmed = The engine confirms the idea.
+engine.refuted = A quick engine check refutes this idea — the defense appears to hold.
+engine.unclear = The engine could not confirm this at the given budget.
+
+# Whole-position engine verdict (only present when an engine actually ran).
+engine.eval = The engine's overall verdict: about {score}, and it likes {best} here.
+
+# Known alert detail qualifiers; unknown ones are humanized mechanically.
+detail.overloaded-defender = an overloaded defender
+detail.back-rank = a vulnerable back rank
+detail.pawn-shield = a damaged pawn shield
+detail.trapped-and-attacked = the piece is trapped and under attack
+
+# Section-level lines.
+tactics.quiet = No immediate tactics jump out; the position will be decided by its long-term features.
+empty = Nothing stands out here: no tactical alarms, no significant imbalances. Improve your worst-placed piece and stay flexible.
+
+# Deterministic sentence-start rotations, applied by index (i % n).
+# Entries are separated by `|`; the first entry is intentionally empty.
+rotation.alert = |Meanwhile,|On top of that,|Also,
+rotation.imbalance = |Meanwhile,|At the same time,|Beyond that,
+
+# List glue (code pads with spaces as needed).
+glue.list_sep = ,
+glue.list_last = and

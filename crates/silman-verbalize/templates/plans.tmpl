@@ -1,0 +1,24 @@
+# plans.tmpl — plan sentences built from imbalance PlanHints.
+# Slots: {side} ("White"/"Black", the side the imbalance favors), {plan}
+# (a lowercase verb phrase from the plan.* keys, or the humanized hint
+# token), {squares_clause} (empty, or " (key squares: ...)" from the hint).
+# The `.more` variants are used for the second and later plans.
+
+plan.lead.side = A good plan for {side}: {plan}{squares_clause}.
+plan.lead.side.more = Another idea for {side}: {plan}{squares_clause}.
+plan.lead.neutral = A plan worth noting: {plan}{squares_clause}.
+plan.lead.neutral.more = Also worth noting: {plan}{squares_clause}.
+clause.plan_squares = (key squares: {squares})
+
+# Known plan-hint tokens; unknown tokens are humanized mechanically
+# ("BlockadeThenPressure" -> "blockade then pressure").
+plan.BlockadeThenPressure = blockade the weak pawn, then pile up on it
+plan.OpenThePosition = look for ways to open the position
+plan.EscortThePasser = escort the passed pawn up the board with the king
+plan.PushThePasser = push the passed pawn
+plan.ManeuverKnight = reroute the knight to its best square
+plan.TradePieces = seek piece trades to ease the cramped position
+plan.PrepareBreak = prepare the freeing pawn break
+plan.MinorityAttack = advance the wing pawns in a minority attack
+plan.PlayOnQueenside = press forward on the queenside
+plan.PlayOnKingside = press forward on the kingside

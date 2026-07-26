@@ -1,0 +1,55 @@
+# imbalances.tmpl — one sentence per (kind, magnitude), with optional
+# phase-specific overrides keyed `imbalance.<Kind>.<magnitude>.<phase>`.
+# Slots: {beneficiary} ("White"/"Black"), {aspect} (from the aspect.* keys),
+# {evidence_clause} (empty, or " — <evidence list>" built from the record).
+
+# Human names for each imbalance aspect (used by balanced/generic templates).
+aspect.MinorPieces = the minor pieces
+aspect.PawnStructure = pawn structure
+aspect.Material = material
+aspect.FilesDiagonals = files and diagonals
+aspect.SquaresOutposts = squares and outposts
+aspect.Space = space
+aspect.Development = development
+aspect.Initiative = the initiative
+
+imbalance.PawnStructure.minor = {beneficiary}'s pawn structure is a shade healthier{evidence_clause}.
+imbalance.PawnStructure.clear = {beneficiary} has the healthier pawn structure{evidence_clause}.
+imbalance.PawnStructure.winning = {beneficiary}'s structural superiority should win the game{evidence_clause}.
+imbalance.PawnStructure.clear.endgame = In this endgame {beneficiary}'s better pawn structure counts for a great deal{evidence_clause}.
+imbalance.PawnStructure.winning.endgame = In this endgame {beneficiary}'s pawn structure should decide the game{evidence_clause}.
+
+imbalance.MinorPieces.minor = {beneficiary}'s minor pieces are a touch better placed{evidence_clause}.
+imbalance.MinorPieces.clear = {beneficiary} has the superior minor pieces{evidence_clause}.
+imbalance.MinorPieces.winning = {beneficiary}'s minor pieces dominate the board{evidence_clause}.
+
+imbalance.Material.minor = {beneficiary} is slightly ahead on material{evidence_clause}.
+imbalance.Material.clear = {beneficiary} is ahead on material{evidence_clause}.
+imbalance.Material.winning = {beneficiary} has a winning material advantage{evidence_clause}.
+imbalance.Material.winning.endgame = In this endgame {beneficiary}'s extra material should decide matters{evidence_clause}.
+
+imbalance.FilesDiagonals.minor = {beneficiary} has slightly the better of the open lines{evidence_clause}.
+imbalance.FilesDiagonals.clear = {beneficiary} controls the key lines{evidence_clause}.
+imbalance.FilesDiagonals.winning = {beneficiary}'s control of the open lines is overwhelming{evidence_clause}.
+
+imbalance.SquaresOutposts.minor = {beneficiary} has a small edge in the fight for the key squares{evidence_clause}.
+imbalance.SquaresOutposts.clear = {beneficiary} owns the important squares{evidence_clause}.
+imbalance.SquaresOutposts.winning = {beneficiary}'s grip on the key squares is decisive{evidence_clause}.
+
+imbalance.Space.minor = {beneficiary} has a little more room to work with{evidence_clause}.
+imbalance.Space.clear = {beneficiary} enjoys a clear space advantage{evidence_clause}.
+imbalance.Space.winning = {beneficiary}'s space advantage is suffocating{evidence_clause}.
+
+imbalance.Development.minor = {beneficiary} is slightly ahead in development{evidence_clause}.
+imbalance.Development.clear = {beneficiary} is clearly ahead in development{evidence_clause}.
+imbalance.Development.winning = {beneficiary}'s lead in development is decisive{evidence_clause}.
+
+imbalance.Initiative.minor = {beneficiary} has a slight initiative{evidence_clause}.
+imbalance.Initiative.clear = {beneficiary} has the initiative and is dictating play{evidence_clause}.
+imbalance.Initiative.winning = {beneficiary}'s initiative has reached decisive proportions{evidence_clause}.
+
+# Balanced verdicts and generic fallbacks.
+imbalance.balanced = As for {aspect}, the position is level{evidence_clause}.
+imbalance.generic.minor = {beneficiary} is slightly better in terms of {aspect}{evidence_clause}.
+imbalance.generic.clear = {beneficiary} holds a clear edge in {aspect}{evidence_clause}.
+imbalance.generic.winning = {beneficiary}'s advantage in {aspect} looks decisive{evidence_clause}.
