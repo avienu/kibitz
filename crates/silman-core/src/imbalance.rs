@@ -509,10 +509,10 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
         return None;
     }
     let (f, m) = favors(score, 15, 40)?;
-    if let Some(file) = open.first() {
+    if !open.is_empty() {
         plans.push(PlanHint {
             hint: "DoubleOnOpenFile".into(),
-            squares: vec![format!("{file}1")],
+            squares: vec![],
         });
     }
     Some(Imbalance {
@@ -668,17 +668,20 @@ pub fn space(board: &Board) -> Option<Imbalance> {
     };
     let w = control(Color::White);
     let b = control(Color::Black);
+    // A space edge over an undeveloped position is noise; require a real
+    // presence in the enemy half before reporting.
+    if w.max(b) < 3 {
+        return None;
+    }
     let diff = (w - b) * 12;
     let mut evidence = BTreeMap::new();
     evidence.insert("white_space".into(), json!(w));
     evidence.insert("black_space".into(), json!(b));
     let (f, m) = favors(diff, 24, 60)?;
-    let cramped = if f == Favors::White { "black" } else { "white" };
+    // Plans are phrased for the favored side (the verbalizer attributes
+    // them that way): keep pieces on, use the extra room.
     let plans = vec![PlanHint {
-        hint: format!(
-            "{}RelieveCramp",
-            if cramped == "white" { "White" } else { "Black" }
-        ),
+        hint: "UseSpaceAvoidExchanges".into(),
         squares: vec![],
     }];
     Some(Imbalance {

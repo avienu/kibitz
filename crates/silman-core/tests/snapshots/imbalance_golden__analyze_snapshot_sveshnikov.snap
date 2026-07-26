@@ -9,36 +9,7 @@ expression: record
   "side_to_move": "white",
   "phase": "opening",
   "wsui": {
-    "alerts": [
-      {
-        "kind": "Undefended",
-        "side": "white",
-        "target": "a1",
-        "severity": "low",
-        "detail": "loose"
-      },
-      {
-        "kind": "Undefended",
-        "side": "white",
-        "target": "h1",
-        "severity": "low",
-        "detail": "loose"
-      },
-      {
-        "kind": "Undefended",
-        "side": "black",
-        "target": "a8",
-        "severity": "low",
-        "detail": "loose"
-      },
-      {
-        "kind": "Undefended",
-        "side": "black",
-        "target": "h8",
-        "severity": "low",
-        "detail": "loose"
-      }
-    ],
+    "alerts": [],
     "screen_fired": false
   },
   "imbalances": [

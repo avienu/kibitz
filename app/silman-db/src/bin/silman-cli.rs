@@ -88,6 +88,22 @@ enum Command {
     },
     /// Export one stored game as PGN to stdout.
     ExportPgn { game_id: i64 },
+    /// Statically annotate a game (Silman template comments + queued
+    /// engine confirmations for fired screens; engine does NOT run).
+    AnnotateGame {
+        game_id: i64,
+        #[arg(long, default_value_t = 200_000)]
+        confirm_nodes: u64,
+        #[arg(long, default_value_t = 12)]
+        max_comments: u32,
+    },
+    /// Run pending engine jobs (spawns the engine; user-initiated).
+    RunJobs {
+        #[arg(long, default_value_t = 100)]
+        max_jobs: u32,
+    },
+    /// Analyze one FEN statically and print the coach prose + record JSON.
+    Explain { fen: String },
     /// Print database summary counts.
     Stats,
 }
@@ -289,6 +305,33 @@ fn main() -> anyhow::Result<()> {
         }
         Command::ExportPgn { game_id } => {
             print!("{}", silman_db::export::export_pgn(&conn, game_id)?);
+        }
+        Command::AnnotateGame {
+            game_id,
+            confirm_nodes,
+            max_comments,
+        } => {
+            let r =
+                silman_db::annotate::annotate_game(&conn, game_id, confirm_nodes, max_comments)?;
+            println!(
+                "analyzed {} positions: {} screens fired, {} confirm jobs queued, {} comments added",
+                r.positions_analyzed, r.screens_fired, r.jobs_enqueued, r.comments_added
+            );
+        }
+        Command::RunJobs { max_jobs } => {
+            let path = silman_db::engine::resolve_engine_path()
+                .ok_or_else(|| anyhow::anyhow!("no engine binary found (set SILMAN_STOCKFISH)"))?;
+            silman_db::jobs::reset_running(&conn)?;
+            let r = silman_db::jobs::run_pending(&conn, &path, max_jobs)?;
+            println!("jobs done: {}, failed: {}", r.done, r.failed);
+        }
+        Command::Explain { fen } => {
+            let board: cozy_chess::Board =
+                fen.parse().map_err(|e| anyhow::anyhow!("bad FEN: {e:?}"))?;
+            let record = silman_core::analyze(&board);
+            println!("{}", silman_verbalize::verbalize(&record));
+            println!("---");
+            println!("{}", serde_json::to_string_pretty(&record)?);
         }
         Command::Stats => {
             let s = stats(&conn)?;

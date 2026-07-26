@@ -96,7 +96,7 @@ fn space_advantage_white() {
     let b = board("r1bqkb1r/pp2pppp/2np1n2/8/2PNP3/2N5/PP3PPP/R1BQKB1R b KQkq - 0 6");
     let s = imbalance::space(&b).expect("space imbalance");
     assert_eq!(s.favors, Favors::White);
-    assert!(s.plans.iter().any(|p| p.hint.contains("RelieveCramp")));
+    assert!(s.plans.iter().any(|p| p.hint == "UseSpaceAvoidExchanges"));
 }
 
 /// Constructed: White fully developed and castled, Black untouched —

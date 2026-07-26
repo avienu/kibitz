@@ -28,3 +28,7 @@ tempfile = { workspace = true }
 [[bin]]
 name = "silman-cli"
 path = "src/bin/silman-cli.rs"
+
+[[bin]]
+name = "wsui-validate"
+path = "src/bin/wsui-validate.rs"

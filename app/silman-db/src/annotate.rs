@@ -46,7 +46,14 @@ pub fn annotate_game(
                 board.play(*mv);
                 ply_in_main += 1;
                 report.positions_analyzed += 1;
-                let record = silman_core::analyze(&board);
+                let mut record = silman_core::analyze(&board);
+                // Inline comments talk about what matters: drop low-severity
+                // chatter before verbalizing (the full record remains
+                // available to the UI via explain).
+                record
+                    .wsui
+                    .alerts
+                    .retain(|a| a.severity >= silman_core::record::Severity::Medium);
                 let fired = record.wsui.screen_fired;
                 if fired {
                     report.screens_fired += 1;
@@ -74,19 +81,26 @@ pub fn annotate_game(
                 }
                 // Comment when a screen fires, or when the positional
                 // story (clear+ imbalances) changes.
-                let summary: String = record
+                let mut summary: String = record
                     .imbalances
                     .iter()
                     .filter(|i| i.magnitude >= Magnitude::Clear)
                     .map(|i| format!("{:?}:{:?};", i.kind, i.favors))
                     .collect();
-                let notable = fired || (!summary.is_empty() && summary != last_summary);
+                for a in &record.wsui.alerts {
+                    summary.push_str(&format!("{:?}@{:?};", a.kind, a.target));
+                }
+                // Comment only when the story CHANGES — a persisting alert
+                // or imbalance is narrated once, not every ply.
+                let notable = (fired || !summary.is_empty()) && summary != last_summary;
                 if notable && report.comments_added < max_comments {
                     let prose = silman_verbalize::verbalize(&record);
                     // Compress paragraphs for an inline comment.
                     let text = prose.replace("\n\n", " ");
                     inserts.push((idx + 1, text));
                     report.comments_added += 1;
+                }
+                if notable {
                     last_summary = summary;
                 }
             }

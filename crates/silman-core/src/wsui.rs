@@ -102,8 +102,16 @@ fn detect_undefended_and_inadequate(
             }
         }
 
+        let home_rank = match side {
+            Color::White => Rank::First,
+            Color::Black => Rank::Eighth,
+        };
         if defenders.is_empty() {
-            // U — loose piece.
+            // U — loose piece. A merely-loose piece still sitting on its
+            // back rank is undeveloped, not tactically loose — skip.
+            if attackers.is_empty() && sq.rank() == home_rank {
+                continue;
+            }
             let severity = if attackers.is_empty() {
                 Severity::Low // merely loose
             } else {
@@ -246,6 +254,17 @@ fn detect_trapped(board: &Board, side: Color, alerts: &mut Vec<TacticAlert>) {
         let attacked = !attackers_of(board, sq, enemy, occ).is_empty();
         let attackable = attackable_in_one(board, sq, enemy);
         if !attacked && !attackable {
+            continue;
+        }
+        // An unattacked piece "trapped" on its own back two ranks is just
+        // undeveloped or boxed in by its own army (home bishops, a Be7
+        // behind Qd8/Rf8); real traps are either attacked now or stuck in
+        // hostile territory.
+        let home_ranks = match side {
+            Color::White => Rank::First.bitboard() | Rank::Second.bitboard(),
+            Color::Black => Rank::Eighth.bitboard() | Rank::Seventh.bitboard(),
+        };
+        if !attacked && home_ranks.has(sq) {
             continue;
         }
         let severity = if attacked && see(board, sq, enemy) > 0 {
