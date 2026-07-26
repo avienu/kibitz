@@ -246,6 +246,7 @@ export default function App() {
     dispatch({ type: "gameLoaded", ply: clampPly(atPly, g), plyCount: g.sans.length });
     setStatus(label + (warning ? ` ${warning}` : ""));
     setExplanations(new Map());
+    setRevealedQuiet(new Set());
     setPendingVar(null);
   }, []);
 
@@ -325,6 +326,28 @@ export default function App() {
     [loadDbGame],
   );
 
+  // Deep link: #game=123&ply=24&theme=light&treatment=instrument&voice=neutral
+  // applies once after the database opens. Handy for dev, demos and docs.
+  const hashApplied = useRef(false);
+  useEffect(() => {
+    if (!dbSummary || hashApplied.current) return;
+    const h = new URLSearchParams(window.location.hash.slice(1));
+    if ([...h.keys()].length === 0) return;
+    hashApplied.current = true;
+    const theme = h.get("theme");
+    if (theme === "light" || theme === "dark") dispatch({ type: "setTheme", theme });
+    const treatment = h.get("treatment");
+    if (treatment === "walnut" || treatment === "instrument") {
+      dispatch({ type: "setTreatment", treatment });
+    }
+    const voice = h.get("voice");
+    if (voice === "coach" || voice === "neutral") dispatch({ type: "setVoice", voice });
+    const gameId = Number(h.get("game"));
+    if (Number.isFinite(gameId) && gameId > 0) {
+      void loadDbGameAt(gameId, Number(h.get("ply")) || 0);
+    }
+  }, [dbSummary, loadDbGameAt]);
+
   const reloadCurrent = useCallback(() => {
     if (annot) void loadDbGameAt(annot.gameId, gv.ply);
   }, [annot, gv.ply, loadDbGameAt]);
@@ -344,13 +367,21 @@ export default function App() {
   );
 
   /* ---- explain (cache per ply; both voices arrive at once) ---- */
-  const currentExplanation = explainOn ? (explanations.get(gv.ply) ?? null) : null;
+  // Quiet positions keep the empty state until the user explicitly asks;
+  // fired screens show their explanation as soon as the (static, free)
+  // analysis lands.
+  const [revealedQuiet, setRevealedQuiet] = useState<Set<number>>(new Set());
+  const fetched = explainOn ? (explanations.get(gv.ply) ?? null) : null;
+  const currentExplanation =
+    fetched && (fetched.tag !== "QUIET POSITION" || revealedQuiet.has(gv.ply)) ? fetched : null;
   const explainedPlies = useMemo(
     () => [...explanations.keys()].sort((a, b) => a - b),
     [explanations],
   );
 
   const doExplain = useCallback(async () => {
+    // An explicit request also reveals a quiet position's explanation.
+    setRevealedQuiet((r) => (r.has(gv.ply) ? r : new Set(r).add(gv.ply)));
     if (explaining || explanations.has(gv.ply)) return;
     const ply = gv.ply;
     setExplaining(true);
@@ -363,6 +394,23 @@ export default function App() {
       setExplaining(false);
     }
   }, [explaining, explanations, gv.ply, fen, gv.voice]);
+
+  // The tactical screen itself is static and free: fetch the current
+  // ply's explanation automatically so fired screens narrate without a
+  // keypress. The ENGINE still never runs from here (CLAUDE.md #6).
+  useEffect(() => {
+    if (!explainOn || !game || explanations.has(gv.ply)) return;
+    let stale = false;
+    const ply = gv.ply;
+    explainPosition(fen, gv.voice)
+      .then((res) => {
+        if (!stale) setExplanations((m) => new Map(m).set(ply, res.explanation));
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [explainOn, game, explanations, gv.ply, fen, gv.voice]);
 
   const toggleExplain = useCallback(() => setExplainOn((v) => !v), []);
 
