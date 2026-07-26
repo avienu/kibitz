@@ -87,6 +87,8 @@ pub(crate) struct PreparedGame {
 /// Everything derived from a game's token stream that the insert needs.
 pub(crate) struct BuiltMovetext {
     pub movetext: Vec<u8>,
+    /// Engine evaluations lifted out of imported comments (verdict 3b).
+    pub legacy_evals: Vec<crate::legacy::LegacyEval>,
     /// Position hashes for ply 0 (start) through the final mainline ply.
     pub position_hashes: Vec<u64>,
     /// For each hash, the index (into the ordered legal moves of that
@@ -106,6 +108,8 @@ impl PreparedGame {
         tokens: &[crate::movebin::Token],
     ) -> Result<BuiltMovetext, String> {
         use crate::movebin::{encode_tokens, mainline_of, Ply};
+        let (tokens, legacy_evals) = crate::legacy::extract_legacy_evals(tokens.to_vec());
+        let tokens = &tokens[..];
         let movetext = encode_tokens(start, tokens).map_err(|e| e.to_string())?;
         let mainline = mainline_of(tokens);
 
@@ -138,6 +142,7 @@ impl PreparedGame {
         next_indices.push(None);
         Ok(BuiltMovetext {
             movetext,
+            legacy_evals,
             position_hashes: hashes,
             next_indices,
             moves_hash: fnv1a64(&moves_hash_input),
@@ -575,6 +580,21 @@ pub(crate) fn insert_game(
         return Ok(());
     }
     let game_id = conn.last_insert_rowid();
+    if !g.built.legacy_evals.is_empty() {
+        let mut a_stmt = conn.prepare_cached(
+            "INSERT INTO analyses (game_id, ply, kind, engine, depth, eval_cp)
+             VALUES (?1, ?2, 'legacy-import', ?3, ?4, ?5)",
+        )?;
+        for ev in &g.built.legacy_evals {
+            a_stmt.execute(params![
+                game_id,
+                ev.ply as i64,
+                ev.engine,
+                ev.depth as i64,
+                ev.eval_cp as i64
+            ])?;
+        }
+    }
     let mut pos_stmt = conn.prepare_cached(
         "INSERT INTO positions (position_hash, game_id, ply, next_byte)
          VALUES (?1, ?2, ?3, ?4)",

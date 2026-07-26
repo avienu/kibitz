@@ -17,6 +17,8 @@ pub enum Purpose {
     WsuiConfirm,
     UserAnalysis,
     BatchAnnotate,
+    BatchProfile,
+    Reanalyze,
 }
 
 impl Purpose {
@@ -25,6 +27,8 @@ impl Purpose {
             Purpose::WsuiConfirm => "wsui-confirm",
             Purpose::UserAnalysis => "user-analysis",
             Purpose::BatchAnnotate => "batch-annotate",
+            Purpose::BatchProfile => "batch-profile",
+            Purpose::Reanalyze => "reanalyze",
         }
     }
 }
@@ -105,13 +109,33 @@ pub fn run_pending(
                 engine = Some(Engine::spawn(engine_path)?);
             }
             let e = engine.as_mut().expect("just spawned");
+            let identity = e.identity.clone();
             let line = e.eval_nodes(&p.fen, p.nodes)?;
             let mut result = serde_json::json!({
                 "score_cp": line.score_cp,
                 "mate": line.mate,
                 "pv": line.pv,
                 "nodes": p.nodes,
+                "engine": identity,
             });
+            // Any evaluation tied to a stored game position becomes a
+            // first-class 'fresh' analysis row, engine identity stamped
+            // (verdict 3a). Legacy rows are never touched.
+            if let (Some(game_id), Some(ply)) = (p.game_id, p.ply) {
+                conn.execute(
+                    "INSERT INTO analyses
+                       (game_id, ply, kind, engine, nodes, eval_cp, pv)
+                     VALUES (?1, ?2, 'fresh', ?3, ?4, ?5, ?6)",
+                    params![
+                        game_id,
+                        ply as i64,
+                        identity,
+                        p.nodes as i64,
+                        line.score_cp,
+                        serde_json::to_string(&line.pv)?
+                    ],
+                )?;
+            }
             if purpose == "wsui-confirm" {
                 // The eval is from the side to move's POV; translate to the
                 // claimed beneficiary and grade the alert.
@@ -157,6 +181,38 @@ pub fn run_pending(
         }
     }
     Ok(report)
+}
+
+/// Enqueue a full-game re-analysis: one bounded eval per mainline
+/// position (verdict 3d). Fresh results are preferred for display; legacy
+/// imported analyses are retained untouched.
+pub fn enqueue_reanalyze(conn: &Connection, game_id: i64, nodes: u64) -> anyhow::Result<u32> {
+    let (start, tokens) = crate::edit::game_tokens(conn, game_id)?;
+    let mut board = start.clone();
+    let mut count = 0u32;
+    let mut ply = 0u32;
+    for p in crate::movebin::mainline_of(&tokens) {
+        match p {
+            crate::movebin::Ply::Move(m) => {
+                board.play(m);
+                ply += 1;
+            }
+            crate::movebin::Ply::Null => break,
+        }
+        enqueue(
+            conn,
+            Purpose::Reanalyze,
+            &EnginePayload {
+                fen: board.to_string(),
+                nodes,
+                beneficiary: None,
+                game_id: Some(game_id),
+                ply: Some(ply),
+            },
+        )?;
+        count += 1;
+    }
+    Ok(count)
 }
 
 pub fn counts(conn: &Connection) -> anyhow::Result<(i64, i64, i64, i64)> {

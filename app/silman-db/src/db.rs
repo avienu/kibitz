@@ -21,6 +21,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("../migrations/0004_source_kind_duplicates.sql"),
     ),
     (5, include_str!("../migrations/0005_jobs.sql")),
+    (6, include_str!("../migrations/0006_analyses.sql")),
 ];
 
 #[derive(Debug, thiserror::Error)]

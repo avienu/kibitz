@@ -97,10 +97,17 @@ enum Command {
         #[arg(long, default_value_t = 12)]
         max_comments: u32,
     },
-    /// Run pending engine jobs (spawns the engine; user-initiated).
+    /// Run pending engine jobs (spawns the engine; user-initiated), then
+    /// fold confirm-verdicts back into stored annotations.
     RunJobs {
         #[arg(long, default_value_t = 100)]
         max_jobs: u32,
+    },
+    /// Enqueue a fresh full-game re-analysis (legacy evals retained).
+    ReanalyzeGame {
+        game_id: i64,
+        #[arg(long, default_value_t = 200_000)]
+        nodes: u64,
     },
     /// Analyze one FEN statically and print the coach prose + record JSON.
     Explain { fen: String },
@@ -323,7 +330,17 @@ fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("no engine binary found (set SILMAN_STOCKFISH)"))?;
             silman_db::jobs::reset_running(&conn)?;
             let r = silman_db::jobs::run_pending(&conn, &path, max_jobs)?;
-            println!("jobs done: {}, failed: {}", r.done, r.failed);
+            let f = silman_db::annotate::fold_back(&conn)?;
+            println!(
+                "jobs done: {}, failed: {}; folded {} verdicts ({} confirmed, {} refuted, {} unclear)",
+                r.done, r.failed, f.folded, f.confirmed, f.refuted, f.unclear
+            );
+        }
+        Command::ReanalyzeGame { game_id, nodes } => {
+            let n = silman_db::jobs::enqueue_reanalyze(&conn, game_id, nodes)?;
+            println!(
+                "queued {n} re-analysis positions for game {game_id}; run `run-jobs` to execute"
+            );
         }
         Command::Explain { fen } => {
             let board: cozy_chess::Board =

@@ -120,3 +120,149 @@ pub fn annotate_game(
     crate::edit::update_game_tokens(conn, game_id, &new_tokens)?;
     Ok(report)
 }
+
+/// Fold completed wsui-confirm verdicts back into the stored annotations
+/// (run-4 goal 3): a confirmed alert leads the re-rendered comment with
+/// the engine's PV; a refuted alert is dropped from the prose entirely.
+/// Jobs are marked with `folded_at` so folding is idempotent.
+#[derive(Debug, Default)]
+pub struct FoldReport {
+    pub folded: u32,
+    pub confirmed: u32,
+    pub refuted: u32,
+    pub unclear: u32,
+}
+
+pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
+    use silman_core::record::{EngineCheck, EngineCheckStatus};
+
+    let mut report = FoldReport::default();
+    let jobs: Vec<(i64, String, String)> = {
+        let mut stmt = conn.prepare(
+            "SELECT id, payload, result FROM jobs
+             WHERE purpose = 'wsui-confirm' AND status = 'done'
+               AND folded_at IS NULL ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+
+    for (job_id, payload, result) in jobs {
+        let p: crate::jobs::EnginePayload = serde_json::from_str(&payload)?;
+        let (Some(game_id), Some(ply)) = (p.game_id, p.ply) else {
+            continue;
+        };
+        let v: serde_json::Value = serde_json::from_str(&result)?;
+        let status = match v["status"].as_str() {
+            Some("confirmed") => {
+                report.confirmed += 1;
+                EngineCheckStatus::Confirmed
+            }
+            Some("refuted") => {
+                report.refuted += 1;
+                EngineCheckStatus::Refuted
+            }
+            _ => {
+                report.unclear += 1;
+                EngineCheckStatus::UnclearAtBudget
+            }
+        };
+
+        // Rebuild the record at that position and merge the verdict.
+        let (start, mut tokens) = crate::edit::game_tokens(conn, game_id)?;
+        let mut board = start.clone();
+        let mut main_ply = 0u32;
+        let mut move_idx: Option<usize> = None;
+        let mut depth = 0u32;
+        for (i, t) in tokens.iter().enumerate() {
+            match t {
+                Token::VarStart => depth += 1,
+                Token::VarEnd => depth = depth.saturating_sub(1),
+                Token::Move(m) if depth == 0 => {
+                    board.play(*m);
+                    main_ply += 1;
+                    if main_ply == ply {
+                        move_idx = Some(i);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(move_idx) = move_idx else { continue };
+
+        let mut record = silman_core::analyze(&board);
+        record
+            .wsui
+            .alerts
+            .retain(|a| a.severity >= silman_core::record::Severity::Medium);
+        // Convert the engine PV (UCI moves) to SAN for the record.
+        let pv_san = {
+            let mut b2 = board.clone();
+            let mut sans = Vec::new();
+            for uci in v["pv"].as_array().into_iter().flatten().take(3) {
+                let Some(mv) = uci
+                    .as_str()
+                    .and_then(|u| u.parse::<cozy_chess::Move>().ok())
+                else {
+                    break;
+                };
+                if !b2.is_legal(mv) {
+                    break;
+                }
+                sans.push(crate::san::format_san(&b2, mv));
+                b2.play(mv);
+            }
+            sans
+        };
+        let check = EngineCheck {
+            status,
+            pv: pv_san,
+            score_delta_cp: v["score_delta_cp"].as_i64().map(|x| x as i32),
+            budget_nodes: v["nodes"].as_u64().unwrap_or(0),
+        };
+        match status {
+            EngineCheckStatus::Refuted => {
+                // The tactic does not work: drop the leading alert.
+                if !record.wsui.alerts.is_empty() {
+                    record.wsui.alerts.remove(0);
+                }
+                record.wsui.screen_fired = !record.wsui.alerts.is_empty();
+            }
+            _ => {
+                if let Some(top) = record.wsui.alerts.first_mut() {
+                    top.engine_check = Some(check);
+                }
+            }
+        }
+
+        // Replace (or insert) the comment right after the mainline move.
+        let prose = silman_verbalize::verbalize(&record).replace("\n\n", " ");
+        let has_content = record.wsui.screen_fired
+            || record
+                .imbalances
+                .iter()
+                .any(|i| i.magnitude >= Magnitude::Clear);
+        match tokens.get(move_idx + 1) {
+            Some(Token::Comment(_)) => {
+                if has_content {
+                    tokens[move_idx + 1] = Token::Comment(prose);
+                } else {
+                    tokens.remove(move_idx + 1);
+                }
+            }
+            _ => {
+                if has_content {
+                    tokens.insert(move_idx + 1, Token::Comment(prose));
+                }
+            }
+        }
+        crate::edit::update_game_tokens(conn, game_id, &tokens)?;
+        conn.execute(
+            "UPDATE jobs SET folded_at = datetime('now') WHERE id = ?1",
+            [job_id],
+        )?;
+        report.folded += 1;
+    }
+    Ok(report)
+}

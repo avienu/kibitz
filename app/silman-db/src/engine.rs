@@ -48,6 +48,9 @@ pub struct Engine {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+    /// The engine's own `id name` string (verdict 3a: stamped on every
+    /// stored analysis).
+    pub identity: String,
 }
 
 #[derive(Debug, Clone)]
@@ -71,29 +74,38 @@ impl Engine {
             child,
             stdin,
             stdout,
+            identity: String::new(),
         };
         engine.send("uci")?;
-        engine.wait_for("uciok")?;
+        engine.handshake()?;
         Ok(engine)
+    }
+
+    /// Read until `uciok`, capturing the `id name` line.
+    fn handshake(&mut self) -> anyhow::Result<()> {
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if self.stdout.read_line(&mut line)? == 0 {
+                anyhow::bail!("engine closed stdout during handshake");
+            }
+            let l = line.trim();
+            if let Some(name) = l.strip_prefix("id name ") {
+                self.identity = name.trim().to_string();
+            }
+            if l.starts_with("uciok") {
+                if self.identity.is_empty() {
+                    self.identity = "unknown engine".to_string();
+                }
+                return Ok(());
+            }
+        }
     }
 
     fn send(&mut self, line: &str) -> anyhow::Result<()> {
         writeln!(self.stdin, "{line}")?;
         self.stdin.flush()?;
         Ok(())
-    }
-
-    fn wait_for(&mut self, token: &str) -> anyhow::Result<()> {
-        let mut line = String::new();
-        loop {
-            line.clear();
-            if self.stdout.read_line(&mut line)? == 0 {
-                anyhow::bail!("engine closed stdout waiting for {token}");
-            }
-            if line.trim_start().starts_with(token) {
-                return Ok(());
-            }
-        }
     }
 
     /// `go nodes N` on `fen`, returning the best line (from the side to

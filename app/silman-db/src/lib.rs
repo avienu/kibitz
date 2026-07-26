@@ -16,6 +16,7 @@ pub mod hash;
 pub mod import;
 pub mod import_si4;
 pub mod jobs;
+pub mod legacy;
 pub mod movebin;
 pub mod net;
 pub mod pgn;
