@@ -341,3 +341,253 @@ textarea {
   margin-top: 8px;
   font-size: 13px;
 }
+
+/* Variation offer (board-entered alternative move) */
+.var-offer {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid #8a7c52;
+  border-radius: 6px;
+  background: #3d382c;
+  font-size: 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Explain-position panel */
+.explain {
+  margin-top: 14px;
+  padding: 10px;
+  border: 1px solid #4a4740;
+  border-radius: 6px;
+}
+.explain h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.explain-prose {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.explain-prose p {
+  margin: 6px 0;
+}
+.explain-legend {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+.explain-legend .lg::before {
+  content: "●";
+  margin-right: 4px;
+}
+.lg-red::before {
+  color: #d64545;
+}
+.lg-orange::before {
+  color: #e68f00;
+}
+.lg-green::before {
+  color: #15781b;
+}
+
+/* Annotated move list (database games) */
+.ann {
+  margin-top: 12px;
+}
+.ann-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ann-header h3 {
+  margin: 0;
+  margin-right: auto;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.ann-dirty {
+  font-size: 11px;
+  color: #cfa85a;
+}
+.ann-moves {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.ann-line {
+  display: block;
+}
+.ann-line.ann-var {
+  margin-left: 22px;
+  opacity: 0.85;
+  font-size: 12px;
+}
+.ann-move-wrap {
+  display: inline;
+}
+.ann-move {
+  padding: 1px 4px;
+  font-size: inherit;
+  background: transparent;
+  border-color: transparent;
+}
+.ann-move:hover {
+  border-color: #5a574f;
+}
+.ann-move.cur {
+  background: #6b5f3f;
+  border-color: #8a7c52;
+}
+.ann-move.sel {
+  outline: 1px dashed #8a7c52;
+}
+.ann-move.in-var {
+  opacity: 0.9;
+}
+.ann-controls {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0 4px 0 2px;
+  vertical-align: baseline;
+}
+.ann-controls button {
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.ann-comment {
+  color: #9a958b;
+  font-style: italic;
+  margin: 0 4px;
+}
+.ann-paren {
+  opacity: 0.7;
+}
+.ann-x {
+  padding: 0 4px;
+  margin-left: 2px;
+  font-size: 11px;
+  line-height: 1.3;
+  background: transparent;
+  border-color: transparent;
+  color: #b08585;
+}
+.ann-x:hover {
+  border-color: #7a5a5a;
+  color: #e07a5f;
+}
+.ann-comment-edit {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #4a4740;
+  border-radius: 6px;
+}
+.ann-comment-label {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+.ann-comment-edit textarea {
+  height: 70px;
+}
+.ann-comment-buttons {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+/* Prep view */
+.prep-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.prep-form input {
+  flex: 1 1 240px;
+}
+.prep-color {
+  display: flex;
+  gap: 4px;
+}
+.prep-color button.cur {
+  background: #6b5f3f;
+  border-color: #8a7c52;
+}
+.prep-card {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #4a4740;
+  border-radius: 6px;
+}
+.prep-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.prep-rank {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.prep-weakness {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #cfa85a;
+}
+.prep-meta {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.prep-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #5a3d3d;
+  color: #e0b08f;
+}
+.prep-moves {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.prep-moves .san {
+  font-weight: 600;
+}
+.prep-masters {
+  margin-top: 8px;
+  border-top: 1px solid #3a3833;
+  padding-top: 6px;
+}
+.prep-master {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.prep-master:hover {
+  background: #3a3833;
+}
+.prep-master .pm-players {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prep-master .pm-meta {
+  opacity: 0.6;
+  white-space: nowrap;
+}

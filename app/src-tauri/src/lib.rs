@@ -1,9 +1,13 @@
 //! Silman Tauri shell.
 //!
 //! Exposes IPC commands over the UCI manager (src/uci.rs) —
-//! `resolve_engine_path`, `analyze_position`, `stop_analysis` — and the
+//! `resolve_engine_path`, `analyze_position`, `stop_analysis` — the
 //! read-only database browser (src/browse.rs) — `open_database`,
-//! `list_games`, `get_game`, `opening_tree`, `find_games_at`.
+//! `list_games`, `get_game`, `opening_tree`, `find_games_at` — the Phase 2
+//! surfaces: opponent prep (src/prep.rs: `matching_players`, `prep_view`),
+//! annotation editing (src/tokens.rs: `get_game_tokens`,
+//! `update_game_tokens`), and static position explanation (src/explain.rs:
+//! `explain_position`).
 //! Search progress streams to the frontend as `engine-info` events and the
 //! run terminates with a single `engine-done` event.
 //!
@@ -12,6 +16,9 @@
 //! Database browsing never touches the engine.
 
 pub mod browse;
+pub mod explain;
+pub mod prep;
+pub mod tokens;
 pub mod uci;
 
 use std::sync::Arc;
@@ -150,7 +157,12 @@ pub fn run() {
             browse::list_games,
             browse::get_game,
             browse::opening_tree,
-            browse::find_games_at
+            browse::find_games_at,
+            prep::matching_players,
+            prep::prep_view,
+            tokens::get_game_tokens,
+            tokens::update_game_tokens,
+            explain::explain_position
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

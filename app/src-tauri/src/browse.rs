@@ -45,7 +45,7 @@ fn result_code(s: &str) -> Result<i64, String> {
 }
 
 /// Run `f` against the open connection, or fail with a clean message.
-fn with_conn<T>(
+pub(crate) fn with_conn<T>(
     state: &State<'_, DbState>,
     f: impl FnOnce(&Connection) -> Result<T, String>,
 ) -> Result<T, String> {

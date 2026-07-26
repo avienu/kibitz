@@ -32,6 +32,10 @@ tokio = { version = "1", features = [
 ] }
 # GPL app-layer database core (pulls the BSD workspace crates in as path deps).
 silman-db = { path = "../silman-db" }
+# BSD workspace crates (app -> crates dependency direction, CLAUDE.md #2).
+silman-core = { path = "../../crates/silman-core" }
+silman-profile = { path = "../../crates/silman-profile" }
+silman-verbalize = { path = "../../crates/silman-verbalize" }
 # Keep these versions in lockstep with the root workspace so the types unify.
 rusqlite = { version = "0.32", features = ["bundled"] }
 cozy-chess = "0.3"

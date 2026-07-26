@@ -3001,7 +3001,10 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "silman-core",
  "silman-db",
+ "silman-profile",
+ "silman-verbalize",
  "tauri",
  "tauri-build",
  "tempfile",
@@ -3031,6 +3034,7 @@ dependencies = [
  "si4-read",
  "silman-core",
  "silman-profile",
+ "silman-verbalize",
  "thiserror 2.0.19",
  "ureq",
  "zip",
@@ -3038,6 +3042,15 @@ dependencies = [
 
 [[package]]
 name = "silman-profile"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "silman-core",
+]
+
+[[package]]
+name = "silman-verbalize"
 version = "0.1.0"
 dependencies = [
  "serde",
