@@ -28,7 +28,7 @@ tempfile = "3"
 criterion = "0.5"
 ureq = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
-insta = { version = "1", features = ["json"] }
+insta = { version = "1", features = ["json", "redactions"] }
 
 [profile.bench]
 lto = "thin"
