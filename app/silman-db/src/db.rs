@@ -25,6 +25,9 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (7, include_str!("../migrations/0007_narrations.sql")),
     (8, include_str!("../migrations/0008_repertoire.sql")),
     (9, include_str!("../migrations/0009_tactics.sql")),
+    // 10 is reserved by parallel work; `migrate` applies per-version (not by
+    // MAX), so 0010 can land after 0011 without being skipped.
+    (11, include_str!("../migrations/0011_endgames.sql")),
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -60,13 +63,16 @@ fn migrate(conn: &Connection) -> Result<(), DbError> {
              applied_at TEXT NOT NULL DEFAULT (datetime('now'))
          );",
     )?;
-    let applied: i64 = conn.query_row(
-        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
-        [],
-        |r| r.get(0),
-    )?;
+    // Applied per version (not by MAX): the registered list may carry gaps
+    // when a number is reserved by parallel work, and the reserved migration
+    // must still run when it lands later.
     for &(version, sql) in MIGRATIONS {
-        if version > applied {
+        let done: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = ?1)",
+            [version],
+            |r| r.get(0),
+        )?;
+        if !done {
             conn.execute_batch("BEGIN;")?;
             conn.execute_batch(sql)?;
             conn.execute(

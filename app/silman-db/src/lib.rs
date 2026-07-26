@@ -9,6 +9,7 @@ pub mod annotate;
 pub mod db;
 pub mod eco;
 pub mod edit;
+pub mod endgame;
 pub mod engine;
 pub mod export;
 pub mod fingerprint;

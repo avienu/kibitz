@@ -36,6 +36,7 @@ silman-db = { path = "../silman-db" }
 silman-core = { path = "../../crates/silman-core" }
 silman-profile = { path = "../../crates/silman-profile" }
 silman-srs = { path = "../../crates/silman-srs" }
+silman-tb = { path = "../../crates/silman-tb" }
 silman-verbalize = { path = "../../crates/silman-verbalize" }
 # Keep these versions in lockstep with the root workspace so the types unify.
 rusqlite = { version = "0.32", features = ["bundled"] }

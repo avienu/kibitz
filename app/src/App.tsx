@@ -7,6 +7,7 @@ import { parseSquare, squareRank } from "chessops/util";
 import AnnotatedMoves from "./AnnotatedMoves";
 import Board, { type BoardMovable } from "./Board";
 import DatabaseView from "./DatabaseView";
+import EndgameView from "./EndgameView";
 import FirstRunOverlay, { markFirstRunSeen, shouldShowFirstRun } from "./FirstRunOverlay";
 import GameTools from "./GameTools";
 import Help from "./Help";
@@ -77,7 +78,7 @@ const SAMPLE_PGN = `[Event "London"]
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-type Mode = "analyze" | "database" | "prep" | "profile" | "train" | "tactics";
+type Mode = "analyze" | "database" | "prep" | "profile" | "train" | "tactics" | "endgames";
 
 /** Annotation-edit state for the currently loaded database game. */
 interface AnnotState {
@@ -643,6 +644,13 @@ export default function App() {
             Tactics
           </button>
           <button
+            className={mode === "endgames" ? "cur" : ""}
+            onClick={() => setMode("endgames")}
+            title="Endgame trainer: classic theoretical positions vs a tablebase/heuristic opponent"
+          >
+            Endgames
+          </button>
+          <button
             className="help-btn"
             onClick={() => setShowHelp(true)}
             title="Open the user guide"
@@ -697,6 +705,7 @@ export default function App() {
         {mode === "prep" && <PrepView onLoadGameAt={loadDbGameAt} profile={profile} />}
         {mode === "train" && <TrainView onSummary={setTrainSum} onBoard={setTrainBoard} />}
         {mode === "tactics" && <TacticsView profile={profile} />}
+        {mode === "endgames" && <EndgameView />}
         {mode === "profile" && (
           <ProfileView
             profile={profile}

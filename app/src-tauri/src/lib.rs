@@ -17,6 +17,7 @@
 
 pub mod browse;
 pub mod dbops;
+pub mod endgame;
 pub mod explain;
 pub mod prep;
 pub mod tactics;
@@ -153,6 +154,7 @@ pub fn run() {
         .manage(EngineState::default())
         .manage(browse::DbState::default())
         .manage(dbops::JobsWorker::default())
+        .manage(endgame::EndgameState::default())
         .invoke_handler(tauri::generate_handler![
             resolve_engine_path,
             analyze_position,
@@ -178,6 +180,10 @@ pub fn run() {
             tactics::tactics_start_cycle,
             tactics::tactics_finish_cycle,
             tactics::tactics_cycle_stats,
+            endgame::endgame_overview,
+            endgame::endgame_start,
+            endgame::endgame_move,
+            endgame::endgame_give_up,
             train::train_summary,
             train::train_queue,
             train::train_grade,

@@ -1,0 +1,308 @@
+{
+  "version": 1,
+  "comment": [
+    "Endgame trainer curriculum (ROADMAP Phase 5). Structure only — a",
+    "rating-banded progression from essential positions to harder technique",
+    "— is inspired by the classic endgame-course format; every position,",
+    "title and instruction below is original or centuries-old public-domain",
+    "theory (Lucena, Philidor, opposition, the square of the pawn, key",
+    "squares, Vancura, ...), described in our own words.",
+    "Every FEN's theoretical result was verified against Syzygy tablebases",
+    "(lichess.ovh tablebase API, 2026-07-26). The side to move in each FEN",
+    "is the side the user plays; `goal` is the theoretical result the user",
+    "must achieve. `material` is white-vs-black piece letters (KQRBNP order)",
+    "and is asserted against the FEN by the curriculum tests."
+  ],
+  "tiers": [
+    {
+      "id": "beginner",
+      "name": "Essentials",
+      "ratingBand": "up to ~1000",
+      "summary": "The two basic mates, the square of the pawn, and king-and-pawn fundamentals every player must know cold."
+    },
+    {
+      "id": "intermediate",
+      "name": "Building technique",
+      "ratingBand": "~1000-1500",
+      "summary": "Opposition in all its forms, key squares, spare tempi, and queen against a pawn on the seventh."
+    },
+    {
+      "id": "advanced",
+      "name": "Rook endings and tempo play",
+      "ratingBand": "~1500-1900",
+      "summary": "The rook endings that decide practical games — Lucena, Philidor, Vancura — plus tempo maneuvering."
+    }
+  ],
+  "drills": [
+    {
+      "id": "kq-mate-edge",
+      "tier": "beginner",
+      "title": "Queen mate: king on the edge",
+      "concept": "queen_mate",
+      "material": "KQvK",
+      "fen": "4k3/8/8/8/8/8/8/Q3K3 w - - 0 1",
+      "goal": "win",
+      "instruction": "Shrink the defending king's space with the queen a knight's-move away, bring your own king up, and mate on the edge — watch for stalemate."
+    },
+    {
+      "id": "kq-mate-center",
+      "tier": "beginner",
+      "title": "Queen mate: king in the center",
+      "concept": "queen_mate",
+      "material": "KQvK",
+      "fen": "8/8/3k4/8/8/8/8/2QK4 w - - 0 1",
+      "goal": "win",
+      "instruction": "First push the centralized king to any edge with the queen alone, then walk your king over to finish."
+    },
+    {
+      "id": "kr-mate-box",
+      "tier": "beginner",
+      "title": "Rook mate: shrink the box",
+      "concept": "rook_mate",
+      "material": "KRvK",
+      "fen": "4k3/8/8/8/8/8/8/R3K3 w - - 0 1",
+      "goal": "win",
+      "instruction": "Confine the king behind a rook barrier, march your king up square by square, and tighten the box until mate on the edge."
+    },
+    {
+      "id": "kr-mate-cut",
+      "tier": "beginner",
+      "title": "Rook mate: cut off first",
+      "concept": "rook_mate",
+      "material": "KRvK",
+      "fen": "8/8/8/3k4/8/8/8/4K2R w - - 0 1",
+      "goal": "win",
+      "instruction": "Use the rook to fence the king into one half of the board before advancing your own king — the cut-off does most of the work."
+    },
+    {
+      "id": "square-rule-hold",
+      "tier": "beginner",
+      "title": "The square of the pawn: catch it",
+      "concept": "square_of_pawn",
+      "material": "KPvK",
+      "fen": "8/8/8/8/P3k3/8/8/K7 b - - 0 1",
+      "goal": "draw",
+      "instruction": "Picture the square drawn from the pawn to its promotion rank: if your king can step inside it, the pawn is caught. Step in and run it down."
+    },
+    {
+      "id": "square-rule-race",
+      "tier": "beginner",
+      "title": "The square of the pawn: outrun the king",
+      "concept": "square_of_pawn",
+      "material": "KPvK",
+      "fen": "8/8/8/8/P4k2/8/8/K7 w - - 0 1",
+      "goal": "win",
+      "instruction": "The defending king stands outside the pawn's square. Push immediately — every pawn step redraws a smaller square it can never enter — then finish with the queen."
+    },
+    {
+      "id": "kp-king-in-front",
+      "tier": "beginner",
+      "title": "King two ranks ahead of its pawn",
+      "concept": "key_squares",
+      "material": "KPvK",
+      "fen": "8/4k3/8/4K3/8/4P3/8/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "With the king leading its pawn by two ranks the win never slips: advance the king first, take the opposition when the kings meet, and push the pawn last."
+    },
+    {
+      "id": "kp-sixth-rank",
+      "tier": "beginner",
+      "title": "King on the sixth, pawn behind",
+      "concept": "key_squares",
+      "material": "KPvK",
+      "fen": "4k3/8/4K3/4P3/8/8/8/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "A king on the sixth rank in front of its pawn wins regardless of whose move it is. Sidestep, let the defender commit, and shepherd the pawn home."
+    },
+    {
+      "id": "kp-opposition-hold",
+      "tier": "beginner",
+      "title": "Hold the draw with the opposition",
+      "concept": "opposition",
+      "material": "KPvK",
+      "fen": "8/8/4k3/8/3KP3/8/8/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "Meet the enemy king head-on and keep the opposition; when the pawn steps forward, plant your king directly in its path and never get pushed aside."
+    },
+    {
+      "id": "rook-pawn-corner",
+      "tier": "beginner",
+      "title": "Rook pawn: the corner is a fortress",
+      "concept": "rook_pawn_draw",
+      "material": "KPvK",
+      "fen": "k7/8/8/8/8/8/P7/K7 b - - 0 1",
+      "goal": "draw",
+      "instruction": "Against a rook pawn the promotion corner is unbreakable: shuffle between the corner and the square beside it — any eviction attempt ends in stalemate."
+    },
+    {
+      "id": "rook-pawn-race",
+      "tier": "beginner",
+      "title": "Rook pawn: wrong side of the board",
+      "concept": "rook_pawn_draw",
+      "material": "KPvK",
+      "fen": "7k/8/8/8/8/8/P7/K7 w - - 0 1",
+      "goal": "win",
+      "instruction": "The defending king starts a file too far from the queening corner. Run the pawn before the king crosses — then mate with the new queen."
+    },
+    {
+      "id": "distant-opposition",
+      "tier": "intermediate",
+      "title": "Distant opposition",
+      "concept": "opposition",
+      "material": "KPvK",
+      "fen": "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
+      "goal": "win",
+      "instruction": "With kings far apart, claim the distant opposition — an odd number of squares between the kings with the opponent to move — and convert it to the close opposition as you advance."
+    },
+    {
+      "id": "spare-tempo",
+      "tier": "intermediate",
+      "title": "Save the pawn moves",
+      "concept": "spare_tempo",
+      "material": "KPvK",
+      "fen": "8/3k4/8/3K4/8/8/3P4/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "The pawn far behind your king is a bank of spare tempi. Improve the king to its key squares first; spend a pawn step only when you need the defender to move."
+    },
+    {
+      "id": "outflank",
+      "tier": "intermediate",
+      "title": "Outflanking",
+      "concept": "opposition",
+      "material": "KPvK",
+      "fen": "3k4/8/3K4/8/8/8/3P4/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "You already hold the opposition — use it: when the defender gives way, step diagonally around, gaining ground rank by rank until the pawn can run."
+    },
+    {
+      "id": "kp-blockade-hold",
+      "tier": "intermediate",
+      "title": "Blockade the sixth-rank pawn",
+      "concept": "opposition",
+      "material": "KPvK",
+      "fen": "8/4k3/4P3/4K3/8/8/8/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "The pawn reached the sixth ahead of its king. Retreat straight back onto the promotion path, take the opposition when the king steps up, and remember: stalemate is your friend."
+    },
+    {
+      "id": "kp-fifth-hold",
+      "tier": "intermediate",
+      "title": "Attacker's king trails its pawn",
+      "concept": "opposition",
+      "material": "KPvK",
+      "fen": "8/3k4/8/3P4/3K4/8/8/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "While the pawn leads its own king you can hold: blockade it, and each time the enemy king advances, meet it head-on with the opposition."
+    },
+    {
+      "id": "qvp-center-win",
+      "tier": "intermediate",
+      "title": "Queen vs pawn on the seventh: center pawn",
+      "concept": "queen_vs_pawn",
+      "material": "KQvKP",
+      "fen": "Q7/8/1K6/8/8/8/4pk2/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "Approach with checks and pins until the defending king is forced onto the square in front of its own pawn — that frozen moment buys your king one step closer. Repeat until the king arrives."
+    },
+    {
+      "id": "qvp-knight-pawn",
+      "tier": "intermediate",
+      "title": "Queen vs pawn on the seventh: knight pawn",
+      "concept": "queen_vs_pawn",
+      "material": "KQvKP",
+      "fen": "Q7/8/8/1K6/8/8/1p3k2/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "Same winning ladder as against a center pawn: check, force the king in front of the pawn, gain a king step, repeat — a knight pawn offers no stalemate tricks."
+    },
+    {
+      "id": "qvp-rook-pawn-hold",
+      "tier": "intermediate",
+      "title": "Rook pawn on the seventh holds the queen",
+      "concept": "queen_vs_pawn",
+      "material": "KQvKP",
+      "fen": "8/7K/8/4Q3/8/8/pk6/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "Stay beside your pawn. Whenever the queen forces your king in front of it, that is stalemate — so no tempo is ever gained and the far-away king never arrives."
+    },
+    {
+      "id": "qvp-bishop-pawn-hold",
+      "tier": "intermediate",
+      "title": "Bishop pawn on the seventh holds the queen",
+      "concept": "queen_vs_pawn",
+      "material": "KQvKP",
+      "fen": "8/6K1/8/4Q3/8/8/1kp5/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "Head for the corner next to your pawn: if the queen ever takes it, the position is stalemate. That standing threat stops the winning ladder cold."
+    },
+    {
+      "id": "lucena",
+      "tier": "advanced",
+      "title": "Lucena position: build the bridge",
+      "concept": "lucena",
+      "material": "KRPvKR",
+      "fen": "1K6/1P1k4/8/8/8/8/r7/2R5 w - - 0 1",
+      "goal": "win",
+      "instruction": "Pawn on the seventh, your king stuck in front of it: place your rook on the fourth rank, step the king out, and when the checks come, walk it down and block with the rook — the bridge."
+    },
+    {
+      "id": "philidor",
+      "tier": "advanced",
+      "title": "Philidor position: the third-rank defense",
+      "concept": "philidor",
+      "material": "KRPvKR",
+      "fen": "4k3/8/r7/4PK2/8/8/8/1R6 b - - 0 1",
+      "goal": "draw",
+      "instruction": "Keep your rook on your third rank so the enemy king can never camp there. The moment the pawn crosses, drop the rook behind it and check forever — the king has no shelter."
+    },
+    {
+      "id": "backrank-defense",
+      "tier": "advanced",
+      "title": "Passive back-rank defense: knight pawn",
+      "concept": "back_rank_defense",
+      "material": "KRPvKR",
+      "fen": "1r4k1/R7/5KP1/8/8/8/8/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "With a knight pawn this far advanced, the humble setup holds: king beside the promotion square, rook parked on the back rank. Stay put and let every breakthrough attempt bounce."
+    },
+    {
+      "id": "vancura",
+      "tier": "advanced",
+      "title": "Vancura draw vs the rook pawn",
+      "concept": "vancura",
+      "material": "KRPvKR",
+      "fen": "R7/6k1/P4r2/2K5/8/8/8/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "Attack the pawn from the side along your third rank, keeping the enemy rook chained to it. When the king walks over to help, greet it with sideways checks it can never escape."
+    },
+    {
+      "id": "rook-cutoff",
+      "tier": "advanced",
+      "title": "Win with the king cut off",
+      "concept": "rook_cutoff",
+      "material": "KRPvKR",
+      "fen": "r7/7k/8/8/2KP4/8/8/6R1 w - - 0 1",
+      "goal": "win",
+      "instruction": "Your rook fences the defending king far from the pawn. Keep the fence intact, escort the pawn with your king, and answer rear checks by walking toward the rook."
+    },
+    {
+      "id": "triangulation",
+      "tier": "advanced",
+      "title": "Triangulation: hand back the move",
+      "concept": "triangulation",
+      "material": "KPvKP",
+      "fen": "8/1k6/1p6/1P6/3K4/8/8/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "The direct approach square is covered by the pawn, and face-to-face the defender holds. Maneuver your king so the same standoff arrives with the other side to move — zugzwang wins the pawn."
+    },
+    {
+      "id": "wrong-bishop",
+      "tier": "advanced",
+      "title": "Wrong bishop, rook pawn",
+      "concept": "wrong_bishop",
+      "material": "KBPvK",
+      "fen": "7k/8/6KP/8/8/3B4/8/8 b - - 0 1",
+      "goal": "draw",
+      "instruction": "The bishop does not control the promotion corner, so the corner is yours: shuttle between it and the neighboring square — driving you out stalemates, and the pawn never queens."
+    }
+  ]
+}

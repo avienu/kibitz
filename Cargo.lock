@@ -1144,6 +1144,7 @@ dependencies = [
  "silman-core",
  "silman-profile",
  "silman-srs",
+ "silman-tb",
  "silman-verbalize",
  "tempfile",
  "thiserror",

@@ -10,6 +10,7 @@ rust-version.workspace = true
 silman-core = { path = "../../crates/silman-core" }
 silman-profile = { path = "../../crates/silman-profile" }
 silman-srs = { path = "../../crates/silman-srs" }
+silman-tb = { path = "../../crates/silman-tb" }
 silman-verbalize = { path = "../../crates/silman-verbalize", features = ["llm"] }
 cozy-chess = { workspace = true }
 rusqlite = { workspace = true }
