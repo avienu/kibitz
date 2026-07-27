@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildPuzzleModel, formatClock, isSolverMove, motifWeightsFromProfile } from "./tactics";
+import {
+  buildPuzzleModel,
+  formatClock,
+  isSolverMove,
+  motifWeightsFromProfile,
+  ratingDeltaText,
+  remainingSolverMoves,
+} from "./tactics";
 import type { PlayerProfile } from "./db";
 
 describe("buildPuzzleModel", () => {
@@ -41,6 +48,24 @@ describe("solve-flow helpers", () => {
     expect(isSolverMove(1)).toBe(true);
     expect(isSolverMove(2)).toBe(false);
     expect(isSolverMove(3)).toBe(true);
+  });
+
+  it("counts the solver moves still to find over a multi-move line", () => {
+    // 4-move line (setup + user + reply + user): the fixture puzzle above.
+    expect(remainingSolverMoves(4, 0)).toBe(2); // setup animating
+    expect(remainingSolverMoves(4, 1)).toBe(2); // first user move pending
+    expect(remainingSolverMoves(4, 2)).toBe(1); // reply beat
+    expect(remainingSolverMoves(4, 3)).toBe(1); // final user move pending
+    expect(remainingSolverMoves(4, 4)).toBe(0); // line exhausted
+    // Single-user-move puzzle (setup + user).
+    expect(remainingSolverMoves(2, 1)).toBe(1);
+    expect(remainingSolverMoves(2, 2)).toBe(0);
+  });
+
+  it("formats the rating delta with an explicit sign", () => {
+    expect(ratingDeltaText(1842, 1849)).toBe("rating 1849 (+7)");
+    expect(ratingDeltaText(1842, 1836)).toBe("rating 1836 (-6)");
+    expect(ratingDeltaText(1842, 1842)).toBe("rating 1842 (+0)");
   });
 
   it("formats drill clocks", () => {

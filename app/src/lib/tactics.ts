@@ -214,6 +214,22 @@ export function isSolverMove(i: number): boolean {
   return i % 2 === 1;
 }
 
+/** Solver moves still to find from line index i (i itself included when it
+ * is the solver's move) — drives the "keep going — N to find" prompt. */
+export function remainingSolverMoves(totalMoves: number, lineIdx: number): number {
+  let n = 0;
+  for (let j = Math.max(0, lineIdx); j < totalMoves; j++) {
+    if (isSolverMove(j)) n++;
+  }
+  return n;
+}
+
+/** "rating 1849 (+7)" — the attempt's rating movement, sign always shown. */
+export function ratingDeltaText(before: number, after: number): string {
+  const d = Math.round(after) - Math.round(before);
+  return `rating ${after.toFixed(0)} (${d >= 0 ? "+" : ""}${d})`;
+}
+
 /** "3:05" style clock for drill timers. */
 export function formatClock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));

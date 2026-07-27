@@ -4,6 +4,12 @@
  * tablebase/heuristic defender; every user move is graded ONLY against
  * tablebase truth (StepReport rows), never an engine score.
  *
+ * The drill loop is driven by the pure view-model state machine in
+ * lib/endgameModel.ts (userTurn → replying → userTurn → … → solved|failed):
+ * an unmissable status line always names whose turn it is, terminal states
+ * get an explicit success/failure panel with Retry / Next drill, and Give
+ * up stays available for the whole attempt.
+ *
  * Honesty rules: the header's verification label states TABLEBASE TRUTH
  * (with the real covered piece count) only when the defender actually
  * probes the tablebase, else names the heuristic defender; the curriculum
@@ -23,29 +29,25 @@ import {
   endgameMove,
   endgameOverview,
   endgameStart,
-  goalText,
-  lastMoveOf,
   uciForDrag,
   type DrillInfo,
-  type DrillProgress,
-  type Outcome,
   type Overview,
-  type StartedDrill,
   type VerdictRow,
 } from "./lib/endgame";
-
-type Phase = "playing" | "solved" | "failed";
-
-interface PlayState {
-  started: StartedDrill;
-  fen: string;
-  lastMove?: [string, string];
-  phase: Phase;
-  outcomeText: string;
-  /** Accumulated feedback rows (StepReport rows arrive per step). */
-  rows: VerdictRow[];
-  showIdea: boolean;
-}
+import {
+  REPLY_BEAT_MS,
+  applyGiveUp,
+  applyMoveResponse,
+  beginDrill,
+  canMove,
+  commitReply,
+  failureReason,
+  isTerminal,
+  nextDrillId,
+  progressNote,
+  statusLine,
+  type EndgameModel,
+} from "./lib/endgameModel";
 
 const VERDICT_LABEL: Record<VerdictRow["verdict"], string> = {
   winning: "WINNING",
@@ -86,7 +88,8 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
   const [ov, setOv] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tierId, setTierId] = useState<string | null>(null);
-  const [play, setPlay] = useState<PlayState | null>(null);
+  const [play, setPlay] = useState<EndgameModel | null>(null);
+  const [showIdea, setShowIdea] = useState(false);
   const busyRef = useRef(false); // one move in flight at a time
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -107,41 +110,12 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
     [],
   );
 
-  const finish = useCallback(
-    (outcome: Outcome, progress: DrillProgress | null) => {
-      setPlay((p) => {
-        if (!p) return p;
-        let note = "";
-        if (progress) {
-          note = progress.mastered
-            ? " Drill mastered."
-            : progress.cleanStreak > 0
-              ? ` Clean streak ${progress.cleanStreak}/${ov?.masteryStreak ?? 2}.`
-              : "";
-        }
-        return {
-          ...p,
-          phase: outcome.solved ? "solved" : "failed",
-          outcomeText: `${outcome.solved ? "Solved — " : "Failed — "}${outcome.detail}${note}`,
-        };
-      });
-      loadOverview();
-    },
-    [ov, loadOverview],
-  );
-
   const start = useCallback(async (drillId: string) => {
     try {
       if (timerRef.current) clearTimeout(timerRef.current);
       const started = await endgameStart(drillId);
-      setPlay({
-        started,
-        fen: started.fen,
-        phase: "playing",
-        outcomeText: "",
-        rows: [],
-        showIdea: false,
-      });
+      setPlay(beginDrill(started));
+      setShowIdea(false);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -156,28 +130,23 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
 
   const onBoardMove = useCallback(
     (orig: string, dest: string, promoRole?: PromoRole) => {
-      if (!play || play.phase !== "playing" || busyRef.current) return;
+      if (!play || !canMove(play) || busyRef.current) return;
       if (!promoRole && promo.guard(play.fen, orig, dest)) return;
       const uci = uciForDrag(play.fen, orig, dest, promoRole);
       if (!uci) return;
       busyRef.current = true;
       endgameMove(uci)
         .then((r) => {
-          // Rows accumulate client-side, per step (user row + engine row).
-          setPlay((p) =>
-            p
-              ? { ...p, fen: r.fenAfterUser, lastMove: lastMoveOf(uci), rows: [...p.rows, ...r.rows] }
-              : p,
-          );
-          const opp = r.opponent;
-          if (opp && r.fenAfterOpponent) {
-            const oppFen = r.fenAfterOpponent;
+          setPlay((p) => (p && canMove(p) ? applyMoveResponse(p, uci, r) : p));
+          if (r.opponent && r.fenAfterOpponent) {
+            // Defender's reply lands after a beat, then it is the user's
+            // turn again (or the reply's own terminal).
             timerRef.current = setTimeout(() => {
-              setPlay((p) => (p ? { ...p, fen: oppFen, lastMove: lastMoveOf(opp.uci) } : p));
-              if (r.outcome) finish(r.outcome, r.progress);
-            }, 350);
+              setPlay((p) => (p ? commitReply(p) : p));
+              if (r.outcome) loadOverview();
+            }, REPLY_BEAT_MS);
           } else if (r.outcome) {
-            finish(r.outcome, r.progress);
+            loadOverview();
           }
         })
         .catch((e) => setError(String(e)))
@@ -185,22 +154,33 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
           busyRef.current = false;
         });
     },
-    [play, finish, promo],
+    [play, promo, loadOverview],
   );
   moveHandlerRef.current = onBoardMove;
 
+  /** Give up — available for the whole attempt. A reply still mid-beat is
+   * flushed first; if it already ended the drill, that outcome stands. */
   const giveUp = useCallback(async () => {
+    if (!play || isTerminal(play)) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const flushed = play.phase === "replying" ? commitReply(play) : play;
+    setPlay(flushed);
+    if (isTerminal(flushed)) {
+      loadOverview();
+      return;
+    }
     try {
       const r = await endgameGiveUp();
-      finish({ solved: false, detail: "gave up." }, r.progress);
+      setPlay((p) => (p ? applyGiveUp(p, r.progress) : p));
+      loadOverview();
     } catch (e) {
       setError(String(e));
     }
-  }, [finish]);
+  }, [play, loadOverview]);
 
   const restart = useCallback(() => {
     if (!play) return;
-    if (play.phase === "playing") {
+    if (!isTerminal(play)) {
       // Restarting mid-attempt concedes it first (recorded honestly).
       void endgameGiveUp()
         .catch(() => {})
@@ -211,9 +191,9 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
   }, [play, start]);
 
   const movable = useMemo((): BoardMovable | undefined => {
-    if (!play || play.phase !== "playing") return undefined;
+    if (!play || !canMove(play)) return undefined;
     const dests = destsFor(play.fen, play.started.userSide);
-    if (dests.size === 0) return undefined; // opponent's turn (reply pending)
+    if (dests.size === 0) return undefined;
     return { color: play.started.userSide, dests, onMove: onBoardMove };
   }, [play, onBoardMove]);
 
@@ -234,6 +214,24 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
         }
       : { text: "HEURISTIC DEFENDER · TERMINAL GRADING", good: false }
     : null;
+
+  const status = play ? statusLine(play) : null;
+  const nextId =
+    play && isTerminal(play) && ov
+      ? nextDrillId(
+          ov.drills.map((d) => ({ id: d.id, mastered: d.mastered })),
+          play.started.drillId,
+        )
+      : null;
+  const startNext = useCallback(
+    (id: string) => {
+      const d = ov?.drills.find((x) => x.id === id);
+      if (d) setTierId(d.tier);
+      void start(id);
+    },
+    [ov, start],
+  );
+  const failWhy = play ? failureReason(play) : null;
 
   return (
     <>
@@ -321,34 +319,71 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                 />
                 {promo.element}
               </div>
-              <div className="eg-objective">
-                <span className="eg-objective-text">
-                  {play.phase === "playing"
-                    ? `Objective: ${goalText(play.started.goal, play.started.userSide).toLowerCase()}. ` +
-                      (play.started.opponentTablebase
-                        ? "The defender replies from the tablebase."
-                        : "The defender is a deterministic heuristic.")
-                    : play.outcomeText}
-                </span>
-                <span className="flex-spacer" />
-                <button className="btn-secondary" onClick={restart}>
-                  Restart
-                </button>
-                {play.phase === "playing" ? (
-                  <>
+
+              {/* Unmissable turn/status line — the loop's heartbeat. */}
+              {status && !isTerminal(play) && (
+                <div className={`eg-status s-${status.tone}`} role="status">
+                  {status.tone === "wait" && <span className="eg-status-dot" aria-hidden />}
+                  <span className="eg-status-text">{status.text}</span>
+                  {play.phase === "userTurn" && (
+                    <span className="eg-status-hint">
+                      Play on until the drill ends — every move is graded in the aside.
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Terminal panel: explicit success/failure with next actions. */}
+              {isTerminal(play) && (
+                <div className={`eg-terminal ${play.phase}`} role="status">
+                  <div className="eg-terminal-head">
+                    {play.phase === "solved" ? "SOLVED ✓" : "FAILED ✗"}
+                  </div>
+                  <p className="eg-terminal-detail">
+                    {play.outcome?.detail}
+                    {progressNote(play, ov?.masteryStreak ?? 2)
+                      ? ` ${progressNote(play, ov?.masteryStreak ?? 2)}`
+                      : ""}
+                  </p>
+                  {failWhy && (
+                    <p className="eg-terminal-why">Where it went wrong: {failWhy}</p>
+                  )}
+                  <div className="eg-terminal-actions">
                     <button
-                      className="btn-secondary"
-                      onClick={() => setPlay((p) => (p ? { ...p, showIdea: !p.showIdea } : p))}
+                      className="btn-primary"
+                      onClick={() => void start(play.started.drillId)}
                     >
-                      {play.showIdea ? "Hide the idea" : "Show the idea"}
+                      Retry drill
                     </button>
-                    <button className="btn-secondary" onClick={() => void giveUp()}>
-                      Give up
-                    </button>
-                  </>
-                ) : null}
-              </div>
-              {play.showIdea && play.phase === "playing" && (
+                    {nextId && (
+                      <button className="btn-secondary" onClick={() => startNext(nextId)}>
+                        Next drill →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!isTerminal(play) && (
+                <div className="eg-objective">
+                  <span className="eg-objective-text">
+                    {play.started.opponentTablebase
+                      ? "The defender replies from the tablebase."
+                      : "The defender is a deterministic heuristic."}
+                  </span>
+                  <span className="flex-spacer" />
+                  <button className="btn-secondary" onClick={restart}>
+                    Restart
+                  </button>
+                  <button className="btn-secondary" onClick={() => setShowIdea((s) => !s)}>
+                    {showIdea ? "Hide the idea" : "Show the idea"}
+                  </button>
+                  <button className="btn-secondary" onClick={() => void giveUp()}>
+                    Give up
+                  </button>
+                </div>
+              )}
+              {showIdea && !isTerminal(play) && (
                 <p className="eg-idea">{play.started.instruction}</p>
               )}
             </>

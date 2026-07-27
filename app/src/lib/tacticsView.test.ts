@@ -7,6 +7,7 @@ import {
   motifFact,
   seedMotifFromClaim,
   seededWeights,
+  solvePrompt,
   sourceFact,
   tacticsKeyAction,
   weaknessWeights,
@@ -99,18 +100,55 @@ describe("the reasoning aside", () => {
   });
 });
 
+describe("solve-flow prompt (no dead-ends: every state names its next action)", () => {
+  it("walks a multi-move line: setup → your move (2) → correct/reply → keep going (1)", () => {
+    // 4-move line: setup, user, reply, user (the tactics.test fixture).
+    expect(solvePrompt("solving", 4, 0)).toEqual({
+      tone: "wait",
+      text: "Watch — the opponent plays first…",
+    });
+    expect(solvePrompt("solving", 4, 1)).toEqual({
+      tone: "play",
+      text: "Your move — 2 to find.",
+    });
+    expect(solvePrompt("solving", 4, 2)).toEqual({
+      tone: "good",
+      text: "✓ Correct — the opponent replies…",
+    });
+    expect(solvePrompt("solving", 4, 3)).toEqual({
+      tone: "play",
+      text: "✓ Keep going — one to find.",
+    });
+  });
+
+  it("single-move puzzles prompt without a count", () => {
+    expect(solvePrompt("solving", 2, 1)).toEqual({
+      tone: "play",
+      text: "Your move — find the best move.",
+    });
+  });
+
+  it("terminal and idle phases yield to the outcome banner", () => {
+    expect(solvePrompt("solved", 4, 4)).toBeNull();
+    expect(solvePrompt("failed", 4, 1)).toBeNull();
+    expect(solvePrompt("idle", 4, 0)).toBeNull();
+  });
+});
+
 describe("keyboard map", () => {
-  it("H / S / G / ⏎ map to actions", () => {
+  it("H / S / G / ⏎ / N map to actions", () => {
     expect(tacticsKeyAction("h", false)).toBe("hint");
     expect(tacticsKeyAction("H", false)).toBe("hint");
     expect(tacticsKeyAction("s", false)).toBe("skip");
     expect(tacticsKeyAction("g", false)).toBe("giveup");
     expect(tacticsKeyAction("Enter", false)).toBe("next");
+    expect(tacticsKeyAction("n", false)).toBe("next");
+    expect(tacticsKeyAction("N", false)).toBe("next");
     expect(tacticsKeyAction("x", false)).toBeNull();
   });
 
   it("focused inputs swallow every key (the editable exception)", () => {
-    for (const key of ["h", "s", "g", "Enter"]) {
+    for (const key of ["h", "s", "g", "n", "Enter"]) {
       expect(tacticsKeyAction(key, true)).toBeNull();
     }
   });

@@ -7,7 +7,7 @@
 import type { PlayerProfile } from "./db";
 import { parseClaim, shortMotif } from "./profileView";
 import type { DrillMode, MotifWeight, ServedPuzzle, TacticsState } from "./tactics";
-import { motifWeightsFromProfile } from "./tactics";
+import { isSolverMove, motifWeightsFromProfile, remainingSolverMoves } from "./tactics";
 
 /* ---- modes ---------------------------------------------------------------- */
 
@@ -191,6 +191,46 @@ export function motifFact(mode: DrillMode, served: ServedPuzzle | null, finished
   return "revealed when solved";
 }
 
+/* ---- solve-flow prompt ----------------------------------------------------- */
+
+export type SolvePhase = "idle" | "solving" | "solved" | "failed";
+
+export interface SolvePrompt {
+  tone: "play" | "wait" | "good";
+  text: string;
+}
+
+/**
+ * The always-on continuation prompt while solving — every state names the
+ * next action. Terminal phases return null (the outcome banner owns them).
+ *
+ * Line indices follow the puzzle convention: 0 is the opponent's setup
+ * move, odd indices are the user's, even indices mid-line are opponent
+ * replies auto-played after a beat.
+ */
+export function solvePrompt(
+  phase: SolvePhase,
+  totalMoves: number,
+  lineIdx: number,
+): SolvePrompt | null {
+  if (phase !== "solving") return null;
+  if (lineIdx === 0) return { tone: "wait", text: "Watch — the opponent plays first…" };
+  if (isSolverMove(lineIdx)) {
+    const n = remainingSolverMoves(totalMoves, lineIdx);
+    if (lineIdx === 1) {
+      return {
+        tone: "play",
+        text: n > 1 ? `Your move — ${n} to find.` : "Your move — find the best move.",
+      };
+    }
+    return {
+      tone: "play",
+      text: n > 1 ? `✓ Keep going — ${n} to find.` : "✓ Keep going — one to find.",
+    };
+  }
+  return { tone: "good", text: "✓ Correct — the opponent replies…" };
+}
+
 /* ---- keyboard ------------------------------------------------------------- */
 
 export type TacticsKey = "hint" | "skip" | "giveup" | "next";
@@ -208,6 +248,8 @@ export function tacticsKeyAction(key: string, editable: boolean): TacticsKey | n
     case "g":
     case "G":
       return "giveup";
+    case "n":
+    case "N":
     case "Enter":
       return "next";
     default:

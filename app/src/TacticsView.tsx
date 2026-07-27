@@ -34,6 +34,7 @@ import {
   importPuzzles,
   isSolverMove,
   nextPuzzle,
+  ratingDeltaText,
   recordAttempt,
   startCycle,
   tacticsState,
@@ -54,6 +55,7 @@ import {
   modeBadge,
   motifFact,
   seedMotifFromClaim,
+  solvePrompt,
   sourceFact,
   tacticsKeyAction,
   weaknessWeights,
@@ -228,8 +230,16 @@ export default function TacticsView({
       setStreak((n) => (solved ? n + 1 : 0));
       setSession((s) => ({ attempts: s.attempts + 1, solved: s.solved + (solved ? 1 : 0) }));
       try {
-        await recordAttempt(served.puzzle.id, solved, timeMs, mode, cycle?.cycleId ?? undefined);
-        setOutcomeText(`${note} ${formatClock(timeMs)}.`);
+        const out = await recordAttempt(
+          served.puzzle.id,
+          solved,
+          timeMs,
+          mode,
+          cycle?.cycleId ?? undefined,
+        );
+        setOutcomeText(
+          `${note} ${formatClock(timeMs)} · ${ratingDeltaText(out.ratingBefore, out.ratingAfter)}.`,
+        );
         loadState();
       } catch (e) {
         setOutcomeText(`${note} (recording failed: ${e})`);
@@ -248,7 +258,7 @@ export default function TacticsView({
             await finishCycle(cycle.cycleId);
             setCycle(null);
             setStatus(
-              `Cycle finished: ${next.solved}/${next.queue.length} solved in ${formatClock(next.totalMs)}.`,
+              `Cycle finished: ${next.solved}/${next.queue.length} solved in ${formatClock(next.totalMs)} — start the next cycle from the Woodpecker panel.`,
             );
             loadState();
           } catch (e) {
@@ -446,6 +456,9 @@ export default function TacticsView({
     setName: cycle?.set.name ?? latestSet?.name,
   });
   const hintShapes = hintSquare ? [{ orig: hintSquare, brush: "orange" }] : undefined;
+  /** Always-on continuation prompt while solving (null once finished —
+   * the outcome banner + Next button own the terminal states). */
+  const prompt = served ? solvePrompt(phase, served.puzzle.moves.length, lineIdx) : null;
 
   return (
     <div className="tx2">
@@ -621,6 +634,19 @@ export default function TacticsView({
                 {promo.element}
               </div>
 
+              {prompt && (
+                <div className={`tx2-prompt p-${prompt.tone}`} role="status">
+                  {prompt.text}
+                </div>
+              )}
+              {outcomeText && (
+                <div className={`tx2-outcome ${phase}`} role="status">
+                  <span className="tx2-outcome-head">
+                    {phase === "solved" ? "Solved ✓ " : phase === "failed" ? "Failed ✗ " : ""}
+                  </span>
+                  {outcomeText}
+                </div>
+              )}
               <div className="tx2-controls">
                 {phase === "solving" ? (
                   <>
@@ -633,14 +659,13 @@ export default function TacticsView({
                     <button className="btn-primary" onClick={doGiveUp} disabled={!solvingNow}>
                       Give up <span className="tx2-key">G</span>
                     </button>
-                    <span className="tx2-kbd-hint">
-                      Play the move on the board — H hint, S skip, G give up.
-                    </span>
+                    <span className="tx2-kbd-hint">H hint · S skip · G give up.</span>
                   </>
                 ) : (
                   <>
                     <button className="btn-primary" onClick={() => void serve()} disabled={!canNext || !st}>
-                      {served ? "Next puzzle" : "Start solving"} <span className="tx2-key">⏎</span>
+                      {served ? "Next puzzle" : "Start solving"}{" "}
+                      <span className="tx2-key">⏎ / N</span>
                     </button>
                     {finished && model && (
                       <span className="tx2-replay">
@@ -658,18 +683,14 @@ export default function TacticsView({
                         >
                           ▶
                         </button>
-                        <span className="tx2-kbd-hint">replay the solution · ⏎ next</span>
+                        <span className="tx2-kbd-hint">
+                          ◀ ▶ replay the solution · ⏎ or N for the next puzzle
+                        </span>
                       </span>
                     )}
                   </>
                 )}
               </div>
-              {outcomeText && (
-                <div className={`tx2-outcome ${phase}`}>
-                  {phase === "solved" ? "Solved ✓ " : phase === "failed" ? "Failed ✗ " : ""}
-                  {outcomeText}
-                </div>
-              )}
               {status && <div className="tx2-status">{status}</div>}
             </>
           )}
