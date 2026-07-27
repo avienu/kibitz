@@ -43,24 +43,24 @@ pub fn player_fingerprint(
     player: &str,
     max_plies: u16,
 ) -> anyhow::Result<RepertoireFingerprint> {
-    let player_id: i64 = conn
-        .query_row("SELECT id FROM players WHERE name = ?1", [player], |r| {
-            r.get(0)
-        })
-        .map_err(|_| {
-            anyhow::anyhow!(
-                "no player named {player:?} (try `kibitz-cli players {player:?}` for matches)"
-            )
-        })?;
+    // Identity-resolved (run 8.5): lexical name variants + declared
+    // aliases fingerprint as one player.
+    let ids = crate::identity::resolve_identity_ids(conn, player)?;
+    if ids.is_empty() {
+        anyhow::bail!(
+            "no player named {player:?} (try `kibitz-cli players {player:?}` for matches)"
+        );
+    }
+    let id_list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
 
     let theory = theory_set(conn)?;
 
-    let mut stmt = conn.prepare(
-        "SELECT white_id = ?1, result, white_elo, black_elo, eco, movetext, start_fen
+    let mut stmt = conn.prepare(&format!(
+        "SELECT white_id IN ({id_list}), result, white_elo, black_elo, eco, movetext, start_fen
          FROM games
-         WHERE white_id = ?1 OR black_id = ?1",
-    )?;
-    let rows = stmt.query_map(params![player_id], |r| {
+         WHERE white_id IN ({id_list}) OR black_id IN ({id_list})"
+    ))?;
+    let rows = stmt.query_map([], |r| {
         Ok((
             r.get::<_, bool>(0)?,
             r.get::<_, i64>(1)?,

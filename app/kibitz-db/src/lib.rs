@@ -15,6 +15,7 @@ pub mod engine;
 pub mod export;
 pub mod fingerprint;
 pub mod hash;
+pub mod identity;
 pub mod import;
 pub mod import_si4;
 pub mod jobs;

@@ -28,6 +28,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     // 10 is reserved by parallel work; `migrate` applies per-version (not by
     // MAX), so 0010 can land after 0011 without being skipped.
     (11, include_str!("../migrations/0011_endgames.sql")),
+    (12, include_str!("../migrations/0012_aliases.sql")),
 ];
 
 #[derive(Debug, thiserror::Error)]

@@ -16,11 +16,15 @@ import EvidencePane, { type EvidenceGame } from "./components/EvidencePane";
 import StatTile from "./components/StatTile";
 import ScreenHeader from "./shell/ScreenHeader";
 import {
+  aliasDeclare,
+  aliasRemove,
   buildProfile,
+  identityGroup,
   cacheProfile,
   getGame,
   matchingPlayers,
   type MotifRow,
+  type NameForm,
   type PlayerProfile,
   type ProfileExample,
 } from "./lib/db";
@@ -133,6 +137,16 @@ export default function ProfileView({
     };
   }, [player]);
 
+  // Identity forms merged into the current self profile (run 8.5):
+  // shown so a false merge is never silent, editable via aliases.
+  const [nameForms, setNameForms] = useState<NameForm[]>([]);
+  const [aliasInput, setAliasInput] = useState("");
+  const refreshForms = useCallback((name: string) => {
+    identityGroup(name)
+      .then(setNameForms)
+      .catch(() => setNameForms([]));
+  }, []);
+
   const buildSelf = useCallback(async () => {
     setBuilding(true);
     setError(null);
@@ -142,12 +156,13 @@ export default function ProfileView({
       // Home's findings read the cache — refresh it on every SELF build.
       cacheProfile(player.trim()).catch(() => {});
       setSelected((c) => c ?? defaultClaim(p));
+      refreshForms(player.trim());
     } catch (e) {
       setError(String(e));
     } finally {
       setBuilding(false);
     }
-  }, [player, onProfileBuilt]);
+  }, [player, onProfileBuilt, refreshForms]);
 
   // Deep-link auto-build (screenshots, shared links): run once.
   const autoBuilt = useRef(false);
@@ -162,13 +177,14 @@ export default function ProfileView({
         onProfileBuilt(prof);
         cacheProfile(initialPlayer).catch(() => {});
         setSelected((c) => c ?? defaultClaim(prof));
+        refreshForms(initialPlayer);
       } catch (e) {
         setError(String(e));
       } finally {
         setBuilding(false);
       }
     })();
-  }, [initialPlayer, onProfileBuilt]);
+  }, [initialPlayer, onProfileBuilt, refreshForms]);
 
   const p = subject === "self" ? profile : oppProfile;
   const active = selected ?? (p ? defaultClaim(p) : null);
@@ -376,6 +392,45 @@ export default function ProfileView({
           ) : (
             <>
               <p className="pf2-lede">{profileLede(p)}</p>
+              {subject === "self" && nameForms.length > 0 && (
+                <div className="pf2-identity">
+                  <span className="pf2-identity-label">INCLUDES</span>
+                  {nameForms.map((f) => (
+                    <span key={f.name} className="pf2-identity-form" title={f.games === 0 ? "declared alias — no imported games yet" : undefined}>
+                      {f.name} <span className="pf2-identity-games">{f.games}g</span>
+                      {nameForms.length > 1 && (
+                        <button
+                          className="pf2-identity-x"
+                          title="Not the same person — split this name off (rebuild after)"
+                          onClick={() => {
+                            void aliasRemove(f.name).then(() => refreshForms(player.trim() || f.name));
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  <span className="pf2-identity-add">
+                    <input
+                      type="text"
+                      value={aliasInput}
+                      onChange={(e) => setAliasInput(e.target.value)}
+                      placeholder="also known as… (e.g. an online handle)"
+                      spellCheck={false}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && aliasInput.trim() !== "") {
+                          void aliasDeclare(player.trim(), aliasInput.trim()).then((forms) => {
+                            setNameForms(forms);
+                            setAliasInput("");
+                            void buildSelf(); // rebuild across the widened identity
+                          });
+                        }
+                      }}
+                    />
+                  </span>
+                </div>
+              )}
 
               <div className="pf2-grid">
                 <section className="pf2-panel">

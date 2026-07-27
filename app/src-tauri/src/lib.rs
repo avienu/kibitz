@@ -20,6 +20,7 @@ pub mod dbops;
 pub mod endgame;
 pub mod explain;
 pub mod home;
+mod identity;
 pub mod prep;
 pub mod tactics;
 pub mod tokens;
@@ -216,6 +217,9 @@ pub fn run() {
             dbops::set_window_title,
             home::home_summary,
             home::touch_last_game,
+            identity::identity_group,
+            identity::alias_declare,
+            identity::alias_remove,
             home::cache_profile,
             home::commitment_get,
             home::commitment_set,

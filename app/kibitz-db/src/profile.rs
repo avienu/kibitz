@@ -63,21 +63,25 @@ pub fn build_profile(
     player: &str,
     max_games: u32,
 ) -> anyhow::Result<PlayerProfile> {
-    let player_id: i64 = conn
-        .query_row("SELECT id FROM players WHERE name = ?1", [player], |r| {
-            r.get(0)
-        })
-        .map_err(|_| anyhow::anyhow!("no player named {player:?}"))?;
+    // Identity resolution (run 8.5): the same person under different name
+    // forms ("O'Connor, Shawn" / "Shawn O'Connor") and declared aliases
+    // (online handles) profiles as ONE player.
+    let ids = crate::identity::resolve_identity_ids(conn, player)?;
+    if ids.is_empty() {
+        anyhow::bail!("no player named {player:?}");
+    }
+    let id_list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
 
-    let mut stmt = conn.prepare(
-        "SELECT id, white_id = ?1, result, eco, movetext
+    let mut stmt = conn.prepare(&format!(
+        "SELECT id, white_id IN ({id_list}), result, eco, movetext
          FROM games
-         WHERE (white_id = ?1 OR black_id = ?1) AND start_fen IS NULL
-         ORDER BY id DESC LIMIT ?2",
-    )?;
+         WHERE (white_id IN ({id_list}) OR black_id IN ({id_list}))
+           AND start_fen IS NULL
+         ORDER BY id DESC LIMIT ?1"
+    ))?;
     type GameRow = (i64, bool, i64, Option<String>, Vec<u8>);
     let rows: Vec<GameRow> = stmt
-        .query_map(params![player_id, max_games as i64], |r| {
+        .query_map(params![max_games as i64], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })?
         .collect::<Result<_, _>>()?;

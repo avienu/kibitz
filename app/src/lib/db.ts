@@ -557,6 +557,25 @@ export function homeSummary(): Promise<HomeSummary> {
 }
 
 /** Record the game/ply on the board (feeds Home's Continue card). */
+export interface NameForm {
+  playerId: number;
+  name: string;
+  games: number;
+}
+
+/** Every name form `name` resolves to (lexical variants + declared aliases). */
+export function identityGroup(name: string): Promise<NameForm[]> {
+  return invoke<NameForm[]>("identity_group", { name });
+}
+
+export function aliasDeclare(a: string, b: string): Promise<NameForm[]> {
+  return invoke<NameForm[]>("alias_declare", { a, b });
+}
+
+export function aliasRemove(name: string): Promise<void> {
+  return invoke<void>("alias_remove", { name });
+}
+
 export function touchLastGame(gameId: number, ply: number, flipped: boolean): Promise<void> {
   return invoke<void>("touch_last_game", { gameId, ply, flipped });
 }
