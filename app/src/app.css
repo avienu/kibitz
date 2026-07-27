@@ -4291,3 +4291,21 @@ input.set-value.editing {
   overflow-wrap: anywhere; }
 .sync-note { font: 400 11px/1.55 "Public Sans", sans-serif; color: var(--faint); margin: 0; }
 .sync-card-icc { opacity: 0.9; }
+
+/* ==== run 9: generated coach narrations in the Moves panel ==== */
+.mv-narration {
+  font: 400 12.5px/1.6 "Source Serif 4", serif;
+  color: var(--dim);
+  text-wrap: pretty;
+  padding: 2px 7px 8px;
+  border-left: 2px solid var(--accent);
+  margin: 2px 0 8px;
+}
+.mv-narration-tag {
+  display: inline-block;
+  margin-right: 7px;
+  font: 700 8.5px "JetBrains Mono", monospace;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  transform: translateY(-1px);
+}

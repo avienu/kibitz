@@ -150,3 +150,25 @@ describe("nagTone", () => {
     expect(nagTone(10)).toBe("plain");
   });
 });
+
+describe("generated narrations in rows", () => {
+  it("attaches a narration row directly after the move it narrates", async () => {
+    const { movesRowsFromSans } = await import("./movesView");
+    void movesRowsFromSans; // shape check only — narration path uses movesRows
+    const { movesRows } = await import("./movesView");
+    const { buildAnnView } = await import("./tokens");
+    const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    const tokens = [
+      { t: "move", san: "e4" },
+      { t: "move", san: "e5" },
+      { t: "move", san: "Nf3" },
+    ] as never[];
+    const view = buildAnnView(START, tokens as never);
+    const rows = movesRows(view, START, new Map() as never, new Map([[2, "Black stakes the center."]]));
+    const kinds = rows.map((r) => r.kind);
+    expect(kinds).toEqual(["pair", "narration", "pair"]);
+    const narr = rows[1] as Extract<(typeof rows)[number], { kind: "narration" }>;
+    expect(narr.ply).toBe(2);
+    expect(narr.text).toContain("stakes the center");
+  });
+});

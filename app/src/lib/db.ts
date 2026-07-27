@@ -236,10 +236,17 @@ export function prepFingerprint(
 
 /* ---- Phase 2: annotation editing ---- */
 
+export interface NarrationRow {
+  ply: number;
+  text: string;
+}
+
 export interface GameTokens {
   /** FEN of the game's start position (standard start included). */
   startFen: string;
   tokens: JsonToken[];
+  /** Generated coach narrations by mainline ply (display-only). */
+  narrations: NarrationRow[];
 }
 
 export function getGameTokens(gameId: number): Promise<GameTokens> {

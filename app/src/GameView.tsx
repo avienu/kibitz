@@ -304,7 +304,7 @@ export default function GameView({
     if (editing && game) {
       const view = buildAnnView(game.fens[0], editing.tokens);
       if (!view.error || view.items.length > 0) {
-        return movesRows(view, game.fens[0], gameEngines(analysisRows));
+        return movesRows(view, game.fens[0], gameEngines(analysisRows), editing.narrations);
       }
     }
     return game ? movesRowsFromSans(game.sans, game.fens[0]) : [];

@@ -113,6 +113,8 @@ interface AnnotState {
   startFen: string;
   tokens: JsonToken[];
   saved: JsonToken[];
+  /** Generated coach narrations by ply (display-only). */
+  narrations: Map<number, string>;
 }
 
 interface PendingVariation {
@@ -368,7 +370,13 @@ export default function App() {
       getGameTokens(detail.id)
         .then((gt) => {
           if (tokenReqRef.current !== req) return;
-          setAnnot({ gameId: detail.id, startFen: gt.startFen, tokens: gt.tokens, saved: gt.tokens });
+          setAnnot({
+            gameId: detail.id,
+            startFen: gt.startFen,
+            tokens: gt.tokens,
+            saved: gt.tokens,
+            narrations: new Map(gt.narrations.map((n) => [n.ply, n.text])),
+          });
         })
         .catch((e) => setStatus((s) => `${s} (annotations unavailable: ${e})`));
       gameAnalyses(detail.id)
@@ -861,6 +869,7 @@ export default function App() {
               annot
                 ? {
                     tokens: annot.tokens,
+                    narrations: annot.narrations,
                     onChange: (tokens) => setAnnot((a) => (a ? { ...a, tokens } : a)),
                     dirty: annot.tokens !== annot.saved,
                     saving,

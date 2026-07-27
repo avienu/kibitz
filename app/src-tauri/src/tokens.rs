@@ -159,6 +159,17 @@ pub struct GameTokens {
     /// FEN of the start position (standard start included, for convenience).
     pub start_fen: String,
     pub tokens: Vec<JsonToken>,
+    /// Generated coach narrations by mainline ply (run-5 side table).
+    /// Display-only: regenerated wholesale by annotate/fold-back, never
+    /// edited as if they were human comments.
+    pub narrations: Vec<NarrationRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrationRow {
+    pub ply: u32,
+    pub text: String,
 }
 
 pub(crate) fn get_game_tokens_impl(
@@ -166,9 +177,16 @@ pub(crate) fn get_game_tokens_impl(
     game_id: i64,
 ) -> Result<GameTokens, String> {
     let (start, tokens) = kibitz_db::edit::game_tokens(conn, game_id).map_err(|e| e.to_string())?;
+    let mut narrations: Vec<NarrationRow> = kibitz_db::narrate::narrations(conn, game_id)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(ply, text)| NarrationRow { ply, text })
+        .collect();
+    narrations.sort_by_key(|n| n.ply);
     Ok(GameTokens {
         start_fen: start.to_string(),
         tokens: tokens_to_json(&start, &tokens)?,
+        narrations,
     })
 }
 
