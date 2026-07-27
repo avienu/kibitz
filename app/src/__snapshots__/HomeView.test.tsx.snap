@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Home — degraded state (maintainer ruling: short honest list) > renders exactly the honest list when nothing is due at all 1`] = `
+<div
+  class="home"
+>
+  <div
+    class="home-greeting"
+  >
+    <h2
+      class="home-date"
+    >
+      Sunday, 26 July
+    </h2>
+  </div>
+  <div
+    class="home-degraded"
+  >
+    <p>
+      Nothing due today.
+    </p>
+    <p>
+      No new games this week.
+    </p>
+    <p>
+      <button
+        class="home-link"
+      >
+        Build a profile
+      </button>
+       
+      to surface findings.
+    </p>
+  </div>
+</div>
+`;
