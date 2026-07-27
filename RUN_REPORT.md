@@ -1,3 +1,83 @@
+# Run 8.5 — 2026-07-27 (book-trial validation & tuning)
+
+## Headline
+
+Your idea worked better than either of us could have hoped. **The
+analyzer was tested against 154 positions transcribed from your own
+Jeremy Silman library** (all 38 numbered HTRYC problems, all 26
+Amateur's Mind tests, 44 Strategy-dictionary concept diagrams incl. six
+deliberate counter-examples, 30 Endgame Course tier tests) — and then
+tuned against it: **imbalance recall 52.0% → 81.5%, plan recall
+33.3% → 67.9%** on a denominator that GREW (29 previously unscoreable
+expectations became scoreable through ten new plan hints), with all
+seven counter-example negative anchors clean and the WSUI alert
+validation byte-identical. Plus, from the same corpus: the endgame
+curriculum grew 27 → 36 drills, and two name-identity features you
+asked for mid-run shipped. All committed; 655 tests green.
+
+## The corpus (private, honest)
+
+PDFs are image scans, so four agents transcribed diagrams visually —
+FENs cross-checked against the printed solution lines (several
+misreads caught that way), 10 HTRYC FENs reconstructed exactly by
+replaying the printed move sequences, every FEN machine-validated.
+The corpus lives in git-ignored testdata/private/book-trials/ (FEN +
+citations + expectations in OUR tag vocabulary — zero book prose).
+What ships in the repo: the book-eval harness, 26 curated golden tests
+(FEN + Jeremy Silman citation + tag assertions), and the results.
+
+## What the books taught the engine
+
+- **A recall killer found**: sub-threshold imbalances were silently
+  discarded — taking their plan hints with them. Now they emit as
+  balanced/minor (narration's dominance selection already filters the
+  noise; the WSUI holdout proves alerts unchanged).
+- **A real bug**: a piece already standing on its outpost was never
+  credited with one (occupancy filtered the hole list before the check).
+- **Ten new plan hints** the books demanded: minority attack, rook to
+  the seventh, rook behind the passer, pressure the doubled pawn,
+  trade-or-activate the bad bishop, activate the king in the endgame,
+  restrict the enemy knight, advance the central majority, open lines
+  toward the weak king, and the wing-storm-when-center-closed gate —
+  which passes the Amateur's Mind tests 14/15 discriminating pair (the
+  same storm endorsed and condemned, differing only in center lock) in
+  both directions.
+- **Counter-examples as precision anchors**: the six Strategy-dictionary
+  trap positions (useful doubled pawns, well-defended backward pawn,
+  open file with no entry squares, kickable knight posts,
+  central-beats-queenside majority, deficit-vs-passer) are negative
+  assertions in the harness — recall tuning that trips one is rejected.
+- **Endgame validation**: 14 of 27 drills matched the book's tier tests
+  outright (our Vancura FEN is square-identical to the book's diagram);
+  the gaps became 9 new tablebase-verified drills (breakthrough,
+  shouldering, short-side defense, rook-placement pair, decoy,
+  stalemate-alert, Vancura transition, trade-into-won-pawn-endgame).
+
+## Name identity (your two mid-run questions)
+
+Lexical variants ("O'Connor, Shawn" ≡ "Shawn O'Connor") merge
+automatically — token-set matching with diacritic folding; initials
+deliberately do NOT auto-merge. Handles ("avienu") are declared once in
+the new alias tables (migration 0012) and resolve transitively with the
+lexical layer. Profile and prep fingerprints aggregate the whole
+identity, and the Profile screen shows exactly what merged with per-form
+game counts, a split control, and an "also known as" field.
+
+## Honest remainders (in DECISIONS_NEEDED terms: judgment items, not blockers)
+
+- The favors axis (62.6%) uses a crude magnitude-weighted vote — two
+  minor edges can cancel a clear one. Known, documented.
+- Deliberately unmodeled from the books: metacognitive advice
+  (reassess-every-move, seize-the-moment — describes the player, not
+  the position), search-dependent plans (open-the-file-then-occupy,
+  win-the-bishop-pair), and storm-first attacks on sheltered kings.
+  These need either search or a different narration surface.
+- Alert recall vs the books (31%) was left alone by design — alert
+  thresholds are governed by the puzzle/quiet validation, not by book
+  positions where "tactics" often means multi-move foresight.
+- The new-hint templates are live in narration everywhere — your next
+  annotated game will speak minority attacks and seventh-rank rooks.
+
 # Run 8 — 2026-07-27
 
 ## Headline
