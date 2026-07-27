@@ -49,7 +49,7 @@
       "endpoints": [
         "https://github.com/avienu/kibitz/releases/latest/download/latest.json"
       ],
-      "pubkey": "TODO-UPDATER-PUBKEY: generate with `npm run tauri signer generate` and paste the .pub contents here (docs/RELEASE_CHECKLIST.md item 5). Until then the in-app updater honestly reports itself unconfigured."
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCMDMyQjIxOERCOTYyODYKUldTR1lybU5JU3NETy91eVhLY0dzMnJ3eklSbEl3SkVaTEpxMVVyalAvNXRUTXJJTnlQc2RZS08K"
     }
   }
 }

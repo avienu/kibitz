@@ -52,7 +52,7 @@ point along this list.
 
 ## 3. Updater keypair
 
-- [ ] Generate: `cd app && npm run tauri signer generate -- -w ~/.tauri/kibitz-updater.key`
+- [x] Generate: `cd app && npm run tauri signer generate -- -w ~/.tauri/kibitz-updater.key` — DONE 2026-07-27 (pubkey committed, secrets set, private key vaulted)
       (choose a password).
 - [ ] Store private key + password in the password manager (plus a
       second-vault backup). **NEVER committed**; delete stray plaintext
