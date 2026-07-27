@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & discussion
+    url: https://github.com/avienu/kibitz/discussions
+    about: Ask questions, share ideas, or show off a workflow — no template needed.
+  - name: Security vulnerabilities
+    url: https://github.com/avienu/kibitz/security/advisories/new
+    about: Report security issues privately — please do not open a public issue.

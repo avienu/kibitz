@@ -37,7 +37,7 @@ pub fn user_agent() -> &'static str {
     static UA: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     UA.get_or_init(|| {
         let contact = std::env::var("KIBITZ_CONTACT")
-            .unwrap_or_else(|_| "https://github.com/avienu/kibitz".to_string());
+            .unwrap_or_else(|_| "contact@kibitzchess.org".to_string());
         format!("kibitz/0.1 (chess database; contact: {contact})")
     })
 }

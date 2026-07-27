@@ -62,7 +62,30 @@ automatically.
   README lands, make sure it has a "Building from source" section (or update
   the anchor).
 
-## Adding a custom domain later (Route 53)
+## Adding the custom domain: kibitzchess.org (Route 53)
+
+The domain is secured (2026-07). Concrete steps, in order:
+
+1. **Set the custom domain in GitHub**: repo → Settings → Pages →
+   Custom domain → `kibitzchess.org` (this creates a commit adding
+   `website/CNAME`; alternatively commit a `website/CNAME` file
+   containing exactly `kibitzchess.org` yourself).
+2. **Route 53 records** (hosted zone `kibitzchess.org`):
+   - Apex `kibitzchess.org` → four `A` records: 185.199.108.153,
+     185.199.109.153, 185.199.110.153, 185.199.111.153 (plus the
+     matching `AAAA` set: 2606:50c0:8000::153 … 8003::153).
+   - `www.kibitzchess.org` → `CNAME` → `avienu.github.io`.
+3. **Wait for DNS, then enable Enforce HTTPS** in the Pages settings
+   (certificate issuance takes a few minutes after DNS resolves).
+4. **Mail**: the app's User-Agent default is `contact@kibitzchess.org`
+   — set up forwarding (e.g. an MX to your provider or SES/improvmx)
+   before the first public release so the contact address is live.
+
+With the custom domain active the site serves at the ROOT of
+`kibitzchess.org` (not under /kibitz/), which the site's relative links
+already handle.
+
+## Generic custom-domain steps (kept for reference)
 
 No domain is secured yet. When one is chosen (`example.org` below — substitute
 the real name):

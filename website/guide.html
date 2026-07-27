@@ -144,6 +144,7 @@
 <li><strong>Annotate</strong> and the Explain panel are static analysis — no engine.</li>
 <li><strong>Re-analyze</strong> and Annotate's confirmation checks only *enqueue* jobs.</li>
 <li>The engine actually runs when you start the worker — <strong>Run pending jobs</strong> in the Jobs view, or confirming a database-wide batch (Database header / Settings), or the CLI <code>run-jobs</code>. The status strip's engine dot and batch progress show it happening.</li>
+<li><strong>Live analysis</strong> (game view, next to Flip): an explicit toggle that runs infinite analysis on the position you're looking at, streaming depth, evaluation and the engine's line below the move controls. It follows you as you step through the game and stops the moment you switch it off, load another game, or leave the game view. It always starts off — the setting is deliberately not remembered between sessions.</li>
 </ol>
 <hr>
 <h2 id="study-views">STUDY views</h2>

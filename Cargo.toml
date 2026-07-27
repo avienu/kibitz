@@ -14,7 +14,7 @@ members = [
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
-repository = "https://example.invalid/kibitz"
+repository = "https://github.com/avienu/kibitz"
 rust-version = "1.82"
 
 [workspace.dependencies]

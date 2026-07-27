@@ -9,3 +9,5 @@
 *.db
 .DS_Store
 /testdata/syzygy/
+__pycache__/
+*.pyc

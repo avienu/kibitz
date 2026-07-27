@@ -1,0 +1,205 @@
+# Release pipeline (docs/RELEASING.md).
+#
+# Triggers:
+#   - tag push v*        → build bundles, then create a DRAFT GitHub release
+#   - workflow_dispatch  → dry-run: build + upload workflow artifacts only
+#
+# Signing is gated on secrets and skipped cleanly when they are absent
+# (pre-enrollment state — see docs/RELEASE_CHECKLIST.md for the exact list):
+#   TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD  → updater artifacts + latest.json
+#   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
+#   APPLE_ID / APPLE_APP_PASSWORD / APPLE_TEAM_ID                   → macOS codesign + notarization
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bundle:
+    name: Bundle (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-aarch64
+            os: macos-latest # Apple Silicon runner; arm64-first (docs/RELEASING.md)
+          - name: linux-x86_64
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tauri system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl \
+            wget file libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            app/src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Detect available signing secrets
+        id: gate
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "updater=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "updater=false" >> "$GITHUB_OUTPUT"
+            echo "**Updater signing skipped** — TAURI_SIGNING_PRIVATE_KEY secret absent; bundles carry no updater artifacts." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            if [ -n "$APPLE_CERTIFICATE" ]; then
+              echo "applesign=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "applesign=false" >> "$GITHUB_OUTPUT"
+              echo "**macOS codesign/notarization skipped** — APPLE_* secrets absent; the .app/.dmg are UNSIGNED (Gatekeeper will warn)." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+      # Signed path: updater artifacts on; Apple env vars are picked up by the
+      # Tauri bundler when set (codesign + notarize during bundling on macOS).
+      - name: Build bundles (signed)
+        if: steps.gate.outputs.updater == 'true'
+        working-directory: app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      - name: Build bundles (unsigned — no updater key present)
+        if: steps.gate.outputs.updater != 'true'
+        working-directory: app
+        run: npm run tauri build
+
+      - name: Collect bundles
+        run: |
+          mkdir -p dist-bundles
+          BUNDLE_DIR=app/src-tauri/target/release/bundle
+          # macOS: .dmg always; .app.tar.gz(.sig) exist only on signed builds.
+          # Linux: .AppImage(+.sig) and .deb.
+          find "$BUNDLE_DIR" -maxdepth 2 -type f \
+            \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
+               -o -name '*.AppImage' -o -name '*.AppImage.sig' -o -name '*.deb' \) \
+            -exec cp {} dist-bundles/ \;
+          ls -la dist-bundles
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kibitz-${{ matrix.name }}
+          path: dist-bundles/*
+          if-no-files-found: error
+
+  release:
+    name: Draft GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Detect updater key
+        id: gate
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "updater=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "updater=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate latest.json updater feed
+        if: steps.gate.outputs.updater == 'true'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node scripts/release/generate_latest_json.mjs \
+            --version "$VERSION" --dir dist --out dist/latest.json \
+            --notes "Kibitz $VERSION — see CHANGELOG.md"
+      - name: Write release notes stub
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "Kibitz $VERSION."
+            echo
+            if [ "${{ steps.gate.outputs.updater }}" = "true" ]; then
+              echo "Signed bundles with updater feed (latest.json)."
+            else
+              echo "> **UNSIGNED pre-release artifacts.** Built without code signing or"
+              echo "> notarization (no signing secrets configured). macOS Gatekeeper will"
+              echo "> warn; there is no auto-update feed for this build. See docs/RELEASING.md."
+            fi
+            echo
+            echo "_Draft — replace this stub with the matching CHANGELOG.md section before publishing (docs/RELEASE_CHECKLIST.md)._"
+          } > notes.md
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --draft \
+            --title "Kibitz ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            --repo "$GITHUB_REPOSITORY"
+
+  # Fresh-clone build-from-source check: the README's literal commands, on a
+  # bare runner. Keeps the README honest without slowing the main CI.
+  from-source:
+    name: from-source
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tauri system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl \
+            wget file libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: rustup default stable
+        run: rustup default stable
+      - name: npm ci (app/)
+        working-directory: app
+        run: npm ci
+      - name: cargo test --workspace
+        run: cargo test --workspace
+      - name: npm run tauri build (app/)
+        working-directory: app
+        run: npm run tauri build
