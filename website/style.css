@@ -311,29 +311,16 @@ a:hover { text-decoration: underline; }
   max-width: 44em;
 }
 
-.todo-link {
+.donate-link {
   display: inline-block;
-  margin-top: 18px;
-  padding: 9px 15px;
+  padding: 9px 16px;
   border-radius: 6px;
-  font: 600 13px var(--sans);
-  color: var(--bad);
-  background: transparent;
-  border: 2px dashed var(--bad);
+  background: var(--accent);
+  color: #14181b;
+  font: 600 13px "Public Sans", sans-serif;
+  text-decoration: none;
 }
-.todo-link::after {
-  content: "TODO: set donation URL";
-  display: inline-block;
-  margin-left: 10px;
-  font: 700 9.5px var(--mono);
-  letter-spacing: 0.1em;
-  color: var(--bad);
-  background: rgba(222, 111, 94, 0.14);
-  border-radius: 4px;
-  padding: 3px 6px;
-  vertical-align: 1px;
-}
-.todo-link:hover { text-decoration: none; background: rgba(222, 111, 94, 0.08); }
+.donate-link:hover { filter: brightness(1.08); }
 
 /* ---------- Guide page ---------- */
 .guide-layout {

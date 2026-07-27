@@ -51,8 +51,8 @@ DONE: history scrub (force-pushed; any old clone must re-clone),
 screenshots blessed, kibitzchess.org live + HTTPS, mail forwarding live
 (SES, hard-fail SPF, p=reject DMARC — infra's setup, verified
 end-to-end), repo public. REMAINING: Apple enrollment → signing
-secrets; `tauri signer generate` → pubkey + CI secrets; donation URL
-(drops into the site on receipt); tag v0.1.0.
+secrets; `tauri signer generate` → pubkey + CI secrets; tag v0.1.0.
+(Donation URL received and live on the site 2026-07-27.)
 
 # Run 8.5 — 2026-07-27 (book-trial validation & tuning)
 
