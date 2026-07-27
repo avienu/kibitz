@@ -231,6 +231,13 @@ Stockfish is **off by default** and never runs behind your back:
    jobs** in the Jobs view, or confirming a database-wide batch (Database
    header / Settings), or the CLI `run-jobs`. The status strip's engine
    dot and batch progress show it happening.
+4. **Live analysis** (game view, next to Flip): an explicit toggle that
+   runs infinite analysis on the position you're looking at, streaming
+   depth, evaluation and the engine's line below the move controls. It
+   follows you as you step through the game and stops the moment you
+   switch it off, load another game, or leave the game view. It always
+   starts off — the setting is deliberately not remembered between
+   sessions.
 
 ---
 
