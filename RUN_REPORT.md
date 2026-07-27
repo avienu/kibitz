@@ -199,13 +199,13 @@ assertions (which test defaults) stay green untouched.
    ("filtering…" readout + clearer placeholder).
 
 ## Remaining human steps — the go-public checklist
-## (STATUS 2026-07-27 evening: 1 done — history scrubbed and
-## force-pushed, zero occurrences across all 80 rewritten commits;
-## 5 done — Route 53 verified correct, Pages enabled, custom domain
-## kibitzchess.org set, site LIVE, push trigger restored; 8 was already
-## public. Remaining: screenshot blessing (2), Apple (3), updater keys
-## (4), mail forwarding (6, infra brief handed off), donation URL (7),
-## tag v0.1.0.)
+## (STATUS 2026-07-27 night: DONE — history scrub (all 80 commits
+## rewritten, force-pushed), screenshots BLESSED by maintainer as-is,
+## site LIVE at https://kibitzchess.org (HTTPS enforced), mail
+## forwarding live via SES (infra-verified end-to-end, p=reject DMARC),
+## repo public. REMAINING: Apple enrollment + signing secrets, updater
+## keygen + pubkey, donation URL (drops into website/index.html on
+## receipt), tag v0.1.0.)
 
 1. **History rewrite decision**: scrub contact@kibitzchess.org from history
    (filter-repo plan above) or accept it. Before the public switch.
