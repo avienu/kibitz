@@ -4132,3 +4132,10 @@ input.set-value.editing {
   animation: live-pulse 1.6s ease-in-out infinite; }
 @keyframes live-pulse { 50% { opacity: 0.35; } }
 .live-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ==== run 8: visible player suggestions (datalist is a no-op in WKWebView) ==== */
+.pf2-suggest { display: flex; flex-direction: column; gap: 1px; margin-top: 6px;
+  max-width: 420px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.pf2-suggest-row { text-align: left; padding: 7px 11px; background: var(--panel2);
+  border: none; color: var(--tx); font: 500 12.5px "Public Sans", sans-serif; cursor: pointer; }
+.pf2-suggest-row:hover { background: var(--panel3); }

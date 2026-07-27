@@ -309,18 +309,12 @@ export default function ProfileView({
       <div className="pf2-build-row">
         <input
           type="text"
-          list="profile-player-suggestions"
           value={player}
           onChange={(e) => setPlayer(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && player.trim() !== "" && void buildSelf()}
-          placeholder="player name…"
+          placeholder="your name as it appears in your games…"
           spellCheck={false}
         />
-        <datalist id="profile-player-suggestions">
-          {suggestions.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
         <button
           className="btn-primary"
           onClick={() => void buildSelf()}
@@ -328,6 +322,18 @@ export default function ProfileView({
         >
           {building ? "Building…" : "Build profile"}
         </button>
+      </div>
+      {suggestions.length > 0 && player.trim().length >= 2 && !suggestions.includes(player) && (
+        <div className="pf2-suggest" role="listbox" aria-label="Matching players">
+          {suggestions.slice(0, 8).map((name) => (
+            <button key={name} type="button" className="pf2-suggest-row" onClick={() => setPlayer(name)}>
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="hint">
+        Names match as you type from the open database — pick yours, then Build.
       </div>
       {error && (
         <div className="error">

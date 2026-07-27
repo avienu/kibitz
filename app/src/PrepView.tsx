@@ -119,6 +119,15 @@ export default function PrepView({
     }
   }, []);
 
+  // Search as you type (run-8 user report): debounced live search once
+  // two characters are in; Enter/the button still force an immediate run.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    const t = setTimeout(() => void search(query), 250);
+    return () => clearTimeout(t);
+  }, [query, search]);
+
   // Home's "Prep an opponent" prefills and searches immediately.
   const openedWithRef = useRef<string | null>(null);
   useEffect(() => {

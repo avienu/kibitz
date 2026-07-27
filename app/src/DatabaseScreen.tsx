@@ -118,10 +118,13 @@ export default function DatabaseScreen({
     }
   }, [path, onSummary]);
 
+  const [filtering, setFiltering] = useState(false);
+
   // Game list: refetch on open / filter (debounced) / page change.
   useEffect(() => {
     if (!summary) return;
     let cancelled = false;
+    setFiltering(true);
     const t = setTimeout(
       () => {
         listGames(
@@ -137,8 +140,13 @@ export default function DatabaseScreen({
             if (cancelled) return;
             setList(l);
             setListError(null);
+            setFiltering(false);
           })
-          .catch((e) => !cancelled && setListError(String(e)));
+          .catch((e) => {
+            if (cancelled) return;
+            setListError(String(e));
+            setFiltering(false);
+          });
       },
       playerFilter || ecoFilter ? 250 : 0,
     );
@@ -325,7 +333,7 @@ export default function DatabaseScreen({
                     setPlayerFilter(e.target.value);
                     setPage(0);
                   }}
-                  placeholder="Player"
+                  placeholder="Player — type to filter"
                   spellCheck={false}
                 />
                 <span className="filter-chip disabled" title="No backend field yet — coming with event filtering">
@@ -366,7 +374,9 @@ export default function DatabaseScreen({
                 <div className="filter-spacer" />
                 {list && (
                   <span className="range-readout">
-                    {rangeReadout(page * PAGE_SIZE, list.rows.length, list.total)}
+                    {filtering
+                      ? "filtering…"
+                      : rangeReadout(page * PAGE_SIZE, list.rows.length, list.total)}
                   </span>
                 )}
               </div>

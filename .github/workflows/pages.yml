@@ -1,13 +1,10 @@
 name: pages
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "website/**"
-      - "scripts/site_build_guide.py"
-      - "docs/USER_GUIDE.md"
-      - ".github/workflows/pages.yml"
+  # TODO(go-public): restore the push trigger once GitHub Pages is enabled
+  # for the repo (Settings -> Pages -> GitHub Actions); until then a push
+  # deploy would fail red every time.
+  #   push: {branches: [main], paths: ["website/**", "scripts/site_build_guide.py", "docs/USER_GUIDE.md", ".github/workflows/pages.yml"]}
   workflow_dispatch:
 
 permissions:
