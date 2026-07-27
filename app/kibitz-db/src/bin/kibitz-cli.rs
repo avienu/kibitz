@@ -167,6 +167,15 @@ enum Command {
     },
     /// Print database summary counts.
     Stats,
+    /// Score the analyzer against a private book-trial corpus
+    /// (testdata/private/book-trials). Path may be a file or directory.
+    BookEval {
+        #[arg(default_value = "testdata/private/book-trials")]
+        path: PathBuf,
+        /// Print every individual miss.
+        #[arg(long)]
+        verbose: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -554,6 +563,29 @@ fn main() -> anyhow::Result<()> {
                 (st.imported + st.duplicates_skipped + st.filtered_out) as f64
                     / st.elapsed.as_secs_f64().max(1e-9)
             );
+        }
+        Command::BookEval { path, verbose } => {
+            let corpora = kibitz_db::bookeval::load(&path)?;
+            let mut totals = kibitz_db::bookeval::Report::default();
+            for corpus in &corpora {
+                let r = kibitz_db::bookeval::eval_corpus(corpus);
+                kibitz_db::bookeval::print_report(&corpus.book, &r, verbose);
+                totals.positions += r.positions;
+                totals.imbalance.hits += r.imbalance.hits;
+                totals.imbalance.total += r.imbalance.total;
+                totals.plans.hits += r.plans.hits;
+                totals.plans.total += r.plans.total;
+                totals.alerts.hits += r.alerts.hits;
+                totals.alerts.total += r.alerts.total;
+                totals.favors.hits += r.favors.hits;
+                totals.favors.total += r.favors.total;
+                for (t, n) in r.vocabulary_gaps {
+                    *totals.vocabulary_gaps.entry(t).or_default() += n;
+                }
+            }
+            if corpora.len() > 1 {
+                kibitz_db::bookeval::print_report("ALL BOOKS", &totals, false);
+            }
         }
         Command::Stats => {
             let s = stats(&conn)?;

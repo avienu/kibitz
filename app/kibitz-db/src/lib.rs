@@ -6,6 +6,7 @@
 //! BSD crates must never depend on this.
 
 pub mod annotate;
+pub mod bookeval;
 pub mod db;
 pub mod eco;
 pub mod edit;
