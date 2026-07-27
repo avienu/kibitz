@@ -1,3 +1,116 @@
+# Run 7 — 2026-07-26
+
+## Headline
+
+**All ten round-2 screens are built and merged** — the high-fidelity five
+(Home A, Database, Profile, Opponent prep, Tactics) and the simplified
+five (Opening tree, Position search, Openings SRS, Endgames, Settings +
+Help & tour) — on exactly the five shared components the pattern budget
+allows, with every maintainer ruling honored: ECO names resolve
+everywhere the design shows one, Home ships Direction A only with its
+degraded state snapshot-pinned, the commitment line is a real Settings
+row that is simply absent when unset, and both batch operations have
+homes with an estimate-confirm flow that quotes its own measurement
+basis. 506 tests green (232 Rust incl. src-tauri + 274 frontend).
+Screenshots: BLOCKED by a machine display/session state — see the
+notes at the end; the harness is ready and the capture is a one-click
+assist away.
+
+## Backend contracts (committed first, everything typed and tested)
+
+- **ECO names** (`eco_names`, `get_game.openingName`, prep fingerprint
+  and weak-line names) from the bundled CC0 dataset — the run-6
+  "codes-only" deviation is dead.
+- **Profile evidence plies**: every example is now {game, ply} — the
+  ply that produced the claim — so "click a number → open the game at
+  the exact moment" is real end to end.
+- **SRS previews**: due cards carry per-grade next intervals computed
+  by the actual FSRS scheduler, proven equal (to 1e-12) to what grading
+  then does.
+- **Endgame verdict rows**: winning / slower (with stated DTZ cost) /
+  throws / unverified, graded ONLY from silman-tb probes; defender
+  replies are ENGINE rows. Tablebase-gated tests cover all three
+  user verdicts.
+- **Batch operations**: `batch_estimate` measures the static annotate
+  rate live on a read-only sample (never mutating, never spawning an
+  engine — spawn-count asserted); fresh-analysis estimates from a
+  documented assumed rate and SAYS so (`estimateBasis`, surfaced
+  verbatim in the confirm dialog). `batch_start` enqueues idempotently;
+  pause is cooperative; the queue was already resumable.
+- **Honest home data**: `home_summary` findings come only from a cached
+  profile; `dueTactics` is always null because an endless
+  weakness-weighted queue has no honest due count — the UI grays the
+  numeral rather than inventing one. Commitment and prep-state are
+  meta-backed settings with absent-by-default round-trip tests.
+
+## The screens (selected verification highlights)
+
+- **Home A**: commitment clause absent-when-unset tested four ways;
+  "no prep started for X yet" appears only when a prep for X genuinely
+  does not exist; the degraded state renders the short honest list and
+  is snapshot-pinned. No Direction B anywhere; no home switch in state.
+- **Profile**: every number is a control (motif cells, structure bars,
+  phase/conversion tiles); the aside retargets; rows open the game at
+  the claim ply; "Train this weakness" restricts the tactics weakness
+  weights to the claim's motif (tested with a fixture profile —
+  `nextPuzzle` receives only the seeded kind). Peer-baseline columns
+  that have no data source show "—" with an explanation, not numbers.
+- **Prep**: stepper persists selections and back-navigates freely;
+  step-2 entry records prep-state so Home's greeting stays truthful;
+  Lichess/chess.com fetch buttons are DISABLED with the reason (no
+  sync IPC exists — CLI-only), stated in the serif footnote.
+- **Tactics**: the puzzle board never receives evidence overlays
+  (asserted in a test); the clock renders only in timed modes; the
+  reasoning aside shares the app-level voice state with Explain.
+- **SRS**: grade buttons show the real scheduler's intervals; 1–4/⏎
+  keyboard with the focused-input exception, tested.
+- **Endgames**: verdict rows styled per spec with DTZ costs; the
+  verification label is honest per drill ("TABLEBASE TRUTH · N PIECES"
+  only when the defender actually probes; "HEURISTIC DEFENDER ·
+  TERMINAL GRADING" otherwise).
+- **Settings**: Schedule row (commitment) with set/clear round-trip
+  tests; spawn policy stated in words; batch rows share the Database
+  confirm flow. **Help & tour**: reader from the bundled guide, six
+  tour cards anchored beside their rail groups, replayable.
+- **Deep links** now cover screen/player/opponent/claim/db — every
+  screen is reachable by URL for demos and automated capture.
+
+## Honest omissions (each stated in the UI or a tooltip, never faked)
+
+Peer-baseline columns (no peer aggregate exists yet); prep fingerprint
+avg-Elo (not in the aggregate); Database Event/Date/Source filter chips
+(no backend fields); Tactics "due" numeral (endless queue); SRS
+new-card cap claim (no cap implemented); analysis column shows "legacy"
+without a year (not stored); prep step-1 Elo/span (names only);
+master-games plies column is "at ply" (reach ply, which also matches
+the stated ranking rule).
+
+## Conditional scale test
+
+Skipped by its own condition — testdata/private/ still has no ≥5M
+corpus. Noted: Position search and the opening tree now DISPLAY their
+measured timings, so when a megabase lands those numbers become
+user-visible product claims (the harness already reports real ms).
+
+## Screenshots — blocked, one action needed
+
+The report requires full-window captures of all ten screens on the real
+database. The app runs and renders (verified through a browser against
+the same dev server — the full round-2 shell, Home with the real
+commitment line, rail badges live), a JS error beacon confirmed the
+webview loads cleanly, and the deep-link harness for driving every
+screen is in place. But mid-run the machine went through a display
+sleep + re-login cycle, after which the window server stopped
+compositing ANY application window into programmatic captures from
+this session — a full-screen capture shows only the desktop wallpaper
+even while the window list reports the silman window on screen.
+Window-id capture, rect capture, and launchctl-asuser capture all
+return the window frame with white content. This is a GUI-session
+limitation, not an app defect. Next time you are at the machine:
+launch `cd app && npm run tauri dev`, confirm the window is visible,
+and say the word — the capture script drives all ten screens by deep
+link in under two minutes.
+
 # Run 6 — 2026-07-26
 
 ## Headline

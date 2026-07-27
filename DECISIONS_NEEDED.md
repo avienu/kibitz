@@ -3,6 +3,16 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+Run-7 note: no parked decisions. All four run-6 judgment calls stand as
+ruled (ECO names now in scope and implemented; the other three
+provisionally ratified, untouched). New judgment calls documented in
+RUN_REPORT.md run-7 "Honest omissions" — the pattern is uniform: where
+the design shows a number the backend cannot yet source (peer
+baselines, fingerprint avg-Elo, tactics due count), the UI shows an
+explained absence instead of an invented value. Screenshots for the
+run-7 report are pending one physical assist at the machine (GUI
+session state; details in the report).
+
 Run-6 note: no parked decisions; the design system is in whole. Four
 judgment calls documented for review in RUN_REPORT.md run-6 ("Honest
 deviations"): heuristic variation provenance, mate-distance sentinel in
