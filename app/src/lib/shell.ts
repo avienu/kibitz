@@ -93,6 +93,8 @@ export interface ViewParams {
   /** Profile: claim id to pre-select in the evidence aside
    * ("motif:<Kind>:missed" | "motif:<Kind>:allowed" | "structure:<flag>"). */
   claim?: string;
+  /** Profile: player name to auto-build as the self subject (deep links). */
+  player?: string;
   /** Prep: opponent name to prefill in step 1. */
   opponent?: string;
 }

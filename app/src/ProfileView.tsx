@@ -40,6 +40,8 @@ import {
 import type { ViewId, ViewParams } from "./lib/shell";
 
 interface ProfileViewProps {
+  /** Deep-link auto-build: set the self player and build on mount. */
+  initialPlayer?: string | null;
   /** The last built SELF profile (held by the parent so it survives tab
    * switches). */
   profile: PlayerProfile | null;
@@ -70,6 +72,7 @@ function defaultClaim(p: PlayerProfile): Claim | null {
 }
 
 export default function ProfileView({
+  initialPlayer,
   profile,
   onProfileBuilt,
   onLoadGameAt,
@@ -145,6 +148,27 @@ export default function ProfileView({
       setBuilding(false);
     }
   }, [player, onProfileBuilt]);
+
+  // Deep-link auto-build (screenshots, shared links): run once.
+  const autoBuilt = useRef(false);
+  useEffect(() => {
+    if (!initialPlayer || autoBuilt.current) return;
+    autoBuilt.current = true;
+    setPlayer(initialPlayer);
+    (async () => {
+      setBuilding(true);
+      try {
+        const prof = await buildProfile(initialPlayer);
+        onProfileBuilt(prof);
+        cacheProfile(initialPlayer).catch(() => {});
+        setSelected((c) => c ?? defaultClaim(prof));
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setBuilding(false);
+      }
+    })();
+  }, [initialPlayer, onProfileBuilt]);
 
   const p = subject === "self" ? profile : oppProfile;
   const active = selected ?? (p ? defaultClaim(p) : null);

@@ -208,7 +208,9 @@ export default function App() {
 
   useEffect(() => {
     // Auto-open the saved database so the shell shows real data at launch.
-    openDatabase(getSavedDbPath())
+    // A #db=<path> deep link opens that database instead (not persisted).
+    const dbOverride = new URLSearchParams(window.location.hash.slice(1)).get("db");
+    openDatabase(dbOverride || getSavedDbPath())
       .then((s) => {
         setDbSummary(s);
         refreshCounts();
@@ -376,13 +378,22 @@ export default function App() {
         settings: "settings",
       };
       if (screen === "help") setShowHelp(true);
-      else if (views[screen]) setView(views[screen]);
+      else if (views[screen]) {
+        const params: ViewParams = {};
+        const player = h.get("player");
+        if (player) params.player = player;
+        const opponent = h.get("opponent");
+        if (opponent) params.opponent = opponent;
+        const claim = h.get("claim");
+        if (claim) params.claim = claim;
+        navigate(views[screen], params);
+      }
     }
     const gameId = Number(h.get("game"));
     if (Number.isFinite(gameId) && gameId > 0) {
       void loadDbGameAt(gameId, Number(h.get("ply")) || 0);
     }
-  }, [dbSummary, loadDbGameAt]);
+  }, [dbSummary, loadDbGameAt, navigate]);
 
   // Feed Home's Continue card: record the game/ply on the board while the
   // user is actually in the game view (debounced across rapid stepping).
@@ -698,6 +709,7 @@ export default function App() {
             onLoadGameAt={(id, ply) => void loadDbGameAt(id, ply)}
             claim={viewParams.claim ?? null}
             opponent={viewParams.opponent ?? null}
+            initialPlayer={viewParams.player ?? null}
             onNavigate={navigate}
           />
         );
