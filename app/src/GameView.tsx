@@ -172,7 +172,8 @@ export default function GameView({
   const meta = game
     ? [
         [headers["Site"], headers["Date"]?.slice(0, 4)].filter(Boolean).join(", "),
-        headers["ECO"],
+        // "Philidor Defence, C41" when the db resolved the opening name.
+        [headers["Opening"], headers["ECO"]].filter(Boolean).join(", "),
         `${game.sans.length} plies`,
         gameId !== null ? `database #${gameId}` : "pasted PGN",
       ]

@@ -25,6 +25,7 @@ describe("rail structure", () => {
       "game",
       "tree",
       "search",
+      "home",
       "explain",
       "profile",
       "prep",

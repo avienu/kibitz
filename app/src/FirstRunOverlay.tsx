@@ -1,3 +1,21 @@
+/**
+ * First-run tour (design/handoff-2 §Help & first-run tour): one card per
+ * rail group, anchored BESIDE the group it describes (measured from the
+ * real rail's bounding boxes), never covering it. Shown on first run
+ * (localStorage flag, unchanged) and replayable from Help.
+ *
+ * The card sequence/state machine is pure (lib/tour.ts) and unit-tested;
+ * this component only measures and renders.
+ */
+import { useCallback, useEffect, useLayoutEffect, useReducer, useState } from "react";
+import {
+  TOUR_STEPS,
+  initialTour,
+  reduceTour,
+  tourCounter,
+  type TourAnchor,
+} from "./lib/tour";
+
 const TOUR_KEY = "silman.tourSeen";
 
 /** True until the user dismisses the first-run overlay once. */
@@ -24,49 +42,92 @@ interface FirstRunOverlayProps {
   onOpenHelp: () => void;
 }
 
-/**
- * One-time orientation overlay (run-5 item 6, discoverability): points out
- * the nav-rail groups and where Help lives. Shown on first launch only;
- * the seen flag persists in localStorage.
- */
+/** Find the rail element a step anchors beside. */
+function anchorElement(anchor: TourAnchor): Element | null {
+  if (anchor === "header") return document.querySelector(".rail .rail-header");
+  if (anchor === "footer") return document.querySelector(".rail .rail-footer");
+  const groups = document.querySelectorAll(".rail .rail-group");
+  const idx = { study: 0, coach: 1, train: 2, data: 3 }[anchor];
+  return groups[idx] ?? null;
+}
+
+const CARD_WIDTH = 300;
+const CARD_EST_HEIGHT = 190;
+
 export default function FirstRunOverlay({ onClose, onOpenHelp }: FirstRunOverlayProps) {
+  const [state, dispatch] = useReducer(
+    (s: Parameters<typeof reduceTour>[0], a: Parameters<typeof reduceTour>[1]) => reduceTour(s, a),
+    undefined,
+    initialTour,
+  );
+  const [pos, setPos] = useState<{ top: number; left: number; caretTop: number } | null>(null);
+
+  const step = TOUR_STEPS[state.step];
+  const last = state.step === TOUR_STEPS.length - 1;
+
+  useEffect(() => {
+    if (state.done) onClose();
+  }, [state.done, onClose]);
+
+  // Anchor beside the rail group: card left = rail's right edge + gap,
+  // card top follows the group's top (clamped into the viewport) — the
+  // card never covers the rail itself.
+  const measure = useCallback(() => {
+    const rail = document.querySelector(".rail");
+    const anchor = anchorElement(step.anchor);
+    if (!rail || !anchor) {
+      setPos(null);
+      return;
+    }
+    const railBox = rail.getBoundingClientRect();
+    const box = anchor.getBoundingClientRect();
+    const top = Math.max(12, Math.min(box.top, window.innerHeight - CARD_EST_HEIGHT - 12));
+    setPos({
+      left: railBox.right + 14,
+      top,
+      caretTop: Math.max(14, box.top + box.height / 2 - top),
+    });
+  }, [step.anchor]);
+
+  useLayoutEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+
   return (
-    <div className="modal-overlay">
-      <div className="modal first-run">
-        <h3>Welcome to silman</h3>
-        <p>
-          The <strong>Game view</strong> is the centrepiece: eval bar + board on the left, the
-          engine-free <strong>Explain</strong> panel and the <strong>Moves</strong> panel on the
-          right. Use ←/→ to step, ↑/↓ to jump five plies, <strong>f</strong> to flip,{" "}
-          <strong>e</strong> to explain.
+    <div className="tour-layer">
+      <div
+        className="tour-card tour-float"
+        role="dialog"
+        aria-label={`First-run tour, card ${tourCounter(state.step)}`}
+        style={
+          pos
+            ? { top: pos.top, left: pos.left, width: CARD_WIDTH }
+            : { top: 80, left: 232, width: CARD_WIDTH }
+        }
+      >
+        <span className="tour-caret" style={pos ? { top: pos.caretTop } : undefined} />
+        <div className="tour-card-head">
+          <span className="tour-tag">FIRST-RUN TOUR</span>
+          <span className="flex-spacer" />
+          <span className="tour-count">{tourCounter(state.step)}</span>
+        </div>
+        <p className="tour-body">
+          <b>{step.title}</b> {step.body}
         </p>
-        <p>Everything else lives in the navigation rail on the left edge:</p>
-        <ul>
-          <li>
-            <strong>STUDY</strong> — Database, Game, Opening tree, and Position search.
-          </li>
-          <li>
-            <strong>COACH</strong> — the Explain toggle, Profile (a player&rsquo;s
-            strengths/weaknesses report), and Opponent prep.
-          </li>
-          <li>
-            <strong>TRAIN</strong> — Openings SRS (spaced repetition), Tactics drills, and the
-            Endgames curriculum.
-          </li>
-          <li>
-            <strong>DATA IN / OUT</strong> — Import PGN / SCID, TWIC ingest, Account syncs, and
-            the engine Jobs queue.
-          </li>
-        </ul>
-        <p>
-          <strong>Help &amp; tour</strong> at the bottom of the rail opens the full user guide
-          any time; <strong>Settings</strong> sits beside it.
-        </p>
-        <div className="modal-buttons">
-          <button onClick={onOpenHelp}>Open the user guide</button>
-          <button className="primary" onClick={onClose}>
-            Got it
+        <div className="tour-actions">
+          <button className="btn-primary" onClick={() => dispatch({ type: "next" })}>
+            {last ? "Finish" : "Next"}
           </button>
+          <button className="btn-ghost" onClick={() => dispatch({ type: "skip" })}>
+            Skip tour
+          </button>
+          {last && (
+            <button className="btn-ghost" onClick={onOpenHelp}>
+              Open the user guide
+            </button>
+          )}
         </div>
       </div>
     </div>

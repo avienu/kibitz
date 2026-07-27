@@ -104,6 +104,38 @@ export function formatInterval(days: number): string {
   return `${(days / 365.25).toFixed(1)}y`;
 }
 
+/* ---- Openings SRS keyboard map (design/handoff-2 §Interactions) ---- */
+
+export type SrsKeyAction =
+  | "grade-again"
+  | "grade-hard"
+  | "grade-good"
+  | "grade-easy"
+  | "submit";
+
+const GRADE_KEYS: Record<string, SrsKeyAction> = {
+  "1": "grade-again",
+  "2": "grade-hard",
+  "3": "grade-good",
+  "4": "grade-easy",
+};
+
+/**
+ * Window-level key handling for an SRS session: `1–4` grade AFTER the
+ * answer is revealed, `⏎` submits the typed move before it. Keys never
+ * fire while a text input is focused (`editable` — the SAN field handles
+ * its own Enter) or while a modifier is held.
+ */
+export function srsKeyAction(
+  key: string,
+  opts: { editable: boolean; revealed: boolean; modifier?: boolean },
+): SrsKeyAction | null {
+  if (opts.modifier || opts.editable) return null;
+  if (key === "Enter") return opts.revealed ? null : "submit";
+  if (!opts.revealed) return null;
+  return GRADE_KEYS[key] ?? null;
+}
+
 /** Outcome tallies for the end-of-session summary. */
 export interface SessionSummary {
   reviewed: number;

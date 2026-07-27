@@ -16,6 +16,9 @@ interface StatusStripProps {
   train: TrainSummary | null;
   /** Transient app status message (load results, save confirmations…). */
   message: string;
+  /** The active screen's keyboard hints (round-2 §Interactions); null =
+   * no shortcuts on this screen, cell absent. */
+  keyHints?: string | null;
   onNudge: () => void;
 }
 
@@ -26,6 +29,7 @@ export default function StatusStrip({
   batchProgress,
   train,
   message,
+  keyHints,
   onNudge,
 }: StatusStripProps) {
   const workerActive = jobs?.workerActive ?? false;
@@ -64,6 +68,11 @@ export default function StatusStrip({
         </div>
       )}
       <div className="strip-spacer" />
+      {keyHints && (
+        <div className="strip-cell strip-hints">
+          <span className="strip-detail">{keyHints}</span>
+        </div>
+      )}
       {due > 0 && (
         <button className="strip-cell strip-nudge" onClick={onNudge}>
           Openings SRS · {due} due today

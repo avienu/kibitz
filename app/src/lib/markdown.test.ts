@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseInline, parseMarkdown } from "./markdown";
+import { parseInline, parseMarkdown, spanText, splitSections } from "./markdown";
 
 describe("parseInline", () => {
   it("passes plain text through", () => {
@@ -53,5 +53,56 @@ describe("parseMarkdown", () => {
       { kind: "list", ordered: true, items: [[{ text: "one" }], [{ text: "two" }]] },
       { kind: "list", ordered: false, items: [[{ text: "bullet" }]] },
     ]);
+  });
+});
+
+describe("splitSections (Help TOC, round 2)", () => {
+  const FIXTURE = [
+    "# Silman User Guide",
+    "",
+    "Intro paragraph before any section.",
+    "",
+    "## The Game view",
+    "",
+    "Body prose.",
+    "",
+    "### Keyboard map",
+    "",
+    "- **←/→** step",
+    "",
+    "## CLI-only features",
+    "",
+    "```",
+    "silman-cli --db x.sqlite stats",
+    "```",
+    "",
+  ].join("\n");
+
+  it("splits at every h1/h2 and keeps deeper headings inside", () => {
+    const sections = splitSections(parseMarkdown(FIXTURE));
+    expect(sections.map((s) => s.title)).toEqual([
+      "Silman User Guide",
+      "The Game view",
+      "CLI-only features",
+    ]);
+    // h3 stays inside its section; the section heading itself is excluded.
+    const game = sections[1];
+    expect(game.blocks[0]).toEqual({ kind: "para", spans: [{ text: "Body prose." }] });
+    expect(game.blocks.some((b) => b.kind === "heading" && b.level === 3)).toBe(true);
+    expect(game.blocks.some((b) => b.kind === "heading" && b.level <= 2)).toBe(false);
+    // Code blocks land in their section (the CLI card).
+    expect(sections[2].blocks).toEqual([
+      { kind: "code", text: "silman-cli --db x.sqlite stats" },
+    ]);
+  });
+
+  it("collects blocks before any heading under the lead title", () => {
+    const sections = splitSections(parseMarkdown("plain intro\n\n## A\n\nbody\n"), "Overview");
+    expect(sections.map((s) => s.title)).toEqual(["Overview", "A"]);
+    expect(sections[0].blocks).toHaveLength(1);
+  });
+
+  it("spanText flattens spans for TOC labels", () => {
+    expect(spanText([{ text: "a " }, { text: "b", bold: true }])).toBe("a b");
   });
 });

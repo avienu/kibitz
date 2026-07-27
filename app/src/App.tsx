@@ -9,9 +9,12 @@ import { chessgroundDests } from "chessops/compat";
 import { parseFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
 import { parseSquare } from "chessops/util";
-import Board, { type BoardMovable } from "./Board";
-import DatabaseView from "./DatabaseView";
+import { type BoardMovable } from "./Board";
+import DatabaseScreen from "./DatabaseScreen";
 import EndgameView from "./EndgameView";
+import HomeView from "./HomeView";
+import OpeningTreeView from "./OpeningTreeView";
+import PositionSearchView from "./PositionSearchView";
 import FirstRunOverlay, { markFirstRunSeen, shouldShowFirstRun } from "./FirstRunOverlay";
 import GameView from "./GameView";
 import Help from "./Help";
@@ -23,7 +26,7 @@ import ProfileView from "./ProfileView";
 import { usePromotionPicker } from "./PromotionPicker";
 import SettingsView from "./SettingsView";
 import TacticsView from "./TacticsView";
-import TrainView, { type TrainBoardState } from "./TrainView";
+import TrainView from "./TrainView";
 import NavRail from "./shell/NavRail";
 import StatusStrip from "./shell/StatusStrip";
 import type { AnalysisRow } from "./lib/analyses";
@@ -41,6 +44,7 @@ import {
   runJobs,
   saveVoice,
   setNarrationVoice,
+  touchLastGame,
   trainAddLine,
   trainSummary,
   updateGameTokens,
@@ -69,7 +73,7 @@ import {
   type GameViewState,
 } from "./lib/gameView";
 import type { PromoRole } from "./lib/promotion";
-import type { ViewId } from "./lib/shell";
+import { viewKeyHints, type ViewId, type ViewParams } from "./lib/shell";
 import { tacticsState as fetchTacticsState, type TacticsState } from "./lib/tactics";
 import { insertVariation, type JsonToken } from "./lib/tokens";
 
@@ -107,6 +111,7 @@ interface PendingVariation {
 }
 
 const VIEW_TITLES: Record<ViewId, string> = {
+  home: "Home",
   database: "Database",
   game: "Game",
   tree: "Opening tree",
@@ -124,7 +129,11 @@ const VIEW_TITLES: Record<ViewId, string> = {
 };
 
 export default function App() {
-  const [view, setView] = useState<ViewId>("game");
+  // Home is the startup screen (round-2 maintainer ruling: Direction A).
+  const [view, setView] = useState<ViewId>("home");
+  // One-shot per-screen navigation params (lib/shell.ts ViewParams):
+  // e.g. navigate("profile", { claim }) pre-selects a claim's evidence.
+  const [viewParams, setViewParams] = useState<ViewParams>({});
   const [gv, dispatch] = useReducer(reduceGameView, undefined, initialGameView);
   const [showHelp, setShowHelp] = useState(false);
   const [showTour, setShowTour] = useState(shouldShowFirstRun);
@@ -150,7 +159,6 @@ export default function App() {
   const [jobs, setJobs] = useState<JobsStatus | null>(null);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [engineRunning, setEngineRunning] = useState(false);
-  const [trainBoard, setTrainBoard] = useState<TrainBoardState | null>(null);
 
   const tokenReqRef = useRef(0);
   /** pending+running when the jobs worker went active (progress base). */
@@ -184,6 +192,12 @@ export default function App() {
     const onResize = () => setWinWidth(window.innerWidth);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  /** Route to a screen, optionally with one-shot params (ViewParams). */
+  const navigate = useCallback((id: ViewId, params?: ViewParams) => {
+    setView(id);
+    setViewParams(params ?? {});
   }, []);
 
   /* ---- shell data: db auto-open, badges, jobs polling ---- */
@@ -280,6 +294,7 @@ export default function App() {
         Result: detail.result,
       };
       if (detail.eco) headers["ECO"] = detail.eco;
+      if (detail.openingName) headers["Opening"] = detail.openingName;
       const res = gameFromSans(detail.sans, detail.startFen, headers);
       if (!res.ok) {
         setStatus(`Failed to load game #${detail.id}: ${res.error}`);
@@ -327,7 +342,8 @@ export default function App() {
   );
 
   // Deep link: #game=123&ply=24&theme=light&treatment=instrument&voice=neutral
-  // applies once after the database opens. Handy for dev, demos and docs.
+  // &screen=database — applies once after the database opens. Handy for
+  // dev, demos and automated screenshots of every screen.
   const hashApplied = useRef(false);
   useEffect(() => {
     if (!dbSummary || hashApplied.current) return;
@@ -342,11 +358,42 @@ export default function App() {
     }
     const voice = h.get("voice");
     if (voice === "coach" || voice === "neutral") dispatch({ type: "setVoice", voice });
+    // screen=home|database|tree|search|profile|prep|tactics|srs|endgames|
+    // settings|help ("srs" is the rail's Openings SRS = view id "train";
+    // "help" opens the overlay). A game=… link below still wins.
+    const screen = h.get("screen");
+    if (screen) {
+      const views: Record<string, ViewId> = {
+        home: "home",
+        database: "database",
+        tree: "tree",
+        search: "search",
+        profile: "profile",
+        prep: "prep",
+        tactics: "tactics",
+        srs: "train",
+        endgames: "endgames",
+        settings: "settings",
+      };
+      if (screen === "help") setShowHelp(true);
+      else if (views[screen]) setView(views[screen]);
+    }
     const gameId = Number(h.get("game"));
     if (Number.isFinite(gameId) && gameId > 0) {
       void loadDbGameAt(gameId, Number(h.get("ply")) || 0);
     }
   }, [dbSummary, loadDbGameAt]);
+
+  // Feed Home's Continue card: record the game/ply on the board while the
+  // user is actually in the game view (debounced across rapid stepping).
+  const annotGameId = annot?.gameId ?? null;
+  useEffect(() => {
+    if (view !== "game" || annotGameId === null) return;
+    const t = setTimeout(() => {
+      touchLastGame(annotGameId, gv.ply).catch(() => {}); // best-effort meta write
+    }, 400);
+    return () => clearTimeout(t);
+  }, [view, annotGameId, gv.ply]);
 
   const reloadCurrent = useCallback(() => {
     if (annot) void loadDbGameAt(annot.gameId, gv.ply);
@@ -569,26 +616,14 @@ export default function App() {
       return null;
     }
     const remaining = jobs.pending + jobs.running;
+    const total = batchTotalRef.current;
     return {
       label: "ENGINE JOBS",
-      fraction: Math.max(0, Math.min(1, 1 - remaining / batchTotalRef.current)),
+      fraction: Math.max(0, Math.min(1, 1 - remaining / total)),
+      total,
+      remaining,
     };
   }, [jobs]);
-
-  /* ---- train board (main-area board while a review session runs) ---- */
-  const trainPromo = usePromotionPicker((orig, dest, role) => {
-    trainBoard?.movable?.onMove(orig, dest, role);
-  });
-  const trainMovable = useMemo((): BoardMovable | undefined => {
-    if (!trainBoard?.movable) return undefined;
-    const m = trainBoard.movable;
-    return {
-      ...m,
-      onMove: (orig, dest) => {
-        if (!trainPromo.guard(trainBoard.fen, orig, dest)) m.onMove(orig, dest);
-      },
-    };
-  }, [trainBoard, trainPromo]);
 
   /* ---- shell chrome data ---- */
   const collapsed = railCollapsed(winWidth);
@@ -605,21 +640,54 @@ export default function App() {
   };
   const engineDetail = `${jobs?.engine ?? "Stockfish"} · nodes ${getSavedNodes().toLocaleString()}`;
 
+  // Screens that render their own header bar (round-2 layout owners).
+  const selfHeaded =
+    view === "database" ||
+    view === "tree" ||
+    view === "search" ||
+    view === "train" ||
+    view === "endgames" ||
+    view === "settings" ||
+    view === "profile" ||
+    view === "prep" ||
+    view === "tactics";
+
   const pageView = (() => {
     switch (view) {
-      case "database":
-      case "tree":
-      case "search":
+      case "home":
         return (
-          <DatabaseView
-            currentFen={fen}
-            game={game}
-            ply={gv.ply}
-            onLoadGame={loadDbGame}
-            onAdvance={() => step(1)}
+          <HomeView
+            dbOpen={dbSummary !== null}
+            batchFraction={batchProgress?.fraction ?? null}
+            onNavigate={navigate}
+            onOpenGame={(id, ply) => void loadDbGameAt(id, ply)}
+          />
+        );
+      case "database":
+        return (
+          <DatabaseScreen
             summary={dbSummary}
             onSummary={setDbSummary}
-            focus={view === "database" ? "all" : view}
+            onLoadGame={loadDbGame}
+            jobs={jobs}
+            batch={batchProgress}
+            onStatus={setStatus}
+          />
+        );
+      case "tree":
+        return (
+          <OpeningTreeView
+            dbOpen={dbSummary !== null}
+            treatment={gv.boardTreatment}
+            onOpenGameAt={(id, ply) => void loadDbGameAt(id, ply)}
+          />
+        );
+      case "search":
+        return (
+          <PositionSearchView
+            dbOpen={dbSummary !== null}
+            treatment={gv.boardTreatment}
+            onOpenGameAt={(id, ply) => void loadDbGameAt(id, ply)}
           />
         );
       case "profile":
@@ -628,33 +696,35 @@ export default function App() {
             profile={profile}
             onProfileBuilt={setProfile}
             onLoadGameAt={(id, ply) => void loadDbGameAt(id, ply)}
+            claim={viewParams.claim ?? null}
+            opponent={viewParams.opponent ?? null}
+            onNavigate={navigate}
           />
         );
       case "prep":
-        return <PrepView onLoadGameAt={(id, ply) => void loadDbGameAt(id, ply)} profile={profile} />;
-      case "train":
         return (
-          <div className="trainer-layout">
-            {trainBoard && (
-              <div className="trainer-board">
-                <Board
-                  fen={trainBoard.fen}
-                  orientation={trainBoard.orientation}
-                  movable={trainMovable}
-                  shapes={trainBoard.shapes}
-                  treatment={gv.boardTreatment}
-                  size={488}
-                />
-                {trainPromo.element}
-              </div>
-            )}
-            <TrainView onSummary={setTrainSum} onBoard={setTrainBoard} />
-          </div>
+          <PrepView
+            onLoadGameAt={(id, ply) => void loadDbGameAt(id, ply)}
+            profile={profile}
+            opponent={viewParams.opponent ?? null}
+            onNavigate={navigate}
+            treatment={gv.boardTreatment}
+          />
         );
+      case "train":
+        return <TrainView onSummary={setTrainSum} treatment={gv.boardTreatment} />;
       case "tactics":
-        return <TacticsView profile={profile} />;
+        return (
+          <TacticsView
+            profile={profile}
+            seedClaim={viewParams.claim ?? null}
+            voice={gv.voice}
+            onVoice={(v) => dispatch({ type: "setVoice", voice: v })}
+            treatment={gv.boardTreatment}
+          />
+        );
       case "endgames":
-        return <EndgameView />;
+        return <EndgameView treatment={gv.boardTreatment} />;
       case "import":
         return <ImportView onLoad={doLoad} status={status} />;
       case "twic":
@@ -695,7 +765,7 @@ export default function App() {
         collapsed={collapsed}
         dbLine={dbLine}
         data={railData}
-        onNavigate={setView}
+        onNavigate={navigate}
         onToggleExplain={toggleExplain}
         onHelp={() => setShowHelp(true)}
       />
@@ -736,6 +806,8 @@ export default function App() {
             onReload={reloadCurrent}
             onStatus={setStatus}
           />
+        ) : selfHeaded ? (
+          pageView
         ) : (
           <>
             <header className="header-bar simple">
@@ -751,11 +823,20 @@ export default function App() {
           batchProgress={batchProgress}
           train={trainSum}
           message={status}
+          keyHints={viewKeyHints(view)}
           onNudge={() => setView("train")}
         />
       </div>
 
-      {showHelp && <Help onClose={() => setShowHelp(false)} />}
+      {showHelp && (
+        <Help
+          onClose={() => setShowHelp(false)}
+          onReplayTour={() => {
+            setShowHelp(false);
+            setShowTour(true);
+          }}
+        />
+      )}
       {showTour && !showHelp && (
         <FirstRunOverlay
           onClose={() => {

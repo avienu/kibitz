@@ -5,6 +5,7 @@ import {
   formatInterval,
   sanForBoardMove,
   sanMatches,
+  srsKeyAction,
   tallyAnswer,
   trainDests,
   turnOf,
@@ -82,5 +83,31 @@ describe("session summary", () => {
     s = tallyAnswer(s, false);
     s = tallyAnswer(s, true);
     expect(s).toEqual({ reviewed: 3, correct: 2, again: 1 });
+  });
+});
+
+describe("srsKeyAction (round-2 keyboard map: 1–4 grade, ⏎ submit)", () => {
+  it("grades 1–4 only after the answer is revealed", () => {
+    expect(srsKeyAction("1", { editable: false, revealed: true })).toBe("grade-again");
+    expect(srsKeyAction("2", { editable: false, revealed: true })).toBe("grade-hard");
+    expect(srsKeyAction("3", { editable: false, revealed: true })).toBe("grade-good");
+    expect(srsKeyAction("4", { editable: false, revealed: true })).toBe("grade-easy");
+    expect(srsKeyAction("1", { editable: false, revealed: false })).toBeNull();
+  });
+
+  it("submits on Enter before the reveal, never after", () => {
+    expect(srsKeyAction("Enter", { editable: false, revealed: false })).toBe("submit");
+    expect(srsKeyAction("Enter", { editable: false, revealed: true })).toBeNull();
+  });
+
+  it("never fires while a text input is focused (the SAN field owns Enter)", () => {
+    expect(srsKeyAction("1", { editable: true, revealed: true })).toBeNull();
+    expect(srsKeyAction("Enter", { editable: true, revealed: false })).toBeNull();
+  });
+
+  it("ignores modified keys and unmapped keys", () => {
+    expect(srsKeyAction("1", { editable: false, revealed: true, modifier: true })).toBeNull();
+    expect(srsKeyAction("5", { editable: false, revealed: true })).toBeNull();
+    expect(srsKeyAction("g", { editable: false, revealed: true })).toBeNull();
   });
 });

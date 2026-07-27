@@ -45,6 +45,10 @@ interface BoardProps {
   intensity?: number;
   /** Per-block isolation: restrict evidence to these squares. */
   isolate?: ReadonlySet<string>;
+  /** Free set-up mode (Position search's drag-to-set-up editor): any piece
+   * drags anywhere, dropping off the board deletes it, and every change
+   * reports the new placement (the FEN board field). Overrides `movable`. */
+  free?: { onChange: (placement: string) => void };
 }
 
 /** Percent position of a square in the visual grid for an orientation. */
@@ -88,15 +92,18 @@ export default function Board({
   evidence,
   intensity,
   isolate,
+  free,
 }: BoardProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<Api | null>(null);
   const fenRef = useRef(fen);
   const lastMoveRef = useRef(lastMove);
   const onMoveRef = useRef(movable?.onMove);
+  const freeRef = useRef(free);
   fenRef.current = fen;
   lastMoveRef.current = lastMove;
   onMoveRef.current = movable?.onMove;
+  freeRef.current = free;
 
   const geo = boardGeometry(size, treatment);
   const view = useMemo(
@@ -114,12 +121,21 @@ export default function Board({
       lastMove: lastMove as Key[] | undefined,
       // The last-move wash is drawn by the evidence overlay (exact colours).
       highlight: { lastMove: false, check: true },
+      // In free mode, report every position change (drag, drop-off delete).
+      events: {
+        change: () => {
+          const api = apiRef.current;
+          if (freeRef.current && api) freeRef.current.onChange(api.getFen());
+        },
+      },
+      draggable: { deleteOnDropOff: !!free },
       movable: {
-        free: false,
-        color: undefined,
+        free: !!free,
+        color: free ? "both" : undefined,
         showDests: true,
         events: {
           after: (orig, dest) => {
+            if (freeRef.current) return; // free mode: the board IS the model
             onMoveRef.current?.(orig, dest);
             // Snap back to the model position: if the move was accepted the
             // fen prop changes and the sync effect re-applies it anyway.
@@ -155,11 +171,13 @@ export default function Board({
       fen,
       orientation: orientation ?? "white",
       lastMove: lastMove as Key[] | undefined,
-      movable: movable
-        ? { color: movable.color, dests: movable.dests as Map<Key, Key[]> }
-        : { color: undefined, dests: new Map() },
+      movable: free
+        ? { free: true, color: "both", dests: new Map() }
+        : movable
+          ? { free: false, color: movable.color, dests: movable.dests as Map<Key, Key[]> }
+          : { free: false, color: undefined, dests: new Map() },
     });
-  }, [fen, lastMove, movable, orientation]);
+  }, [fen, lastMove, movable, orientation, free]);
 
   // Legacy trainer shapes only — evidence arrows never go through chessground.
   useEffect(() => {

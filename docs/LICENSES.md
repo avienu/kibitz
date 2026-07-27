@@ -52,6 +52,8 @@ versions.
 | typescript | 5.9.x | Apache-2.0 | dev |
 | vite / @vitejs/plugin-react / vitest | 6.x / 4.x / 3.x | MIT | dev |
 | @types/react, @types/react-dom | 19.x | MIT | dev |
+| jsdom | 29.x | MIT | dev (component tests) |
+| @testing-library/react, @testing-library/dom | 16.x / 10.x | MIT | dev (component tests) |
 
 ## app/src-tauri cargo dependencies (standalone GPL package, own Cargo.lock)
 

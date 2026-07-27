@@ -11,6 +11,7 @@ import type { TacticsState } from "./tactics";
 
 /** Every routable surface in the app (the discoverability fix). */
 export type ViewId =
+  | "home"
   | "database"
   | "game"
   | "tree"
@@ -52,6 +53,7 @@ export const RAIL_GROUPS: RailGroup[] = [
   {
     heading: "COACH",
     items: [
+      { id: "home", label: "Home", icon: "Hm" },
       { id: "explain", label: "Explain", icon: "Ex" },
       { id: "profile", label: "Profile", icon: "Pf" },
       { id: "prep", label: "Opponent prep", icon: "Op" },
@@ -80,6 +82,39 @@ export const RAIL_FOOTER: RailItem[] = [
   { id: "settings", label: "Settings", icon: "St" },
   { id: "help", label: "Help & tour", icon: "?" },
 ];
+
+/**
+ * Per-screen navigation params (round-2 "claim → evidence" contract).
+ * `navigate(view, params)` carries these alongside the ViewId; each screen
+ * reads only its own keys and ignores the rest. Params are one-shot: they
+ * describe how the screen should open, not persistent screen state.
+ */
+export interface ViewParams {
+  /** Profile: claim id to pre-select in the evidence aside
+   * ("motif:<Kind>:missed" | "motif:<Kind>:allowed" | "structure:<flag>"). */
+  claim?: string;
+  /** Prep: opponent name to prefill in step 1. */
+  opponent?: string;
+}
+
+/**
+ * The active screen's keyboard hints for the status strip's right cell
+ * (design/handoff-2 §Interactions). Only keys that actually work are
+ * listed — null means the screen has no shortcuts (no cell rendered).
+ */
+export function viewKeyHints(view: ViewId): string | null {
+  switch (view) {
+    case "game":
+      return "← → step · ↑ ↓ jump 5 · f flip · e explain";
+    case "train":
+      // Openings SRS: ⏎ submits the typed move, 1–4 grade after reveal.
+      return "1–4 grade · ⏎ submit";
+    default:
+      // No other screen has working shortcuts yet — an unearned hint would
+      // be a fake affordance.
+      return null;
+  }
+}
 
 /** "121438" → "121k"; small counts stay exact. */
 export function formatCount(n: number): string {

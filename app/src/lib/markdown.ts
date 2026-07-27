@@ -37,6 +37,43 @@ export function parseInline(text: string): InlineSpan[] {
   return out;
 }
 
+/** Plain text of a span list (TOC labels, section titles). */
+export function spanText(spans: InlineSpan[]): string {
+  return spans.map((s) => s.text).join("");
+}
+
+/** One Help-reader section: an h1/h2 title plus everything under it. */
+export interface GuideSection {
+  title: string;
+  /** Blocks of the section, heading excluded (the reader renders the
+   * title itself at h2 scale). */
+  blocks: Block[];
+}
+
+/**
+ * Split parsed blocks into reader sections at every level-1/2 heading
+ * (round-2 Help TOC). Deeper headings (###, ####) stay inside their
+ * section. Blocks before any heading land in a leading section titled
+ * `leadTitle` (only emitted when such blocks exist).
+ */
+export function splitSections(blocks: Block[], leadTitle = "Overview"): GuideSection[] {
+  const sections: GuideSection[] = [];
+  let cur: GuideSection | null = null;
+  for (const b of blocks) {
+    if (b.kind === "heading" && b.level <= 2) {
+      cur = { title: spanText(b.spans), blocks: [] };
+      sections.push(cur);
+      continue;
+    }
+    if (!cur) {
+      cur = { title: leadTitle, blocks: [] };
+      sections.push(cur);
+    }
+    cur.blocks.push(b);
+  }
+  return sections;
+}
+
 const HEADING = /^(#{1,4})\s+(.*)$/;
 const UL_ITEM = /^-\s+(.*)$/;
 const OL_ITEM = /^\d+\.\s+(.*)$/;
