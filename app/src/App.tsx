@@ -513,7 +513,12 @@ export default function App() {
     const ply = gv.ply;
     setExplaining(true);
     try {
-      const res = await explainPosition(fen, gv.voice);
+      const res = await explainPosition(
+        fen,
+        gv.voice,
+        game && gv.ply > 0 ? game.fens[gv.ply - 1] : undefined,
+        game && gv.ply > 0 ? game.sans[gv.ply - 1] : undefined,
+      );
       setExplanations((m) => new Map(m).set(ply, res.explanation));
     } catch (e) {
       setStatus(`Explain failed: ${e}`);
@@ -529,7 +534,12 @@ export default function App() {
     if (!explainOn || !game || explanations.has(gv.ply)) return;
     let stale = false;
     const ply = gv.ply;
-    explainPosition(fen, gv.voice)
+    explainPosition(
+      fen,
+      gv.voice,
+      game && gv.ply > 0 ? game.fens[gv.ply - 1] : undefined,
+      game && gv.ply > 0 ? game.sans[gv.ply - 1] : undefined,
+    )
       .then((res) => {
         if (!stale) setExplanations((m) => new Map(m).set(ply, res.explanation));
       })

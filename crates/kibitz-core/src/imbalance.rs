@@ -986,6 +986,18 @@ pub fn material(board: &Board) -> Option<Imbalance> {
     };
     let diff = total(Color::White) - total(Color::Black);
     evidence.insert("material_diff_cp".into(), json!(diff));
+    // Per-piece surplus (white minus black) so the verbalizer can NAME
+    // the imbalance ("a knight for two pawns") instead of counting pawns.
+    evidence.insert(
+        "piece_diff".into(),
+        json!({
+            "p": count(Color::White, Piece::Pawn) - count(Color::Black, Piece::Pawn),
+            "n": count(Color::White, Piece::Knight) - count(Color::Black, Piece::Knight),
+            "b": count(Color::White, Piece::Bishop) - count(Color::Black, Piece::Bishop),
+            "r": count(Color::White, Piece::Rook) - count(Color::Black, Piece::Rook),
+            "q": count(Color::White, Piece::Queen) - count(Color::Black, Piece::Queen),
+        }),
+    );
 
     // Named patterns.
     let w_minor = count(Color::White, Piece::Knight) + count(Color::White, Piece::Bishop);

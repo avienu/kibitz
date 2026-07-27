@@ -84,7 +84,9 @@ export default function MovesPanel({
     const b = body.getBoundingClientRect();
     const c = cur.getBoundingClientRect();
     if (c.top < b.top + 8 || c.bottom > b.bottom - 8) {
-      cur.scrollIntoView({ block: "nearest" });
+      // Center rather than pin to the edge, so the coach notes under
+      // the current move stay readable while stepping (run-9 report).
+      cur.scrollIntoView({ block: "center" });
     }
   }, [currentPly]);
 

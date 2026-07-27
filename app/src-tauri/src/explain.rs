@@ -20,8 +20,32 @@ pub(crate) fn explain_position_impl(
     fen: &str,
     voice: kibitz_verbalize::Voice,
 ) -> Result<Explanation, String> {
+    explain_position_ctx(fen, voice, None)
+}
+
+/// Like [`explain_position_impl`], optionally with last-move context
+/// (`prev_fen` + the SAN just played) so the prose gates can tell a
+/// pending recapture from a real hang.
+pub(crate) fn explain_position_ctx(
+    fen: &str,
+    voice: kibitz_verbalize::Voice,
+    last: Option<(&str, &str)>,
+) -> Result<Explanation, String> {
     let board: cozy_chess::Board = fen.parse().map_err(|e| format!("bad FEN {fen:?}: {e:?}"))?;
-    let record = kibitz_core::analyze(&board);
+    let mut record = kibitz_core::analyze(&board);
+    if let Some((prev_fen, san)) = last {
+        if let Ok(before) = prev_fen.parse::<cozy_chess::Board>() {
+            if let Ok(mv) = kibitz_db::san::parse_san(&before, san) {
+                let mut check = before.clone();
+                check.play(mv);
+                if check == board {
+                    kibitz_core::prose_gate::suppress_exchange_noise(&mut record, &before, mv);
+                }
+            }
+        }
+    }
+    kibitz_core::prose_gate::suppress_escapable_attack_noise(&mut record, &board);
+    let record = record;
     let prose = kibitz_verbalize::verbalize_voiced(&record, voice);
     let explanation =
         serde_json::to_value(kibitz_verbalize::explain(&record)).map_err(|e| e.to_string())?;
@@ -36,12 +60,21 @@ pub(crate) fn explain_position_impl(
 /// Static analysis + prose for `fen` in the requested narration voice
 /// ("coach" when omitted — run-5 item 3). No engine involved.
 #[tauri::command]
-pub fn explain_position(fen: String, voice: Option<String>) -> Result<Explanation, String> {
+pub fn explain_position(
+    fen: String,
+    voice: Option<String>,
+    prev_fen: Option<String>,
+    last_san: Option<String>,
+) -> Result<Explanation, String> {
     let voice = voice
         .as_deref()
         .map(kibitz_verbalize::Voice::from_setting)
         .unwrap_or_default();
-    explain_position_impl(&fen, voice)
+    let last = match (prev_fen.as_deref(), last_san.as_deref()) {
+        (Some(p), Some(s)) => Some((p, s)),
+        _ => None,
+    };
+    explain_position_ctx(&fen, voice, last)
 }
 
 #[cfg(test)]

@@ -292,8 +292,13 @@ export function setNarrationVoice(voice: NarrationVoice): Promise<void> {
   return invoke<void>("set_narration_voice", { voice });
 }
 
-export function explainPosition(fen: string, voice?: NarrationVoice): Promise<Explanation> {
-  return invoke<Explanation>("explain_position", { fen, voice });
+export function explainPosition(
+  fen: string,
+  voice?: NarrationVoice,
+  prevFen?: string,
+  lastSan?: string,
+): Promise<Explanation> {
+  return invoke<Explanation>("explain_position", { fen, voice, prevFen, lastSan });
 }
 
 /* ---- Run 4: analyses, annotate/re-analyze/jobs, export, profile ---- */

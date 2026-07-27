@@ -171,6 +171,7 @@ pub fn narrate_game(
             Token::VarEnd => depth = depth.saturating_sub(1),
             Token::Null if depth == 0 => break,
             Token::Move(mv) if depth == 0 => {
+                let board_before = board.clone();
                 board.play(*mv);
                 ply += 1;
                 if board.status() != cozy_chess::GameStatus::Ongoing {
@@ -184,6 +185,12 @@ pub fn narrate_game(
                     .wsui
                     .alerts
                     .retain(|a| a.severity >= Severity::Medium);
+                // Coach-voice noise gates (run 9): a sound capture's
+                // pending recapture is not a hang, the one-ply material
+                // spike is not a material edge, and an attacked heavy
+                // piece with a flight square is tempo, not tactics.
+                kibitz_core::prose_gate::suppress_exchange_noise(&mut record, &board_before, *mv);
+                kibitz_core::prose_gate::suppress_escapable_attack_noise(&mut record, &board);
 
                 // Merge this ply's engine verdict, if any.
                 let mut verdict_status = None;

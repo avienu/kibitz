@@ -6,6 +6,7 @@ pub mod attack;
 pub mod imbalance;
 pub mod perft;
 pub mod plans;
+pub mod prose_gate;
 pub mod record;
 pub mod see;
 pub mod wsui;

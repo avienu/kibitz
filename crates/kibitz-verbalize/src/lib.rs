@@ -648,6 +648,7 @@ pub(crate) fn render_imbalance(
     let context = EvidenceContext {
         open_position: imbalance.evidence.get("character").and_then(Value::as_str) == Some("open"),
         has_pattern: imbalance.evidence.contains_key("pattern"),
+        piece_diff: imbalance.evidence.get("piece_diff").cloned(),
     };
 
     let order = lookup(&["evidence.order"]);
@@ -710,6 +711,42 @@ pub(crate) fn render_imbalance(
 struct EvidenceContext {
     open_position: bool,
     has_pattern: bool,
+    /// Per-piece surplus (white minus black), when the detector supplied
+    /// it — lets material speak in piece terms.
+    piece_diff: Option<Value>,
+}
+
+/// Chess-terms phrase for a piece surplus, or None when plain pawn
+/// counting says it best. `side` is the side the cp diff favors.
+fn material_phrase(pd: &Value, side: SideColor, voice: Voice) -> Option<String> {
+    let get = |k: &str| pd.get(k).and_then(Value::as_i64).unwrap_or(0);
+    // Orient so positive = the favored side's surplus.
+    let sign = if side == SideColor::White { 1 } else { -1 };
+    let (p, n, b, r, q) = (
+        get("p") * sign,
+        get("n") * sign,
+        get("b") * sign,
+        get("r") * sign,
+        get("q") * sign,
+    );
+    let minors = n + b;
+    let key: &str = if q > 0 && minors <= 0 && r >= 0 {
+        "evidence.material.queen_up"
+    } else if r > 0 && minors == 0 && p >= 0 && q >= 0 {
+        "evidence.material.rook_up"
+    } else if minors > 0 && p == 0 && r >= 0 && q >= 0 {
+        "evidence.material.piece_up"
+    } else if minors > 0 && p == -1 {
+        "evidence.material.piece_for_pawn"
+    } else if minors > 0 && p <= -2 {
+        "evidence.material.piece_for_pawns"
+    } else {
+        return None; // pure pawn surpluses etc. read fine as counts
+    };
+    Some(fill(
+        lookup_voiced(voice, &[key]),
+        &[("side", side_name(side))],
+    ))
 }
 
 /// The evidence key with any side/file suffix stripped, for ordering and
@@ -879,6 +916,10 @@ fn render_evidence(
             ))
         }
 
+        // Raw per-piece surplus: consumed by material_diff_cp below, never
+        // narrated on its own.
+        "piece_diff" => None,
+
         "material_diff_cp" => {
             if context.has_pattern {
                 return None; // "up the exchange" says it better
@@ -890,8 +931,21 @@ fn render_evidence(
                 SideColor::Black
             };
             let pawns = (diff.abs() + 50) / 100;
+            if pawns == 0 {
+                return None; // level material is headline territory
+            }
+            // Name the surplus in chess terms when the piece mix says
+            // more than a pawn count ("up a piece", "a piece for two
+            // pawns") — run-9 maintainer report: a won knight is not
+            // "three pawns".
+            if let Some(named) = context
+                .piece_diff
+                .as_ref()
+                .and_then(|pd| material_phrase(pd, side, voice))
+            {
+                return Some(named);
+            }
             let template_key = match pawns {
-                0 => return None, // level material is headline territory
                 1 => "evidence.material.pawn_up",
                 2 => "evidence.material.two_pawns_up",
                 3 => "evidence.material.three_pawns_up",
@@ -1121,13 +1175,17 @@ pub(crate) fn render_composite(
     voice: Voice,
 ) -> String {
     if index == 0 {
-        let clauses: Vec<String> = cp
+        let mut clauses: Vec<String> = cp
             .hints
             .iter()
             .filter_map(|h| {
                 try_lookup_voiced(voice, &format!("plan.composite.clause.{h}")).map(str::to_string)
             })
             .collect();
+        // The same hint can enter a cluster twice (two squares, one
+        // idea) — each clause reads once (run-9 maintainer screenshot).
+        let mut seen_clause = std::collections::HashSet::new();
+        clauses.retain(|c| seen_clause.insert(c.clone()));
         let clause_text = if clauses.is_empty() {
             humanize(&cp.hints.join(", "))
         } else {

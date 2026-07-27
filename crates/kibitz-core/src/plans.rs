@@ -61,7 +61,9 @@ pub fn synthesize(imbalances: &[Imbalance]) -> Vec<CompositePlan> {
             let c = clusters
                 .entry((favors_key(hint_favors), target_file))
                 .or_default();
-            c.hints.push((plan.hint.clone(), imb.magnitude));
+            if !c.hints.iter().any(|(h, _)| h == &plan.hint) {
+                c.hints.push((plan.hint.clone(), imb.magnitude));
+            }
             if !c.supporting.contains(&imb.kind) {
                 c.supporting.push(imb.kind);
                 c.score += magnitude_weight(imb.magnitude);
