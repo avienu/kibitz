@@ -18,6 +18,11 @@ vi.mock("./lib/db", () => ({
 vi.mock("./lib/endgame", () => ({
   endgameOverview: vi.fn(() => Promise.reject(new Error("no db"))),
 }));
+vi.mock("./lib/net", () => ({
+  railNetBadges: vi.fn(() => Promise.reject(new Error("no db"))),
+  twicCatalog: vi.fn(() => Promise.reject(new Error("no db"))),
+  twicSetAutoSync: vi.fn(),
+}));
 vi.mock("./lib/engine", () => ({
   getSavedEnginePath: () => "",
   getSavedNodes: () => 2_000_000,

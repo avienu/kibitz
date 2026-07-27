@@ -34,9 +34,10 @@ is currently CLI-only. It is also available inside the app: press
   **Opponent prep**.
 - **TRAIN** — **Openings SRS** (badge: "N due"), **Tactics** (badge:
   attempts, or puzzle count before any attempt), **Endgames**.
-- **DATA IN / OUT** — **Import PGN / SCID**, **TWIC ingest**,
-  **Account syncs**, **Jobs** (badge: "N running" / "N pending" / done
-  count).
+- **DATA IN / OUT** — **Import PGN / SCID**, **TWIC ingest** (badge:
+  "wk NNNN", the newest imported week), **Account syncs** (badge: "N
+  linked" configured accounts), **Jobs** (badge: "N running" /
+  "N pending" / done count).
 - Footer — **Settings**, **Help & tour** (this guide + the replayable
   tour).
 
@@ -96,10 +97,15 @@ of padding the screen.
   in Settings).
 - **Annotate** — the *static* Kibitz annotation pass over the loaded
   database game: imbalance comments plus tactical alerts from the WSUI
-  screen. **No engine runs**; each fired alert enqueues a bounded engine
-  confirmation job for the Jobs queue.
-- **Re-analyze** — enqueues one bounded engine evaluation per mainline
-  position. Nothing runs yet: "N eval jobs enqueued — run them from Jobs".
+  screen appear instantly. Each fired alert enqueues a bounded engine
+  confirmation job, **and the worker starts right away** — an inline
+  ANNOTATING progress row appears under the header (Pause anytime);
+  verdicts fold back into the comments when it finishes.
+- **Re-analyze** — one bounded engine evaluation per mainline position,
+  enqueued **and run immediately**: an inline REANALYZING progress row
+  tracks the batch, and evals/annotations refresh in place when it
+  completes. Clicking while a worker is already running just adds the
+  jobs to the active run.
 - **Export PGN** — renders the game (with annotations) as PGN in a modal
   with **Copy** / **Close**.
 
@@ -192,6 +198,13 @@ pre-2020 years), or plain human lines.
 - **full | hover | hidden** — how comments and variations display (hover
   dims them until pointed at; hidden removes them). Also in Settings.
 - Click a move to jump the board there.
+- **Repertoire marks** — when you have trained repertoires, moves that
+  match a repertoire card get a small **✓** (hover: "in your White/Black
+  repertoire"), and the first move where the game *deviates* from your
+  repertoire gets a **≠** whose tooltip names the move you train there
+  ("your White repertoire plays Bb5 here") — per color, both colors when
+  both repertoires apply. No toggle: the marks only exist when a
+  repertoire has cards.
 
 **Editing** (database games only):
 
@@ -223,14 +236,18 @@ solution underpromotes.
 
 ### When does the engine run?
 
-Stockfish is **off by default** and never runs behind your back:
+Stockfish is **off by default** and never runs behind your back — but an
+explicit click *is* an explicit engine request:
 
-1. **Annotate** and the Explain panel are static analysis — no engine.
-2. **Re-analyze** and Annotate's confirmation checks only *enqueue* jobs.
-3. The engine actually runs when you start the worker — **Run pending
-   jobs** in the Jobs view, or confirming a database-wide batch (Database
-   header / Settings), or the CLI `run-jobs`. The status strip's engine
-   dot and batch progress show it happening.
+1. Stepping through games, the Explain panel and Annotate's static
+   comments never involve the engine.
+2. **Re-analyze** and **Annotate** (game view) run their jobs
+   immediately on click — enqueue *and* start the worker — with an
+   inline progress row in the game view. So does confirming a
+   database-wide batch (Database header / Settings), and **Run pending
+   jobs** in the Jobs view (or the CLI `run-jobs`) resumes anything left
+   pending. The status strip's engine dot and batch progress show it
+   happening.
 4. **Live analysis** (game view, next to Flip): an explicit toggle that
    runs infinite analysis on the position you're looking at, streaming
    depth, evaluation and the engine's line below the move controls. It
@@ -258,7 +275,10 @@ database-wide batch actions.
 - **Filter chips** — **Player** (substring), **ECO** (prefix), and
   **Result** are wired; **Event**, **Date** and **Source** render as
   disabled "soon" chips because no backend field exists yet. The right
-  edge shows the range readout ("1–50 of 121,438").
+  edge shows the range readout ("1–50 of 121,438"). Filters, page,
+  scroll position and the last-opened row **survive leaving the screen**
+  — open a game, step through it, come back, and your search is exactly
+  where you left it (a **Clear** chip resets; a restart starts clean).
 - **Inline job row** — while a batch runs (or jobs are pending), a
   progress row appears above the table: the batch label (ANNOTATING
   DATABASE / FRESH ANALYSIS PASS / ENGINE JOBS), the progress bar,
@@ -339,7 +359,7 @@ tile or a rate tile re-targets the evidence aside on the right.
   blunder/mistake/inaccuracy counts.
 - **CONVERSION & DEFENCE** — conversion rate from +2.00, defence rate
   from −1.00 (both "—" when no data). These need stored evals: run a
-  Fresh analysis pass (or Re-analyze + Jobs per game) first.
+  Fresh analysis pass (or Re-analyze per game) first.
 - **Evidence aside** (right, 420 px) — the selected claim's count pill, a
   what-this-is paragraph citing real numbers, and the supporting games.
   **Opening an evidence row jumps to the game at the ply that produced
@@ -363,9 +383,10 @@ reached chip; each chip shows its chosen value) beside a persistent aside.
 
 1. **Opponent** — **Search local** lists up to eight matching names from
    your own database with their game counts. **Fetch from Lichess /
-   chess.com** are visible but honestly disabled — account fetch runs
-   from the CLI today (`lichess-sync` / `chesscom-sync`). Picking a name
-   advances. (Home's "Prep an opponent" lands here pre-searched.)
+   chess.com** are visible but honestly disabled in this stepper — pull
+   the opponent's games in first via the **Account syncs** screen (or the
+   CLI `lichess-sync` / `chesscom-sync`). Picking a name advances.
+   (Home's "Prep an opponent" lands here pre-searched.)
 2. **Fingerprint** — their repertoire by ECO family for the chosen colour
    (**as White / as Black**): share of games, score bar against the 50 %
    tick (weak families — under 50 % on 3+ games — marked), and the
@@ -562,12 +583,63 @@ tablebase-verified play across the whole curriculum.
 Note: pasting a PGN loads it for *viewing* — storing games in the
 database is a CLI import.
 
-### TWIC ingest / Account syncs
+### TWIC ingest
 
-Placeholder screens: both capabilities live in the data layer and the CLI
-(`twic-sync`; `lichess-sync` / `chesscom-sync` / `fics-sync` — see
-"CLI-only features"). The screens reserve the rail entry and will grow
-status displays when the desktop surface lands.
+The full Week in Chess catalog — every issue from the earliest one the
+TWIC zip archive serves (issue 920, ≈ June 2012) through the latest known
+issue — with per-issue status. The rail badge shows the newest imported
+week ("wk NNNN").
+
+- **Catalog table** (paginated, newest first): issue number, approximate
+  publication week ("≈ YYYY-MM-DD" — weekly arithmetic from a fixed
+  anchor, so dates can slip a few days), status (imported / not
+  downloaded) and the games imported from that issue.
+- **Refresh catalog** — the only thing that asks theweekinchess.com what
+  the newest published issue is: a handful of HEAD requests (typically 2,
+  hard cap 12; the exact count is shown), run **only** on this explicit
+  click. Until the first refresh (or import) the table is empty rather
+  than guessed.
+- **Downloading** — tick issues and **Download selected**, or **Download
+  all missing**. Downloads run on a background worker, strictly serially,
+  one issue at a time, with an inline progress row and a cooperative
+  **Cancel** (stops after the current issue; everything imported stays).
+  An issue is never fetched twice. Before the very first download the
+  first-run notice (TWIC is donation-funded; personal use only) must be
+  acknowledged in-UI.
+- **Auto-download** — a toggle (mirrored in Settings → Data): when on,
+  opening the database quietly downloads NEW issues only (resuming after
+  the newest import, max 5 per launch), with progress in the status
+  strip.
+
+TWIC data is for personal use only and is never bundled or redistributed;
+downloads go to your own database with full provenance. CLI equivalent:
+`twic-sync` (see "Downloading games" below).
+
+### Account syncs
+
+Per-service cards for online accounts; the rail badge counts configured
+accounts. Usernames persist in the open database, and each service's last
+sync result (games imported / duplicates / failures, with its timestamp —
+or the error, verbatim) is stored and shown.
+
+- **Lichess** — full game export via the Lichess API, resumed
+  incrementally: after the first sync only newer games are downloaded.
+- **chess.com** — monthly archives via the published-data API, oldest
+  first, resumed incrementally; the newest (still growing) month is
+  re-checked and duplicates are skipped.
+- **FICS** — via ficsgames.org (a volunteer-run community archive): one
+  year, or one month, per request — there is no incremental cursor, but
+  re-runs are harmless. Keep requests occasional; personal use only. If
+  the server returns a bzip2 archive the file path is shown with
+  instructions (`bunzip2`, then Import PGN).
+- **ICC** — honestly not syncable (no scriptable export API): export
+  manually from the ICC client and use Import PGN / SCID.
+
+All syncs run one at a time on the background worker with a descriptive
+User-Agent; HTTP 429 rate limits are respected automatically (a sync can
+pause for a minute or more — the card says so rather than showing a fake
+percentage). CLI equivalents: `lichess-sync` / `chesscom-sync` /
+`fics-sync`.
 
 ### Jobs
 
@@ -624,9 +696,12 @@ current value, and an action.
   prose on any failure; no key is stored by the app — set
   `ANTHROPIC_API_KEY` for the CLI `explain-llm`).
 - **DATA** — Database path (read-only; change it from the Database
-  screen); Account syncs and TWIC schedule (read-only CLI pointers);
-  Tablebase status (Syzygy loaded / not found, with the covered piece
-  count); **Schedule** — the recurring commitment Home plans around
+  screen); Account syncs (configured-account count; manage them on the
+  Account syncs screen); **TWIC auto-download** (the same toggle as the
+  TWIC ingest screen: new issues download quietly at database open, max 5
+  per launch); Tablebase status (Syzygy loaded / not found, with the
+  covered piece count); **Schedule** — the recurring commitment Home
+  plans around
   (label, e.g. "Club night · Thursday", plus an optional opponent name;
   **Save** / **Clear**).
 - **APPEARANCE** — Theme (Dark default / Light); Board treatment (Studio
@@ -695,11 +770,11 @@ Any subset works. Handy for demos, screenshots and shared findings.
 ### Annotate a single game and confirm tactics with the engine
 
 1. Load a game from the Database view.
-2. Header bar → **Annotate** — instant static comments; engine checks are
-   queued.
-3. DATA IN / OUT → Jobs → **Run pending jobs** — verdicts fold back
-   automatically when the batch finishes.
-4. Edit by hand in the Moves panel (comments, NAGs, variations) and
+2. Header bar → **Annotate** — instant static comments; the engine
+   checks run immediately (inline ANNOTATING row) and verdicts fold back
+   automatically when the batch finishes. (Jobs → **Run pending jobs**
+   still resumes anything paused or left over.)
+3. Edit by hand in the Moves panel (comments, NAGs, variations) and
    **Save**; **Export PGN** to take the annotated game elsewhere.
 
 ### Drill a weakness end to end
@@ -800,7 +875,10 @@ cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000
 ```
 
-### Downloading games (CLI-only)
+### Downloading games (CLI equivalents)
+
+These all have UI homes now — the **TWIC ingest** and **Account syncs**
+screens (see above) — and remain available for scripting:
 
 - **TWIC incremental sync** — downloads The Week in Chess issues to *your*
   machine for personal use (TWIC data must never be redistributed; a notice

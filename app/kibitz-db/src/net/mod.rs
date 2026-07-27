@@ -75,6 +75,15 @@ pub trait Fetcher {
     /// Perform a form-encoded POST (used by the ficsgames.org client).
     /// Implementations must send [`user_agent`].
     fn post_form(&self, url: &str, form: &[(&str, &str)]) -> anyhow::Result<FetchOutcome>;
+
+    /// Existence check for `url` (used by the TWIC catalog probe). The
+    /// default falls back to [`Fetcher::get`] with the body dropped
+    /// unread, so existing implementations — including offline test
+    /// fixtures — keep working; [`UreqFetcher`] overrides it with a real
+    /// HEAD request so probes never transfer issue bodies.
+    fn head(&self, url: &str) -> anyhow::Result<FetchOutcome> {
+        self.get(url, &[])
+    }
 }
 
 /// Production [`Fetcher`] backed by `ureq` (blocking, serial).
@@ -107,6 +116,11 @@ impl Fetcher for UreqFetcher {
     fn post_form(&self, url: &str, form: &[(&str, &str)]) -> anyhow::Result<FetchOutcome> {
         let req = ureq::post(url).set("User-Agent", user_agent());
         outcome(req.send_form(form), url)
+    }
+
+    fn head(&self, url: &str) -> anyhow::Result<FetchOutcome> {
+        let req = ureq::head(url).set("User-Agent", user_agent());
+        outcome(req.call(), url)
     }
 }
 

@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { AnalysisRow } from "./analyses";
 import type { FeatureRecordJson } from "./explainView";
 import type { ExplanationJson } from "./gameView";
+import type { RepertoireMark } from "./repMarks";
 import type { JsonToken } from "./tokens";
 
 const DB_PATH_KEY = "kibitz.dbPath";
@@ -486,6 +487,12 @@ export function trainQueue(color: TrainColor, limit?: number): Promise<DueCard[]
 
 export function trainGrade(cardId: number, grade: TrainGrade): Promise<TrainGraded> {
   return invoke<TrainGraded>("train_grade", { cardId, grade });
+}
+
+/** Per-ply repertoire match/deviation marks for a stored game (run-9).
+ * Empty when no repertoire has cards — the UI renders nothing then. */
+export function repertoireMarks(gameId: number): Promise<RepertoireMark[]> {
+  return invoke<RepertoireMark[]>("repertoire_marks", { gameId });
 }
 
 export function trainAddLine(

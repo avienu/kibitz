@@ -20,8 +20,9 @@ import GameView from "./GameView";
 import Help from "./Help";
 import ImportView from "./ImportView";
 import JobsView from "./JobsView";
-import { SyncsPlaceholder, TwicPlaceholder } from "./PlaceholderView";
 import PrepView from "./PrepView";
+import SyncsView from "./SyncsView";
+import TwicView from "./TwicView";
 import ProfileView from "./ProfileView";
 import { usePromotionPicker } from "./PromotionPicker";
 import SettingsView from "./SettingsView";
@@ -41,6 +42,7 @@ import {
   getSavedVoice,
   jobsStatus,
   openDatabase,
+  repertoireMarks,
   runJobs,
   saveVoice,
   setNarrationVoice,
@@ -56,6 +58,14 @@ import {
 } from "./lib/db";
 import { getSavedNodes } from "./lib/engine";
 import { onEngineDone, onEngineInfo } from "./lib/engine";
+import {
+  netProgress as fetchNetProgress,
+  netStripProgress,
+  railNetBadges,
+  twicAutoSyncCheck,
+  type NetBadges,
+  type NetProgress,
+} from "./lib/net";
 import {
   clampPly,
   gameFromSans,
@@ -73,6 +83,7 @@ import {
   type GameViewState,
 } from "./lib/gameView";
 import type { PromoRole } from "./lib/promotion";
+import type { RepertoireMark } from "./lib/repMarks";
 import { viewKeyHints, type ViewId, type ViewParams } from "./lib/shell";
 import { tacticsState as fetchTacticsState, type TacticsState } from "./lib/tactics";
 import { insertVariation, type JsonToken } from "./lib/tokens";
@@ -147,6 +158,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [pendingVar, setPendingVar] = useState<PendingVariation | null>(null);
   const [analysisRows, setAnalysisRows] = useState<AnalysisRow[]>([]);
+  const [repMarks, setRepMarks] = useState<RepertoireMark[]>([]);
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
 
   const [explainOn, setExplainOn] = useState(() => localStorage.getItem(EXPLAIN_KEY) !== "off");
@@ -159,6 +171,8 @@ export default function App() {
   const [jobs, setJobs] = useState<JobsStatus | null>(null);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [engineRunning, setEngineRunning] = useState(false);
+  const [netProg, setNetProg] = useState<NetProgress | null>(null);
+  const [netBadges, setNetBadges] = useState<NetBadges | null>(null);
 
   const tokenReqRef = useRef(0);
   /** pending+running when the jobs worker went active (progress base). */
@@ -217,6 +231,9 @@ export default function App() {
         getNarrationVoice()
           .then((v) => dispatch({ type: "setVoice", voice: v }))
           .catch(() => {});
+        // TWIC auto-download hook: quietly syncs NEW issues only when the
+        // user enabled the toggle (netops.rs; no-op otherwise).
+        twicAutoSyncCheck().catch(() => {});
       })
       .catch(() => {}); // no database yet — badges stay empty
   }, [refreshCounts]);
@@ -247,6 +264,28 @@ export default function App() {
           }
         })
         .catch(() => setJobs(null));
+    };
+    tick();
+    const t = setInterval(tick, 3000);
+    return () => clearInterval(t);
+  }, [dbSummary]);
+
+  // Network worker (TWIC downloads / account syncs): poll its in-memory
+  // progress (cheap, no db) and refresh the rail badges when a job ends.
+  const netWasActive = useRef(false);
+  useEffect(() => {
+    if (!dbSummary) return;
+    const refreshBadges = () =>
+      railNetBadges().then(setNetBadges).catch(() => setNetBadges(null));
+    refreshBadges();
+    const tick = () => {
+      fetchNetProgress()
+        .then((p) => {
+          if (netWasActive.current && !(p?.active ?? false)) refreshBadges();
+          netWasActive.current = p?.active ?? false;
+          setNetProg(p);
+        })
+        .catch(() => setNetProg(null));
     };
     tick();
     const t = setInterval(tick, 3000);
@@ -287,6 +326,7 @@ export default function App() {
       tokenReqRef.current++;
       setAnnot(null);
       setAnalysisRows([]);
+      setRepMarks([]); // pasted PGN has no db identity — no marks
       applyGame(res.game, `${w} — ${b}, ${res.game.sans.length} plies.`, res.warning);
       setView("game");
     },
@@ -337,6 +377,13 @@ export default function App() {
           setAnalysisRows(rows);
         })
         .catch(() => {}); // eval display is best-effort
+      setRepMarks([]);
+      repertoireMarks(detail.id)
+        .then((marks) => {
+          if (tokenReqRef.current !== req) return;
+          setRepMarks(marks);
+        })
+        .catch(() => {}); // marks are best-effort decoration
     },
     [applyGame],
   );
@@ -662,6 +709,8 @@ export default function App() {
     train: trainSum,
     tactics: tacticsSt,
     jobs,
+    twicLatestImported: netBadges?.twicLatestImported ?? null,
+    syncAccounts: netBadges ? netBadges.accountsConfigured : null,
   };
   const engineDetail = `${jobs?.engine ?? "Stockfish"} · nodes ${getSavedNodes().toLocaleString()}`;
 
@@ -675,7 +724,8 @@ export default function App() {
     view === "settings" ||
     view === "profile" ||
     view === "prep" ||
-    view === "tactics";
+    view === "tactics" ||
+    view === "twic";
 
   const pageView = (() => {
     switch (view) {
@@ -754,9 +804,9 @@ export default function App() {
       case "import":
         return <ImportView onLoad={doLoad} status={status} />;
       case "twic":
-        return <TwicPlaceholder />;
+        return <TwicView progress={netProg} />;
       case "syncs":
-        return <SyncsPlaceholder />;
+        return <SyncsView progress={netProg} />;
       case "jobs":
         return (
           <JobsView
@@ -820,6 +870,7 @@ export default function App() {
                 : null
             }
             analysisRows={analysisRows}
+            repMarks={repMarks}
             explainOn={explainOn}
             explanation={currentExplanation}
             explaining={explaining}
@@ -846,7 +897,7 @@ export default function App() {
           engineRunning={engineRunning}
           engineDetail={engineDetail}
           jobs={jobs}
-          batchProgress={batchProgress}
+          batchProgress={batchProgress ?? netStripProgress(netProg)}
           train={trainSum}
           message={status}
           keyHints={viewKeyHints(view)}

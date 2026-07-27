@@ -49,3 +49,6 @@ cozy-chess = "0.3"
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 tempfile = "3"
+# Test-only: offline Fetcher fixtures implement kibitz-db's trait, whose
+# methods return anyhow::Result (already recorded in docs/LICENSES.md).
+anyhow = "1"

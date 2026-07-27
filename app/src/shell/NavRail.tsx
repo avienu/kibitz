@@ -15,6 +15,10 @@ export interface RailData {
   train: TrainSummary | null;
   tactics: TacticsState | null;
   jobs: JobsStatus | null;
+  /** Newest imported TWIC issue ("wk NNNN" badge); null = none/unknown. */
+  twicLatestImported: number | null;
+  /** Configured sync accounts (0–3); null = unknown (no db open). */
+  syncAccounts: number | null;
 }
 
 interface NavRailProps {

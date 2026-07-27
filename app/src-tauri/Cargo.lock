@@ -1837,6 +1837,7 @@ dependencies = [
 name = "kibitz-app"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cozy-chess",
  "kibitz-core",
  "kibitz-db",

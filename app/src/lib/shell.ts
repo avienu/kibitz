@@ -146,6 +146,10 @@ export function railBadge(
     train: TrainSummary | null;
     tactics: TacticsState | null;
     jobs: JobsStatus | null;
+    /** Newest imported TWIC issue (rail_net_badges); null = none. */
+    twicLatestImported: number | null;
+    /** Configured sync accounts, 0–3 (rail_net_badges); null = unknown. */
+    syncAccounts: number | null;
   },
 ): string | null {
   switch (id) {
@@ -177,6 +181,12 @@ export function railBadge(
       if (pending > 0) return `${pending} pending`;
       return done > 0 ? formatCount(done) : null;
     }
+    case "twic":
+      // The newest imported week — real import state, not the published
+      // frontier (which is only known after an explicit catalog refresh).
+      return data.twicLatestImported !== null ? `wk ${data.twicLatestImported}` : null;
+    case "syncs":
+      return data.syncAccounts ? `${data.syncAccounts} linked` : null;
     default:
       return null;
   }

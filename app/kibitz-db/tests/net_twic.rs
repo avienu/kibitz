@@ -133,6 +133,128 @@ fn default_max_issues_is_five() {
     assert_eq!(TwicOptions::default().max_issues, 5);
 }
 
+// ---------------------------------------------------------------------------
+// import_issue (run 9: the UI catalog's per-issue download path)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn import_issue_records_provenance_and_refuses_refetch() {
+    let (_dir, conn) = open_temp_db();
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(&twic::zip_url(1500), Scripted::Body(ZIP_A.to_vec()));
+
+    let report = twic::import_issue(&conn, &fetcher, 1500)
+        .unwrap()
+        .expect("issue exists");
+    assert_eq!(report.issue, 1500);
+    assert_eq!(report.games_imported, 2);
+    assert_eq!(twic::imported_issues(&conn).unwrap(), vec![(1500, 2)]);
+
+    // Refetching an imported issue is refused BEFORE touching the network.
+    let err = twic::import_issue(&conn, &fetcher, 1500).unwrap_err();
+    assert!(
+        err.to_string().contains("never fetched twice"),
+        "got: {err}"
+    );
+    assert_eq!(fetcher.requested_urls().len(), 1, "no second request");
+}
+
+#[test]
+fn import_issue_returns_none_on_404() {
+    let (_dir, conn) = open_temp_db();
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(&twic::zip_url(999), Scripted::NotFound);
+    assert!(twic::import_issue(&conn, &fetcher, 999).unwrap().is_none());
+    assert_eq!(twic::latest_imported(&conn).unwrap(), None);
+}
+
+// ---------------------------------------------------------------------------
+// probe_latest (run 9: explicit "Refresh catalog" only — bounded HEADs)
+// ---------------------------------------------------------------------------
+
+fn no_sleep() -> impl FnMut(std::time::Duration) {
+    |_| panic!("probe must not sleep in these scenarios")
+}
+
+#[test]
+fn probe_accurate_guess_costs_two_requests() {
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(&twic::zip_url(1650), Scripted::Body(vec![]));
+    fetcher.script(&twic::zip_url(1651), Scripted::NotFound);
+    let r = twic::probe_latest(&fetcher, Some(1600), 1650, &mut no_sleep()).unwrap();
+    assert_eq!(r.latest, Some(1650));
+    assert_eq!(r.requests, 2, "the documented typical cost");
+}
+
+#[test]
+fn probe_low_guess_walks_forward_to_the_first_404() {
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(&twic::zip_url(1650), Scripted::Body(vec![]));
+    fetcher.script(&twic::zip_url(1651), Scripted::Body(vec![]));
+    fetcher.script(&twic::zip_url(1652), Scripted::NotFound);
+    let r = twic::probe_latest(&fetcher, None, 1650, &mut no_sleep()).unwrap();
+    assert_eq!(r.latest, Some(1651));
+    assert_eq!(r.requests, 3);
+}
+
+#[test]
+fn probe_high_guess_walks_backward_to_the_first_hit() {
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(&twic::zip_url(1655), Scripted::NotFound);
+    fetcher.script(&twic::zip_url(1654), Scripted::NotFound);
+    fetcher.script(&twic::zip_url(1653), Scripted::Body(vec![]));
+    let r = twic::probe_latest(&fetcher, Some(1600), 1655, &mut no_sleep()).unwrap();
+    assert_eq!(r.latest, Some(1653));
+    assert_eq!(r.requests, 3);
+}
+
+#[test]
+fn probe_falls_back_to_the_floor_without_reverifying_it() {
+    // Everything above the floor 404s; the floor itself (an imported
+    // issue, known to exist) is returned without a request for it.
+    let fetcher = FixtureFetcher::new();
+    for issue in 1601..=1603 {
+        fetcher.script(&twic::zip_url(issue), Scripted::NotFound);
+    }
+    let r = twic::probe_latest(&fetcher, Some(1600), 1603, &mut no_sleep()).unwrap();
+    assert_eq!(r.latest, Some(1600));
+    assert_eq!(r.requests, 3);
+    assert!(
+        !fetcher.requested_urls().contains(&twic::zip_url(1600)),
+        "the floor is trusted, not probed"
+    );
+}
+
+#[test]
+fn probe_request_cap_is_honored() {
+    // No floor, guess just above the archive start, nothing exists:
+    // the walk stops at FIRST_AVAILABLE_ISSUE, all misses.
+    let fetcher = FixtureFetcher::new();
+    let first = twic::FIRST_AVAILABLE_ISSUE;
+    for issue in first..=first + 5 {
+        fetcher.script(&twic::zip_url(issue), Scripted::NotFound);
+    }
+    let r = twic::probe_latest(&fetcher, None, first + 5, &mut no_sleep()).unwrap();
+    assert_eq!(r.latest, None);
+    assert!(
+        r.requests <= twic::PROBE_MAX_REQUESTS,
+        "requests {} exceed the documented cap",
+        r.requests
+    );
+}
+
+#[test]
+fn probe_respects_429_backoff() {
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(&twic::zip_url(1650), Scripted::RateLimited(Some(7)));
+    fetcher.script(&twic::zip_url(1650), Scripted::Body(vec![]));
+    fetcher.script(&twic::zip_url(1651), Scripted::NotFound);
+    let mut slept = Vec::new();
+    let r = twic::probe_latest(&fetcher, None, 1650, &mut |d| slept.push(d)).unwrap();
+    assert_eq!(r.latest, Some(1650));
+    assert_eq!(slept, vec![std::time::Duration::from_secs(7)]);
+}
+
 #[test]
 fn corrupt_zip_is_an_error() {
     let (_dir, conn) = open_temp_db();

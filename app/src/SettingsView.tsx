@@ -40,6 +40,7 @@ import {
   saveNodes,
 } from "./lib/engine";
 import { fmtDurationMs } from "./lib/home";
+import { railNetBadges, twicCatalog, twicSetAutoSync } from "./lib/net";
 import type { AnnotationMode, BoardTreatmentChoice, Theme, Voice } from "./lib/gameView";
 
 interface SettingsViewProps {
@@ -115,6 +116,12 @@ export default function SettingsView({
   const [commitOpponent, setCommitOpponent] = useState("");
   const [commitNote, setCommitNote] = useState<string | null>(null);
 
+  // Network-ingestion mirrors (run 9): configured sync accounts and the
+  // TWIC auto-download toggle (same meta keys the TWIC screen writes).
+  const [syncCount, setSyncCount] = useState<number | null>(null);
+  const [twicAuto, setTwicAuto] = useState<boolean | null>(null);
+  const [twicWeek, setTwicWeek] = useState<number | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     resolveEnginePath(enginePath)
@@ -138,7 +145,26 @@ export default function SettingsView({
         setCommitOpponent(c.opponent ?? "");
       })
       .catch(() => {}); // no database open — the row stays empty
+    railNetBadges()
+      .then((b) => setSyncCount(b.accountsConfigured))
+      .catch(() => setSyncCount(null));
+    twicCatalog()
+      .then((c) => {
+        setTwicAuto(c.autoSync);
+        setTwicWeek(c.latestImported);
+      })
+      .catch(() => setTwicAuto(null));
   }, []);
+
+  const toggleTwicAuto = useCallback(async () => {
+    if (twicAuto === null) return;
+    try {
+      await twicSetAutoSync(!twicAuto);
+      setTwicAuto(!twicAuto);
+    } catch (e) {
+      setNote(`TWIC auto-download: ${e}`);
+    }
+  }, [twicAuto]);
 
   /* ---- batch operations (same confirm flow as the Database header) ---- */
 
@@ -328,13 +354,31 @@ export default function SettingsView({
             />
             <Row
               label="Account syncs"
-              help="On-demand from the command line; the Account syncs screen reserves the rail entry."
-              value={<div className="set-value mono">CLI: lichess-sync · chesscom-sync · fics-sync</div>}
+              help="Lichess, chess.com and FICS sync live on the Account syncs screen (rail: DATA IN / OUT). CLI equivalents: lichess-sync · chesscom-sync · fics-sync."
+              value={
+                <div className="set-value mono">
+                  {syncCount === null
+                    ? "unknown (no database open)"
+                    : syncCount === 0
+                      ? "no accounts configured"
+                      : `${syncCount} account${syncCount === 1 ? "" : "s"} configured`}
+                </div>
+              }
             />
             <Row
-              label="TWIC schedule"
-              help="Incremental, resumable, personal-use download — TWIC data is never redistributed."
-              value={<div className="set-value mono">CLI: twic-sync (resumes at the last issue)</div>}
+              label="TWIC auto-download"
+              help="When on, new issues download quietly when the database opens (max 5 per launch, strictly serial). Incremental, resumable, personal-use only — TWIC data is never redistributed. Mirrored on the TWIC ingest screen."
+              value={
+                <div className="set-value mono">
+                  {twicAuto === null
+                    ? "unknown (no database open)"
+                    : `${twicAuto ? "on" : "off"}${twicWeek !== null ? ` · newest imported wk ${twicWeek}` : ""}`}
+                </div>
+              }
+              action={
+                twicAuto !== null &&
+                ghost(twicAuto ? "Turn off" : "Turn on", () => void toggleTwicAuto())
+              }
             />
             <Row
               label="Tablebase"

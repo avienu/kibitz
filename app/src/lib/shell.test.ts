@@ -9,6 +9,8 @@ const noData = {
   train: null,
   tactics: null,
   jobs: null,
+  twicLatestImported: null,
+  syncAccounts: null,
 };
 
 describe("rail structure", () => {
@@ -75,6 +77,17 @@ describe("badges (real data or nothing)", () => {
     expect(
       railBadge("jobs", { ...noData, jobs: { ...jobs, done: 0 } }),
     ).toBeNull();
+  });
+
+  it("twic badge shows the newest IMPORTED week (rail_net_badges)", () => {
+    expect(railBadge("twic", { ...noData, twicLatestImported: 1650 })).toBe("wk 1650");
+    expect(railBadge("twic", noData)).toBeNull();
+  });
+
+  it("syncs badge counts configured accounts, hidden at zero", () => {
+    expect(railBadge("syncs", { ...noData, syncAccounts: 2 })).toBe("2 linked");
+    expect(railBadge("syncs", { ...noData, syncAccounts: 0 })).toBeNull();
+    expect(railBadge("syncs", noData)).toBeNull();
   });
 
   it("profile findings use the prep weakness rules", () => {

@@ -21,6 +21,7 @@ pub mod endgame;
 pub mod explain;
 pub mod home;
 mod identity;
+pub mod netops;
 pub mod prep;
 pub mod tactics;
 pub mod tokens;
@@ -167,6 +168,7 @@ pub fn run() {
         .manage(browse::DbState::default())
         .manage(dbops::JobsWorker::default())
         .manage(endgame::EndgameState::default())
+        .manage(netops::NetWorker::default())
         .invoke_handler(tauri::generate_handler![
             resolve_engine_path,
             analyze_position,
@@ -210,6 +212,7 @@ pub fn run() {
             dbops::batch_estimate,
             dbops::batch_start,
             dbops::batch_pause,
+            dbops::repertoire_marks,
             dbops::export_game_pgn,
             dbops::build_profile,
             dbops::get_narration_voice,
@@ -225,7 +228,19 @@ pub fn run() {
             home::commitment_set,
             home::prep_state_get,
             home::prep_state_set,
-            updates::update_check
+            updates::update_check,
+            netops::twic_catalog,
+            netops::twic_refresh_catalog,
+            netops::twic_download,
+            netops::twic_set_auto_sync,
+            netops::twic_ack_notice,
+            netops::twic_auto_sync_check,
+            netops::sync_accounts,
+            netops::sync_set_username,
+            netops::sync_run,
+            netops::net_progress,
+            netops::net_cancel,
+            netops::rail_net_badges
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
