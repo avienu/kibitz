@@ -92,24 +92,35 @@ corpus. Noted: Position search and the opening tree now DISPLAY their
 measured timings, so when a megabase lands those numbers become
 user-visible product claims (the harness already reports real ms).
 
-## Screenshots — blocked, one action needed
+## Screenshots (committed, real data — docs/screenshots/run7/)
 
-The report requires full-window captures of all ten screens on the real
-database. The app runs and renders (verified through a browser against
-the same dev server — the full round-2 shell, Home with the real
-commitment line, rail badges live), a JS error beacon confirmed the
-webview loads cleanly, and the deep-link harness for driving every
-screen is in place. But mid-run the machine went through a display
-sleep + re-login cycle, after which the window server stopped
-compositing ANY application window into programmatic captures from
-this session — a full-screen capture shows only the desktop wallpaper
-even while the window list reports the silman window on screen.
-Window-id capture, rect capture, and launchctl-asuser capture all
-return the window frame with white content. This is a GUI-session
-limitation, not an app defect. Next time you are at the machine:
-launch `cd app && npm run tauri dev`, confirm the window is visible,
-and say the word — the capture script drives all ten screens by deep
-link in under two minutes.
+Captured from the running app on scid.sqlite (7,786 games: your five
+si4 bases + TWIC test data + personal games), dark theme, driven by
+deep links:
+
+01-home — the full Home A: your real commitment line ("Club night ·
+Thursday — no prep started for Khachian, Melik yet."), Continue on the
+Jacobs game at ply 25, 43 SRS due with the tactics numeral honestly
+grayed, findings from your freshly cached profile (Undefended allowed
+1,318 leading, backward-pawn 45.1%), real TWIC imports under "New
+since Sunday", and the engine-cold Running panel.
+02-home-degraded — the empty-database state: the short honest list,
+nothing else. 03-database — chips, source tags, analysis column,
+batch actions. 04-profile — the acceptance centerpiece: serif lede
+naming your two dominant leaks, motif matrix with the evidence aside
+live on the 1,318-allowed claim (three games with ply anchors), honest
+"—" under VS PEERS, Train this weakness. 05-prep — stepper with your
+club opponent prefilled from the deep link. 06-tactics — five modes,
+weakness-targeted default, "why this puzzle" aside, no overlays on the
+board. 07-srs — grade row with real FSRS intervals on the buttons.
+08-endgames — tier browser + verdict aside. 09-tree / 10-search —
+with their measured-timing pills. 11-settings — including the
+Schedule row holding the real commitment. 12-help — TOC + reader.
+
+One robustness fix fell out of the capture session: a corrupt or
+old-format `last_game` meta value used to error the whole Home screen;
+it now degrades to an absent Continue card (the write path was always
+correct — the bad value came from a by-hand seed during staging).
 
 # Run 6 — 2026-07-26
 

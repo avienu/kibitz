@@ -315,8 +315,11 @@ fn last_game(conn: &Connection) -> Result<Option<LastGame>, String> {
     let Some(json) = meta_get(conn, "last_game")? else {
         return Ok(None);
     };
-    let meta: LastGameMeta =
-        serde_json::from_str(&json).map_err(|e| format!("stored last_game: {e}"))?;
+    // A corrupt or old-format value must never take Home down: the
+    // Continue card simply degrades to absent.
+    let Ok(meta) = serde_json::from_str::<LastGameMeta>(&json) else {
+        return Ok(None);
+    };
     // The pointed-at game may have been deleted since: degrade to null.
     let names: Option<(String, String)> = conn
         .query_row(
