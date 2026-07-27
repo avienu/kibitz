@@ -353,8 +353,12 @@ export default function GameView({
         );
       } else {
         onStatus(
-          `Annotated: ${s.positionsAnalyzed} positions, ${s.screensFired} screens fired, ` +
-            `${s.commentsAdded} comments — nothing new for the engine to confirm.`,
+          s.screensFired > 0
+            ? `Narrations regenerated (${s.commentsAdded} comments over ` +
+              `${s.positionsAnalyzed} positions) — all ${s.screensFired} tactical ` +
+              `screens were already engine-verified, so nothing changed visibly.`
+            : `Annotated: ${s.positionsAnalyzed} positions, ${s.commentsAdded} comments — ` +
+              `no tactical screens fired, nothing for the engine to confirm.`,
         );
       }
     } catch (e) {
@@ -417,10 +421,20 @@ export default function GameView({
             ))}
           </span>
           <span className="header-divider" />
-          <button className="btn" onClick={() => void doAnnotate()} disabled={gameId === null || acting}>
+          <button
+            className="btn"
+            onClick={() => void doAnnotate()}
+            disabled={gameId === null || acting}
+            title="The coach: write prose comments for the whole game (static, free) and engine-verify any tactical alerts"
+          >
             Annotate
           </button>
-          <button className="btn" onClick={() => void doReanalyze()} disabled={gameId === null || acting}>
+          <button
+            className="btn"
+            onClick={() => void doReanalyze()}
+            disabled={gameId === null || acting}
+            title="The numbers: fresh engine evaluation of every position — fills the eval column and eval bar"
+          >
             Re-analyze
           </button>
           <button className="btn" onClick={() => void doExport()} disabled={gameId === null}>
