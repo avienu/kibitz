@@ -56,7 +56,7 @@ describe("Home — degraded state (maintainer ruling: short honest list)", () =>
     const { container, getByText } = renderHome({
       summary: {
         ...EMPTY_SUMMARY,
-        lastGame: { id: 7, white: "sounix", black: "christoforo", ply: 21, openedAt: "2026-07-25 20:11:00" },
+        lastGame: { id: 7, white: "sounix", black: "christoforo", ply: 21, openedAt: "2026-07-25 20:11:00" , flipped: false },
       },
       commitment: null,
       prepState: [],

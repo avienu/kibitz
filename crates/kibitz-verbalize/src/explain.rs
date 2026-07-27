@@ -56,8 +56,21 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
         });
     }
 
-    // --- Imbalance blocks (dominance selection mirrors narration). ---
-    for imbalance in crate::select_imbalances(&record.imbalances) {
+    // --- Imbalance blocks (dominance selection mirrors narration, incl.
+    // the tactics-first gate: a confirmed tactic mutes positional blocks
+    // in proportion to its size). ---
+    let swing = crate::confirmed_tactic_swing_pub(record);
+    let selected: Vec<&Imbalance> = if swing >= crate::TACTIC_DOMINANT_CP {
+        Vec::new()
+    } else if swing > 0 {
+        crate::select_imbalances(&record.imbalances)
+            .into_iter()
+            .take(1)
+            .collect()
+    } else {
+        crate::select_imbalances(&record.imbalances)
+    };
+    for imbalance in selected {
         blocks.push(ExplanationBlock {
             kind: BlockKind::Imbalance,
             text: VoiceText {
@@ -68,9 +81,15 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
         });
     }
 
-    // --- Plan blocks: composites first, leftover single hints after. ---
+    // --- Plan blocks: composites first, leftover single hints after.
+    // Suppressed entirely while a confirmed tactic is on the board. ---
     let mut consumed: BTreeSet<&str> = BTreeSet::new();
-    for (i, cp) in record.composite_plans.iter().take(2).enumerate() {
+    let composites: &[_] = if swing > 0 {
+        &[]
+    } else {
+        &record.composite_plans[..]
+    };
+    for (i, cp) in composites.iter().take(2).enumerate() {
         if cp.supporting.len() < 2 {
             continue;
         }
@@ -87,7 +106,12 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
         });
     }
     let mut plan_index = blocks.iter().filter(|b| b.kind == BlockKind::Plan).count();
-    for imbalance in crate::select_imbalances(&record.imbalances) {
+    let plan_sources: Vec<&Imbalance> = if swing > 0 {
+        Vec::new()
+    } else {
+        crate::select_imbalances(&record.imbalances)
+    };
+    for imbalance in plan_sources {
         for plan in &imbalance.plans {
             if !consumed.insert(plan.hint.as_str()) {
                 continue;

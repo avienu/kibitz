@@ -63,6 +63,7 @@ versions.
 |---|---|---|---|
 | tauri | 2.11.x | Apache-2.0 OR MIT | |
 | tauri-build | 2.6.x | Apache-2.0 OR MIT | build |
+| tauri-plugin-updater | 2.10.x | Apache-2.0 OR MIT | app layer (run 8). First-party Tauri updater plugin; transitively pulls reqwest (MIT OR Apache-2.0) + rustls stack (Apache-2.0/ISC/MIT). Network use is user-gated (Settings → Updates). |
 | tokio | 1.x | MIT | UCI subprocess I/O |
 | serde / serde_json | 1.x | MIT OR Apache-2.0 | |
 | rusqlite (bundled) | 0.32 | MIT | Kept in lockstep with the root workspace. Bundles SQLite (public domain). |

@@ -242,7 +242,10 @@ export default function GameView({
     setActing(true);
     try {
       const n = await reanalyzeGame(gameId);
-      onStatus(`${n} eval jobs enqueued — run them from Jobs (the engine only runs on demand).`);
+      onStatus(
+        `${n} positions queued. The engine only runs on demand: press "Run pending jobs" ` +
+          `in Jobs (rail) — evals and updated annotations appear here when it finishes.`,
+      );
     } catch (e) {
       onStatus(`Re-analyze failed: ${e}`);
     } finally {

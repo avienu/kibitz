@@ -10,6 +10,8 @@ Please **do not open a public issue** for security problems.
 
 Report vulnerabilities privately through GitHub's security advisories:
 [github.com/avienu/kibitz/security/advisories/new](https://github.com/avienu/kibitz/security/advisories/new).
+If you can't use GitHub, email
+[contact@kibitzchess.org](mailto:contact@kibitzchess.org) instead.
 
 Include what you can: affected version or commit, reproduction steps, and
 impact as you understand it. You'll get an acknowledgment within a week; fixes

@@ -226,10 +226,19 @@ export default function App() {
     refreshCounts();
   }, [view, refreshCounts]);
 
+  // When the jobs worker finishes, results (fresh evals, fold-back
+  // narrations) must appear in the open game without a manual reload —
+  // otherwise Re-analyze looks like it "did nothing" (run-8 user report).
+  const workerWasActive = useRef(false);
   useEffect(() => {
     const tick = () => {
       jobsStatus()
         .then((j) => {
+          if (workerWasActive.current && !j.workerActive) {
+            reloadCurrentRef.current();
+            refreshCounts();
+          }
+          workerWasActive.current = j.workerActive;
           setJobs(j);
           if (j.workerActive && batchTotalRef.current === null) {
             batchTotalRef.current = j.pending + j.running;
@@ -333,9 +342,11 @@ export default function App() {
   );
 
   const loadDbGameAt = useCallback(
-    async (gameId: number, atPly: number) => {
+    async (gameId: number, atPly: number, flipped?: boolean) => {
       try {
         loadDbGame(await getGame(gameId), atPly);
+        // Resume restores the board orientation you left the game in.
+        if (flipped !== undefined) dispatch({ type: "setFlipped", flipped });
       } catch (e) {
         setStatus(String(e));
       }
@@ -401,14 +412,17 @@ export default function App() {
   useEffect(() => {
     if (view !== "game" || annotGameId === null) return;
     const t = setTimeout(() => {
-      touchLastGame(annotGameId, gv.ply).catch(() => {}); // best-effort meta write
+      touchLastGame(annotGameId, gv.ply, gv.flipped).catch(() => {}); // best-effort meta write
     }, 400);
     return () => clearTimeout(t);
-  }, [view, annotGameId, gv.ply]);
+  }, [view, annotGameId, gv.ply, gv.flipped]);
 
   const reloadCurrent = useCallback(() => {
     if (annot) void loadDbGameAt(annot.gameId, gv.ply);
   }, [annot, gv.ply, loadDbGameAt]);
+  // Stable handle for the jobs poller (defined before reloadCurrent).
+  const reloadCurrentRef = useRef(reloadCurrent);
+  reloadCurrentRef.current = reloadCurrent;
 
   /* ---- stepping ---- */
   const step = useCallback(
@@ -671,7 +685,7 @@ export default function App() {
             dbOpen={dbSummary !== null}
             batchFraction={batchProgress?.fraction ?? null}
             onNavigate={navigate}
-            onOpenGame={(id, ply) => void loadDbGameAt(id, ply)}
+            onOpenGame={(id, ply, flipped) => void loadDbGameAt(id, ply, flipped)}
           />
         );
       case "database":

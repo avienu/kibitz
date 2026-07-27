@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // Tauri expects a fixed dev server port (see src-tauri/tauri.conf.json build.devUrl).
@@ -16,5 +16,10 @@ export default defineConfig({
   build: {
     target: "es2022",
     outDir: "dist",
+  },
+  test: {
+    // Shims a functional localStorage when node's experimental webstorage
+    // global shadows the environment's (node >= 25) — see src/test-setup.ts.
+    setupFiles: ["src/test-setup.ts"],
   },
 });

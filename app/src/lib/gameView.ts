@@ -171,6 +171,8 @@ export type GameViewAction =
   | { type: "setTreatment"; treatment: BoardTreatmentChoice }
   | { type: "setTheme"; theme: Theme }
   | { type: "toggleFlip" }
+  /** Restore a persisted orientation (e.g. resuming from Home). */
+  | { type: "setFlipped"; flipped: boolean }
   /** A new game was installed: jump to `ply`, drop transient state. */
   | { type: "gameLoaded"; ply: number; plyCount: number };
 
@@ -178,6 +180,8 @@ const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n
 
 export function reduceGameView(state: GameViewState, action: GameViewAction): GameViewState {
   switch (action.type) {
+    case "setFlipped":
+      return { ...state, flipped: action.flipped };
     case "setPly":
     case "gameLoaded": {
       const ply = clamp(action.ply, 0, action.plyCount);

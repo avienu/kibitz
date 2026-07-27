@@ -46,7 +46,7 @@ export interface HomeContentProps {
   batchFraction: number | null;
   onNavigate: (view: ViewId, params?: ViewParams) => void;
   /** Open a database game at a ply (Continue card, new-game rows). */
-  onOpenGame: (gameId: number, ply: number) => void;
+  onOpenGame: (gameId: number, ply: number, flipped?: boolean) => void;
   /** Clock injection for deterministic tests; defaults to now. */
   now?: Date;
 }
@@ -73,7 +73,9 @@ export function HomeContent({ data, batchFraction, onNavigate, onOpenGame, now }
       </div>
       <button
         className="btn-primary"
-        onClick={() => onOpenGame(summary.lastGame!.id, summary.lastGame!.ply)}
+        onClick={() =>
+          onOpenGame(summary.lastGame!.id, summary.lastGame!.ply, summary.lastGame!.flipped)
+        }
       >
         Resume review
       </button>
@@ -282,7 +284,7 @@ export interface HomeViewProps {
   dbOpen: boolean;
   batchFraction: number | null;
   onNavigate: (view: ViewId, params?: ViewParams) => void;
-  onOpenGame: (gameId: number, ply: number) => void;
+  onOpenGame: (gameId: number, ply: number, flipped?: boolean) => void;
 }
 
 /** Live Home: fetches home_summary + commitment + prep state. */

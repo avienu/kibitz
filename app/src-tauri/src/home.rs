@@ -147,6 +147,9 @@ pub async fn prep_state_set(
 struct LastGameMeta {
     game_id: i64,
     ply: i64,
+    /// Board orientation when the user left (resume restores it).
+    #[serde(default)]
+    flipped: bool,
     opened_at: String,
 }
 
@@ -154,10 +157,12 @@ pub(crate) fn touch_last_game_impl(
     conn: &Connection,
     game_id: i64,
     ply: i64,
+    flipped: bool,
 ) -> Result<(), String> {
     let meta = LastGameMeta {
         game_id,
         ply,
+        flipped,
         opened_at: now_utc(conn)?,
     };
     meta_set(
@@ -174,8 +179,11 @@ pub async fn touch_last_game(
     state: State<'_, DbState>,
     game_id: i64,
     ply: i64,
+    flipped: Option<bool>,
 ) -> Result<(), String> {
-    with_conn(&state, |conn| touch_last_game_impl(conn, game_id, ply))
+    with_conn(&state, |conn| {
+        touch_last_game_impl(conn, game_id, ply, flipped.unwrap_or(false))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +245,7 @@ pub struct LastGame {
     /// Ply the user last had on the board.
     pub ply: i64,
     pub opened_at: String,
+    pub flipped: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -338,6 +347,7 @@ fn last_game(conn: &Connection) -> Result<Option<LastGame>, String> {
         white,
         black,
         ply: meta.ply,
+        flipped: meta.flipped,
         opened_at: meta.opened_at,
     }))
 }
@@ -615,7 +625,7 @@ mod tests {
         assert!(!s.new_games[0].imported_at.is_empty());
 
         // Continue card: touch, then read back.
-        touch_last_game_impl(&conn, 1, 20).unwrap();
+        touch_last_game_impl(&conn, 1, 20, true).unwrap();
         let s = home_summary_impl(&conn, false).unwrap();
         let lg = s.last_game.expect("last game recorded");
         assert_eq!((lg.id, lg.ply), (1, 20));
@@ -663,7 +673,7 @@ mod tests {
     #[test]
     fn last_game_pointer_degrades_when_the_game_is_gone() {
         let (_dir, conn) = fixture_db();
-        touch_last_game_impl(&conn, 999, 5).unwrap();
+        touch_last_game_impl(&conn, 999, 5, false).unwrap();
         let s = home_summary_impl(&conn, false).unwrap();
         assert!(s.last_game.is_none(), "dangling pointer degrades to null");
     }

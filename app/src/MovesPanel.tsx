@@ -6,7 +6,7 @@
  * All edits round-trip through the encoding-v2 tokens (lib/tokens.ts →
  * update_game_tokens); the panel never invents storage.
  */
-import { useState } from "react";
+import {useState, useEffect, useRef} from "react";
 import { formatWhiteCp, legacyEvalTitle, type PlyEval } from "./lib/analyses";
 import type { AnnotationMode } from "./lib/gameView";
 import { nagTone, type MovesRow, type PairCell } from "./lib/movesView";
@@ -66,6 +66,21 @@ export default function MovesPanel({
   onSelectPly,
   editing,
 }: MovesPanelProps) {
+  // Follow the game: keep the current move visible while stepping
+  // (run-8 user report — the panel lost you mid-game).
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const cur = body.querySelector<HTMLElement>(".mv-cell.cur");
+    if (!cur) return;
+    const b = body.getBoundingClientRect();
+    const c = cur.getBoundingClientRect();
+    if (c.top < b.top + 8 || c.bottom > b.bottom - 8) {
+      cur.scrollIntoView({ block: "nearest" });
+    }
+  }, [currentPly]);
+
   const [draft, setDraft] = useState<CommentDraft | null>(null);
   /** Move token index the NAG popover is open for. */
   const [nagFor, setNagFor] = useState<number | null>(null);
@@ -278,7 +293,7 @@ export default function MovesPanel({
           {editing?.saving ? "Saving…" : "Save"}
         </button>
       </header>
-      <div className="moves-body">
+      <div className="moves-body" ref={bodyRef}>
         {body}
         {rows.length === 0 && <div className="mv-empty-note">No game loaded.</div>}
       </div>

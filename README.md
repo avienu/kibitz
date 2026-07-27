@@ -7,7 +7,9 @@ which imbalances define the position, whose plan is faster, which piece is
 loose, and what you keep getting wrong across your own games — then trains you
 on exactly those weaknesses.
 
-Kibitz is a free, open-source desktop app (macOS and Linux) built around three
+Kibitz is a free, open-source desktop app (macOS and Linux). Project site:
+[kibitzchess.org](https://kibitzchess.org) — including the rendered
+[user guide](https://kibitzchess.org/guide.html). It is built around three
 ideas:
 
 1. **Explain, don't just evaluate.** A static explanation engine reads the
@@ -90,7 +92,7 @@ tablebase-verified endgame training, point Settings at a local
 [Syzygy](https://syzygy-tables.info/) tablebase directory. Both are optional —
 everything else works offline out of the box.
 
-## Build from source
+## Building from source
 
 Prerequisites:
 

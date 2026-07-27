@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Updater dry-run test (run-8 item 3): validates the version-compare and
  * platform-key selection logic against a MOCK latest.json fixture parsed

@@ -505,6 +505,7 @@ export interface HomeLastGame {
   black: string;
   ply: number;
   openedAt: string;
+  flipped: boolean;
 }
 
 export interface HomeNewGame {
@@ -556,8 +557,8 @@ export function homeSummary(): Promise<HomeSummary> {
 }
 
 /** Record the game/ply on the board (feeds Home's Continue card). */
-export function touchLastGame(gameId: number, ply: number): Promise<void> {
-  return invoke<void>("touch_last_game", { gameId, ply });
+export function touchLastGame(gameId: number, ply: number, flipped: boolean): Promise<void> {
+  return invoke<void>("touch_last_game", { gameId, ply, flipped });
 }
 
 export interface Commitment {

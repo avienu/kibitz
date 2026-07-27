@@ -150,6 +150,41 @@ impl Verbalizer for TemplateVerbalizer {
 /// rendering (run-5) is untouched and always wins over any band.
 pub const DECISIVE_CP: i32 = 500;
 
+/// When an engine-CONFIRMED tactic reaches this swing (or any mate), the
+/// position is *about* the tactic: imbalance and plan prose is suppressed
+/// entirely. Below it, a confirmed tactic still leads but only the single
+/// strongest imbalance is kept (winning a pawn doesn't end the game — the
+/// dominant theme stays relevant) and plan talk waits. UNconfirmed static
+/// alerts change nothing: the screen may yet be refuted, so hedging with
+/// positional context stays honest. (Run-8 maintainer question: "when a
+/// tactic is present it seems silly to talk about imbalances".)
+pub const TACTIC_DOMINANT_CP: i32 = 200;
+
+/// Strongest engine-confirmed tactical swing in the record's alerts:
+/// `i32::MAX` for a confirmed mate, the |cp| delta otherwise, 0 when no
+/// alert is confirmed.
+pub(crate) fn confirmed_tactic_swing_pub(record: &FeatureRecord) -> i32 {
+    confirmed_tactic_swing(record)
+}
+
+fn confirmed_tactic_swing(record: &FeatureRecord) -> i32 {
+    record
+        .wsui
+        .alerts
+        .iter()
+        .filter_map(|a| a.engine_check.as_ref())
+        .filter(|c| c.status == EngineCheckStatus::Confirmed)
+        .map(|c| {
+            if c.mate_in.is_some() {
+                i32::MAX
+            } else {
+                c.score_delta_cp.unwrap_or(0).abs()
+            }
+        })
+        .max()
+        .unwrap_or(0)
+}
+
 pub fn verbalize(record: &FeatureRecord) -> String {
     verbalize_voiced(record, Voice::default())
 }
@@ -206,7 +241,19 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
         .collect::<Vec<_>>()
         .join(" ");
 
-    let selected = select_imbalances(&record.imbalances);
+    // Tactics-first gate: a confirmed tactic mutes positional prose in
+    // proportion to its size (see TACTIC_DOMINANT_CP).
+    let swing = confirmed_tactic_swing(record);
+    let selected = if swing >= TACTIC_DOMINANT_CP {
+        Vec::new()
+    } else if swing > 0 {
+        select_imbalances(&record.imbalances)
+            .into_iter()
+            .take(1)
+            .collect()
+    } else {
+        select_imbalances(&record.imbalances)
+    };
 
     let mut imbalance_sentences: Vec<String> = selected
         .iter()
@@ -261,7 +308,12 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
     // repeated as singles.
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     let mut plan_sentences: Vec<String> = Vec::new();
-    for (i, cp) in record.composite_plans.iter().take(2).enumerate() {
+    let composites: &[_] = if swing > 0 {
+        &[]
+    } else {
+        &record.composite_plans[..]
+    };
+    for (i, cp) in composites.iter().take(2).enumerate() {
         if cp.supporting.len() < 2 {
             continue;
         }
@@ -271,6 +323,9 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
         plan_sentences.push(render_composite(cp, i, voice));
     }
     for imbalance in &selected {
+        if swing > 0 {
+            break; // tactics on the board: plan talk waits for the verdict
+        }
         for plan in &imbalance.plans {
             if seen.insert(plan.hint.as_str()) {
                 plan_sentences.push(render_plan(

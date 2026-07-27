@@ -907,3 +907,77 @@ fn decisive_band_boundaries() {
     assert!(out.contains("completely winning for White"), "{out}");
     assert!(!out.contains("+9.1"), "number stays out of prose: {out}");
 }
+
+/// Run-8 maintainer ruling: a confirmed tactic mutes positional prose in
+/// proportion to its size; unconfirmed alerts change nothing.
+#[test]
+fn confirmed_tactic_gates_positional_prose() {
+    use kibitz_core::record::{CompositePlan, EngineCheckStatus, Favors, ImbalanceKind};
+    // Start from the full record: tactical alert + imbalances + composite.
+    let mk = |status: EngineCheckStatus, delta: Option<i32>, mate: Option<i32>| {
+        let mut r = tactical_record();
+        // Graft the quiet record's positional content onto it.
+        let q = quiet_record();
+        r.imbalances = q.imbalances.clone();
+        r.composite_plans = vec![CompositePlan {
+            target: "d5".into(),
+            hints: vec![
+                "ManeuverKnightToOutpost".into(),
+                "PressureBackwardPawn".into(),
+            ],
+            supporting: vec![ImbalanceKind::SquaresOutposts, ImbalanceKind::PawnStructure],
+            squares: vec!["d5".into(), "d6".into()],
+            score: 4,
+            favors: Favors::White,
+        }];
+        if let Some(a) = r.wsui.alerts.first_mut() {
+            if let Some(c) = a.engine_check.as_mut() {
+                c.status = status;
+                c.score_delta_cp = delta;
+                c.mate_in = mate;
+            }
+        }
+        r
+    };
+
+    // Confirmed big swing (or mate): tactics only — no positional prose.
+    for r in [
+        mk(EngineCheckStatus::Confirmed, Some(250), None),
+        mk(EngineCheckStatus::Confirmed, None, Some(4)),
+    ] {
+        let sections = kibitz_verbalize::verbalize_sections(&r);
+        assert!(!sections.tactics.is_empty());
+        assert!(
+            sections.imbalances.is_empty(),
+            "imbalances muted by a dominant confirmed tactic: {}",
+            sections.imbalances
+        );
+        assert!(sections.plans.is_empty(), "plans muted: {}", sections.plans);
+    }
+
+    // Confirmed small swing: tactics lead, ONE imbalance survives, no plans.
+    let small = mk(EngineCheckStatus::Confirmed, Some(120), None);
+    let sections = kibitz_verbalize::verbalize_sections(&small);
+    assert!(!sections.imbalances.is_empty(), "top imbalance kept");
+    let sentence_count = sections.imbalances.matches(". ").count() + 1;
+    assert!(
+        sentence_count <= 3,
+        "only the top theme: {}",
+        sections.imbalances
+    );
+    assert!(sections.plans.is_empty(), "{}", sections.plans);
+
+    // Unconfirmed: everything renders as before (the screen may be refuted).
+    let unclear = mk(EngineCheckStatus::UnclearAtBudget, Some(250), None);
+    let sections = kibitz_verbalize::verbalize_sections(&unclear);
+    assert!(!sections.imbalances.is_empty());
+    assert!(!sections.plans.is_empty());
+
+    // The explanation contract applies the same gate.
+    let ex = kibitz_verbalize::explain(&mk(EngineCheckStatus::Confirmed, Some(250), None));
+    use kibitz_core::record::BlockKind;
+    assert!(
+        ex.blocks.iter().all(|b| b.kind == BlockKind::Alert),
+        "alert blocks only"
+    );
+}
