@@ -328,3 +328,78 @@ fn grade_previews_match_what_grading_does() {
     );
     assert_eq!(kibitz_db::engine::spawn_count(), 0);
 }
+
+/// Run-9: repertoire marks over a stored game — matched plies for both
+/// colors, a deviation carrying the expected move, and silence once the
+/// game is outside every repertoire (or before any repertoire exists).
+#[test]
+fn game_marks_flags_matches_and_deviations() {
+    use kibitz_db::repertoire::{game_marks, MarkPlayed};
+
+    let (_dir, conn) = open_db();
+    // Two Knights game: White deviates from a Ruy Lopez repertoire at
+    // ply 5 (3.Bc4 where the repertoire trains 3.Bb5).
+    let game = r#"[Event "Fixture"]
+[Site "?"]
+[Date "2024.01.01"]
+[White "A"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. d4 exd4 1-0
+"#;
+    let st = kibitz_db::import::import_pgn(&conn, &test_source(), Cursor::new(game)).unwrap();
+    assert_eq!(st.games_imported, 1, "failures: {:?}", st.failures);
+
+    // No repertoire yet → no marks at all.
+    assert!(game_marks(&conn, 1).unwrap().is_empty());
+
+    let now = now_utc(&conn).unwrap();
+    let white_rep = ensure_repertoire(&conn, Color::White, "Ruy", &test_source()).unwrap();
+    let line: Vec<String> = ["e4", "e5", "Nf3", "Nc6", "Bb5"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    add_line(
+        &conn,
+        white_rep,
+        Color::White,
+        &Board::default(),
+        &line,
+        &now,
+    )
+    .unwrap();
+    let black_rep = ensure_repertoire(&conn, Color::Black, "Open games", &test_source()).unwrap();
+    let bline: Vec<String> = ["e4", "e5", "Nf3", "Nc6"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    add_line(
+        &conn,
+        black_rep,
+        Color::Black,
+        &Board::default(),
+        &bline,
+        &now,
+    )
+    .unwrap();
+
+    let marks = game_marks(&conn, 1).unwrap();
+    let brief: Vec<(u32, &str, &str, MarkPlayed)> = marks
+        .iter()
+        .map(|m| (m.ply, m.color.as_str(), m.expected_san.as_str(), m.played))
+        .collect();
+    assert_eq!(
+        brief,
+        vec![
+            (1, "white", "e4", MarkPlayed::Matched),
+            (2, "black", "e5", MarkPlayed::Matched),
+            (3, "white", "Nf3", MarkPlayed::Matched),
+            (4, "black", "Nc6", MarkPlayed::Matched),
+            // The deviation names what the repertoire expected instead.
+            (5, "white", "Bb5", MarkPlayed::Deviated),
+            // Plies 6+ (after 3.Bc4) are outside both repertoires: silence.
+        ]
+    );
+    assert_eq!(kibitz_db::engine::spawn_count(), 0);
+}

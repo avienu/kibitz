@@ -413,6 +413,23 @@ pub async fn batch_start(state: State<'_, DbState>, kind: String) -> Result<Batc
 }
 
 // ---------------------------------------------------------------------------
+// repertoire marks in the game view (run-9)
+// ---------------------------------------------------------------------------
+
+/// Per-ply repertoire awareness for one stored game: which mainline moves
+/// match a repertoire card and where the game first deviates from what
+/// the user trains. Pure database lookup — no engine (CLAUDE.md #6).
+#[tauri::command]
+pub async fn repertoire_marks(
+    state: State<'_, DbState>,
+    game_id: i64,
+) -> Result<Vec<kibitz_db::repertoire::RepertoireMark>, String> {
+    with_conn(&state, |conn| {
+        kibitz_db::repertoire::game_marks(conn, game_id).map_err(|e| e.to_string())
+    })
+}
+
+// ---------------------------------------------------------------------------
 // narration voice setting (run-5 item 3)
 // ---------------------------------------------------------------------------
 

@@ -11,7 +11,17 @@ import EvalBar from "./EvalBar";
 import ExplainPanel from "./ExplainPanel";
 import MovesPanel, { type MovesEditing } from "./MovesPanel";
 import { evalsByPly, type AnalysisRow } from "./lib/analyses";
-import { annotateGame, exportGamePgn, reanalyzeGame, type AnnotateSummary } from "./lib/db";
+import {
+  annotateGame,
+  batchPause,
+  exportGamePgn,
+  jobsStatus,
+  reanalyzeGame,
+  runJobs,
+  type AnnotateSummary,
+  type JobsStatus,
+} from "./lib/db";
+import { repGlyphsByPly, type RepertoireMark } from "./lib/repMarks";
 import { analyzeLive, getSavedEnginePath, onEngineInfo, stopAnalysis } from "./lib/engine";
 import { summarizeInfo, type EngineInfo } from "./lib/engineView";
 import { boardGeometry } from "./lib/evidence";
@@ -49,6 +59,8 @@ interface GameViewProps {
   gameId: number | null;
   editing: MovesEditing | null;
   analysisRows: AnalysisRow[];
+  /** Repertoire marks for the loaded game (empty = no repertoire). */
+  repMarks: RepertoireMark[];
   explainOn: boolean;
   explanation: ExplanationJson | null;
   explaining: boolean;
@@ -95,6 +107,7 @@ export default function GameView({
   gameId,
   editing,
   analysisRows,
+  repMarks,
   explainOn,
   explanation,
   explaining,
@@ -149,6 +162,104 @@ export default function GameView({
   const [exportText, setExportText] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
 
+  /* ---- run-9: Re-analyze / Annotate run immediately on click ----
+   * An explicit click IS an explicit engine request — the engine-off
+   * principle (CLAUDE.md #6) governs defaults, not user actions. The
+   * click enqueues AND starts the jobs worker; this inline row shows the
+   * batch progressing right here in the game view. */
+  interface GameBatch {
+    kind: "reanalyze" | "annotate";
+    /** Jobs this click enqueued (the label's honest count). */
+    positions: number;
+    /** pending+running snapshot once the worker was started — the
+     * progress base (covers this enqueue plus anything already queued). */
+    total: number;
+    done: boolean;
+  }
+  const [gameBatch, setGameBatch] = useState<GameBatch | null>(null);
+  const [batchJobs, setBatchJobs] = useState<JobsStatus | null>(null);
+  const [pausing, setPausing] = useState(false);
+
+  /** Enqueue happened — start the worker (or join the active one) and
+   * snapshot the progress base. Returns true when a worker was already
+   * running (our jobs joined its queue). */
+  const startGameBatch = async (kind: GameBatch["kind"], positions: number) => {
+    let joined = false;
+    try {
+      await runJobs();
+    } catch {
+      joined = true;
+    }
+    const j = await jobsStatus().catch(() => null);
+    const total = Math.max(positions, (j?.pending ?? 0) + (j?.running ?? 0));
+    setBatchJobs(j);
+    setGameBatch({ kind, positions, total, done: false });
+    return joined;
+  };
+
+  // Poll jobs_status at 1s while our batch runs — the inline row's counts.
+  // (App's 3s shell poll stays untouched; this one is scoped to the batch
+  // and stops the moment the row reaches its done-state.)
+  useEffect(() => {
+    if (!gameBatch || gameBatch.done) return;
+    let cancelled = false;
+    const tick = () => {
+      jobsStatus()
+        .then((j) => {
+          if (!cancelled) setBatchJobs(j);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [gameBatch]);
+
+  // Batch completion: worker idle with nothing left → done-state row.
+  // App also reloads on worker-idle; onReload here covers a run that
+  // finishes between App's 3s polls, so results always appear.
+  useEffect(() => {
+    if (!gameBatch || gameBatch.done || !batchJobs) return;
+    if (!batchJobs.workerActive && batchJobs.pending + batchJobs.running === 0) {
+      setGameBatch({ ...gameBatch, done: true });
+      onReload();
+    }
+  }, [batchJobs, gameBatch, onReload]);
+  useEffect(() => {
+    if (!gameBatch?.done) return;
+    const t = setTimeout(() => setGameBatch(null), 6000);
+    return () => clearTimeout(t);
+  }, [gameBatch]);
+  // A different game loaded: the row's context is gone.
+  useEffect(() => setGameBatch(null), [gameId]);
+
+  const batchRemaining = batchJobs ? batchJobs.pending + batchJobs.running : null;
+  const batchFraction =
+    gameBatch === null
+      ? 0
+      : gameBatch.done || gameBatch.total === 0
+        ? 1
+        : Math.max(0, Math.min(1, 1 - (batchRemaining ?? gameBatch.total) / gameBatch.total));
+
+  const doPauseBatch = async () => {
+    setPausing(true);
+    try {
+      const was = await batchPause();
+      onStatus(
+        was
+          ? "Pausing between jobs — everything unstarted stays pending; Re-analyze or Jobs resumes."
+          : "Nothing was running.",
+      );
+    } catch (e) {
+      onStatus(`Pause failed: ${e}`);
+    } finally {
+      setPausing(false);
+    }
+  };
+
   // Resize (deliverable 2c): the board column absorbs extra width; the
   // board snaps to the largest multiple of 8 that fits (min 496).
   useLayoutEffect(() => {
@@ -200,6 +311,11 @@ export default function GameView({
   }, [editing, game, analysisRows]);
 
   const evalsMap = useMemo(() => evalsByPly(analysisRows), [analysisRows]);
+  // Marks only render when repertoires exist — no toggle needed (run-9).
+  const repGlyphs = useMemo(
+    () => (repMarks.length > 0 ? repGlyphsByPly(repMarks) : null),
+    [repMarks],
+  );
   const evalRow = useMemo(() => selectPlyAnalysis(analysisRows, gv.ply), [analysisRows, gv.ply]);
   // Mate distance for the eval bar, when the current explanation knows it.
   const mate = explanation?.eval?.mate ?? null;
@@ -226,11 +342,21 @@ export default function GameView({
     setActing(true);
     try {
       const s: AnnotateSummary = await annotateGame(gameId);
-      onStatus(
-        `Annotated: ${s.positionsAnalyzed} positions, ${s.screensFired} screens fired, ` +
-          `${s.commentsAdded} comments, ${s.jobsEnqueued} confirm jobs enqueued.`,
-      );
       onReload();
+      if (s.jobsEnqueued > 0) {
+        // Run the confirm jobs now — the click asked for them (run-9).
+        const joined = await startGameBatch("annotate", s.jobsEnqueued);
+        onStatus(
+          `Annotated: ${s.positionsAnalyzed} positions, ${s.screensFired} screens fired, ` +
+            `${s.commentsAdded} comments — ${s.jobsEnqueued} engine confirmation(s) ` +
+            (joined ? "added to the already-running worker." : "running now."),
+        );
+      } else {
+        onStatus(
+          `Annotated: ${s.positionsAnalyzed} positions, ${s.screensFired} screens fired, ` +
+            `${s.commentsAdded} comments — nothing new for the engine to confirm.`,
+        );
+      }
     } catch (e) {
       onStatus(`Annotate failed: ${e}`);
     } finally {
@@ -242,9 +368,16 @@ export default function GameView({
     setActing(true);
     try {
       const n = await reanalyzeGame(gameId);
+      if (n === 0) {
+        onStatus("Nothing to enqueue — every position is already queued or freshly analyzed.");
+        return;
+      }
+      const joined = await startGameBatch("reanalyze", n);
       onStatus(
-        `${n} positions queued. The engine only runs on demand: press "Run pending jobs" ` +
-          `in Jobs (rail) — evals and updated annotations appear here when it finishes.`,
+        `${n} position(s) ` +
+          (joined
+            ? "added to the already-running worker — progress above."
+            : "queued and running now — evals and annotations refresh when it finishes."),
       );
     } catch (e) {
       onStatus(`Re-analyze failed: ${e}`);
@@ -295,6 +428,36 @@ export default function GameView({
           </button>
         </div>
       </header>
+
+      {gameBatch && (
+        <div className="inline-job-row game-inline-job" role="status">
+          <span className="inline-job-label">
+            {gameBatch.kind === "reanalyze" ? "REANALYZING" : "ANNOTATING"} ·{" "}
+            {gameBatch.positions.toLocaleString("en-US")} position
+            {gameBatch.positions === 1 ? "" : "s"}
+          </span>
+          <span className="inline-job-track">
+            <span className="inline-job-fill" style={{ width: `${Math.round(batchFraction * 100)}%` }} />
+          </span>
+          <span className="inline-job-detail">
+            {gameBatch.done
+              ? "done — evals and annotations refreshed"
+              : `${Math.round(batchFraction * 100)}% · ${Math.max(
+                  0,
+                  gameBatch.total - (batchRemaining ?? gameBatch.total),
+                ).toLocaleString("en-US")} / ${gameBatch.total.toLocaleString("en-US")} jobs`}
+          </span>
+          {gameBatch.done ? (
+            <button className="btn-ghost" onClick={() => setGameBatch(null)} title="Dismiss">
+              ✕
+            </button>
+          ) : (
+            <button className="btn-ghost" onClick={() => void doPauseBatch()} disabled={pausing}>
+              {pausing ? "Pausing…" : "Pause"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="game-main">
         <div className="board-column" ref={colRef}>
@@ -418,6 +581,7 @@ export default function GameView({
             onAnnotationMode={(m) => dispatch({ type: "setAnnotationMode", mode: m })}
             onSelectPly={setPly}
             editing={editing}
+            repGlyphs={repGlyphs}
           />
           {game && game.sans.length > 0 && (
             <div className="rep-footer">

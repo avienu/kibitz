@@ -9,9 +9,15 @@
  * "soon" chips. The batch confirm dialog shows the measured-or-assumed
  * `estimateBasis` string verbatim, and states that jobs are resumable.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import DataTable, { type DataTableColumn } from "./components/DataTable";
 import ScreenHeader from "./shell/ScreenHeader";
+import {
+  clearDbScreenState,
+  dbScreenState,
+  hasActiveFilters,
+  updateDbScreenState,
+} from "./lib/dbScreenState";
 import {
   batchEstimate,
   batchPause,
@@ -88,12 +94,48 @@ export default function DatabaseScreen({
   const [opening, setOpening] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
 
-  const [playerFilter, setPlayerFilter] = useState("");
-  const [ecoFilter, setEcoFilter] = useState("");
-  const [resultFilter, setResultFilter] = useState("");
-  const [page, setPage] = useState(0);
+  // Filter / page / selection state initializes from the session store
+  // (lib/dbScreenState) so navigating away and back restores the search
+  // instead of starting from scratch (run-9 field report 1).
+  const [playerFilter, setPlayerFilter] = useState(() => dbScreenState().player);
+  const [ecoFilter, setEcoFilter] = useState(() => dbScreenState().eco);
+  const [resultFilter, setResultFilter] = useState(() => dbScreenState().result);
+  const [page, setPage] = useState(() => dbScreenState().page);
+  const [selectedId, setSelectedId] = useState<number | null>(
+    () => dbScreenState().selectedGameId,
+  );
   const [list, setList] = useState<GameList | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+
+  // Mirror every change back into the store (cheap plain-object writes).
+  useEffect(() => {
+    updateDbScreenState({
+      player: playerFilter,
+      eco: ecoFilter,
+      result: resultFilter,
+      page,
+      selectedGameId: selectedId,
+    });
+  }, [playerFilter, ecoFilter, resultFilter, page, selectedId]);
+
+  const clearFilters = useCallback(() => {
+    clearDbScreenState();
+    setPlayerFilter("");
+    setEcoFilter("");
+    setResultFilter("");
+    setPage(0);
+    setSelectedId(null);
+  }, []);
+
+  // Scroll restore: remember the offset as the user scrolls; put it back
+  // once, after the first game list of this mount has rendered rows.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollRestored = useRef(false);
+  useLayoutEffect(() => {
+    if (scrollRestored.current || !list) return;
+    scrollRestored.current = true;
+    if (scrollRef.current) scrollRef.current.scrollTop = dbScreenState().scrollTop;
+  }, [list]);
 
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [estimating, setEstimating] = useState<BatchKind | null>(null);
@@ -304,7 +346,11 @@ export default function DatabaseScreen({
           )
         }
       />
-      <div className="page-scroll">
+      <div
+        className="page-scroll"
+        ref={scrollRef}
+        onScroll={(e) => updateDbScreenState({ scrollTop: e.currentTarget.scrollTop })}
+      >
         <div className="dbscreen">
           {!summary && (
             <div className="db-open-row">
@@ -371,6 +417,22 @@ export default function DatabaseScreen({
                 <span className="filter-chip disabled" title="No backend field yet — coming with source filtering">
                   Source · soon
                 </span>
+                {hasActiveFilters({
+                  player: playerFilter,
+                  eco: ecoFilter,
+                  result: resultFilter,
+                  page,
+                  scrollTop: 0,
+                  selectedGameId: null,
+                }) && (
+                  <button
+                    className="filter-chip-clear"
+                    onClick={clearFilters}
+                    title="Reset filters, page and selection"
+                  >
+                    Clear
+                  </button>
+                )}
                 <div className="filter-spacer" />
                 {list && (
                   <span className="range-readout">
@@ -404,7 +466,11 @@ export default function DatabaseScreen({
                   rows={list.rows}
                   gridTemplate={GRID}
                   rowKey={(g) => g.id}
-                  onRowClick={(g) => void loadById(g.id)}
+                  onRowClick={(g) => {
+                    setSelectedId(g.id);
+                    void loadById(g.id);
+                  }}
+                  rowClassName={(g) => (g.id === selectedId ? "row-selected" : undefined)}
                   empty="No games match the filters."
                   footer={
                     <div className="pager-row">

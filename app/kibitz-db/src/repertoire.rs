@@ -20,6 +20,7 @@ use kibitz_srs::{Grade, MemoryState, Scheduler};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::import::SourceInfo;
+use crate::movebin::Token;
 use crate::pgn::PgnReader;
 
 fn color_str(color: Color) -> &'static str {
@@ -430,4 +431,108 @@ pub fn grade_card(
         reps: new_reps,
         lapses: new_lapses,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Repertoire awareness in the game view (run-9): per-ply match/deviation
+// marks for a stored game against the user's repertoires.
+// ---------------------------------------------------------------------------
+
+/// Did the game move agree with the repertoire card at that position?
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkPlayed {
+    /// The game played exactly the move the card trains.
+    Matched,
+    /// The position had a card but the game played something else.
+    Deviated,
+}
+
+/// One repertoire mark on a mainline ply of a stored game.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepertoireMark {
+    /// 1-based mainline ply of the move the mark attaches to.
+    pub ply: u32,
+    /// Repertoire color ("white" / "black") whose card covers the
+    /// position the move was played from.
+    pub color: String,
+    /// The move that repertoire trains from this position.
+    pub expected_san: String,
+    pub played: MarkPlayed,
+}
+
+/// Walk a stored game's mainline and mark every ply whose *before*
+/// position (ep-normalized `crate::hash::position_hash`, the card key)
+/// has a repertoire card for the side to move: `Matched` when the game
+/// played the trained move, `Deviated` otherwise. Colors without any
+/// cards produce no marks, so an empty repertoire yields an empty list.
+/// Static lookup only — no engine anywhere near this (CLAUDE.md #6).
+pub fn game_marks(conn: &Connection, game_id: i64) -> anyhow::Result<Vec<RepertoireMark>> {
+    // Which colors actually have cards? No repertoire → no marks, and the
+    // per-ply lookup below is skipped entirely for uncovered colors.
+    let mut colors_stmt = conn.prepare_cached(
+        "SELECT DISTINCT r.color FROM repertoires r
+         JOIN repertoire_cards c ON c.repertoire_id = r.id",
+    )?;
+    let colors: Vec<String> = colors_stmt
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    if colors.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let (start, tokens) = crate::edit::game_tokens(conn, game_id)?;
+    // First card in wins, exactly as `add_line` inserts (one card per
+    // (repertoire, position); lowest id = earliest added).
+    let mut lookup = conn.prepare_cached(
+        "SELECT c.expected_san, c.expected_uci FROM repertoire_cards c
+         JOIN repertoires r ON r.id = c.repertoire_id
+         WHERE r.color = ?1 AND c.position_hash = ?2
+         ORDER BY c.id LIMIT 1",
+    )?;
+
+    let mut board = start;
+    let mut depth = 0u32;
+    let mut ply = 0u32;
+    let mut marks = Vec::new();
+    for token in tokens.iter() {
+        match token {
+            Token::VarStart => depth += 1,
+            Token::VarEnd => depth = depth.saturating_sub(1),
+            Token::Null if depth == 0 => break,
+            Token::Move(mv) if depth == 0 => {
+                ply += 1;
+                let color = match board.side_to_move() {
+                    cozy_chess::Color::White => "white",
+                    cozy_chess::Color::Black => "black",
+                };
+                if colors.iter().any(|c| c == color) {
+                    let hash = crate::hash::position_hash(&board) as i64;
+                    let card: Option<(String, String)> = lookup
+                        .query_row(params![color, hash], |r| Ok((r.get(0)?, r.get(1)?)))
+                        .optional()?;
+                    if let Some((expected_san, expected_uci)) = card {
+                        // Compare in UCI: both sides come from cozy-chess
+                        // `Move` display, so the encoding always agrees
+                        // (castling included).
+                        let played = if mv.to_string() == expected_uci {
+                            MarkPlayed::Matched
+                        } else {
+                            MarkPlayed::Deviated
+                        };
+                        marks.push(RepertoireMark {
+                            ply,
+                            color: color.to_string(),
+                            expected_san,
+                            played,
+                        });
+                    }
+                }
+                board.play(*mv);
+            }
+            _ => {}
+        }
+    }
+    Ok(marks)
 }

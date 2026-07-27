@@ -11,6 +11,7 @@ import { formatWhiteCp, legacyEvalTitle, type PlyEval } from "./lib/analyses";
 import type { AnnotationMode } from "./lib/gameView";
 import { nagTone, type MovesRow, type PairCell } from "./lib/movesView";
 import { nagView } from "./lib/nags";
+import type { RepGlyph } from "./lib/repMarks";
 import {
   deleteComment,
   deleteVariation,
@@ -47,6 +48,9 @@ interface MovesPanelProps {
   onSelectPly: (ply: number) => void;
   /** Null when the loaded game has no editable annotation stream. */
   editing: MovesEditing | null;
+  /** Repertoire marks per mainline ply (run-9); null/empty renders
+   * nothing — marks only exist when a repertoire has cards. */
+  repGlyphs?: Map<number, RepGlyph> | null;
 }
 
 interface CommentDraft {
@@ -65,6 +69,7 @@ export default function MovesPanel({
   onAnnotationMode,
   onSelectPly,
   editing,
+  repGlyphs,
 }: MovesPanelProps) {
   // Follow the game: keep the current move visible while stepping
   // (run-8 user report — the panel lost you mid-game).
@@ -112,6 +117,7 @@ export default function MovesPanel({
     const cur = cell.ply === currentPly;
     const ev = evals?.get(cell.ply);
     const nag = cell.nag !== null ? nagView(cell.nag) : null;
+    const rep = repGlyphs?.get(cell.ply);
     return (
       <span className="mv-cell-wrap">
         <button
@@ -146,6 +152,11 @@ export default function MovesPanel({
               title={ev.kind === "legacy" ? legacyEvalTitle(ev.engine) : ev.engine}
             >
               {formatWhiteCp(ev.whiteCp)}
+            </span>
+          )}
+          {rep && (
+            <span className={`mv-rep mv-rep-${rep.kind}`} title={rep.title}>
+              {rep.kind === "match" ? "✓" : "≠"}
             </span>
           )}
         </button>
