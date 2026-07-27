@@ -52,7 +52,7 @@
 <li><strong>STUDY</strong> — <strong>Database</strong> (badge: game count), <strong>Game</strong>, <strong>Opening tree</strong>, <strong>Position search</strong>.</li>
 <li><strong>COACH</strong> — <strong>Home</strong> (the startup screen), <strong>Explain</strong> (a toggle, not a page — switches the Game view's Explain panel on/off; badge shows "on"/"off"), <strong>Profile</strong> (badge: "N findings" once a profile is built), <strong>Opponent prep</strong>.</li>
 <li><strong>TRAIN</strong> — <strong>Openings SRS</strong> (badge: "N due"), <strong>Tactics</strong> (badge: attempts, or puzzle count before any attempt), <strong>Endgames</strong>.</li>
-<li><strong>DATA IN / OUT</strong> — <strong>Import PGN / SCID</strong>, <strong>TWIC ingest</strong>, <strong>Account syncs</strong>, <strong>Jobs</strong> (badge: "N running" / "N pending" / done count).</li>
+<li><strong>DATA IN / OUT</strong> — <strong>Import PGN / SCID</strong>, <strong>TWIC ingest</strong> (badge: "wk NNNN", the newest imported week), <strong>Account syncs</strong> (badge: "N linked" configured accounts), <strong>Jobs</strong> (badge: "N running" / "N pending" / done count).</li>
 <li>Footer — <strong>Settings</strong>, <strong>Help &amp; tour</strong> (this guide + the replayable tour).</li>
 </ul>
 <p>In the data tables used across the app (Database, Opening tree, Position search, Profile, Prep), some column headers sort: clicking one cycles ascending → descending → original order.</p>
@@ -75,8 +75,8 @@
 <ul>
 <li><strong>Title block</strong> — "White — Black" with the result, and a meta line: site, year, opening name and ECO (when the database resolved them), ply count, and the game's identity (<code>database #N</code> or <code>pasted PGN</code>).</li>
 <li><strong>walnut | instrument</strong> — switches the board treatment (same control as in Settings).</li>
-<li><strong>Annotate</strong> — the *static* Kibitz annotation pass over the loaded database game: imbalance comments plus tactical alerts from the WSUI screen. <strong>No engine runs</strong>; each fired alert enqueues a bounded engine confirmation job for the Jobs queue.</li>
-<li><strong>Re-analyze</strong> — enqueues one bounded engine evaluation per mainline position. Nothing runs yet: "N eval jobs enqueued — run them from Jobs".</li>
+<li><strong>Annotate</strong> — the *static* Kibitz annotation pass over the loaded database game: imbalance comments plus tactical alerts from the WSUI screen appear instantly. Each fired alert enqueues a bounded engine confirmation job, <strong>and the worker starts right away</strong> — an inline ANNOTATING progress row appears under the header (Pause anytime); verdicts fold back into the comments when it finishes.</li>
+<li><strong>Re-analyze</strong> — one bounded engine evaluation per mainline position, enqueued <strong>and run immediately</strong>: an inline REANALYZING progress row tracks the batch, and evals/annotations refresh in place when it completes. Clicking while a worker is already running just adds the jobs to the active run.</li>
 <li><strong>Export PGN</strong> — renders the game (with annotations) as PGN in a modal with <strong>Copy</strong> / <strong>Close</strong>.</li>
 </ul>
 <p>These three buttons are enabled only for games loaded from the database.</p>
@@ -126,6 +126,7 @@
 <ul>
 <li><strong>full | hover | hidden</strong> — how comments and variations display (hover dims them until pointed at; hidden removes them). Also in Settings.</li>
 <li>Click a move to jump the board there.</li>
+<li><strong>Repertoire marks</strong> — when you have trained repertoires, moves that match a repertoire card get a small <strong>✓</strong> (hover: "in your White/Black repertoire"), and the first move where the game *deviates* from your repertoire gets a <strong>≠</strong> whose tooltip names the move you train there ("your White repertoire plays Bb5 here") — per color, both colors when both repertoires apply. No toggle: the marks only exist when a repertoire has cards.</li>
 </ul>
 <p><strong>Editing</strong> (database games only):</p>
 <ul>
@@ -139,11 +140,10 @@
 <h3 id="promotion-picker">Promotion picker</h3>
 <p>Wherever a board accepts moves — Game-view variations, Openings SRS, Tactics, Endgames — dragging a pawn to the last rank opens a picker: choose <strong>Q / R / B / N</strong> by click or keys <strong>1–4</strong>; <strong>Esc</strong> cancels. Underpromotions are fully supported, including tactics puzzles whose solution underpromotes.</p>
 <h3 id="when-does-the-engine-run">When does the engine run?</h3>
-<p>Stockfish is <strong>off by default</strong> and never runs behind your back:</p>
+<p>Stockfish is <strong>off by default</strong> and never runs behind your back — but an explicit click *is* an explicit engine request:</p>
 <ol>
-<li><strong>Annotate</strong> and the Explain panel are static analysis — no engine.</li>
-<li><strong>Re-analyze</strong> and Annotate's confirmation checks only *enqueue* jobs.</li>
-<li>The engine actually runs when you start the worker — <strong>Run pending jobs</strong> in the Jobs view, or confirming a database-wide batch (Database header / Settings), or the CLI <code>run-jobs</code>. The status strip's engine dot and batch progress show it happening.</li>
+<li>Stepping through games, the Explain panel and Annotate's static comments never involve the engine.</li>
+<li><strong>Re-analyze</strong> and <strong>Annotate</strong> (game view) run their jobs immediately on click — enqueue *and* start the worker — with an inline progress row in the game view. So does confirming a database-wide batch (Database header / Settings), and <strong>Run pending jobs</strong> in the Jobs view (or the CLI <code>run-jobs</code>) resumes anything left pending. The status strip's engine dot and batch progress show it happening.</li>
 <li><strong>Live analysis</strong> (game view, next to Flip): an explicit toggle that runs infinite analysis on the position you're looking at, streaming depth, evaluation and the engine's line below the move controls. It follows you as you step through the game and stops the moment you switch it off, load another game, or leave the game view. It always starts off — the setting is deliberately not remembered between sessions.</li>
 </ol>
 <hr>
@@ -152,7 +152,7 @@
 <p>The database screen: filter bar, the games table, and the two database-wide batch actions.</p>
 <ul>
 <li><strong>Header actions</strong> — <strong>Annotate database</strong> and <strong>Fresh analysis pass</strong>. Both first show an <strong>estimate-confirm dialog</strong>: how many games are still uncovered, the estimated duration, and an "Estimate basis:" line quoting exactly how the estimate was derived (measured from your own completed jobs where possible, stated assumption otherwise). Jobs are resumable — pause anytime and the run picks up where it left off; already-covered games are skipped. <strong>Start</strong> enqueues the jobs *and* starts the worker.</li>
-<li><strong>Filter chips</strong> — <strong>Player</strong> (substring), <strong>ECO</strong> (prefix), and <strong>Result</strong> are wired; <strong>Event</strong>, <strong>Date</strong> and <strong>Source</strong> render as disabled "soon" chips because no backend field exists yet. The right edge shows the range readout ("1–50 of 121,438").</li>
+<li><strong>Filter chips</strong> — <strong>Player</strong> (substring), <strong>ECO</strong> (prefix), and <strong>Result</strong> are wired; <strong>Event</strong>, <strong>Date</strong> and <strong>Source</strong> render as disabled "soon" chips because no backend field exists yet. The right edge shows the range readout ("1–50 of 121,438"). Filters, page, scroll position and the last-opened row <strong>survive leaving the screen</strong> — open a game, step through it, come back, and your search is exactly where you left it (a <strong>Clear</strong> chip resets; a restart starts clean).</li>
 <li><strong>Inline job row</strong> — while a batch runs (or jobs are pending), a progress row appears above the table: the batch label (ANNOTATING DATABASE / FRESH ANALYSIS PASS / ENGINE JOBS), the progress bar, "% · done / total · time left", and <strong>Pause</strong> (pauses between jobs — everything unstarted stays pending; run again to resume).</li>
 <li><strong>Games table</strong> — columns: <strong>⑂</strong> (duplicate flag — the game is linked to its higher-priority copy, never deleted; source priority is personal &gt; TWIC &gt; online), White, Black, Result, Event, Date, ECO, <strong>Source</strong> (a colour-coded tag per origin), and <strong>Analysis</strong> ("fresh d28" / "legacy" / "—"). Click a row to open the game in the Game view; 50 games per page with a pager.</li>
 <li>With no database open, the path field + <strong>Open</strong> appear (the window title takes the database filename).</li>
@@ -184,7 +184,7 @@
 <li><strong>MOTIF MATRIX</strong> — per motif ("Loose piece (LPDO)", "Under-defended piece", "Trapped piece", "Exposed king"): <strong>MISSED</strong> (a tactic was available to the player and not played) and <strong>ALLOWED</strong> (their move created the weakness against them) — both clickable; <strong>VS PEERS</strong> is an honest "—" until peer baselines ship.</li>
 <li><strong>STRUCTURE REPORT</strong> — a bar per recurring pawn-structure flag showing the player's score in those games against the 50 % baseline tick.</li>
 <li><strong>PHASE ACCURACY</strong> — ACPL tiles for opening / middlegame / endgame with blunder/mistake/inaccuracy counts.</li>
-<li><strong>CONVERSION &amp; DEFENCE</strong> — conversion rate from +2.00, defence rate from −1.00 (both "—" when no data). These need stored evals: run a Fresh analysis pass (or Re-analyze + Jobs per game) first.</li>
+<li><strong>CONVERSION &amp; DEFENCE</strong> — conversion rate from +2.00, defence rate from −1.00 (both "—" when no data). These need stored evals: run a Fresh analysis pass (or Re-analyze per game) first.</li>
 <li><strong>Evidence aside</strong> (right, 420 px) — the selected claim's count pill, a what-this-is paragraph citing real numbers, and the supporting games. <strong>Opening an evidence row jumps to the game at the ply that produced the claim</strong> — for "missed", the ply where the tactic became available; for "allowed", the ply where the weakness appeared; for structures, the ply where the structure was assessed. Examples are capped at three per claim ("Showing 3 of 12"); phase and rate claims aggregate eval traces and honestly state that no per-game example list exists yet.</li>
 <li><strong>Train this weakness</strong> — enabled for motif claims only: seeds the Tactics queue with that motif and switches to Tactics.</li>
 <li><strong>You | &lt;opponent&gt; subject switch</strong> — appears when you arrive from Opponent prep's "Open his profile": the same screen shows the opponent's profile (built on demand), and the switch flips between your profile and theirs.</li>
@@ -192,7 +192,7 @@
 <h3 id="opponent-prep">Opponent prep</h3>
 <p>A four-step workflow in a header stepper — <strong>① Opponent → ② Fingerprint → ③ Weak lines → ④ Master games</strong> — with free backward navigation (click any reached chip; each chip shows its chosen value) beside a persistent aside.</p>
 <ol>
-<li><strong>Opponent</strong> — <strong>Search local</strong> lists up to eight matching names from your own database with their game counts. <strong>Fetch from Lichess / chess.com</strong> are visible but honestly disabled — account fetch runs from the CLI today (<code>lichess-sync</code> / <code>chesscom-sync</code>). Picking a name advances. (Home's "Prep an opponent" lands here pre-searched.)</li>
+<li><strong>Opponent</strong> — <strong>Search local</strong> lists up to eight matching names from your own database with their game counts. <strong>Fetch from Lichess / chess.com</strong> are visible but honestly disabled in this stepper — pull the opponent's games in first via the <strong>Account syncs</strong> screen (or the CLI <code>lichess-sync</code> / <code>chesscom-sync</code>). Picking a name advances. (Home's "Prep an opponent" lands here pre-searched.)</li>
 <li><strong>Fingerprint</strong> — their repertoire by ECO family for the chosen colour (<strong>as White / as Black</strong>): share of games, score bar against the 50 % tick (weak families — under 50 % on 3+ games — marked), and the <strong>book-exit</strong> column ("leaves book at Nf6 (ply 5, 12×)"). AVG ELO is an honest "—" (not recorded per family yet). Click a row to rank the weak lines.</li>
 <li><strong>Weak lines — ranked</strong> — cards ordered by prep value: rank, the line name (opening name, ECO, or "Out of book"), "by ply N · plays …", the score chip ("38% in 21"), and a serif paragraph explaining *why* this spot is weak, citing real counts (plus a note when it is also a book-exit point). Click one to see its master games.</li>
 <li><strong>Master games</strong> — games reaching the exact position, with the stated ranking rule: both players rated 2200 or above, strongest pairings first. Click a row to open it in the Game view at the prep ply.</li>
@@ -261,8 +261,24 @@
 <li><strong>SCID (.si4)</strong> — imports through the command line for now: <code>kibitz-cli import-si4 &lt;base&gt;</code> converts a <code>.si4</code>/<code>.sg4</code>/<code>.sn4</code> base into the SQLite database the app opens. Legacy engine analysis is preserved and tagged — never deleted, only superseded by fresh analysis.</li>
 </ul>
 <p>Note: pasting a PGN loads it for *viewing* — storing games in the database is a CLI import.</p>
-<h3 id="twic-ingest-account-syncs">TWIC ingest / Account syncs</h3>
-<p>Placeholder screens: both capabilities live in the data layer and the CLI (<code>twic-sync</code>; <code>lichess-sync</code> / <code>chesscom-sync</code> / <code>fics-sync</code> — see "CLI-only features"). The screens reserve the rail entry and will grow status displays when the desktop surface lands.</p>
+<h3 id="twic-ingest">TWIC ingest</h3>
+<p>The full Week in Chess catalog — every issue from the earliest one the TWIC zip archive serves (issue 920, ≈ June 2012) through the latest known issue — with per-issue status. The rail badge shows the newest imported week ("wk NNNN").</p>
+<ul>
+<li><strong>Catalog table</strong> (paginated, newest first): issue number, approximate publication week ("≈ YYYY-MM-DD" — weekly arithmetic from a fixed anchor, so dates can slip a few days), status (imported / not downloaded) and the games imported from that issue.</li>
+<li><strong>Refresh catalog</strong> — the only thing that asks theweekinchess.com what the newest published issue is: a handful of HEAD requests (typically 2, hard cap 12; the exact count is shown), run <strong>only</strong> on this explicit click. Until the first refresh (or import) the table is empty rather than guessed.</li>
+<li><strong>Downloading</strong> — tick issues and <strong>Download selected</strong>, or <strong>Download all missing</strong>. Downloads run on a background worker, strictly serially, one issue at a time, with an inline progress row and a cooperative <strong>Cancel</strong> (stops after the current issue; everything imported stays). An issue is never fetched twice. Before the very first download the first-run notice (TWIC is donation-funded; personal use only) must be acknowledged in-UI.</li>
+<li><strong>Auto-download</strong> — a toggle (mirrored in Settings → Data): when on, opening the database quietly downloads NEW issues only (resuming after the newest import, max 5 per launch), with progress in the status strip.</li>
+</ul>
+<p>TWIC data is for personal use only and is never bundled or redistributed; downloads go to your own database with full provenance. CLI equivalent: <code>twic-sync</code> (see "Downloading games" below).</p>
+<h3 id="account-syncs">Account syncs</h3>
+<p>Per-service cards for online accounts; the rail badge counts configured accounts. Usernames persist in the open database, and each service's last sync result (games imported / duplicates / failures, with its timestamp — or the error, verbatim) is stored and shown.</p>
+<ul>
+<li><strong>Lichess</strong> — full game export via the Lichess API, resumed incrementally: after the first sync only newer games are downloaded.</li>
+<li><strong>chess.com</strong> — monthly archives via the published-data API, oldest first, resumed incrementally; the newest (still growing) month is re-checked and duplicates are skipped.</li>
+<li><strong>FICS</strong> — via ficsgames.org (a volunteer-run community archive): one year, or one month, per request — there is no incremental cursor, but re-runs are harmless. Keep requests occasional; personal use only. If the server returns a bzip2 archive the file path is shown with instructions (<code>bunzip2</code>, then Import PGN).</li>
+<li><strong>ICC</strong> — honestly not syncable (no scriptable export API): export manually from the ICC client and use Import PGN / SCID.</li>
+</ul>
+<p>All syncs run one at a time on the background worker with a descriptive User-Agent; HTTP 429 rate limits are respected automatically (a sync can pause for a minute or more — the card says so rather than showing a fake percentage). CLI equivalents: <code>lichess-sync</code> / <code>chesscom-sync</code> / <code>fics-sync</code>.</p>
 <h3 id="jobs">Jobs</h3>
 <p>The engine job queue — the engine only ever runs through it:</p>
 <ul>
@@ -288,7 +304,7 @@
 <ul>
 <li><strong>ENGINE &amp; ANALYSIS</strong> — Engine path (Edit; auto-resolved when empty — resolution order: override, <code>KIBITZ_STOCKFISH</code>, a repo-local <code>tools/</code> binary, <code>stockfish</code> on PATH); Node budget (Edit; bounds every engine job); Spawn policy (stated in words — the engine-off default is a product principle, not a setting); <strong>Annotate database</strong> and <strong>Fresh analysis pass</strong> rows ("Estimate &amp; run…" — the same estimate-confirm dialog as the Database header, quoting its basis).</li>
 <li><strong>COACH</strong> — Default voice (Coach/Neutral switch; applies to Explain, drill feedback and puzzle reasons; also stored in the open database); LLM verbaliser (read-only: optional and strictly grounded — it may only rewrite detector output, never add claims, and falls back to template prose on any failure; no key is stored by the app — set <code>ANTHROPIC_API_KEY</code> for the CLI <code>explain-llm</code>).</li>
-<li><strong>DATA</strong> — Database path (read-only; change it from the Database screen); Account syncs and TWIC schedule (read-only CLI pointers); Tablebase status (Syzygy loaded / not found, with the covered piece count); <strong>Schedule</strong> — the recurring commitment Home plans around (label, e.g. "Club night · Thursday", plus an optional opponent name; <strong>Save</strong> / <strong>Clear</strong>).</li>
+<li><strong>DATA</strong> — Database path (read-only; change it from the Database screen); Account syncs (configured-account count; manage them on the Account syncs screen); <strong>TWIC auto-download</strong> (the same toggle as the TWIC ingest screen: new issues download quietly at database open, max 5 per launch); Tablebase status (Syzygy loaded / not found, with the covered piece count); <strong>Schedule</strong> — the recurring commitment Home plans around (label, e.g. "Club night · Thursday", plus an optional opponent name; <strong>Save</strong> / <strong>Clear</strong>).</li>
 <li><strong>APPEARANCE</strong> — Theme (Dark default / Light); Board treatment (Studio Walnut default / Instrument); Annotation display (full / hover / hidden); Piece set (cburnett — fixed for now).</li>
 </ul>
 <hr>
@@ -331,8 +347,7 @@
 <h3 id="annotate-a-single-game-and-confirm-tactics-with-the-engine">Annotate a single game and confirm tactics with the engine</h3>
 <ol>
 <li>Load a game from the Database view.</li>
-<li>Header bar → <strong>Annotate</strong> — instant static comments; engine checks are queued.</li>
-<li>DATA IN / OUT → Jobs → <strong>Run pending jobs</strong> — verdicts fold back automatically when the batch finishes.</li>
+<li>Header bar → <strong>Annotate</strong> — instant static comments; the engine checks run immediately (inline ANNOTATING row) and verdicts fold back automatically when the batch finishes. (Jobs → <strong>Run pending jobs</strong> still resumes anything paused or left over.)</li>
 <li>Edit by hand in the Moves panel (comments, NAGs, variations) and <strong>Save</strong>; <strong>Export PGN</strong> to take the annotated game elsewhere.</li>
 </ol>
 <h3 id="drill-a-weakness-end-to-end">Drill a weakness end to end</h3>
@@ -387,7 +402,8 @@
 </ul>
 <pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000</code></pre>
-<h3 id="downloading-games-cli-only">Downloading games (CLI-only)</h3>
+<h3 id="downloading-games-cli-equivalents">Downloading games (CLI equivalents)</h3>
+<p>These all have UI homes now — the <strong>TWIC ingest</strong> and <strong>Account syncs</strong> screens (see above) — and remain available for scripting:</p>
 <ul>
 <li><strong>TWIC incremental sync</strong> — downloads The Week in Chess issues to *your* machine for personal use (TWIC data must never be redistributed; a notice prints on first run). <code>--from</code> is required the first time:</li>
 </ul>
