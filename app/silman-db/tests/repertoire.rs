@@ -149,8 +149,9 @@ fn black_repertoire_prompts_black_moves_and_add_line_is_idempotent() {
     // Black moves: c5, d6, cxd4, Nf6 → 4 cards.
     assert_eq!(st.line.cards_added, 4);
 
+    let scheduler = Scheduler::default();
     let now = now_utc(&conn).unwrap();
-    let due = due_cards(&conn, Color::Black, &now, 50).unwrap();
+    let due = due_cards(&conn, &scheduler, Color::Black, &now, 50).unwrap();
     assert_eq!(due.len(), 4);
     // Order tiebreak (same due timestamp): shallower positions first.
     assert_eq!(due[0].expected_san, "c5");
@@ -195,8 +196,9 @@ fn due_queue_orders_by_due_and_excludes_future_cards() {
         [],
     )
     .unwrap();
+    let scheduler = Scheduler::default();
     let now = now_utc(&conn).unwrap();
-    let due = due_cards(&conn, Color::Black, &now, 50).unwrap();
+    let due = due_cards(&conn, &scheduler, Color::Black, &now, 50).unwrap();
     let sans: Vec<&str> = due.iter().map(|c| c.expected_san.as_str()).collect();
     assert_eq!(
         sans,
@@ -220,7 +222,7 @@ fn grading_updates_fsrs_state_due_and_lapse_history() {
     .unwrap();
     let scheduler = Scheduler::default();
     let now = now_utc(&conn).unwrap();
-    let card = &due_cards(&conn, Color::Black, &now, 1).unwrap()[0];
+    let card = &due_cards(&conn, &scheduler, Color::Black, &now, 1).unwrap()[0];
 
     // First review: Good → S0(3) = 3.7145 days ≈ 320,933 seconds out.
     let g = grade_card(&conn, &scheduler, card.card_id, Grade::Good, &now).unwrap();
@@ -236,7 +238,7 @@ fn grading_updates_fsrs_state_due_and_lapse_history() {
         .unwrap();
     assert!((secs - 320_933.0).abs() < 2.0, "due {} secs out", secs);
     // The card is no longer due.
-    assert!(due_cards(&conn, Color::Black, &now, 50)
+    assert!(due_cards(&conn, &scheduler, Color::Black, &now, 50)
         .unwrap()
         .iter()
         .all(|c| c.card_id != card.card_id));
@@ -265,5 +267,64 @@ fn grading_updates_fsrs_state_due_and_lapse_history() {
 
     // Product principle (CLAUDE.md #6): nothing in the trainer ever
     // touches the engine.
+    assert_eq!(silman_db::engine::spawn_count(), 0);
+}
+
+/// Round-2 item 3: the grade-row previews must equal exactly what grading
+/// would then persist — for new cards AND for reviewed cards with real
+/// elapsed time.
+#[test]
+fn grade_previews_match_what_grading_does() {
+    let (_dir, conn) = open_db();
+    import_pgn_repertoire(
+        &conn,
+        Color::Black,
+        "najdorf shell",
+        &test_source(),
+        Cursor::new(BLACK_PGN),
+    )
+    .unwrap();
+    let scheduler = Scheduler::default();
+    let now = now_utc(&conn).unwrap();
+
+    // New card: first-rating previews are the published FSRS-4.5 initial
+    // stabilities (Again clamps to the 1-day scheduling minimum).
+    let card = due_cards(&conn, &scheduler, Color::Black, &now, 1).unwrap()[0].clone();
+    assert!(card.is_new);
+    let p = card.previews;
+    assert!((p.again - 1.0).abs() < 1e-9, "again {}", p.again);
+    assert!((p.hard - 1.4003).abs() < 1e-9);
+    assert!((p.good - 3.7145).abs() < 1e-9);
+    assert!((p.easy - 13.8206).abs() < 1e-9);
+    // preview(good) == the interval grading with Good actually sets.
+    let g = grade_card(&conn, &scheduler, card.card_id, Grade::Good, &now).unwrap();
+    assert!((p.good - g.interval_days).abs() < 1e-12);
+
+    // Reviewed card, seen again 4 days later: previews must still agree
+    // with grading (same memory state, same elapsed-days computation).
+    conn.execute(
+        "UPDATE repertoire_cards SET due = datetime('now', '-1 hour') WHERE id = ?1",
+        [card.card_id],
+    )
+    .unwrap();
+    let later: String = conn
+        .query_row("SELECT datetime(?1, '+4 days')", [&now], |r| r.get(0))
+        .unwrap();
+    let again_due = due_cards(&conn, &scheduler, Color::Black, &later, 50).unwrap();
+    let seen = again_due
+        .iter()
+        .find(|c| c.card_id == card.card_id)
+        .expect("card is due again");
+    assert!(!seen.is_new);
+    let p2 = seen.previews;
+    assert!(p2.good > p.good, "interval grows after a success");
+    assert!(p2.again <= p2.hard && p2.hard <= p2.good && p2.good <= p2.easy);
+    let g2 = grade_card(&conn, &scheduler, card.card_id, Grade::Good, &later).unwrap();
+    assert!(
+        (p2.good - g2.interval_days).abs() < 1e-12,
+        "preview {} vs graded {}",
+        p2.good,
+        g2.interval_days
+    );
     assert_eq!(silman_db::engine::spawn_count(), 0);
 }

@@ -18,9 +18,15 @@ use tauri::State;
 
 use crate::browse::{with_conn, DbState};
 
-/// True while a `run_jobs` worker thread is executing.
+/// Job-worker state: `active` is true while a `run_jobs` worker thread is
+/// executing; `stop` is the cooperative pause flag — setting it makes the
+/// worker return between jobs, leaving everything unstarted 'pending'
+/// (pause = stop the worker; the queue itself is the resumable state).
 #[derive(Default)]
-pub struct JobsWorker(pub Arc<AtomicBool>);
+pub struct JobsWorker {
+    pub active: Arc<AtomicBool>,
+    pub stop: Arc<AtomicBool>,
+}
 
 // ---------------------------------------------------------------------------
 // game_analyses (verdict 3c)
@@ -125,13 +131,14 @@ pub async fn reanalyze_game(state: State<'_, DbState>, game_id: i64) -> Result<u
     })
 }
 
-fn run_jobs_worker(db_path: &Path, engine_path: &Path) -> Result<(), String> {
+fn run_jobs_worker(db_path: &Path, engine_path: &Path, stop: &AtomicBool) -> Result<(), String> {
     // A dedicated connection: the UI connection stays free for polling.
     let conn = silman_db::db::open(db_path).map_err(|e| e.to_string())?;
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
     silman_db::jobs::reset_running(&conn).map_err(|e| e.to_string())?;
-    silman_db::jobs::run_pending(&conn, engine_path, u32::MAX).map_err(|e| e.to_string())?;
+    silman_db::jobs::run_pending_until(&conn, engine_path, u32::MAX, Some(stop))
+        .map_err(|e| e.to_string())?;
     silman_db::annotate::fold_back(&conn).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -156,17 +163,31 @@ pub async fn run_jobs(
         "no engine found (set SILMAN_STOCKFISH, add tools/stockfish, or put stockfish on PATH)"
             .to_string()
     })?;
-    if worker.0.swap(true, Ordering::SeqCst) {
+    if worker.active.swap(true, Ordering::SeqCst) {
         return Err("a job run is already in progress".to_string());
     }
-    let flag = Arc::clone(&worker.0);
+    worker.stop.store(false, Ordering::SeqCst);
+    let active = Arc::clone(&worker.active);
+    let stop = Arc::clone(&worker.stop);
     std::thread::spawn(move || {
-        if let Err(e) = run_jobs_worker(Path::new(&db_path), &engine_path) {
+        if let Err(e) = run_jobs_worker(Path::new(&db_path), &engine_path, &stop) {
             eprintln!("silman job worker failed: {e}");
         }
-        flag.store(false, Ordering::SeqCst);
+        active.store(false, Ordering::SeqCst);
     });
     Ok(())
+}
+
+/// Pause the batch: ask the running worker to stop between jobs. Unstarted
+/// jobs stay 'pending' — `run_jobs` later resumes exactly where it left
+/// off. Returns false when no worker was running (nothing to pause).
+#[tauri::command]
+pub async fn batch_pause(worker: State<'_, JobsWorker>) -> Result<bool, String> {
+    let was_active = worker.active.load(Ordering::SeqCst);
+    if was_active {
+        worker.stop.store(true, Ordering::SeqCst);
+    }
+    Ok(was_active)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -191,8 +212,11 @@ pub(crate) fn jobs_status_impl(
         silman_db::jobs::counts(conn).map_err(|e| e.to_string())?;
     let last_result: Option<String> = conn
         .query_row(
+            // batch-annotate jobs are static (no engine) — they carry no
+            // engine identity and must not mask the last real engine run.
             "SELECT result FROM jobs
              WHERE status = 'done' AND result IS NOT NULL
+               AND purpose <> 'batch-annotate'
              ORDER BY updated_at DESC, id DESC LIMIT 1",
             [],
             |r| r.get(0),
@@ -218,8 +242,174 @@ pub async fn jobs_status(
     state: State<'_, DbState>,
     worker: State<'_, JobsWorker>,
 ) -> Result<JobsStatus, String> {
-    let active = worker.0.load(Ordering::SeqCst);
+    let active = worker.active.load(Ordering::SeqCst);
     with_conn(&state, |conn| jobs_status_impl(conn, active))
+}
+
+// ---------------------------------------------------------------------------
+// batch operations (round-2 item 6): annotate database / fresh analysis
+// ---------------------------------------------------------------------------
+
+/// Games sampled for the measured annotate estimate.
+const ESTIMATE_SAMPLE_GAMES: u32 = 15;
+/// Documented assumption for fresh-analysis estimates. Measuring a real
+/// nodes/sec figure would require spawning the engine, and the engine stays
+/// OFF outside the job worker (CLAUDE.md #6) — so the estimate uses this
+/// constant and says so in `estimateBasis`.
+const ASSUMED_NODES_PER_SEC: f64 = 1_500_000.0;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchEstimate {
+    /// Games the batch would still cover (already-queued/done games are
+    /// excluded — starting is idempotent).
+    pub games: i64,
+    pub per_game_ms: f64,
+    pub total_estimate_ms: f64,
+    /// How `perGameMs` was obtained: "measured: …" (live static-analysis
+    /// sample) or "assumed: …" (documented constant, engine off).
+    pub estimate_basis: String,
+}
+
+fn parse_batch_kind(kind: &str) -> Result<silman_db::jobs::Purpose, String> {
+    match kind {
+        "annotate" => Ok(silman_db::jobs::Purpose::BatchAnnotate),
+        "fresh-analysis" => Ok(silman_db::jobs::Purpose::Reanalyze),
+        other => Err(format!(
+            "batch kind must be \"annotate\" or \"fresh-analysis\", got {other:?}"
+        )),
+    }
+}
+
+pub(crate) fn batch_estimate_impl(conn: &Connection, kind: &str) -> Result<BatchEstimate, String> {
+    let purpose = parse_batch_kind(kind)?;
+    let remaining = silman_db::jobs::games_without_job(conn, purpose)
+        .map_err(|e| e.to_string())?
+        .len() as i64;
+
+    match purpose {
+        silman_db::jobs::Purpose::BatchAnnotate => {
+            // MEASURED, live, read-only: run the real static analyzer over
+            // every mainline position of a small sample of games. Nothing
+            // is written and no engine exists anywhere near this path.
+            let mut stmt = conn
+                .prepare_cached("SELECT movetext, start_fen FROM games ORDER BY id LIMIT ?1")
+                .map_err(|e| e.to_string())?;
+            let sample: Vec<(Vec<u8>, Option<String>)> = stmt
+                .query_map([ESTIMATE_SAMPLE_GAMES], |r| Ok((r.get(0)?, r.get(1)?)))
+                .and_then(|it| it.collect())
+                .map_err(|e| e.to_string())?;
+            if sample.is_empty() {
+                return Ok(BatchEstimate {
+                    games: 0,
+                    per_game_ms: 0.0,
+                    total_estimate_ms: 0.0,
+                    estimate_basis: "measured: empty database".to_string(),
+                });
+            }
+            let sampled = sample.len();
+            let start_t = std::time::Instant::now();
+            for (movetext, start_fen) in sample {
+                let start: cozy_chess::Board = match start_fen.as_deref() {
+                    Some(fen) => match fen.parse() {
+                        Ok(b) => b,
+                        Err(_) => continue,
+                    },
+                    None => cozy_chess::Board::default(),
+                };
+                let Ok(moves) = silman_db::movebin::decode_game(&start, &movetext) else {
+                    continue;
+                };
+                let mut board = start;
+                for mv in moves {
+                    board.play(mv);
+                    let _ = silman_core::analyze(&board);
+                }
+            }
+            let per_game_ms = start_t.elapsed().as_secs_f64() * 1000.0 / sampled as f64;
+            Ok(BatchEstimate {
+                games: remaining,
+                per_game_ms,
+                total_estimate_ms: per_game_ms * remaining as f64,
+                estimate_basis: format!(
+                    "measured: static analysis of every position of {sampled} sampled game(s), just now"
+                ),
+            })
+        }
+        _ => {
+            // Fresh analysis: one bounded eval (UI_NODES) per mainline
+            // position; time follows the node budget over an ASSUMED
+            // engine speed (measuring would spawn the engine — see const).
+            let avg_plies: f64 = conn
+                .query_row("SELECT COALESCE(AVG(ply_count), 0.0) FROM games", [], |r| {
+                    r.get(0)
+                })
+                .map_err(|e| e.to_string())?;
+            let per_game_ms = avg_plies * (UI_NODES as f64) / ASSUMED_NODES_PER_SEC * 1000.0;
+            Ok(BatchEstimate {
+                games: remaining,
+                per_game_ms,
+                total_estimate_ms: per_game_ms * remaining as f64,
+                estimate_basis: format!(
+                    "assumed: {UI_NODES} nodes/position at {} nodes/s (engine off; \
+                     measuring the real speed would spawn it)",
+                    ASSUMED_NODES_PER_SEC as u64
+                ),
+            })
+        }
+    }
+}
+
+/// Estimate a batch run: `{ games, perGameMs, totalEstimateMs,
+/// estimateBasis }`. Never spawns an engine and never writes.
+#[tauri::command]
+pub async fn batch_estimate(
+    state: State<'_, DbState>,
+    kind: String,
+) -> Result<BatchEstimate, String> {
+    with_conn(&state, |conn| batch_estimate_impl(conn, &kind))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchStarted {
+    /// Games newly covered by this start (0 on a redundant re-start).
+    pub games_enqueued: u32,
+    /// Queue rows added (annotate: 1/game; fresh: 1/position).
+    pub jobs_enqueued: u32,
+    /// Pending + running + done totals after the start, for the inline row.
+    pub pending: i64,
+    pub running: i64,
+    pub done: i64,
+}
+
+pub(crate) fn batch_start_impl(conn: &Connection, kind: &str) -> Result<BatchStarted, String> {
+    let purpose = parse_batch_kind(kind)?;
+    let (games, jobs) = match purpose {
+        silman_db::jobs::Purpose::BatchAnnotate => {
+            let n = silman_db::jobs::enqueue_batch_annotate(conn, UI_NODES, UI_MAX_COMMENTS)
+                .map_err(|e| e.to_string())?;
+            (n, n)
+        }
+        _ => silman_db::jobs::enqueue_batch_fresh(conn, UI_NODES).map_err(|e| e.to_string())?,
+    };
+    let (pending, running, done, _failed) =
+        silman_db::jobs::counts(conn).map_err(|e| e.to_string())?;
+    Ok(BatchStarted {
+        games_enqueued: games,
+        jobs_enqueued: jobs,
+        pending,
+        running,
+        done,
+    })
+}
+
+/// Start (or resume the coverage of) a batch: enqueues jobs only — nothing
+/// runs until `run_jobs`. Idempotent: games already queued or completed
+/// are skipped. Pause with `batch_pause`; resume with `run_jobs`.
+#[tauri::command]
+pub async fn batch_start(state: State<'_, DbState>, kind: String) -> Result<BatchStarted, String> {
+    with_conn(&state, |conn| batch_start_impl(conn, &kind))
 }
 
 // ---------------------------------------------------------------------------
@@ -381,6 +571,71 @@ mod tests {
             "legacy -150 stays White -1.50"
         );
         assert_eq!(p.conversion.held, 1, "the game was not lost");
+    }
+
+    #[test]
+    fn batch_estimate_returns_sane_numbers_without_an_engine() {
+        let (_dir, conn) = fixture_db();
+        let spawns = silman_db::engine::spawn_count();
+
+        let est = batch_estimate_impl(&conn, "annotate").unwrap();
+        assert_eq!(est.games, 1);
+        assert!(est.per_game_ms > 0.0, "measured sample takes real time");
+        assert!(
+            (est.total_estimate_ms - est.per_game_ms * est.games as f64).abs() < 1e-9,
+            "total = per-game × games"
+        );
+        assert!(
+            est.estimate_basis.starts_with("measured"),
+            "{}",
+            est.estimate_basis
+        );
+
+        let est = batch_estimate_impl(&conn, "fresh-analysis").unwrap();
+        assert_eq!(est.games, 1);
+        // Opera game: 33 plies × 200k nodes at the assumed speed = 4.4 s.
+        assert!(
+            (est.per_game_ms - 4400.0).abs() < 1.0,
+            "{}",
+            est.per_game_ms
+        );
+        assert!(
+            est.estimate_basis.starts_with("assumed"),
+            "{}",
+            est.estimate_basis
+        );
+
+        assert!(batch_estimate_impl(&conn, "nope").is_err());
+        assert_eq!(
+            silman_db::engine::spawn_count(),
+            spawns,
+            "estimates must never spawn an engine"
+        );
+    }
+
+    #[test]
+    fn batch_start_enqueues_idempotently() {
+        let (_dir, conn) = fixture_db();
+
+        // Annotate: one job per game; a re-start skips covered games.
+        let s = batch_start_impl(&conn, "annotate").unwrap();
+        assert_eq!((s.games_enqueued, s.jobs_enqueued), (1, 1));
+        assert_eq!(s.pending, 1);
+        let again = batch_start_impl(&conn, "annotate").unwrap();
+        assert_eq!((again.games_enqueued, again.jobs_enqueued), (0, 0));
+        assert_eq!(again.pending, 1, "no duplicate jobs");
+
+        // Fresh analysis: one bounded eval per mainline position (33 for
+        // the Opera game), also idempotent per game.
+        let f = batch_start_impl(&conn, "fresh-analysis").unwrap();
+        assert_eq!((f.games_enqueued, f.jobs_enqueued), (1, 33));
+        let f2 = batch_start_impl(&conn, "fresh-analysis").unwrap();
+        assert_eq!((f2.games_enqueued, f2.jobs_enqueued), (0, 0));
+        assert_eq!(f2.pending, 34, "1 annotate + 33 reanalyze jobs");
+
+        // Starting is enqueue-only: nothing ran, no engine was spawned.
+        assert_eq!(f2.done, 0);
+        assert_eq!(silman_db::engine::spawn_count(), 0);
     }
 
     #[test]

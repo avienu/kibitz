@@ -25,6 +25,11 @@ pub struct MasterGame {
 pub struct WeakLine {
     /// Position hash of the spot to prepare for.
     pub hash: u64,
+    /// ECO code of this spot when it is a book position (bundled dataset),
+    /// resolved by position hash — deviations past book have none.
+    pub eco: Option<String>,
+    /// Opening name for `eco`, from the same dataset entry.
+    pub opening_name: Option<String>,
     /// Earliest ply the opponent reached it.
     pub ply: u16,
     /// What the opponent plays there (most frequent first).
@@ -101,6 +106,8 @@ pub fn prep_view(
             };
             WeakLine {
                 hash: p.hash,
+                eco: None,
+                opening_name: None,
                 ply: p.min_ply,
                 opponent_moves: p.moves.iter().map(|m| m.san.clone()).collect(),
                 games: p.count,
@@ -122,6 +129,15 @@ pub fn prep_view(
     }
     lines.sort_by(|a, b| b.weakness.partial_cmp(&a.weakness).unwrap());
     lines.truncate(opts.max_lines);
+
+    // Name the book spots (the openings table is populated: the fingerprint
+    // above ran ensure_openings via its theory set).
+    for line in &mut lines {
+        if let Some((eco, name)) = crate::eco::classify_hash(conn, line.hash)? {
+            line.eco = Some(eco);
+            line.opening_name = Some(name);
+        }
+    }
 
     // Master games reaching each position, best-rated first, then recent.
     let mut stmt = conn.prepare_cached(

@@ -60,6 +60,10 @@ pub struct DueCardDto {
     pub is_new: bool,
     pub reps: u32,
     pub lapses: u32,
+    /// Next interval per grade in raw days ({again, hard, good, easy});
+    /// the UI formats ("<1 m", "2 d", ... — see lib/train.ts). Computed by
+    /// the real scheduler, so it always equals what grading will set.
+    pub previews: silman_db::repertoire::GradePreviews,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -109,8 +113,9 @@ pub(crate) fn train_queue_impl(
 ) -> Result<Vec<DueCardDto>, String> {
     let color = parse_color(color)?;
     let now = silman_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
-    let cards =
-        silman_db::repertoire::due_cards(conn, color, &now, limit).map_err(|e| e.to_string())?;
+    let scheduler = Scheduler::default();
+    let cards = silman_db::repertoire::due_cards(conn, &scheduler, color, &now, limit)
+        .map_err(|e| e.to_string())?;
     Ok(cards
         .into_iter()
         .map(|c| DueCardDto {
@@ -125,6 +130,7 @@ pub(crate) fn train_queue_impl(
             is_new: c.is_new,
             reps: c.reps,
             lapses: c.lapses,
+            previews: c.previews,
         })
         .collect())
 }
@@ -260,11 +266,16 @@ mod tests {
             "\"expectedSan\":",
             "\"linePrefix\":",
             "\"isNew\":",
+            "\"previews\":",
+            "\"good\":",
         ] {
             assert!(json.contains(needle), "missing {needle} in {json}");
         }
 
+        // Grade previews come from the real scheduler and match grading.
+        assert!((queue[0].previews.good - 3.7145).abs() < 1e-9);
         let graded = train_grade_impl(&conn, queue[0].card_id, "good").unwrap();
+        assert!((queue[0].previews.good - graded.interval_days).abs() < 1e-12);
         assert!((graded.stability - 3.7145).abs() < 1e-6);
         assert_eq!(graded.reps, 1);
         let summary = train_summary_impl(&conn).unwrap();

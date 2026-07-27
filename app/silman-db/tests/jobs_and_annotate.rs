@@ -90,6 +90,75 @@ fn queue_resets_running_jobs_on_startup() {
     assert_eq!(running, 0);
 }
 
+/// Round-2 item 6: batch-annotate jobs are enqueued idempotently, execute
+/// STATICALLY inside the worker (zero engine spawns for quiet games), and
+/// the stop flag pauses between jobs leaving the rest pending — pause =
+/// stop the worker, the queue is the resumable state.
+#[test]
+fn batch_annotate_runs_statically_and_pauses_between_jobs() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let _g = SPAWN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    // Two distinct quiet games (different movetext, so no dup collapse):
+    // quiet = no WSUI screen fires = no confirm jobs = engine never needed.
+    const TWO_QUIET: &str = "[White \"A\"]\n[Black \"B\"]\n[Result \"*\"]\n\n\
+        1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3 Nf6 5. Nc3 d6 *\n\n\
+        [White \"C\"]\n[Black \"D\"]\n[Result \"*\"]\n\n\
+        1. d4 d5 2. Nf3 Nf6 3. e3 e6 4. Bd3 Bd6 5. O-O O-O *\n";
+    let dir = tempfile::tempdir().unwrap();
+    let conn = silman_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+    let src = SourceInfo {
+        name: "t".into(),
+        origin: "test".into(),
+        license: "test".into(),
+        kind: SourceKind::Personal,
+    };
+    let st = import_pgn(&conn, &src, Cursor::new(TWO_QUIET)).unwrap();
+    assert_eq!(st.games_imported, 2, "failures: {:?}", st.failures);
+    let spawns_before = spawn_count();
+
+    // Enqueue one job per game; re-starting skips covered games.
+    assert_eq!(jobs::enqueue_batch_annotate(&conn, 200_000, 12).unwrap(), 2);
+    assert_eq!(jobs::enqueue_batch_annotate(&conn, 200_000, 12).unwrap(), 0);
+
+    // A raised stop flag pauses before anything starts.
+    let stop = AtomicBool::new(true);
+    let path = std::path::Path::new("/nonexistent-engine");
+    let r = jobs::run_pending_until(&conn, path, 100, Some(&stop)).unwrap();
+    assert_eq!((r.done, r.failed), (0, 0));
+    assert_eq!(jobs::counts(&conn).unwrap().0, 2, "both still pending");
+
+    // Run one job, then stop again: the second job stays pending.
+    stop.store(false, Ordering::SeqCst);
+    let r = jobs::run_pending_until(&conn, path, 1, Some(&stop)).unwrap();
+    assert_eq!((r.done, r.failed), (1, 0));
+    let (pending, running, done, failed) = jobs::counts(&conn).unwrap();
+    assert_eq!((pending, running, done, failed), (1, 0, 1, 0));
+
+    // Resume drains the rest. Quiet games fire no screens, so the whole
+    // batch completes with the bogus engine path untouched.
+    let r = jobs::run_pending(&conn, path, 100).unwrap();
+    assert_eq!((r.done, r.failed), (1, 0));
+    assert_eq!(jobs::counts(&conn).unwrap().0, 0);
+    assert_eq!(
+        spawn_count(),
+        spawns_before,
+        "static batch annotate must never spawn an engine"
+    );
+
+    // Each job stored an honest static result.
+    let result: String = conn
+        .query_row(
+            "SELECT result FROM jobs WHERE purpose='batch-annotate' AND status='done'
+             ORDER BY id LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_str(&result).unwrap();
+    assert!(v["positions_analyzed"].as_u64().unwrap() > 0, "{v}");
+    assert_eq!(v["jobs_enqueued"].as_u64(), Some(0), "quiet games: {v}");
+}
+
 /// Live (skipped when no engine binary is available, e.g. Linux CI):
 /// running the queue spawns exactly ONE engine for N jobs and grades the
 /// fired alert.

@@ -145,6 +145,19 @@ pub struct GameRow {
     pub result: &'static str,
     pub eco: Option<String>,
     pub ply_count: i64,
+    /// Source name (e.g. "TWIC 1594") — the Database table's SOURCE tag.
+    pub source: String,
+    /// Source kind for tag colouring: personal | twic | online | other.
+    pub source_kind: String,
+    /// True when duplicate copies are linked to this game (the ⑂ flag —
+    /// duplicates are linked to their higher-priority copy, never deleted).
+    pub dup: bool,
+    /// Analysis presence per the round-1 display rule: "fresh" when any
+    /// fresh engine row exists (fresh supersedes legacy), "legacy" when
+    /// only legacy-import rows exist, None when the game has no evals.
+    pub analysis_kind: Option<&'static str>,
+    /// Max stored depth of the fresh analysis (None for legacy/none).
+    pub analysis_depth: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,12 +205,24 @@ pub(crate) fn list_games_impl(
         .and_then(|mut stmt| stmt.query_row(rusqlite::params![player, eco, result], |r| r.get(0)))
         .map_err(|e| e.to_string())?;
 
+    // The list-row extras (source tag, ⑂ dup flag, analysis presence) ride
+    // as correlated subqueries: they run only for the returned page (≤ 500
+    // rows), each over an indexed lookup — cheap even on 121k games.
     let rows_sql = format!(
         "SELECT g.id,
                 COALESCE(wp.name, '?'), COALESCE(bp.name, '?'),
                 g.white_elo, g.black_elo,
-                COALESCE(e.name, '?'), g.date, g.result, g.eco, g.ply_count
+                COALESCE(e.name, '?'), g.date, g.result, g.eco, g.ply_count,
+                s.name, s.kind,
+                EXISTS(SELECT 1 FROM duplicates d WHERE d.kept_game_id = g.id),
+                EXISTS(SELECT 1 FROM analyses a
+                       WHERE a.game_id = g.id AND a.kind = 'fresh'),
+                EXISTS(SELECT 1 FROM analyses a
+                       WHERE a.game_id = g.id AND a.kind = 'legacy-import'),
+                (SELECT MAX(a.depth) FROM analyses a
+                 WHERE a.game_id = g.id AND a.kind = 'fresh')
          FROM games g
+         JOIN sources s ON s.id = g.source_id
          LEFT JOIN players wp ON wp.id = g.white_id
          LEFT JOIN players bp ON bp.id = g.black_id
          LEFT JOIN events e ON e.id = g.event_id
@@ -210,6 +235,9 @@ pub(crate) fn list_games_impl(
         .query_map(
             rusqlite::params![player, eco, result, limit, offset],
             |row| {
+                let has_fresh: bool = row.get(13)?;
+                let has_legacy: bool = row.get(14)?;
+                let fresh_depth: Option<i64> = row.get(15)?;
                 Ok(GameRow {
                     id: row.get(0)?,
                     white: row.get(1)?,
@@ -221,6 +249,17 @@ pub(crate) fn list_games_impl(
                     result: result_str(row.get(7)?),
                     eco: row.get(8)?,
                     ply_count: row.get(9)?,
+                    source: row.get(10)?,
+                    source_kind: row.get(11)?,
+                    dup: row.get(12)?,
+                    analysis_kind: if has_fresh {
+                        Some("fresh")
+                    } else if has_legacy {
+                        Some("legacy")
+                    } else {
+                        None
+                    },
+                    analysis_depth: if has_fresh { fresh_depth } else { None },
                 })
             },
         )
@@ -254,6 +293,9 @@ pub struct GameDetail {
     pub date: Option<String>,
     pub result: &'static str,
     pub eco: Option<String>,
+    /// Resolved opening name for `eco` (bundled CC0 dataset); None when the
+    /// game has no ECO or the code is unknown.
+    pub opening_name: Option<String>,
     pub ply_count: i64,
     /// None = standard initial position.
     pub start_fen: Option<String>,
@@ -330,6 +372,11 @@ pub(crate) fn get_game_impl(conn: &Connection, id: i64) -> Result<GameDetail, St
         start_fen,
     ) = row;
 
+    let opening_name = match eco.as_deref() {
+        Some(code) => silman_db::eco::name_for(conn, code).map_err(|e| e.to_string())?,
+        None => None,
+    };
+
     let start: Board = match start_fen.as_deref() {
         Some(fen) => fen
             .parse()
@@ -357,6 +404,7 @@ pub(crate) fn get_game_impl(conn: &Connection, id: i64) -> Result<GameDetail, St
         date,
         result: result_str(result),
         eco,
+        opening_name,
         ply_count,
         start_fen,
         sans,
@@ -381,26 +429,38 @@ pub struct TreeRow {
     pub perf: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpeningTree {
+    pub rows: Vec<TreeRow>,
+    /// Pure query time in milliseconds (measured, a product claim — never
+    /// estimated). Excludes FEN parsing.
+    pub elapsed_ms: f64,
+}
+
 /// Opening tree for `fen`: every continuation played from this position in
-/// the database, with counts, W/D/L (White's perspective), avg mover elo
-/// and performance rating.
+/// the database, with counts, W/D/L (White's perspective), avg mover elo,
+/// performance rating and the measured query time.
 #[tauri::command]
-pub async fn opening_tree(state: State<'_, DbState>, fen: String) -> Result<Vec<TreeRow>, String> {
+pub async fn opening_tree(state: State<'_, DbState>, fen: String) -> Result<OpeningTree, String> {
     with_conn(&state, |conn| {
-        let (moves, _elapsed) =
+        let (moves, elapsed) =
             silman_db::query::opening_tree(conn, &fen).map_err(|e| e.to_string())?;
-        Ok(moves
-            .into_iter()
-            .map(|m| TreeRow {
-                san: m.san,
-                count: m.count,
-                white_wins: m.white_wins,
-                draws: m.draws,
-                black_wins: m.black_wins,
-                avg_elo: m.avg_elo,
-                perf: m.perf,
-            })
-            .collect())
+        Ok(OpeningTree {
+            rows: moves
+                .into_iter()
+                .map(|m| TreeRow {
+                    san: m.san,
+                    count: m.count,
+                    white_wins: m.white_wins,
+                    draws: m.draws,
+                    black_wins: m.black_wins,
+                    avg_elo: m.avg_elo,
+                    perf: m.perf,
+                })
+                .collect(),
+            elapsed_ms: elapsed.as_secs_f64() * 1000.0,
+        })
     })
 }
 
@@ -424,13 +484,16 @@ pub struct GamesAt {
     pub total: i64,
     /// At most [`FIND_GAMES_MAX_ROWS`] hits (ordered by game id).
     pub rows: Vec<GameAtRow>,
+    /// Pure query time in milliseconds (measured — the position-search
+    /// header's "N GAMES · M ms" pill is a product claim, never estimated).
+    pub elapsed_ms: f64,
 }
 
 /// Games whose mainline reached the position `fen` (position-hash lookup).
 #[tauri::command]
 pub async fn find_games_at(state: State<'_, DbState>, fen: String) -> Result<GamesAt, String> {
     with_conn(&state, |conn| {
-        let (hits, _elapsed) = silman_db::query::find_fen(conn, &fen).map_err(|e| e.to_string())?;
+        let (hits, elapsed) = silman_db::query::find_fen(conn, &fen).map_err(|e| e.to_string())?;
         let total = hits.len() as i64;
         let rows = hits
             .into_iter()
@@ -445,8 +508,38 @@ pub async fn find_games_at(state: State<'_, DbState>, fen: String) -> Result<Gam
                 ply: h.ply,
             })
             .collect();
-        Ok(GamesAt { total, rows })
+        Ok(GamesAt {
+            total,
+            rows,
+            elapsed_ms: elapsed.as_secs_f64() * 1000.0,
+        })
     })
+}
+
+/// Resolve ECO codes to canonical opening names for UI-side display (SRS
+/// browser, weak-line cards, ...). Unknown codes map to null.
+pub(crate) fn eco_names_impl(
+    conn: &Connection,
+    codes: &[String],
+) -> Result<std::collections::HashMap<String, Option<String>>, String> {
+    // The openings table is populated at import time; make sure it exists
+    // for databases that somehow skipped that (cheap when already loaded).
+    silman_db::eco::ensure_openings(conn).map_err(|e| e.to_string())?;
+    let mut out = std::collections::HashMap::with_capacity(codes.len());
+    for code in codes {
+        let name = silman_db::eco::name_for(conn, code).map_err(|e| e.to_string())?;
+        out.insert(code.clone(), name);
+    }
+    Ok(out)
+}
+
+/// Map of ECO code → opening name (null when unknown).
+#[tauri::command]
+pub async fn eco_names(
+    state: State<'_, DbState>,
+    codes: Vec<String>,
+) -> Result<std::collections::HashMap<String, Option<String>>, String> {
+    with_conn(&state, |conn| eco_names_impl(conn, &codes))
 }
 
 #[cfg(test)]
@@ -582,5 +675,113 @@ mod tests {
         assert_eq!(mini.sans, vec!["f3", "e5", "g4", "Qh4#"]);
 
         assert!(get_game_impl(&conn, 999).unwrap_err().contains("999"));
+    }
+
+    #[test]
+    fn get_game_resolves_the_opening_name() {
+        let (_dir, conn) = fixture_db();
+        // The Opera game is ECO-tagged C41 at import; the header shows the
+        // resolved base name (run-6 deviation "no opening name" dies here).
+        let g = get_game_impl(&conn, 1).unwrap();
+        assert_eq!(g.eco.as_deref(), Some("C41"));
+        assert_eq!(g.opening_name.as_deref(), Some("Philidor Defense"));
+        // A game without a recognizable opening keeps None, not a fake.
+        let mini = get_game_impl(&conn, 2).unwrap();
+        if mini.eco.is_none() {
+            assert_eq!(mini.opening_name, None);
+        }
+    }
+
+    #[test]
+    fn eco_names_resolves_known_codes_and_nulls_unknown() {
+        let (_dir, conn) = fixture_db();
+        let out = eco_names_impl(
+            &conn,
+            &["C41".to_string(), "B01".to_string(), "Z99".to_string()],
+        )
+        .unwrap();
+        assert_eq!(out.get("C41").unwrap().as_deref(), Some("Philidor Defense"));
+        assert_eq!(
+            out.get("B01").unwrap().as_deref(),
+            Some("Scandinavian Defense")
+        );
+        assert_eq!(out.get("Z99").unwrap(), &None);
+        assert_eq!(silman_db::engine::spawn_count(), 0);
+    }
+
+    #[test]
+    fn search_and_tree_report_measured_timing() {
+        let (_dir, conn) = fixture_db();
+        // Impl-level check via silman-db (the command wrappers only convert
+        // the Duration): both queries return a real measured duration.
+        let start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        let (hits, elapsed) = silman_db::query::find_fen(&conn, start).unwrap();
+        assert_eq!(hits.len(), 3, "every game reaches the start position");
+        assert!(elapsed.as_secs_f64() >= 0.0);
+        let after_e4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
+        let (hits, elapsed) = silman_db::query::find_fen(&conn, after_e4).unwrap();
+        assert_eq!(hits.len(), 1, "only the Opera game opens 1.e4");
+        assert!(elapsed.as_secs_f64() * 1000.0 < 10_000.0, "sane magnitude");
+    }
+
+    #[test]
+    fn list_games_carries_source_dup_and_analysis_fields() {
+        let (_dir, conn) = fixture_db();
+        let all = list_games_impl(&conn, &GameFilter::default(), 0, 50).unwrap();
+
+        // Fresh fixture: real source tag, no dup links, no analyses.
+        for row in &all.rows {
+            assert_eq!(row.source, "fixture");
+            assert_eq!(row.source_kind, "personal");
+            assert!(!row.dup);
+            assert_eq!(row.analysis_kind, None);
+            assert_eq!(row.analysis_depth, None);
+        }
+
+        // Game 1 gains a legacy eval, then a fresh one; game 2 a dup link.
+        conn.execute(
+            "INSERT INTO analyses (game_id, ply, kind, engine, depth, eval_cp)
+             VALUES (1, 4, 'legacy-import', 'Rybka 4', 18, 35)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO duplicates (kept_game_id, source_id) VALUES (2, 1)",
+            [],
+        )
+        .unwrap();
+        let rows = list_games_impl(&conn, &GameFilter::default(), 0, 50)
+            .unwrap()
+            .rows;
+        let g1 = rows.iter().find(|r| r.id == 1).unwrap();
+        assert_eq!(g1.analysis_kind, Some("legacy"));
+        assert_eq!(g1.analysis_depth, None, "depth shows for fresh only");
+        let g2 = rows.iter().find(|r| r.id == 2).unwrap();
+        assert!(g2.dup, "⑂ flag from the duplicates link");
+
+        // Fresh supersedes legacy in the display rule.
+        conn.execute(
+            "INSERT INTO analyses (game_id, ply, kind, engine, depth, eval_cp)
+             VALUES (1, 4, 'fresh', 'Stockfish 18', 24, 30)",
+            [],
+        )
+        .unwrap();
+        let rows = list_games_impl(&conn, &GameFilter::default(), 0, 50)
+            .unwrap()
+            .rows;
+        let g1 = rows.iter().find(|r| r.id == 1).unwrap();
+        assert_eq!(g1.analysis_kind, Some("fresh"));
+        assert_eq!(g1.analysis_depth, Some(24));
+
+        // Wire shape: camelCase keys for the new fields.
+        let json = serde_json::to_string(&g1).unwrap();
+        for needle in [
+            "\"sourceKind\":",
+            "\"dup\":",
+            "\"analysisKind\":",
+            "\"analysisDepth\":",
+        ] {
+            assert!(json.contains(needle), "missing {needle} in {json}");
+        }
     }
 }

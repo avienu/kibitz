@@ -7,7 +7,7 @@
 //! construction, since matching is by position hash, not move order).
 
 use cozy_chess::Board;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::hash::position_hash;
 use crate::san::parse_san;
@@ -65,25 +65,93 @@ pub fn ensure_openings(conn: &Connection) -> anyhow::Result<i64> {
 /// The ECO code and opening name of the deepest opening-book position in
 /// `hashes` (a game's per-ply position hashes, in order).
 pub fn classify(conn: &Connection, hashes: &[u64]) -> rusqlite::Result<Option<(String, String)>> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT eco, name FROM openings WHERE position_hash = ?1 ORDER BY ply DESC LIMIT 1",
-    )?;
     // Openings are at most ~35 plies deep; scan the game's prefix from the
     // deepest ply backwards and return the first hit.
     for &h in hashes.iter().take(40).rev() {
-        let hit = stmt
-            .query_row([h as i64], |r| Ok((r.get(0)?, r.get(1)?)))
-            .map(Some)
-            .or_else(|e| {
-                if e == rusqlite::Error::QueryReturnedNoRows {
-                    Ok(None)
-                } else {
-                    Err(e)
-                }
-            })?;
+        let hit = classify_hash(conn, h)?;
         if hit.is_some() {
             return Ok(hit);
         }
     }
     Ok(None)
+}
+
+/// The ECO code and opening name recorded for one book position hash
+/// (deepest entry first; deterministic tiebreak). `None` when the position
+/// is not in the bundled dataset.
+pub fn classify_hash(conn: &Connection, hash: u64) -> rusqlite::Result<Option<(String, String)>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT eco, name FROM openings WHERE position_hash = ?1
+         ORDER BY ply DESC, eco, name LIMIT 1",
+    )?;
+    stmt.query_row([hash as i64], |r| Ok((r.get(0)?, r.get(1)?)))
+        .optional()
+}
+
+/// The canonical display name for an ECO code, from the bundled dataset.
+/// Deterministic rule: the shortest name recorded under the exact code —
+/// which is the bare-code line of the dataset (C41 → "Philidor Defense",
+/// not one of its named sub-variations) — ties broken lexicographically.
+/// `None` for unknown codes. Requires [`ensure_openings`] to have run
+/// (every importer runs it; callers on foreign connections should too).
+pub fn name_for(conn: &Connection, code: &str) -> rusqlite::Result<Option<String>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT name FROM openings WHERE eco = ?1 ORDER BY LENGTH(name), name LIMIT 1",
+    )?;
+    stmt.query_row([code], |r| r.get(0)).optional()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn name_for_resolves_known_codes_deterministically() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(&dir.path().join("t.sqlite")).unwrap();
+        ensure_openings(&conn).unwrap();
+
+        let philidor = name_for(&conn, "C41").unwrap().expect("C41 is known");
+        assert!(
+            philidor.contains("Philidor"),
+            "C41 must resolve to a Philidor name, got {philidor:?}"
+        );
+        // The bare-code entry, not a sub-variation (shortest wins).
+        assert!(
+            !philidor.contains(':'),
+            "expected the base name, got {philidor:?}"
+        );
+        // Deterministic: repeated calls agree.
+        assert_eq!(name_for(&conn, "C41").unwrap().as_deref(), Some(&*philidor));
+        assert_eq!(
+            name_for(&conn, "B20").unwrap().as_deref(),
+            Some("Sicilian Defense")
+        );
+
+        // Unknown codes resolve to None, not an error.
+        assert_eq!(name_for(&conn, "Z99").unwrap(), None);
+        assert_eq!(name_for(&conn, "").unwrap(), None);
+    }
+
+    #[test]
+    fn classify_hash_names_book_positions() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(&dir.path().join("t.sqlite")).unwrap();
+        ensure_openings(&conn).unwrap();
+
+        // After 1. e4 c5 the position is the Sicilian Defense (B20).
+        let mut board = Board::default();
+        for san in ["e4", "c5"] {
+            let mv = parse_san(&board, san).unwrap();
+            board.play(mv);
+        }
+        let (eco, name) = classify_hash(&conn, position_hash(&board))
+            .unwrap()
+            .expect("1.e4 c5 is in book");
+        assert_eq!(eco, "B20");
+        assert!(name.contains("Sicilian"), "got {name:?}");
+
+        // A random non-book hash yields None.
+        assert_eq!(classify_hash(&conn, 0xDEAD_BEEF).unwrap(), None);
+    }
 }

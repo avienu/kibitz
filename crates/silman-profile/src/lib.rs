@@ -12,4 +12,4 @@ pub use fingerprint::{
     fingerprint, Color, ColorFingerprint, DeviationPoint, EcoFamilyStat, FingerprintGame,
     FingerprintOptions, GameScore, MoveStat, OwnMove, PositionStat, RepertoireFingerprint,
 };
-pub use player::{player_profile, PhaseTag, PlayerProfile, ProfileGame, ProfilePly};
+pub use player::{player_profile, Example, PhaseTag, PlayerProfile, ProfileGame, ProfilePly};

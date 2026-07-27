@@ -22,6 +22,24 @@ pub enum PhaseTag {
     Endgame,
 }
 
+/// One piece of drill-down evidence: the game and the 1-based mainline ply
+/// that produced the claim, so a UI can open the game exactly there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Example {
+    /// Opaque game id (database game id).
+    pub game: i64,
+    /// 1-based mainline ply that produced the claim. Game-level claims
+    /// (opening families) anchor at ply 0, the start of the game.
+    pub ply: u32,
+}
+
+impl std::fmt::Display for Example {
+    /// The CLI's compact form, e.g. `3759@p34`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@p{}", self.game, self.ply)
+    }
+}
+
 /// One mainline ply, from the subject player's perspective.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfilePly {
@@ -48,6 +66,9 @@ pub struct ProfileGame {
     /// Structure flags observed for this game (sampled mid-game), e.g.
     /// "own-isolated-pawn", "opp-bad-bishop".
     pub structure_flags: Vec<String>,
+    /// The mainline ply at which `structure_flags` were assessed — the ply
+    /// a structure claim's evidence opens the game at.
+    pub structure_ply: u16,
     pub plies: Vec<ProfilePly>,
 }
 
@@ -69,8 +90,8 @@ pub struct MotifRow {
     pub missed: u32,
     /// Times the subject's own move created this weakness against them.
     pub allowed: u32,
-    pub example_missed: Vec<i64>,
-    pub example_allowed: Vec<i64>,
+    pub example_missed: Vec<Example>,
+    pub example_allowed: Vec<Example>,
 }
 
 #[derive(Debug, Serialize)]
@@ -78,7 +99,7 @@ pub struct StructureRow {
     pub flag: String,
     pub games: u32,
     pub score_pct: f64,
-    pub examples: Vec<i64>,
+    pub examples: Vec<Example>,
 }
 
 #[derive(Debug, Serialize)]
@@ -86,7 +107,7 @@ pub struct EcoRow {
     pub eco: String,
     pub games: u32,
     pub score_pct: f64,
-    pub examples: Vec<i64>,
+    pub examples: Vec<Example>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -127,8 +148,8 @@ pub fn player_profile(player: &str, games: &[ProfileGame]) -> PlayerProfile {
     let mut points = 0.0;
     let mut phase_acc: BTreeMap<&'static str, (f64, u32, u32, u32, u32)> = BTreeMap::new();
     let mut motif: BTreeMap<MotifKind, MotifRow> = BTreeMap::new();
-    let mut structures: BTreeMap<String, (u32, f64, Vec<i64>)> = BTreeMap::new();
-    let mut eco_map: BTreeMap<String, (u32, f64, Vec<i64>)> = BTreeMap::new();
+    let mut structures: BTreeMap<String, (u32, f64, Vec<Example>)> = BTreeMap::new();
+    let mut eco_map: BTreeMap<String, (u32, f64, Vec<Example>)> = BTreeMap::new();
     let mut conversion = Conversion::default();
     let mut evaled_moves = 0u32;
     let mut subject_moves = 0u32;
@@ -146,14 +167,21 @@ pub fn player_profile(player: &str, games: &[ProfileGame]) -> PlayerProfile {
         e.0 += 1;
         e.1 += g.score.points();
         if e.2.len() < 3 {
-            e.2.push(g.game_id);
+            // Opening-family claims are about the whole game: anchor at ply 0.
+            e.2.push(Example {
+                game: g.game_id,
+                ply: 0,
+            });
         }
         for flag in &g.structure_flags {
             let s = structures.entry(flag.clone()).or_default();
             s.0 += 1;
             s.1 += g.score.points();
             if s.2.len() < 3 {
-                s.2.push(g.game_id);
+                s.2.push(Example {
+                    game: g.game_id,
+                    ply: g.structure_ply as u32,
+                });
             }
         }
 
@@ -232,8 +260,13 @@ pub fn player_profile(player: &str, games: &[ProfileGame]) -> PlayerProfile {
                 let still_there = p.alerts_after.iter().any(|(k, vs)| k == kind && !*vs);
                 if still_there {
                     row.missed += 1;
-                    if row.example_missed.len() < 3 && !row.example_missed.contains(&g.game_id) {
-                        row.example_missed.push(g.game_id);
+                    if row.example_missed.len() < 3
+                        && !row.example_missed.iter().any(|e| e.game == g.game_id)
+                    {
+                        row.example_missed.push(Example {
+                            game: g.game_id,
+                            ply: p.ply as u32,
+                        });
                     }
                 } else {
                     row.taken += 1;
@@ -265,8 +298,13 @@ pub fn player_profile(player: &str, games: &[ProfileGame]) -> PlayerProfile {
                         example_allowed: vec![],
                     });
                     row.allowed += 1;
-                    if row.example_allowed.len() < 3 && !row.example_allowed.contains(&g.game_id) {
-                        row.example_allowed.push(g.game_id);
+                    if row.example_allowed.len() < 3
+                        && !row.example_allowed.iter().any(|e| e.game == g.game_id)
+                    {
+                        row.example_allowed.push(Example {
+                            game: g.game_id,
+                            ply: p.ply as u32,
+                        });
                     }
                 }
             }
@@ -366,6 +404,7 @@ mod tests {
                 score: GameScore::Win,
                 eco: Some("B01".into()),
                 structure_flags: vec!["own-passed-pawn".into()],
+                structure_ply: 2,
                 plies: vec![
                     ply(1, true, &[("Undefended", false)], &[], Some((0, 300))),
                     ply(2, false, &[], &[], None),
@@ -378,6 +417,7 @@ mod tests {
                 score: GameScore::Loss,
                 eco: Some("B01".into()),
                 structure_flags: vec!["own-isolated-pawn".into()],
+                structure_ply: 2,
                 plies: vec![
                     ply(
                         1,
@@ -418,10 +458,19 @@ mod tests {
             (und.opportunities, und.taken, und.missed, und.allowed),
             (2, 1, 1, 0)
         );
-        assert_eq!(und.example_missed, vec![22]);
+        // Evidence carries the ply that produced the claim: the miss was
+        // the subject's move at ply 1 of game 22.
+        assert_eq!(und.example_missed, vec![Example { game: 22, ply: 1 }]);
         let trap = p.motifs.iter().find(|m| m.kind == "TrappedPiece").unwrap();
         assert_eq!((trap.opportunities, trap.allowed), (0, 1));
-        assert_eq!(trap.example_allowed, vec![22]);
+        // The weakness was allowed by the subject's move at ply 3.
+        assert_eq!(trap.example_allowed, vec![Example { game: 22, ply: 3 }]);
+        // Wire shape (JSON contract) and the CLI's compact form.
+        assert_eq!(
+            serde_json::to_string(&trap.example_allowed[0]).unwrap(),
+            r#"{"game":22,"ply":3}"#
+        );
+        assert_eq!(trap.example_allowed[0].to_string(), "22@p3");
 
         // Structure + ECO with drill-down examples.
         let iso = p
@@ -430,9 +479,12 @@ mod tests {
             .find(|s| s.flag == "own-isolated-pawn")
             .unwrap();
         assert_eq!((iso.games, iso.score_pct), (1, 0.0));
-        assert_eq!(iso.examples, vec![22]);
+        // Structure evidence anchors at the sample ply the flags were read.
+        assert_eq!(iso.examples, vec![Example { game: 22, ply: 2 }]);
         assert_eq!(p.eco[0].eco, "B01");
         assert_eq!(p.eco[0].games, 2);
+        // Opening-family claims are whole-game claims: anchored at ply 0.
+        assert_eq!(p.eco[0].examples[0], Example { game: 11, ply: 0 });
 
         // Conversion & defense.
         assert_eq!(p.conversion.winning_reached, 1);

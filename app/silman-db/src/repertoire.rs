@@ -219,6 +219,18 @@ pub fn import_pgn_repertoire<R: BufRead>(
     Ok(stats)
 }
 
+/// Next-interval preview per grade, in raw (unformatted) days — the UI
+/// formats ("<1 m", "2 d", ...). Computed with the REAL scheduler on the
+/// card's current memory state and elapsed time, exactly as [`grade_card`]
+/// will, so a preview always equals what grading then does.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct GradePreviews {
+    pub again: f64,
+    pub hard: f64,
+    pub good: f64,
+    pub easy: f64,
+}
+
 /// One due card, ready to present.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DueCard {
@@ -235,19 +247,26 @@ pub struct DueCard {
     pub is_new: bool,
     pub reps: u32,
     pub lapses: u32,
+    /// Next interval per grade (days) for the grade-row buttons.
+    pub previews: GradePreviews,
 }
 
 /// Cards of `color` due at `now`, earliest due first (new cards are due at
 /// creation time), then shallower positions first as a tiebreak.
 pub fn due_cards(
     conn: &Connection,
+    scheduler: &Scheduler,
     color: Color,
     now: &str,
     limit: u32,
 ) -> anyhow::Result<Vec<DueCard>> {
     let mut stmt = conn.prepare_cached(
         "SELECT c.id, c.repertoire_id, r.name, c.fen, c.expected_san,
-                c.expected_uci, c.ply, c.line_prefix, c.due, c.reps, c.lapses
+                c.expected_uci, c.ply, c.line_prefix, c.due, c.reps, c.lapses,
+                c.stability, c.difficulty,
+                -- Elapsed days since the last review: the same julianday
+                -- computation grade_card uses, so previews match grading.
+                COALESCE(MAX(julianday(?2) - julianday(c.last_review), 0.0), 0.0)
          FROM repertoire_cards c
          JOIN repertoires r ON r.id = c.repertoire_id
          WHERE r.color = ?1 AND c.due <= ?2
@@ -256,6 +275,17 @@ pub fn due_cards(
     )?;
     let rows = stmt.query_map(params![color_str(color), now, limit], |r| {
         let reps: u32 = r.get(9)?;
+        let stability: Option<f64> = r.get(11)?;
+        let difficulty: Option<f64> = r.get(12)?;
+        let elapsed_days: f64 = r.get(13)?;
+        let state = match (stability, difficulty) {
+            (Some(s), Some(d)) => Some(MemoryState {
+                stability: s,
+                difficulty: d,
+            }),
+            _ => None,
+        };
+        let preview = |g: Grade| scheduler.next(state, elapsed_days, g).interval_days;
         Ok(DueCard {
             card_id: r.get(0)?,
             repertoire_id: r.get(1)?,
@@ -269,6 +299,12 @@ pub fn due_cards(
             is_new: reps == 0,
             reps,
             lapses: r.get(10)?,
+            previews: GradePreviews {
+                again: preview(Grade::Again),
+                hard: preview(Grade::Hard),
+                good: preview(Grade::Good),
+                easy: preview(Grade::Easy),
+            },
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)

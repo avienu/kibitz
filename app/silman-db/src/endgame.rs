@@ -139,6 +139,40 @@ pub struct OpponentMove {
     pub source: OpponentSource,
 }
 
+/// Grading of one move in the feedback aside. User moves are graded ONLY
+/// from tablebase probes — never engine scores; opponent replies carry the
+/// `engine` label (the design's name for the scripted defender), ungraded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Verdict {
+    /// Kept the theoretical result on the fastest (DTZ-optimal) path.
+    Winning,
+    /// Kept the result but the DTZ worsened — `dtz_cost` states the cost.
+    Slower,
+    /// Flipped the theoretical result.
+    Throws,
+    /// No tablebase coverage for this move (graded on terminals only).
+    Unverified,
+    /// The scripted defender's reply.
+    Engine,
+}
+
+/// One row of the endgame feedback aside: `no | SAN | verdict | note`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerdictRow {
+    /// 1-based row number over the whole session (user moves and replies).
+    pub index: u32,
+    pub san: String,
+    pub verdict: Verdict,
+    /// Only for [`Verdict::Slower`]: how many plies longer the tablebase
+    /// path became compared to the fastest move.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dtz_cost: Option<u32>,
+    /// Short human note; empty when the verdict speaks for itself.
+    pub note: String,
+}
+
 /// What one user move produced.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -149,6 +183,10 @@ pub struct StepReport {
     pub opponent: Option<OpponentMove>,
     /// Position after the opponent's reply (when there was one).
     pub fen_after_opponent: Option<String>,
+    /// Feedback rows ADDED by this step, in order: the user move's graded
+    /// row, then the opponent reply's `engine` row when there was one.
+    /// (The whole session's list is on [`DrillSession::verdict_rows`].)
+    pub rows: Vec<VerdictRow>,
     /// Set when the drill ended on this step.
     pub outcome: Option<Outcome>,
 }
@@ -169,6 +207,8 @@ pub struct DrillSession {
     /// Position-hash occurrence counts for threefold detection (uses the
     /// ep-normalized hash — the same one the position index uses).
     reps: HashMap<u64, u32>,
+    /// Feedback rows for the whole session (user moves + replies).
+    rows: Vec<VerdictRow>,
     outcome: Option<Outcome>,
 }
 
@@ -197,8 +237,33 @@ impl DrillSession {
             tb_replies: 0,
             heuristic_replies: 0,
             reps,
+            rows: Vec::new(),
             outcome: None,
         })
+    }
+
+    /// All feedback rows so far (user moves graded by tablebase truth,
+    /// opponent replies labeled `engine`).
+    pub fn verdict_rows(&self) -> &[VerdictRow] {
+        &self.rows
+    }
+
+    fn push_row(
+        &mut self,
+        san: String,
+        verdict: Verdict,
+        dtz_cost: Option<u32>,
+        note: String,
+    ) -> VerdictRow {
+        let row = VerdictRow {
+            index: self.rows.len() as u32 + 1,
+            san,
+            verdict,
+            dtz_cost,
+            note,
+        };
+        self.rows.push(row.clone());
+        row
     }
 
     pub fn drill(&self) -> &Drill {
@@ -262,8 +327,9 @@ impl DrillSession {
     }
 
     /// Play one user move (UCI), then — if the drill continues — the
-    /// opponent's reply. `tb` enables tablebase result-flip policing and
-    /// tablebase opponent replies where the piece count allows.
+    /// opponent's reply. `tb` enables tablebase result-flip policing,
+    /// tablebase move grading (the feedback rows) and tablebase opponent
+    /// replies where the piece count allows.
     ///
     /// Errors on an unparseable/illegal move or a finished drill; those are
     /// caller mistakes, not drill failures.
@@ -278,18 +344,25 @@ impl DrillSession {
             "internal error: not the user's turn"
         );
         let mv = parse_uci(&self.board, uci).map_err(|e| anyhow::anyhow!(e))?;
+        let user_san = crate::san::format_san(&self.board, mv);
 
-        // Tablebase result-flip check: probe before and after the move.
-        let pre = tb.as_deref_mut().and_then(|tb| tb_score(tb, &self.board));
+        // Tablebase probes before and after the move: WDL for result-flip
+        // policing, DTZ for pace grading. NEVER an engine score.
+        let pre = tb.as_deref_mut().and_then(|tb| tb_probe(tb, &self.board));
         let mut after = self.board.clone();
         after
             .try_play(mv)
             .map_err(|e| anyhow::anyhow!("legal move failed to play: {e}"))?;
+        // Opponent-to-move probe -> user perspective for the score.
         let post_user = tb
             .as_deref_mut()
-            .and_then(|tb| tb_score(tb, &after))
-            .map(|s| -s); // opponent-to-move score -> user perspective
+            .and_then(|tb| tb_probe(tb, &after))
+            .map(|(s, d)| (-s, d));
         let checked = pre.is_some() && post_user.is_some();
+        // A zeroing move (pawn move or capture) restarts the DTZ count, so
+        // pace comparison across it is meaningless — and a result-keeping
+        // zeroing move IS the progress DTZ measures.
+        let move_zeroed = after.halfmove_clock() == 0;
 
         self.board = after;
         self.user_moves += 1;
@@ -299,20 +372,31 @@ impl DrillSession {
         *self.reps.entry(position_hash(&self.board)).or_insert(0) += 1;
         let fen_after_user = self.fen();
 
-        if let (Some(pre), Some(post)) = (pre, post_user) {
-            if meets_goal(pre, self.drill.goal) && !meets_goal(post, self.drill.goal) {
+        if let (Some((pre_s, _)), Some((post_s, _))) = (pre, post_user) {
+            if meets_goal(pre_s, self.drill.goal) && !meets_goal(post_s, self.drill.goal) {
                 self.outcome = Some(Outcome {
                     solved: false,
                     detail: format!(
                         "That move throws away the {} — the tablebase says the position is now {}.",
                         goal_word(self.drill.goal),
-                        score_word(post),
+                        score_word(post_s),
                     ),
                 });
+                let row = self.push_row(
+                    user_san,
+                    Verdict::Throws,
+                    None,
+                    format!(
+                        "Throws away the {}: the position is now {}.",
+                        goal_word(self.drill.goal),
+                        score_word(post_s)
+                    ),
+                );
                 return Ok(StepReport {
                     fen_after_user,
                     opponent: None,
                     fen_after_opponent: None,
+                    rows: vec![row],
                     outcome: self.outcome.clone(),
                 });
             }
@@ -327,16 +411,79 @@ impl DrillSession {
                 },
                 other => self.draw_outcome(&other),
             });
+            let outcome = self.outcome.clone().expect("just set");
+            // Terminals are ground truth: a solved ending kept the result,
+            // a failed one (drawn terminal in a win drill) threw it.
+            let verdict = if outcome.solved {
+                Verdict::Winning
+            } else {
+                Verdict::Throws
+            };
+            let row = self.push_row(user_san, verdict, None, outcome.detail.clone());
             return Ok(StepReport {
                 fen_after_user,
                 opponent: None,
                 fen_after_opponent: None,
+                rows: vec![row],
                 outcome: self.outcome.clone(),
             });
         }
 
+        // Grade the (non-terminal, non-flipping) user move.
+        let user_row = match (pre, post_user) {
+            (Some((pre_s, pre_d)), Some((post_s, post_d))) => {
+                // -1..=1 class: 0 loss, 1 draw band, 2 win — for positions
+                // whose goal already slipped during an uncovered stretch.
+                let class = |s: i8| -> u8 {
+                    if s >= 2 {
+                        2
+                    } else if s >= -1 {
+                        1
+                    } else {
+                        0
+                    }
+                };
+                if class(post_s) < class(pre_s) {
+                    // The goal was already gone, but this move loses even
+                    // the remaining theoretical result.
+                    self.push_row(
+                        user_san,
+                        Verdict::Throws,
+                        None,
+                        format!("The position is now {}.", score_word(post_s)),
+                    )
+                } else if self.drill.goal == Goal::Win && pre_s >= 2 && !move_zeroed {
+                    // Winning position kept: grade the pace. Optimal play
+                    // shortens the DTZ by one ply per move.
+                    let cost = post_d as i64 + 1 - pre_d as i64;
+                    if cost > 0 {
+                        self.push_row(
+                            user_san,
+                            Verdict::Slower,
+                            Some(cost as u32),
+                            format!(
+                                "Still winning, but the tablebase path is {cost} pl{} longer.",
+                                if cost == 1 { "y" } else { "ies" }
+                            ),
+                        )
+                    } else {
+                        self.push_row(user_san, Verdict::Winning, None, String::new())
+                    }
+                } else {
+                    self.push_row(user_san, Verdict::Winning, None, String::new())
+                }
+            }
+            _ => self.push_row(
+                user_san,
+                Verdict::Unverified,
+                None,
+                "No tablebase coverage for this position.".to_string(),
+            ),
+        };
+
         // Opponent reply.
         let (reply, source) = self.opponent_reply(tb);
+        let reply_san = crate::san::format_san(&self.board, reply);
         self.board
             .try_play(reply)
             .map_err(|e| anyhow::anyhow!("opponent move failed to play: {e}"))?;
@@ -346,6 +493,7 @@ impl DrillSession {
         }
         *self.reps.entry(position_hash(&self.board)).or_insert(0) += 1;
         let fen_after_opponent = self.fen();
+        let reply_row = self.push_row(reply_san, Verdict::Engine, None, String::new());
 
         // Terminal after the opponent's reply (the user is now to move).
         if let Some(t) = self.terminal() {
@@ -365,6 +513,7 @@ impl DrillSession {
                 source,
             }),
             fen_after_opponent: Some(fen_after_opponent),
+            rows: vec![user_row, reply_row],
             outcome: self.outcome.clone(),
         })
     }
@@ -598,25 +747,30 @@ fn insufficient_material(board: &Board) -> bool {
 // Tablebase scoring
 // ---------------------------------------------------------------------------
 
-/// Position value from the side to move's perspective: -2 loss, -1 blessed
-/// loss (50-move-rule draw), 0 draw, 1 cursed win, 2 win. `None` when the
-/// tables do not cover the position (too many pieces, missing file, ...).
-/// Uses the root probe because — unlike the WDL probe — it accepts a
-/// nonzero 50-move counter, which mid-drill positions routinely have.
-fn tb_score(tb: &mut Tablebase, board: &Board) -> Option<i8> {
+/// Position value and DTZ from the side to move's perspective: score is
+/// -2 loss, -1 blessed loss (50-move-rule draw), 0 draw, 1 cursed win,
+/// 2 win; DTZ is the distance to zeroing under optimal play (0 at
+/// terminals). `None` when the tables do not cover the position (too many
+/// pieces, missing file, ...). Uses the root probe because — unlike the
+/// WDL probe — it accepts a nonzero 50-move counter, which mid-drill
+/// positions routinely have.
+fn tb_probe(tb: &mut Tablebase, board: &Board) -> Option<(i8, u32)> {
     if board.occupied().len() > tb.largest() {
         return None;
     }
     match tb.probe_root_board(board) {
-        Ok(RootProbe::Checkmate) => Some(-2),
-        Ok(RootProbe::Stalemate) => Some(0),
-        Ok(RootProbe::Move(m)) => Some(match m.wdl {
-            silman_tb::Wdl::Loss => -2,
-            silman_tb::Wdl::BlessedLoss => -1,
-            silman_tb::Wdl::Draw => 0,
-            silman_tb::Wdl::CursedWin => 1,
-            silman_tb::Wdl::Win => 2,
-        }),
+        Ok(RootProbe::Checkmate) => Some((-2, 0)),
+        Ok(RootProbe::Stalemate) => Some((0, 0)),
+        Ok(RootProbe::Move(m)) => Some((
+            match m.wdl {
+                silman_tb::Wdl::Loss => -2,
+                silman_tb::Wdl::BlessedLoss => -1,
+                silman_tb::Wdl::Draw => 0,
+                silman_tb::Wdl::CursedWin => 1,
+                silman_tb::Wdl::Win => 2,
+            },
+            m.dtz,
+        )),
         Err(_) => None,
     }
 }

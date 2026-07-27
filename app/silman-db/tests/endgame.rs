@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use cozy_chess::{Board, Color, Move, Piece};
-use silman_db::endgame::{self, curriculum, DrillSession, Goal};
+use silman_db::endgame::{self, curriculum, Drill, DrillSession, Goal, Verdict};
 use silman_tb::{RootProbe, Tablebase, Wdl};
 
 // ---------------------------------------------------------------------------
@@ -224,10 +224,15 @@ const KP_WIN_SCRIPT: &[&str] = &[
 fn scripted_kp_win_reaches_mate_without_tablebase() {
     let drill = endgame::drill("kp-king-in-front").expect("drill exists");
     let mut s = DrillSession::new(drill).unwrap();
+    let mut first_rows = None;
     for (i, uci) in KP_WIN_SCRIPT.iter().enumerate() {
         assert!(s.outcome().is_none(), "drill ended early at move {i}");
-        s.user_move(uci, None)
+        let report = s
+            .user_move(uci, None)
             .unwrap_or_else(|e| panic!("scripted move {uci} rejected: {e}"));
+        if i == 0 {
+            first_rows = Some(report.rows.clone());
+        }
     }
     let outcome = s.outcome().expect("drill finished");
     assert!(outcome.solved, "expected a win, got {:?}", outcome.detail);
@@ -235,6 +240,22 @@ fn scripted_kp_win_reaches_mate_without_tablebase() {
     assert_eq!(s.user_moves(), KP_WIN_SCRIPT.len() as u32);
     assert_eq!(s.opponent_kind(), "heuristic");
     assert_eq!(s.verification_kind(), "terminal");
+
+    // Feedback rows without tablebase files: user moves are honestly
+    // `unverified`, opponent replies carry the `engine` label.
+    let first = first_rows.expect("first step captured");
+    assert_eq!(first.len(), 2);
+    assert_eq!(first[0].verdict, Verdict::Unverified);
+    assert_eq!(first[0].san, "e4", "SAN of the user's pawn push e3e4");
+    assert_eq!(first[1].verdict, Verdict::Engine);
+    assert!(!first[1].san.is_empty());
+    // Terminals are ground truth even without tables: the mating move is
+    // graded `winning`. 13 user moves, 12 opponent replies.
+    let rows = s.verdict_rows();
+    assert_eq!(rows.len(), 25);
+    assert_eq!(rows.last().unwrap().verdict, Verdict::Winning);
+    assert_eq!(rows.last().unwrap().note, "Checkmate!");
+    assert_eq!(rows.last().unwrap().index, 25, "rows are 1-based, ordered");
     assert_eq!(silman_db::engine::spawn_count(), 0, "engine-off violated");
 }
 
@@ -333,6 +354,107 @@ fn tb_opponent_replies_preserve_the_theoretical_result() {
     assert!(outcome.solved, "got {:?}", outcome.detail);
     assert_eq!(s.opponent_kind(), "tablebase");
     assert_eq!(s.verification_kind(), "tablebase");
+    assert_eq!(silman_db::engine::spawn_count(), 0, "engine-off violated");
+}
+
+/// Round-2 item 4: verdict rows graded purely from tablebase probes.
+/// A fixture 3-man KQvK drill in which all three user verdicts are
+/// reachable in one move: the DTZ-fastest move → `winning`, a
+/// win-preserving shuffle with a worse DTZ → `slower` (cost stated), and
+/// hanging the queen → `throws`.
+#[test]
+fn verdict_rows_grade_against_tablebase_truth() {
+    let mut tb = require_tb!();
+    let fixture = Drill {
+        id: "test-kq-verdicts".into(),
+        tier: "test".into(),
+        title: "KQvK verdict fixture".into(),
+        concept: "queen_mate".into(),
+        material: "KQvK".into(),
+        // Qg2/Ke1 vs Ke6: Qd5+?? Kxd5 hangs the queen (draw); quiet
+        // queen moves keep the win at varying DTZ pace.
+        fen: "8/8/4k3/8/8/8/6Q1/4K3 w - - 0 1".into(),
+        goal: Goal::Win,
+        instruction: "test fixture".into(),
+    };
+    let start = Board::from_fen(&fixture.fen, false).unwrap();
+
+    // Classify every legal move by probing, from the user's perspective.
+    let score_of = |wdl: Wdl| -> i8 {
+        match wdl {
+            Wdl::Loss => -2,
+            Wdl::BlessedLoss => -1,
+            Wdl::Draw => 0,
+            Wdl::CursedWin => 1,
+            Wdl::Win => 2,
+        }
+    };
+    let pre_dtz = match tb.probe_root_board(&start).unwrap() {
+        RootProbe::Move(m) => {
+            assert_eq!(m.wdl, Wdl::Win, "fixture must be winning");
+            m.dtz
+        }
+        other => panic!("fixture is not terminal, got {other:?}"),
+    };
+    let mut moves: Vec<Move> = Vec::new();
+    start.generate_moves(|ml| {
+        moves.extend(ml);
+        false
+    });
+    let mut fastest = None; // (uci, cost == 0)
+    let mut slow = None; // win kept, cost > 0
+    let mut throwing = None; // result flipped
+    for mv in moves {
+        let mut b = start.clone();
+        b.play(mv);
+        // Opponent to move: negate for the user's perspective.
+        let (user_score, dtz) = match tb.probe_root_board(&b).unwrap() {
+            RootProbe::Checkmate => (2, 0),
+            RootProbe::Stalemate => (0, 0),
+            RootProbe::Move(m) => (-score_of(m.wdl), m.dtz),
+        };
+        let cost = dtz as i64 + 1 - pre_dtz as i64;
+        if user_score >= 2 && cost <= 0 && fastest.is_none() {
+            fastest = Some(mv.to_string());
+        } else if user_score >= 2 && cost > 0 && slow.is_none() {
+            slow = Some((mv.to_string(), cost));
+        } else if user_score < 2 && throwing.is_none() {
+            throwing = Some(mv.to_string());
+        }
+    }
+    let fastest = fastest.expect("a DTZ-optimal move exists");
+    let (slow, slow_cost) = slow.expect("a slower-but-winning move exists");
+    let throwing = throwing.expect("a throwing move exists (Qd5+??)");
+
+    // Best move → winning, and the opponent's reply is an `engine` row.
+    let mut s = DrillSession::new(&fixture).unwrap();
+    let report = s.user_move(&fastest, Some(&mut tb)).unwrap();
+    assert_eq!(report.rows.len(), 2);
+    assert_eq!(report.rows[0].verdict, Verdict::Winning);
+    assert_eq!(report.rows[0].dtz_cost, None);
+    assert_eq!(report.rows[1].verdict, Verdict::Engine);
+    assert_eq!(s.verdict_rows(), &report.rows[..], "session accumulates");
+
+    // Worse-but-winning → slower, with the DTZ cost stated.
+    let mut s = DrillSession::new(&fixture).unwrap();
+    let report = s.user_move(&slow, Some(&mut tb)).unwrap();
+    assert_eq!(report.rows[0].verdict, Verdict::Slower);
+    assert_eq!(report.rows[0].dtz_cost, Some(slow_cost as u32));
+    assert!(
+        report.rows[0].note.contains("longer"),
+        "note states the cost: {}",
+        report.rows[0].note
+    );
+    assert!(report.outcome.is_none(), "slower does not end the drill");
+
+    // Drawing move → throws, and the drill fails on the spot.
+    let mut s = DrillSession::new(&fixture).unwrap();
+    let report = s.user_move(&throwing, Some(&mut tb)).unwrap();
+    assert_eq!(report.rows.len(), 1, "no opponent reply after a throw");
+    assert_eq!(report.rows[0].verdict, Verdict::Throws);
+    let outcome = report.outcome.expect("throw ends the drill");
+    assert!(!outcome.solved);
+
     assert_eq!(silman_db::engine::spawn_count(), 0, "engine-off violated");
 }
 

@@ -446,25 +446,39 @@ fn main() -> anyhow::Result<()> {
                         );
                     }
                 }
+                // Compact evidence form: game id @ producing ply, "3759@p34".
+                fn eg(examples: &[silman_profile::Example]) -> String {
+                    examples
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }
                 println!("  motif matrix (opportunities taken/missed | allowed against self):");
                 for m in p.motifs.iter().take(8) {
                     println!(
-                        "    {:<22} opp {:>4}  taken {:>4}  missed {:>4} (e.g. {:?})  allowed {:>4} (e.g. {:?})",
-                        m.kind, m.opportunities, m.taken, m.missed, m.example_missed, m.allowed, m.example_allowed
+                        "    {:<22} opp {:>4}  taken {:>4}  missed {:>4} (e.g. {})  allowed {:>4} (e.g. {})",
+                        m.kind, m.opportunities, m.taken, m.missed, eg(&m.example_missed), m.allowed, eg(&m.example_allowed)
                     );
                 }
                 println!("  structures:");
                 for s in p.structures.iter().take(8) {
                     println!(
-                        "    {:<22} {:>4} games  {:>5.1}%  (e.g. {:?})",
-                        s.flag, s.games, s.score_pct, s.examples
+                        "    {:<22} {:>4} games  {:>5.1}%  (e.g. {})",
+                        s.flag,
+                        s.games,
+                        s.score_pct,
+                        eg(&s.examples)
                     );
                 }
                 println!("  openings:");
                 for e in p.eco.iter().take(8) {
                     println!(
-                        "    {:<4} {:>4} games  {:>5.1}%  (e.g. {:?})",
-                        e.eco, e.games, e.score_pct, e.examples
+                        "    {:<4} {:>4} games  {:>5.1}%  (e.g. {})",
+                        e.eco,
+                        e.games,
+                        e.score_pct,
+                        eg(&e.examples)
                     );
                 }
                 println!(

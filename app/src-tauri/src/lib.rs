@@ -19,6 +19,7 @@ pub mod browse;
 pub mod dbops;
 pub mod endgame;
 pub mod explain;
+pub mod home;
 pub mod prep;
 pub mod tactics;
 pub mod tokens;
@@ -164,8 +165,10 @@ pub fn run() {
             browse::get_game,
             browse::opening_tree,
             browse::find_games_at,
+            browse::eco_names,
             prep::matching_players,
             prep::prep_view,
+            prep::prep_fingerprint,
             tokens::get_game_tokens,
             tokens::update_game_tokens,
             explain::explain_position,
@@ -193,11 +196,21 @@ pub fn run() {
             dbops::reanalyze_game,
             dbops::run_jobs,
             dbops::jobs_status,
+            dbops::batch_estimate,
+            dbops::batch_start,
+            dbops::batch_pause,
             dbops::export_game_pgn,
             dbops::build_profile,
             dbops::get_narration_voice,
             dbops::set_narration_voice,
-            dbops::set_window_title
+            dbops::set_window_title,
+            home::home_summary,
+            home::touch_last_game,
+            home::cache_profile,
+            home::commitment_get,
+            home::commitment_set,
+            home::prep_state_get,
+            home::prep_state_set
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -30,6 +30,10 @@ pub struct MasterGameDto {
 pub struct WeakLineDto {
     /// Position hash as a decimal string (u64 does not fit a JS number).
     pub hash: String,
+    /// ECO code when the spot is a book position (deviations have none).
+    pub eco: Option<String>,
+    /// Opening name for `eco` from the bundled CC0 dataset.
+    pub opening_name: Option<String>,
     /// Earliest ply the opponent reached the position.
     pub ply: u16,
     /// What the opponent plays there (most frequent first).
@@ -69,6 +73,8 @@ pub(crate) fn prep_view_impl(
         .into_iter()
         .map(|l| WeakLineDto {
             hash: l.hash.to_string(),
+            eco: l.eco,
+            opening_name: l.opening_name,
             ply: l.ply,
             opponent_moves: l.opponent_moves,
             games: l.games,
@@ -92,6 +98,116 @@ pub(crate) fn prep_view_impl(
                 .collect(),
         })
         .collect())
+}
+
+/// One ECO-family row of the prep fingerprint table (design: step 2 of the
+/// opponent-prep workflow — `ECO | opening | share | score`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FingerprintRowDto {
+    pub eco: String,
+    /// Resolved opening name (bundled CC0 dataset); None for unknown / "?".
+    pub name: Option<String>,
+    pub games: u32,
+    /// Share of the opponent's games as this color, percent (one decimal).
+    pub share_pct: f64,
+    pub score_pct: f64,
+}
+
+/// A book-exit point of the opponent (the "book exit" fingerprint column).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookExitDto {
+    /// Position hash (decimal string) of the position the exit came from.
+    pub hash: String,
+    pub eco: Option<String>,
+    pub opening_name: Option<String>,
+    /// The move that left book.
+    pub san: String,
+    /// Earliest 0-based ply observed for this exit.
+    pub ply: u16,
+    pub count: u32,
+    pub score_pct: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrepFingerprintDto {
+    pub games: u32,
+    pub score_pct: f64,
+    pub rows: Vec<FingerprintRowDto>,
+    pub book_exits: Vec<BookExitDto>,
+}
+
+pub(crate) fn prep_fingerprint_impl(
+    conn: &rusqlite::Connection,
+    player: &str,
+    color: &str,
+) -> Result<PrepFingerprintDto, String> {
+    let color = parse_color(color)?;
+    let fp = silman_db::fingerprint::player_fingerprint(
+        conn,
+        player,
+        silman_db::fingerprint::DEFAULT_MAX_PLIES,
+    )
+    .map_err(|e| e.to_string())?;
+    let cf = match color {
+        silman_profile::Color::White => &fp.white,
+        silman_profile::Color::Black => &fp.black,
+    };
+    let total = cf.games.max(1);
+    let rows = cf
+        .eco_families
+        .iter()
+        .map(|f| {
+            Ok(FingerprintRowDto {
+                eco: f.eco.clone(),
+                name: silman_db::eco::name_for(conn, &f.eco).map_err(|e| e.to_string())?,
+                games: f.games,
+                share_pct: (f.games as f64 / total as f64 * 1000.0).round() / 10.0,
+                score_pct: f.score_pct,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let book_exits = cf
+        .deviations
+        .iter()
+        .map(|d| {
+            let named =
+                silman_db::eco::classify_hash(conn, d.hash_before).map_err(|e| e.to_string())?;
+            let (eco, opening_name) = match named {
+                Some((e, n)) => (Some(e), Some(n)),
+                None => (None, None),
+            };
+            Ok(BookExitDto {
+                hash: d.hash_before.to_string(),
+                eco,
+                opening_name,
+                san: d.san.clone(),
+                ply: d.ply,
+                count: d.count,
+                score_pct: d.score_pct,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(PrepFingerprintDto {
+        games: cf.games,
+        score_pct: cf.score_pct,
+        rows,
+        book_exits,
+    })
+}
+
+/// Fingerprint table for prep step 2: the opponent's ECO families as
+/// `color`, with resolved opening names, share and score, plus their
+/// book-exit points. Read-only; the engine is never involved.
+#[tauri::command]
+pub async fn prep_fingerprint(
+    state: State<'_, DbState>,
+    player: String,
+    color: String,
+) -> Result<PrepFingerprintDto, String> {
+    with_conn(&state, |conn| prep_fingerprint_impl(conn, &player, &color))
 }
 
 /// Player names matching `pattern` (substring, for opponent suggestions).
@@ -217,9 +333,38 @@ mod tests {
             assert!(json.contains(needle), "missing {needle} in {json}");
         }
 
+        // Book spots carry resolved ECO + opening name (round-2 item 1);
+        // the top weak line is at ply <= 2 and firmly inside book.
+        assert!(top.eco.is_some(), "top weak line should be a book position");
+        assert!(top.opening_name.is_some());
+        assert!(json.contains("\"openingName\":"), "camelCase key: {json}");
+
         // Bad inputs fail cleanly.
         assert!(prep_view_impl(&conn, "Villain", "purple").is_err());
         assert!(prep_view_impl(&conn, "Nobody Such", "white").is_err());
+    }
+
+    #[test]
+    fn prep_fingerprint_names_the_eco_families() {
+        let (_dir, conn) = fixture_db();
+        let fp = prep_fingerprint_impl(&conn, "Villain", "black").unwrap();
+        assert_eq!(fp.games, 4, "Villain has four games as Black");
+        // All fixture games are Scandinavians: the B01 family leads, named.
+        let top = &fp.rows[0];
+        assert_eq!(top.eco, "B01");
+        assert_eq!(top.name.as_deref(), Some("Scandinavian Defense"));
+        assert_eq!(top.games, 4);
+        assert!((top.share_pct - 100.0).abs() < 0.01, "{}", top.share_pct);
+
+        // Wire shape.
+        let json = serde_json::to_string(&fp).unwrap();
+        for needle in ["\"sharePct\":", "\"scorePct\":", "\"bookExits\":"] {
+            assert!(json.contains(needle), "missing {needle} in {json}");
+        }
+
+        assert!(prep_fingerprint_impl(&conn, "Villain", "purple").is_err());
+        // No engine involvement anywhere in prep.
+        assert_eq!(silman_db::engine::spawn_count(), 0);
     }
 
     #[test]

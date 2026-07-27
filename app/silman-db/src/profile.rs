@@ -198,6 +198,7 @@ pub fn build_profile(
             score,
             eco,
             structure_flags,
+            structure_ply: sample_ply as u16,
             plies,
         });
     }
