@@ -94,38 +94,6 @@ pub fn identity_ids(conn: &Connection, name: &str) -> rusqlite::Result<Vec<i64>>
         .collect())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn comma_flip_apostrophes_and_case_wash_out() {
-        assert_eq!(
-            identity_key("O'Connor, Shawn"),
-            identity_key("Shawn O'Connor")
-        );
-        assert_eq!(
-            identity_key("O'Connor, Shawn"),
-            identity_key("shawn oconnor")
-        );
-        assert_eq!(identity_key("Müller, Hans"), identity_key("Hans Muller"));
-        assert_eq!(identity_key("Kráľ, Ján"), identity_key("jan kral"));
-    }
-
-    #[test]
-    fn initials_and_different_people_stay_separate() {
-        assert_ne!(
-            identity_key("O'Connor, Shawn"),
-            identity_key("O'Connor, S.")
-        );
-        assert_ne!(
-            identity_key("O'Connor, Shawn"),
-            identity_key("O'Connor, Sean")
-        );
-        assert_ne!(identity_key("Polgar, Judit"), identity_key("Polgar, Sofia"));
-    }
-}
-
 /// Declare that `a` and `b` are the same person. Joins existing groups
 /// when either name is already in one (merging two groups if needed).
 pub fn declare_alias(conn: &Connection, a: &str, b: &str) -> rusqlite::Result<()> {
@@ -303,4 +271,36 @@ pub fn resolve_identity_ids(conn: &Connection, name: &str) -> rusqlite::Result<V
         .filter(|f| f.player_id >= 0)
         .map(|f| f.player_id)
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn comma_flip_apostrophes_and_case_wash_out() {
+        assert_eq!(
+            identity_key("O'Connor, Shawn"),
+            identity_key("Shawn O'Connor")
+        );
+        assert_eq!(
+            identity_key("O'Connor, Shawn"),
+            identity_key("shawn oconnor")
+        );
+        assert_eq!(identity_key("Müller, Hans"), identity_key("Hans Muller"));
+        assert_eq!(identity_key("Kráľ, Ján"), identity_key("jan kral"));
+    }
+
+    #[test]
+    fn initials_and_different_people_stay_separate() {
+        assert_ne!(
+            identity_key("O'Connor, Shawn"),
+            identity_key("O'Connor, S.")
+        );
+        assert_ne!(
+            identity_key("O'Connor, Shawn"),
+            identity_key("O'Connor, Sean")
+        );
+        assert_ne!(identity_key("Polgar, Judit"), identity_key("Polgar, Sofia"));
+    }
 }

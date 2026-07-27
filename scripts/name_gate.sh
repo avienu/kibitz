@@ -16,7 +16,7 @@ hits=$(grep -rIni 'silman' \
   --exclude=RUN_REPORT.md --exclude=name_gate.sh \
   . | grep -vi 'jeremy silman' || true)
 if [[ -n "$hits" ]]; then
-  echo "name gate FAILED — 'silman' outside allowed locations:"
+  echo "name gate FAILED - 'silman' outside allowed locations:"
   echo "$hits"
   exit 1
 fi

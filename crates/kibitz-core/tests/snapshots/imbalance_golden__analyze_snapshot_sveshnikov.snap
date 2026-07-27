@@ -1,6 +1,5 @@
 ---
 source: crates/kibitz-core/tests/imbalance_golden.rs
-assertion_line: 166
 expression: record
 ---
 {
@@ -27,7 +26,16 @@ expression: record
         },
         "character": "open",
         "locked_center_pawns": 1
-      }
+      },
+      "plans": [
+        {
+          "hint": "RestrictKnight",
+          "squares": [
+            "c6",
+            "f6"
+          ]
+        }
+      ]
     },
     {
       "kind": "PawnStructure",
@@ -37,12 +45,13 @@ expression: record
         "backward_black": [
           "d6"
         ],
+        "central_majority": "black",
+        "locked_files": [
+          "e"
+        ],
         "queenside_majority": "white"
       },
       "plans": [
-        {
-          "hint": "AdvanceQueensideMajority"
-        },
         {
           "hint": "PressureBackwardPawn",
           "squares": [
@@ -51,6 +60,19 @@ expression: record
           ]
         }
       ]
+    },
+    {
+      "kind": "FilesDiagonals",
+      "favors": "balanced",
+      "magnitude": "minor",
+      "evidence": {
+        "half_open_files_black": [
+          "c"
+        ],
+        "half_open_files_white": [
+          "d"
+        ]
+      }
     },
     {
       "kind": "SquaresOutposts",
@@ -69,6 +91,15 @@ expression: record
           ]
         }
       ]
+    },
+    {
+      "kind": "Initiative",
+      "favors": "balanced",
+      "magnitude": "minor",
+      "evidence": {
+        "black_forcing_moves": 0,
+        "white_forcing_moves": 2
+      }
     }
   ],
   "composite_plans": [
@@ -87,6 +118,21 @@ expression: record
         "d5"
       ],
       "score": 2,
+      "favors": "white"
+    },
+    {
+      "target": "f6",
+      "hints": [
+        "RestrictKnight"
+      ],
+      "supporting": [
+        "MinorPieces"
+      ],
+      "squares": [
+        "c6",
+        "f6"
+      ],
+      "score": 1,
       "favors": "white"
     }
   ],

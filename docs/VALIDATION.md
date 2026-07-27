@@ -114,3 +114,158 @@ profiling over huge corpora, alongside the existing `fire ≥ High` option.
 Because the adopted default is unchanged, profile motif counts over the
 personal corpus are unaffected (re-verified after the study — see
 RUN_REPORT.md run-5).
+
+## Book-trial validation (run 8.5)
+
+### Corpus
+
+A PRIVATE validation corpus lives in `testdata/private/book-trials/`
+(git-ignored, never shipped): 154 scoreable positions transcribed by the
+maintainer from four Jeremy Silman books — The Amateur's Mind (35), The
+Complete Book of Chess Strategy (44), How to Reassess Your Chess 3rd ed.
+(45), and the same author's Complete Endgame Course (30, currently drill-only with
+no imbalance/plan assertions). Each entry carries a FEN plus expectations
+in OUR vocabulary (ImbalanceKind names, PlanHint tokens, AlertKind names,
+a favors verdict) — never book prose. The harness
+(`kibitz-cli book-eval`, `app/kibitz-db/src/bookeval.rs`) scores recall
+per axis, reports free-form tags as vocabulary gaps, and checks
+`not_expected` negative assertions (precision anchors).
+
+### Before / after (run 8.5 detector tuning)
+
+All books, 154 positions:
+
+| axis | before | after |
+|---|---|---|
+| imbalances | 146/281 = 52.0% | 229/281 = **81.5%** |
+| plans | 28/84 = 33.3% | 76/112 = **67.9%** |
+| alerts | 10/32 = 31.2% | 10/32 = 31.2% (untouched by design) |
+| favors | 60/99 = 60.6% | 62/99 = **62.6%** |
+| negatives | — | **7/7 clean** |
+
+The plans denominator grew from 84 to 112 because ten new PlanHint tokens
+turned 29 formerly free-form corpus tags into scoreable expectations
+(one contradictory expectation was removed from cbcs-237, see below).
+
+Per book (imbalances / plans / favors, before → after):
+
+| book | imbalances | plans | favors |
+|---|---|---|---|
+| The Amateur's Mind | 50.0% → 75.0% | 28.6% → 60.0% | 55.2% → 55.2% |
+| Complete Book of Chess Strategy | 60.0% → 92.9% | 41.7% → 90.0% | 65.7% → 71.4% |
+| How to Reassess Your Chess | 48.7% → 80.0% | 31.2% → 59.6% | 60.0% → 60.0% |
+| Complete Endgame Course | (no imbalance/plan assertions yet) | | |
+
+WSUI alert behavior is provably unchanged: `wsui-validate` holdout tables
+are byte-identical before and after (alert tuning is validated separately
+against the puzzle corpus, not the book corpus).
+
+### What was tuned
+
+- **Balanced/Minor emission**: a detector holding real evidence no longer
+  returns nothing when the lean is too small to pick a side — it reports
+  a `Balanced`/`Minor` imbalance. This was the single largest recall
+  lever (a sub-threshold imbalance used to silently discard its plan
+  hints too). Balanced records contribute nothing to the favors lean, and
+  narration's dominance selection already filters Minor noise.
+- **Outpost occupancy bug**: an established outpost was tested against
+  the hole list AFTER the occupancy filter, so a piece STANDING on its
+  outpost square could never be recognized. Fixed (and extended to
+  bishops — Jeremy Silman's support points, CBoCS pp. 276-277).
+- **Knight-route targets** may now be piece-contested by one unit if at
+  least one friendly defender exists (holes are permanent, piece cover is
+  tradeable — HTRYC ex. 60); an attacked target with NO defenders stays
+  a fantasy. Route score halved (a route is a plan, not yet an edge), and
+  empty holes score fully only for a side with a concrete way in.
+- **Backward pawns**: also detected when the pawn can never rejoin its
+  neighbors on a file the enemy has half-open (pawn- or piece-grip on the
+  advance squares); the pressure PLAN fires only when the attacker
+  out-controls the stop square (CBoCS p. 237 counter-example).
+- **Doubled pawns** charged per extra member, not per member (CBoCS
+  p. 239 counter-example).
+- **Development**: castled-detection is file-based (a castled king that
+  stepped up a rank in a reconstructed middlegame still gets credit) and
+  the detector is silent in endgame phase — both were major favors-noise
+  sources.
+- **Seventh-rank rooks** score per rook (doubled rooks on the 7th are
+  CBoCS p. 329's winning force). Space requires 8+ pawns on the board.
+  Initiative names a two-forcing-move edge at Balanced/Minor instead of
+  leaning a side.
+- **Side-owned plan hints** (majorities, storms, king marches, pressure
+  plans, bad-bishop and restrict-knight plans) are dropped when the
+  parent imbalance leans toward the OTHER side, since narration
+  attributes hints to the favored side. Blockade-family hints are exempt
+  (plans.rs re-attributes them by name).
+
+### New PlanHints (run 8.5 vocabulary)
+
+| hint | detection rule (static) |
+|---|---|
+| `WingPawnStormClosedCenter` | side owns a blocked central pawn that is advanced or lever-proof, and the center is closed (two locked pairs, or the anchor itself lever-proof); break square = wing-most reachable lever vs the nearest enemy-chain pawn. Passes The Amateur's Mind tests 14/15 in both directions. |
+| `MinorityAttack` | Carlsbad shape: 2 vs 3 pawns on files a-c, minority side has no c-pawn but a b-pawn, opponent has a c-pawn, d-file locked; lever square targets the enemy c-pawn (both colors). |
+| `RookToSeventh` | rook already on the 7th/2nd, or rook on an open file whose entry square is not covered by an enemy pawn/minor and not out-defended (CBoCS p. 225 counter-example gates this). |
+| `RookBehindPasser` | own passer at/past the 4th with a rook on the board; squares name the pawn and the square behind it. |
+| `PressureDoubledPawn` | enemy doubled-pawn FRONT member that no enemy pawn can ever defend, pressuring side named (CBoCS p. 239 counter-example stays silent). |
+| `TradeOrActivateBadBishop` | owner-side plan whenever a bad bishop is detected; bad-bishop test loosened to include a bishop behind a full three-pawn own-color chain with limited mobility (CBoCS p. 279). |
+| `ActivateKingInEndgame` | endgame phase; every king not already on a central square gets a march target (nearest of d4/d5/e4/e5). |
+| `RestrictKnight` | side has a bishop; every enemy knight has neither an outpost nor a safe route to one; skipped while 3+ enemy minors still sit at home (not-yet-developed is not restricted). Mutually exclusive with `ManeuverKnightToOutpost` by construction. |
+| `AdvanceCentralMajority` | more pawns on d+e files than the opponent and the candidate's advance square is empty. Queenside-majority hint is withheld in middlegames when the opponent owns the central majority (CBoCS p. 269). |
+| `OpenLinesTowardWeakKing` | enemy king castled-ish with a thin pawn shield (≤1 shield pawn) and an open/half-open file at or beside the king file; squares name the entry square. Static membrane of the direct-attack family — storm-first sacrifices are out of scope. |
+
+Each hint ships with a cited unit test in `crates/kibitz-core/src/imbalance.rs`
+(FEN + Jeremy Silman citation, no prose), templates in `plans.tmpl`
+(plan.* and plan.composite.clause.*) plus coach-voice overlays in
+`coach.tmpl`, and is registered in `KNOWN_HINTS` in
+`app/kibitz-db/src/bookeval.rs`.
+
+### Counter-example status (precision anchors)
+
+Six deliberate counter-examples in the chess-strategy corpus carry
+`not_expected` blocks, plus one in The Amateur's Mind; all 7 negative
+checks are clean after tuning:
+
+| entry | banned | status |
+|---|---|---|
+| cbcs-219 (kickable "outposts", p. 219) | ManeuverKnightToOutpost | clean |
+| cbcs-225 (open file, no entry squares, p. 225) | RookToSeventh | clean |
+| cbcs-237 (well-defended backward pawn, p. 237) | PressureBackwardPawn | clean |
+| cbcs-239 (useful doubled pawns, p. 239) | PressureDoubledPawn | clean |
+| cbcs-269 (central beats queenside majority, p. 269) | AdvanceQueensideMajority | clean |
+| cbcs-298 (far passer vs material, p. 298) | BlockadeBlackPasser | clean |
+| am-322-2 (unjustified wing storm, test 14) | WingPawnStormClosedCenter | clean |
+
+cbcs-237 originally listed PressureBackwardPawn as BOTH expected and (per
+its own note) refuted; the expectation was removed in favor of the ban.
+
+A committed golden set (`crates/kibitz-core/tests/book_golden.rs`, 26
+tests) promotes the most diagnostic positions — including the tests-14/15
+discriminating pair, both minority-attack colors, support points, the
+seventh-rank hogs, and all the counter-examples asserting NON-firing — as
+FEN + citation + tag assertions only.
+
+### Honest caveats
+
+- **Transcription confidence is mixed** (high / medium-high / medium /
+  low per entry); reconstructed FENs carry stated castling-rights
+  assumptions, and all reconstructed positions say fullmove 1, which is
+  why move-number gates cannot be trusted on this corpus.
+- **The harness is recall-oriented**: expected tags are checked for
+  presence; over-firing is only punished at the seven negative anchors.
+  Minor-magnitude liberality is a deliberate trade backed by narration's
+  dominance filtering.
+- **The favors axis is crude**: a magnitude-weighted vote across
+  detected imbalances (Minor=1, Clear=2, Winning=4). Two Minor leans
+  cancel a Clear one; book verdicts often rest on dynamic play a static
+  analyzer cannot see. 62.6% should be read as directional, not as an
+  evaluation benchmark.
+- **Alerts score low (31.2%) by design here**: book expectations tag
+  strategic king-danger and trapped pieces that the WSUI screen
+  deliberately reserves for engine confirmation; WSUI is validated
+  against the puzzle corpus above, and its behavior is unchanged in this
+  run.
+- **Known gaps deliberately not chased**: metacognitive book tags
+  (reassess-every-new-move, execute-plan-dont-overprepare), plans that
+  need search or foresight (open-file-before-occupying, win-bishop-pair,
+  storm-first attacks on a still-sheltered king), and the endgame-course
+  technique vocabulary (opposition, Lucena/Philidor) which belongs to the
+  drill curriculum rather than the static analyzer.

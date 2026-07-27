@@ -76,6 +76,17 @@ const KNOWN_HINTS: &[&str] = &[
     "OpenPositionForBishops",
     "OpenPositionBeforeOpponentCompletes",
     "UseSpaceAvoidExchanges",
+    // Run 8.5 vocabulary additions (book-trial tuning).
+    "WingPawnStormClosedCenter",
+    "MinorityAttack",
+    "RookToSeventh",
+    "RookBehindPasser",
+    "PressureDoubledPawn",
+    "TradeOrActivateBadBishop",
+    "ActivateKingInEndgame",
+    "RestrictKnight",
+    "AdvanceCentralMajority",
+    "OpenLinesTowardWeakKing",
 ];
 
 #[derive(Debug, Default)]

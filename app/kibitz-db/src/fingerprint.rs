@@ -8,7 +8,7 @@ use kibitz_profile::{
     fingerprint, Color, FingerprintGame, FingerprintOptions, GameScore, OwnMove,
     RepertoireFingerprint,
 };
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 use crate::hash::position_hash;
 use crate::movebin::decode_game;

@@ -34,6 +34,56 @@ fn favors(diff: i32, minor: i32, clear: i32) -> Option<(Favors, Magnitude)> {
     Some((side, magnitude))
 }
 
+/// Recall-oriented variant (run 8.5): a detector that has gathered real
+/// evidence should still REPORT the imbalance when the lean is too small
+/// to pick a side — as a Balanced/Minor record. Narration's dominance
+/// selection filters Minor noise, and a Balanced record contributes
+/// nothing to any favors lean, so this stays honest.
+fn favors_or_balanced(diff: i32, minor: i32, clear: i32) -> (Favors, Magnitude) {
+    favors(diff, minor, clear).unwrap_or((Favors::Balanced, Magnitude::Minor))
+}
+
+/// Chebyshev distance between two squares.
+fn chebyshev(a: Square, b: Square) -> i8 {
+    let df = (a.file() as i8 - b.file() as i8).abs();
+    let dr = (a.rank() as i8 - b.rank() as i8).abs();
+    df.max(dr)
+}
+
+/// The central square (d4/d5/e4/e5) nearest to `sq`.
+fn nearest_center_square(sq: Square) -> Square {
+    [Square::D4, Square::D5, Square::E4, Square::E5]
+        .into_iter()
+        .min_by_key(|c| chebyshev(sq, *c))
+        .expect("non-empty")
+}
+
+/// True if some enemy pawn can still reach a square from which it would
+/// attack `sq` (a pawn LEVER remains possible against `owner`'s pawn).
+fn pawn_lever_possible(board: &Board, owner: Color, sq: Square) -> bool {
+    let enemy = !owner;
+    let dr: i8 = match owner {
+        Color::White => 1,
+        Color::Black => -1,
+    };
+    for df in [-1i8, 1] {
+        let Some(origin) = sq.try_offset(df, dr) else {
+            continue;
+        };
+        let on_file = board.colored_pieces(enemy, Piece::Pawn) & origin.file().bitboard();
+        for p in on_file {
+            let can_reach = match enemy {
+                Color::White => p.rank() as i8 <= origin.rank() as i8,
+                Color::Black => p.rank() as i8 >= origin.rank() as i8,
+            };
+            if can_reach {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn sq_list(bb: BitBoard) -> serde_json::Value {
     json!(bb.into_iter().map(square_name).collect::<Vec<_>>())
 }
@@ -138,6 +188,10 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                 | Rank::Third.bitboard()
         }
     };
+    let mut plans = Vec::new();
+    // Side-owned plans, filtered against the final lean (see
+    // pawn_structure for the rationale).
+    let mut sided: Vec<(Color, PlanHint)> = Vec::new();
     for (color, sign) in [(Color::White, 1i32), (Color::Black, -1i32)] {
         for b in board.colored_pieces(color, Piece::Bishop) {
             let complex = if light.has(b) { light } else { !light };
@@ -150,7 +204,14 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                     | File::F.bitboard());
             let mobility =
                 (cozy_chess::get_bishop_moves(b, board.occupied()) & !board.colors(color)).len();
-            if own_center_pawns.len() >= 2 && mobility <= 2 {
+            // A bishop is bad behind two fixed central pawns when nearly
+            // immobile, or behind a full three-pawn chain on its color
+            // even with a few squares to shuffle on (Jeremy Silman, The
+            // Complete Book of Chess Strategy, p. 279: the c5/d6/e5 chain
+            // buries the e7-bishop).
+            let bad = (own_center_pawns.len() >= 2 && mobility <= 2)
+                || (own_center_pawns.len() >= 3 && mobility <= 4);
+            if bad {
                 evidence.insert(
                     format!(
                         "bad_bishop_{}",
@@ -162,8 +223,37 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                     }),
                 );
                 score -= sign * 25;
+                // The owner's counter-plan: trade it off or reroute it
+                // outside the chain.
+                sided.push((
+                    color,
+                    PlanHint {
+                        hint: "TradeOrActivateBadBishop".into(),
+                        squares: vec![square_name(b)],
+                    },
+                ));
             }
         }
+    }
+
+    // Opposite-colored single bishops: a named imbalance worth reporting
+    // even when the ledger is level.
+    if wb == 1 && bb == 1 {
+        let w_light = !(board.colored_pieces(Color::White, Piece::Bishop) & light).is_empty();
+        let b_light = !(board.colored_pieces(Color::Black, Piece::Bishop) & light).is_empty();
+        if w_light != b_light {
+            evidence.insert("opposite_bishops".into(), json!(true));
+        }
+    }
+    // Asymmetric minor-piece mix (B vs N stories).
+    if (wb, wn) != (bb, bn) {
+        evidence.insert(
+            "minor_mix".into(),
+            json!({
+                "white": format!("{wb}B+{wn}N"),
+                "black": format!("{bb}B+{bn}N"),
+            }),
+        );
     }
 
     // Knights benefit from closed positions and available outposts.
@@ -183,20 +273,93 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
         json!(if closed { "closed" } else { "open" }),
     );
 
-    let (f, m) = favors(score, 20, 45)?;
-    let mut plans = Vec::new();
-    if closed && wn > bn {
+    // Outpost denial: when every enemy knight has neither an outpost nor
+    // a safe route to one, the bishop side's plan is to KEEP it that way
+    // (Jeremy Silman, How to Reassess Your Chess, restrict-the-knight
+    // examples). The mirror of ManeuverKnightToOutpost: routes found
+    // there suppress the hint here.
+    for (color, sign, enemy_holes) in [
+        (Color::White, 1i32, holes_in_camp(board, Color::White)),
+        (Color::Black, -1i32, holes_in_camp(board, Color::Black)),
+    ] {
+        let enemy = !color;
+        if board.colored_pieces(color, Piece::Bishop).is_empty() {
+            continue;
+        }
+        let eknights = board.colored_pieces(enemy, Piece::Knight);
+        if eknights.is_empty() {
+            continue;
+        }
+        // An army that simply has not developed yet is not "restricted":
+        // with most enemy minors still at home this is an opening, not a
+        // domination story.
+        let enemy_back = match enemy {
+            Color::White => Rank::First,
+            Color::Black => Rank::Eighth,
+        };
+        let enemy_minors_home = (board.colors(enemy)
+            & (board.pieces(Piece::Knight) | board.pieces(Piece::Bishop))
+            & enemy_back.bitboard())
+        .len();
+        if enemy_minors_home >= 3 {
+            continue;
+        }
+        let mask = hole_mask(board, color); // holes in the restricting side's camp
+        let all_homeless = eknights
+            .into_iter()
+            .all(|n| !mask.has(n) && knight_route_to(board, enemy, n, enemy_holes).is_none());
+        if all_homeless {
+            // Plan only — no score: "their knight has no home" is advice,
+            // not yet an edge.
+            let _ = sign;
+            sided.push((
+                color,
+                PlanHint {
+                    hint: "RestrictKnight".into(),
+                    squares: eknights.into_iter().map(square_name).collect(),
+                },
+            ));
+        }
+    }
+
+    let white_wants_closed = closed && (wn > bn || (wn > 0 && !holes_w_side.is_empty()));
+    let black_wants_closed = closed && (bn > wn || (bn > 0 && !holes_b_side.is_empty()));
+    if white_wants_closed || black_wants_closed {
         plans.push(PlanHint {
             hint: "KeepPositionClosed".into(),
             squares: vec![],
         });
     }
-    if !closed && ((wb >= 2 && bb < 2) || (bb >= 2 && wb < 2)) {
+    // The bishop side wants lines: with the pair (whatever the current
+    // character — in a closed position opening it IS the plan), or with a
+    // straight bishops-vs-knights mix in an open position.
+    let pair_edge = (wb >= 2 && bb < 2) || (bb >= 2 && wb < 2);
+    let mix_edge = !closed && ((wb > bb && wn < bn) || (bb > wb && bn < wn));
+    if pair_edge || mix_edge {
         plans.push(PlanHint {
             hint: "OpenPositionForBishops".into(),
             squares: vec![],
         });
     }
+
+    let asymmetric = evidence.keys().any(|k| {
+        k.starts_with("bad_bishop")
+            || k == "bishop_pair"
+            || k == "opposite_bishops"
+            || k == "minor_mix"
+    });
+    let (f, m) = if asymmetric || !plans.is_empty() || !sided.is_empty() {
+        favors_or_balanced(score, 20, 45)
+    } else {
+        favors(score, 20, 45)?
+    };
+    plans.extend(sided.into_iter().filter_map(|(side, p)| {
+        let side_favors = match side {
+            Color::White => Favors::White,
+            Color::Black => Favors::Black,
+        };
+        (f == Favors::Balanced || f == side_favors).then_some(p)
+    }));
     Some(Imbalance {
         kind: ImbalanceKind::MinorPieces,
         favors: f,
@@ -206,26 +369,39 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     })
 }
 
+/// Squares in `camp_owner`'s outpost band the owner's pawns can never
+/// defend, WITHOUT the occupancy filter — used to test whether a piece
+/// already standing on such a square is on an outpost.
+fn hole_mask(board: &Board, camp_owner: Color) -> BitBoard {
+    let owner_span = pawn_attack_span(board, camp_owner);
+    let half = match camp_owner {
+        Color::White => Rank::Third.bitboard() | Rank::Fourth.bitboard(),
+        Color::Black => Rank::Sixth.bitboard() | Rank::Fifth.bitboard(),
+    };
+    let files = !(File::A.bitboard() | File::H.bitboard());
+    half & files & !owner_span
+}
+
 /// Holes in `camp_owner`'s camp: squares the owner's pawns can never
 /// defend, restricted to the ranks where an enemy outpost actually bites
 /// (5th/6th from the attacker's view). Ranks nearer the back rank are
 /// pawn-undefendable by construction and piece-covered in practice —
 /// counting them buries the real signal in noise.
 fn holes_in_camp(board: &Board, camp_owner: Color) -> BitBoard {
-    let owner_span = pawn_attack_span(board, camp_owner);
-    let half = match camp_owner {
-        Color::White => Rank::Third.bitboard() | Rank::Fourth.bitboard(),
-        Color::Black => Rank::Sixth.bitboard() | Rank::Fifth.bitboard(),
-    };
-    // Central-ish holes matter (files b-g).
-    let files = !(File::A.bitboard() | File::H.bitboard());
-    half & files & !owner_span & !board.occupied()
+    // Central-ish holes matter (files b-g); occupied squares are not
+    // DESTINATIONS (see hole_mask for the occupancy-free test).
+    hole_mask(board, camp_owner) & !board.occupied()
 }
 
 /// 2. Pawn structure.
 pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
     let mut evidence = BTreeMap::new();
+    // Neutral plans (blockade family: plans.rs re-attributes those by
+    // name) go straight into `plans`; side-owned plans carry their owner
+    // so that, once the imbalance's lean is known, plans belonging to the
+    // DISFAVORED side can be dropped instead of being misattributed.
     let mut plans = Vec::new();
+    let mut sided: Vec<(Color, PlanHint)> = Vec::new();
     let mut score = 0i32;
 
     let mut iso = [BitBoard::EMPTY; 2];
@@ -251,19 +427,40 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             {
                 passed[ci] |= p.bitboard();
             }
-            // Backward: stop square controlled by enemy pawns, no own pawn
-            // beside/behind on adjacent files, not isolated (that's worse).
+            // Backward: no own pawn beside/behind on adjacent files (not
+            // isolated — that's worse), and the pawn cannot safely step
+            // level: its stop square is enemy-pawn-controlled, or — on a
+            // file the enemy has half-open — the square two ahead is,
+            // so it can never rejoin its neighbors (Jeremy Silman, The
+            // Amateur's Mind, p. 319 test 4: the d2-pawn under a d-file
+            // grip on d4).
             if let Some(stop) = match color {
                 Color::White => p.try_offset(0, 1),
                 Color::Black => p.try_offset(0, -1),
             } {
-                let enemy_controls_stop =
-                    !(get_pawn_attacks(stop, !color) & BitBoard::EMPTY).is_empty() || {
-                        // pawns of !color attacking stop:
-                        !(get_pawn_attacks(stop, color) & enemy).is_empty()
-                    };
+                let pawn_controls = |sq: Square| !(get_pawn_attacks(sq, color) & enemy).is_empty();
+                let half_open_for_enemy = (enemy & file.bitboard()).is_empty();
+                let two_ahead = match color {
+                    Color::White => p.try_offset(0, 2),
+                    Color::Black => p.try_offset(0, -2),
+                };
+                // On a file the enemy has half-open, piece control of the
+                // stop square holds the pawn back just as surely as pawn
+                // control (Jeremy Silman, The Complete Book of Chess
+                // Strategy, p. 236: the backward d6 pawn on the open
+                // file).
+                let occ = board.occupied();
+                let enemy_piece_grip = |sq: Square| {
+                    let att = crate::attack::attackers_of(board, sq, !color, occ).len();
+                    let def = crate::attack::attackers_of(board, sq, color, occ).len();
+                    att >= def && att > 0
+                };
+                let held_back = pawn_controls(stop)
+                    || (half_open_for_enemy
+                        && !occ.has(stop)
+                        && (two_ahead.is_some_and(pawn_controls) || enemy_piece_grip(stop)));
                 let support = own & adj & behind_or_beside(color, p.rank());
-                if enemy_controls_stop && support.is_empty() && !(own & adj).is_empty() {
+                if held_back && support.is_empty() && !(own & adj).is_empty() {
                     backward[ci] |= p.bitboard();
                 }
             }
@@ -271,11 +468,22 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
     }
 
     // Score: passed pawns are assets; isolated/doubled/backward liabilities.
+    // Doubled pawns are charged per EXTRA member, not per member: a
+    // doubled pair is one defect, and useful doubled pawns should not be
+    // double-billed (Jeremy Silman, The Complete Book of Chess Strategy,
+    // p. 239).
     for (ci, sign) in [(0usize, 1i32), (1, -1)] {
+        let color = if ci == 0 { Color::White } else { Color::Black };
+        let own = board.colored_pieces(color, Piece::Pawn);
+        let mut doubled_extras = 0i32;
+        for fi in 0..8 {
+            let k = (own & File::index(fi).bitboard()).len() as i32;
+            doubled_extras += (k - 1).max(0);
+        }
         score += sign
             * (passed[ci].len() as i32 * 30
                 - iso[ci].len() as i32 * 15
-                - doubled[ci].len() as i32 * 10
+                - doubled_extras * 10
                 - backward[ci].len() as i32 * 15);
         // Protected passers are worth more.
         for p in passed[ci] {
@@ -301,68 +509,354 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
         }
     }
 
-    // Majorities per wing (files a-c vs f-h).
+    let wp = board.colored_pieces(Color::White, Piece::Pawn);
+    let bp = board.colored_pieces(Color::Black, Piece::Pawn);
+
+    // Majorities per wing (files a-c vs f-h) and in the center (d-e).
     let qside = File::A.bitboard() | File::B.bitboard() | File::C.bitboard();
     let kside = File::F.bitboard() | File::G.bitboard() | File::H.bitboard();
-    let wq = (board.colored_pieces(Color::White, Piece::Pawn) & qside).len() as i32;
-    let bq = (board.colored_pieces(Color::Black, Piece::Pawn) & qside).len() as i32;
-    let wk = (board.colored_pieces(Color::White, Piece::Pawn) & kside).len() as i32;
-    let bk = (board.colored_pieces(Color::Black, Piece::Pawn) & kside).len() as i32;
+    let center = File::D.bitboard() | File::E.bitboard();
+    let wq = (wp & qside).len() as i32;
+    let bq = (bp & qside).len() as i32;
+    let wk = (wp & kside).len() as i32;
+    let bk = (bp & kside).len() as i32;
+    let wc = (wp & center).len() as i32;
+    let bc = (bp & center).len() as i32;
+    let queens_on = !board.pieces(Piece::Queen).is_empty();
+    // A queenside majority is a plan; but in a middlegame the CENTRAL
+    // majority outranks it (Jeremy Silman, The Complete Book of Chess
+    // Strategy, p. 269), so the wing hint is withheld while queens are on
+    // and the opponent owns the center majority.
     if wq > bq {
         evidence.insert("queenside_majority".into(), json!("white"));
-        plans.push(PlanHint {
-            hint: "AdvanceQueensideMajority".into(),
-            squares: vec![],
-        });
+        if !(queens_on && bc > wc) {
+            sided.push((
+                Color::White,
+                PlanHint {
+                    hint: "AdvanceQueensideMajority".into(),
+                    squares: vec![],
+                },
+            ));
+        }
     } else if bq > wq {
         evidence.insert("queenside_majority".into(), json!("black"));
+        if !(queens_on && wc > bc) {
+            sided.push((
+                Color::Black,
+                PlanHint {
+                    hint: "AdvanceQueensideMajority".into(),
+                    squares: vec![],
+                },
+            ));
+        }
     }
     if bk > wk {
         evidence.insert("kingside_majority".into(), json!("black"));
     } else if wk > bk {
         evidence.insert("kingside_majority".into(), json!("white"));
     }
+    // Central majority: roll it forward into a passer.
+    for (color, mine, theirs, own_bb) in [(Color::White, wc, bc, wp), (Color::Black, bc, wc, bp)] {
+        if mine <= theirs {
+            continue;
+        }
+        evidence.insert(
+            "central_majority".into(),
+            json!(if color == Color::White {
+                "white"
+            } else {
+                "black"
+            }),
+        );
+        // Most advanced central pawn with an empty advance square.
+        let mut best: Option<(i8, Square)> = None;
+        for p in own_bb & center {
+            let adv = match color {
+                Color::White => p.rank() as i8,
+                Color::Black => 7 - p.rank() as i8,
+            };
+            if let Some(front) = p.try_offset(0, if color == Color::White { 1 } else { -1 }) {
+                if !board.occupied().has(front) && best.map(|(a, _)| adv > a).unwrap_or(true) {
+                    best = Some((adv, front));
+                }
+            }
+        }
+        if let Some((_, front)) = best {
+            sided.push((
+                color,
+                PlanHint {
+                    hint: "AdvanceCentralMajority".into(),
+                    squares: vec![square_name(front)],
+                },
+            ));
+        }
+    }
 
-    // Backward pawns invite pressure down their file onto the stop square.
+    // Minority attack (Jeremy Silman, The Complete Book of Chess
+    // Strategy, pp. 202-203): two pawns storm three in a Carlsbad-style
+    // structure — minority side has no c-pawn, the opponent does, and the
+    // d-file is locked. The b-pawn lever targets the enemy c-pawn.
+    for (color, opp) in [(Color::White, Color::Black), (Color::Black, Color::White)] {
+        let own = board.colored_pieces(color, Piece::Pawn);
+        let their = board.colored_pieces(opp, Piece::Pawn);
+        let d_locked = {
+            let wd = wp & File::D.bitboard();
+            let bd = bp & File::D.bitboard();
+            wd.into_iter()
+                .any(|p| p.try_offset(0, 1).is_some_and(|f| bd.has(f)))
+        };
+        if (own & qside).len() == 2
+            && (their & qside).len() == 3
+            && (own & File::C.bitboard()).is_empty()
+            && !(their & File::C.bitboard()).is_empty()
+            && !(own & File::B.bitboard()).is_empty()
+            && d_locked
+        {
+            if let Some(target) = (their & File::C.bitboard()).into_iter().next() {
+                let lever = target.try_offset(-1, if color == Color::White { -1 } else { 1 });
+                let mut squares: Vec<String> = Vec::new();
+                if let Some(l) = lever {
+                    squares.push(square_name(l));
+                }
+                squares.push(square_name(target));
+                sided.push((
+                    color,
+                    PlanHint {
+                        hint: "MinorityAttack".into(),
+                        squares,
+                    },
+                ));
+            }
+        }
+    }
+
+    // Wing pawn storm, gated on a truly closed center (Jeremy Silman, The
+    // Amateur's Mind, pp. 322-323, tests 14/15: identical storms judged
+    // solely by whether the center can still be levered open). A side may
+    // storm when it owns a blocked central pawn that is either advanced
+    // (across the frontier) or lever-proof, and the center as a whole is
+    // closed (two locked pairs, or that anchor itself lever-proof).
+    let central_files =
+        File::C.bitboard() | File::D.bitboard() | File::E.bitboard() | File::F.bitboard();
+    let locked_pairs = (wp & central_files)
+        .into_iter()
+        .filter(|p| p.try_offset(0, 1).is_some_and(|f| bp.has(f)))
+        .count();
+    for color in [Color::White, Color::Black] {
+        let own = board.colored_pieces(color, Piece::Pawn);
+        let their = board.colored_pieces(!color, Piece::Pawn);
+        let fwd: i8 = if color == Color::White { 1 } else { -1 };
+        let mut anchor: Option<Square> = None;
+        for p in own & central_files {
+            let blocked = p.try_offset(0, fwd).is_some_and(|f| their.has(f));
+            if !blocked {
+                continue;
+            }
+            let advanced = match color {
+                Color::White => p.rank() >= Rank::Fifth,
+                Color::Black => p.rank() <= Rank::Fourth,
+            };
+            let lever_proof = !pawn_lever_possible(board, color, p);
+            // Lever-proof anchors qualify outright; advanced ones need
+            // the center closed elsewhere too.
+            if lever_proof || (advanced && locked_pairs >= 2) {
+                let adv = match color {
+                    Color::White => p.rank() as i8,
+                    Color::Black => 7 - p.rank() as i8,
+                };
+                let cur = anchor.map(|a| match color {
+                    Color::White => a.rank() as i8,
+                    Color::Black => 7 - a.rank() as i8,
+                });
+                if cur.map(|c| adv > c).unwrap_or(true) {
+                    anchor = Some(p);
+                }
+            }
+        }
+        if let Some(a) = anchor {
+            let squares = storm_break_square(board, color, a)
+                .map(|s| vec![square_name(s)])
+                .unwrap_or_default();
+            sided.push((
+                color,
+                PlanHint {
+                    hint: "WingPawnStormClosedCenter".into(),
+                    squares,
+                },
+            ));
+        }
+    }
+
+    // Pressure the front member of an enemy doubled-pawn complex when its
+    // own pawns can never defend it (a useful, defensible doubled pawn —
+    // Jeremy Silman, The Complete Book of Chess Strategy, p. 239 — earns
+    // no such plan).
+    for (ci, color) in [(0usize, Color::White), (1, Color::Black)] {
+        let own = board.colored_pieces(color, Piece::Pawn);
+        for p in doubled[ci] {
+            // Front member only: no own pawn ahead on the same file.
+            if !(file_front(color, p) & own).is_empty() {
+                continue;
+            }
+            // Only a pawn STRICTLY behind on an adjacent file can ever
+            // defend it (a same-rank neighbor is already past).
+            let strictly_behind = behind_or_beside(color, p.rank()) & !p.rank().bitboard();
+            let indefensible = (own & adjacent_files(p.file()) & strictly_behind).is_empty();
+            if indefensible {
+                sided.push((
+                    !color,
+                    PlanHint {
+                        hint: "PressureDoubledPawn".into(),
+                        squares: vec![square_name(p)],
+                    },
+                ));
+            }
+        }
+    }
+
+    // Backward pawns invite pressure down their file onto the stop
+    // square — unless the owner out-controls the stop square, in which
+    // case the pressure has nowhere to go (Jeremy Silman, The Complete
+    // Book of Chess Strategy, p. 237: the well-defended backward pawn).
     for (ci, color) in [(0, Color::White), (1, Color::Black)] {
         for p in backward[ci] {
             if let Some(stop) = match color {
                 Color::White => p.try_offset(0, 1),
                 Color::Black => p.try_offset(0, -1),
             } {
-                let _ = ci;
-                plans.push(PlanHint {
-                    hint: "PressureBackwardPawn".into(),
-                    squares: vec![square_name(p), square_name(stop)],
-                });
+                let occ = board.occupied();
+                let owner_grip = crate::attack::attackers_of(board, stop, color, occ).len();
+                let attacker_grip = crate::attack::attackers_of(board, stop, !color, occ).len();
+                if attacker_grip >= owner_grip {
+                    sided.push((
+                        !color,
+                        PlanHint {
+                            hint: "PressureBackwardPawn".into(),
+                            squares: vec![square_name(p), square_name(stop)],
+                        },
+                    ));
+                }
             }
         }
     }
 
-    // Blockade hint against the strongest enemy passer.
+    // Passer plans. Blockades are urgent only once the passer has crossed
+    // the frontier (blockading a pawn still at home is premature — cf.
+    // Jeremy Silman, The Complete Book of Chess Strategy, p. 298, where
+    // the far-advanced passer outweighs three unadvanced ones). The
+    // owner's rook belongs BEHIND the passer; a piece already sitting on
+    // the stop square upgrades the defense to blockade-then-pressure.
     for (ci, color) in [(0, Color::White), (1, Color::Black)] {
+        let advanced = |p: Square| match color {
+            Color::White => p.rank() >= Rank::Fifth,
+            Color::Black => p.rank() <= Rank::Fourth,
+        };
         for p in passed[ci] {
             if let Some(stop) = match color {
                 Color::White => p.try_offset(0, 1),
                 Color::Black => p.try_offset(0, -1),
             } {
-                plans.push(PlanHint {
-                    hint: if ci == 0 {
-                        "BlockadeWhitePasser"
-                    } else {
-                        "BlockadeBlackPasser"
+                if advanced(p) {
+                    plans.push(PlanHint {
+                        hint: if ci == 0 {
+                            "BlockadeWhitePasser"
+                        } else {
+                            "BlockadeBlackPasser"
+                        }
+                        .into(),
+                        squares: vec![square_name(stop)],
+                    });
+                }
+                // Tarrasch: the rook belongs behind the passer — worth
+                // saying one rank earlier than the blockade is urgent.
+                let rook_worthy = match color {
+                    Color::White => p.rank() >= Rank::Fourth,
+                    Color::Black => p.rank() <= Rank::Fifth,
+                };
+                if rook_worthy && !board.colored_pieces(color, Piece::Rook).is_empty() {
+                    if let Some(behind) =
+                        p.try_offset(0, if color == Color::White { -1 } else { 1 })
+                    {
+                        sided.push((
+                            color,
+                            PlanHint {
+                                hint: "RookBehindPasser".into(),
+                                squares: vec![square_name(p), square_name(behind)],
+                            },
+                        ));
                     }
-                    .into(),
-                    squares: vec![square_name(stop)],
+                }
+            }
+        }
+        // Blockade-then-pressure against enemy passed AND isolated pawns
+        // already halted by a piece on the stop square.
+        for p in passed[ci] | iso[ci] {
+            if let Some(stop) = match color {
+                Color::White => p.try_offset(0, 1),
+                Color::Black => p.try_offset(0, -1),
+            } {
+                if (board.colors(!color) & stop.bitboard()).is_empty() {
+                    continue;
+                }
+                let already = plans.iter().any(|h| {
+                    h.hint == "BlockadeThenPressure" && h.squares.contains(&square_name(p))
                 });
+                if !already {
+                    plans.push(PlanHint {
+                        hint: "BlockadeThenPressure".into(),
+                        squares: vec![square_name(p), square_name(stop)],
+                    });
+                }
             }
         }
     }
 
-    if evidence.is_empty() {
+    // Endgame king activity: with the heavy wood off, a king within reach
+    // of the central battleground should march (Jeremy Silman, How to
+    // Reassess Your Chess, the endgame-planning examples, and the same
+    // author's Complete Endgame Course throughout).
+    if phase(board) == crate::record::Phase::Endgame {
+        for color in [Color::White, Color::Black] {
+            let k = board.king(color);
+            let target = nearest_center_square(k);
+            // Any king not already on the central battleground has the
+            // standing endgame plan of marching there.
+            if chebyshev(k, target) >= 1 {
+                sided.push((
+                    color,
+                    PlanHint {
+                        hint: "ActivateKingInEndgame".into(),
+                        squares: vec![square_name(target)],
+                    },
+                ));
+            }
+        }
+    }
+
+    if locked_pairs > 0 {
+        let files: Vec<String> = (wp & central_files)
+            .into_iter()
+            .filter(|p| p.try_offset(0, 1).is_some_and(|f| bp.has(f)))
+            .map(|p| ((b'a' + p.file() as u8) as char).to_string())
+            .collect();
+        evidence.insert("locked_files".into(), json!(files));
+    }
+
+    if evidence.is_empty() && plans.is_empty() && sided.is_empty() {
         return None;
     }
-    let (f, m) = favors(score, 15, 45)?;
+    let (f, m) = favors_or_balanced(score, 15, 45);
+    // Keep a side-owned plan only when the imbalance is level or leans
+    // toward that side: hints are attributed to the imbalance's favored
+    // side downstream, so a disfavored side's plan would be narrated for
+    // the wrong player.
+    plans.extend(sided.into_iter().filter_map(|(side, p)| {
+        let side_favors = match side {
+            Color::White => Favors::White,
+            Color::Black => Favors::Black,
+        };
+        (f == Favors::Balanced || f == side_favors).then_some(p)
+    }));
     Some(Imbalance {
         kind: ImbalanceKind::PawnStructure,
         favors: f,
@@ -370,6 +864,67 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
         evidence,
         plans,
     })
+}
+
+/// Where a justified wing storm should strike: take the enemy pawn on the
+/// storm wing nearest the anchor that a friendly pawn can still attack
+/// via an empty lever square; among its lever squares prefer the wing-most
+/// one (the c5 break against d6 in a King's Indian; g4 against f5 in the
+/// Torre storm of Jeremy Silman, The Amateur's Mind, p. 323 test 15).
+fn storm_break_square(board: &Board, color: Color, anchor: Square) -> Option<Square> {
+    let own = board.colored_pieces(color, Piece::Pawn);
+    let back: i8 = if color == Color::White { -1 } else { 1 };
+    let support_left = anchor.try_offset(-1, back).is_some_and(|s| own.has(s));
+    let support_right = anchor.try_offset(1, back).is_some_and(|s| own.has(s));
+    let dir: i8 = if support_left && !support_right {
+        1
+    } else if support_right && !support_left {
+        -1
+    } else if board.king(!color).file() as i8 >= anchor.file() as i8 {
+        1
+    } else {
+        -1
+    };
+    let mut candidates: Vec<(i8, Square)> = Vec::new(); // (file distance from anchor, pawn)
+    for ep in board.colored_pieces(!color, Piece::Pawn) {
+        let df = ep.file() as i8 - anchor.file() as i8;
+        if (dir > 0 && df < 0) || (dir < 0 && df > 0) {
+            continue;
+        }
+        candidates.push((df.abs(), ep));
+    }
+    candidates.sort_by_key(|(d, _)| *d);
+    for (_, ep) in candidates {
+        let mut best: Option<Square> = None;
+        for lf in [-1i8, 1] {
+            let Some(lever) = ep.try_offset(lf, back) else {
+                continue;
+            };
+            if board.occupied().has(lever) {
+                continue;
+            }
+            let reachable = (own & lever.file().bitboard())
+                .into_iter()
+                .any(|p| match color {
+                    Color::White => p.rank() < lever.rank(),
+                    Color::Black => p.rank() > lever.rank(),
+                });
+            if !reachable {
+                continue;
+            }
+            let more_wingward = |a: Square, b: Square| {
+                let center = 3.5f32;
+                (a.file() as i8 as f32 - center).abs() > (b.file() as i8 as f32 - center).abs()
+            };
+            if best.map(|b| more_wingward(lever, b)).unwrap_or(true) {
+                best = Some(lever);
+            }
+        }
+        if best.is_some() {
+            return best;
+        }
+    }
+    None
 }
 
 fn adjacent_files(f: File) -> BitBoard {
@@ -442,7 +997,23 @@ pub fn material(board: &Board) -> Option<Imbalance> {
     } else if b_r > w_r && w_minor > b_minor {
         evidence.insert("pattern".into(), json!("black-exchange-up"));
     }
-    let (f, m) = favors(diff, 80, 250)?;
+    // A level ledger can still hide a NAMED material imbalance (rook vs
+    // pieces, bishop vs knight, queen vs army): report the asymmetric mix
+    // even when the point count is close.
+    let mix_differs = [
+        Piece::Pawn,
+        Piece::Knight,
+        Piece::Bishop,
+        Piece::Rook,
+        Piece::Queen,
+    ]
+    .iter()
+    .any(|p| count(Color::White, *p) != count(Color::Black, *p));
+    let (f, m) = if mix_differs {
+        favors_or_balanced(diff, 80, 250)
+    } else {
+        favors(diff, 80, 250)?
+    };
     Some(Imbalance {
         kind: ImbalanceKind::Material,
         favors: f,
@@ -512,19 +1083,91 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
     // 7th-rank rooks.
     let w7 = board.colored_pieces(Color::White, Piece::Rook) & Rank::Seventh.bitboard();
     let b2 = board.colored_pieces(Color::Black, Piece::Rook) & Rank::Second.bitboard();
+    // Per rook: DOUBLED rooks on the seventh are a game-winning force
+    // (Jeremy Silman, The Complete Book of Chess Strategy, p. 329).
     if !w7.is_empty() {
         evidence.insert("rook_on_seventh".into(), json!("white"));
-        score += 25;
+        score += 25 * w7.len().min(2) as i32;
     }
     if !b2.is_empty() {
         evidence.insert("rook_on_seventh".into(), json!("black"));
-        score -= 25;
+        score -= 25 * b2.len().min(2) as i32;
+    }
+
+    // Rook to the seventh: a rook already there presses on; a rook on an
+    // open file heads for the 7th-rank entry square — but only if that
+    // square is actually enterable: an entry covered by an enemy pawn or
+    // minor piece is no entry at all (Jeremy Silman, The Complete Book of
+    // Chess Strategy, p. 225, the file with no penetration points).
+    for (color, on7th) in [(Color::White, w7), (Color::Black, b2)] {
+        for r in on7th {
+            plans.push(PlanHint {
+                hint: "RookToSeventh".into(),
+                squares: vec![square_name(r)],
+            });
+        }
+        if !on7th.is_empty() {
+            continue;
+        }
+        let entry_rank = match color {
+            Color::White => Rank::Seventh,
+            Color::Black => Rank::Second,
+        };
+        let rooks = board.colored_pieces(color, Piece::Rook);
+        let occ = board.occupied();
+        for fname in &open {
+            let file = File::index((fname.as_bytes()[0] - b'a') as usize);
+            if (rooks & file.bitboard()).is_empty() {
+                continue;
+            }
+            let entry = Square::new(file, entry_rank);
+            let enemy_cover = crate::attack::attackers_of(board, entry, !color, occ);
+            let cheap_cover = enemy_cover
+                & (board.pieces(Piece::Pawn)
+                    | board.pieces(Piece::Knight)
+                    | board.pieces(Piece::Bishop));
+            let own_cover = crate::attack::attackers_of(board, entry, color, occ);
+            if cheap_cover.is_empty() && own_cover.len() >= enemy_cover.len() {
+                plans.push(PlanHint {
+                    hint: "RookToSeventh".into(),
+                    squares: vec![square_name(entry)],
+                });
+            }
+        }
+    }
+
+    // Open lines toward a weak king: only when the enemy king's shelter
+    // is ALREADY thin and a usable (half-)open file sits at or beside the
+    // king file — the static, no-search membrane of the direct-attack
+    // family.
+    for (color, halves) in [(Color::White, &half_w), (Color::Black, &half_b)] {
+        let enemy = !color;
+        if !shelter_is_thin(board, enemy) {
+            continue;
+        }
+        let kf = board.king(enemy).file() as i8;
+        let entry_rank = match color {
+            Color::White => Rank::Seventh,
+            Color::Black => Rank::Second,
+        };
+        let near_king = |fname: &String| {
+            let f = (fname.as_bytes()[0] - b'a') as i8;
+            (f - kf).abs() <= 1
+        };
+        if let Some(fname) = open.iter().chain(halves.iter()).find(|f| near_king(f)) {
+            let file = File::index((fname.as_bytes()[0] - b'a') as usize);
+            plans.push(PlanHint {
+                hint: "OpenLinesTowardWeakKing".into(),
+                squares: vec![square_name(Square::new(file, entry_rank))],
+            });
+            score += if color == Color::White { 15 } else { -15 };
+        }
     }
 
     if evidence.is_empty() {
         return None;
     }
-    let (f, m) = favors(score, 15, 40)?;
+    let (f, m) = favors_or_balanced(score, 15, 40);
     if !open.is_empty() {
         plans.push(PlanHint {
             hint: "DoubleOnOpenFile".into(),
@@ -540,6 +1183,37 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
     })
 }
 
+/// A castled-ish king whose pawn shield has largely gone: at most one own
+/// pawn remains on the three files around the king within two ranks in
+/// front of it. Kings still in the center are the development story, not
+/// this one.
+fn shelter_is_thin(board: &Board, side: Color) -> bool {
+    let k = board.king(side);
+    let home_dist = match side {
+        Color::White => k.rank() as u8,
+        Color::Black => 7 - k.rank() as u8,
+    };
+    if home_dist > 1 {
+        return false;
+    }
+    let own = board.colored_pieces(side, Piece::Pawn);
+    let fwd: i8 = if side == Color::White { 1 } else { -1 };
+    let mut shield = 0;
+    for df in -1i8..=1 {
+        for dr in 0i8..=2 {
+            if df == 0 && dr == 0 {
+                continue;
+            }
+            if let Some(s) = k.try_offset(df, dr * fwd) {
+                if own.has(s) {
+                    shield += 1;
+                }
+            }
+        }
+    }
+    shield <= 1
+}
+
 /// 5. Squares & outposts (with the spec's BFS knight-route plan hint).
 pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
     let mut evidence = BTreeMap::new();
@@ -549,20 +1223,23 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
     for (color, sign) in [(Color::White, 1i32), (Color::Black, -1)] {
         let enemy = !color;
         let holes = holes_in_camp(board, enemy);
-        if holes.is_empty() {
+        // Occupancy-free mask: a piece STANDING on an outpost square must
+        // still be recognized as established (holes lists destinations
+        // only, so testing the piece's own square against it always
+        // failed — run 8.5 bug fix).
+        let mask = hole_mask(board, enemy);
+        let occupied_outposts = mask
+            & (board.colored_pieces(color, Piece::Knight)
+                | board.colored_pieces(color, Piece::Bishop));
+        if holes.is_empty() && occupied_outposts.is_empty() {
             continue;
         }
-        let key = if color == Color::White {
-            "holes_in_black_camp"
-        } else {
-            "holes_in_white_camp"
-        };
-        evidence.insert(key.into(), sq_list(holes));
-        score += sign * holes.len().min(3) as i32 * 8;
-
-        // Established outposts: own knight on a hole, defended by own pawn.
+        // Established outposts: a minor piece on a hole, defended by its
+        // own pawn — Jeremy Silman's support points (The Complete Book of
+        // Chess Strategy, pp. 276-277: knights AND bishops).
+        let mut exploitable = false;
         for n in board.colored_pieces(color, Piece::Knight) {
-            if holes.has(n) {
+            if mask.has(n) {
                 let pawn_backup =
                     get_pawn_attacks(n, enemy) & board.colored_pieces(color, Piece::Pawn);
                 if !pawn_backup.is_empty() {
@@ -578,20 +1255,57 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
                         json!(square_name(n)),
                     );
                     score += sign * 30;
+                    exploitable = true;
                 }
             } else if let Some((target, route)) = knight_route_to(board, color, n, holes) {
                 plans.push(PlanHint {
                     hint: "ManeuverKnightToOutpost".into(),
                     squares: route.into_iter().chain([target]).map(square_name).collect(),
                 });
-                score += sign * 8;
+                // A route is a plan, not yet an edge: half a hole's worth.
+                score += sign * 4;
+                exploitable = true;
+            }
+        }
+
+        if !holes.is_empty() {
+            let key = if color == Color::White {
+                "holes_in_black_camp"
+            } else {
+                "holes_in_white_camp"
+            };
+            evidence.insert(key.into(), sq_list(holes));
+            // A hole is worth real points only when this side has a
+            // concrete way in (an outpost held or a knight route); holes
+            // nobody can reach are latent, near-noise.
+            let per_hole = if exploitable { 8 } else { 2 };
+            score += sign * holes.len().min(3) as i32 * per_hole;
+        }
+        for b in board.colored_pieces(color, Piece::Bishop) {
+            if mask.has(b) {
+                let pawn_backup =
+                    get_pawn_attacks(b, enemy) & board.colored_pieces(color, Piece::Pawn);
+                if !pawn_backup.is_empty() {
+                    evidence.insert(
+                        format!(
+                            "bishop_outpost_{}",
+                            if color == Color::White {
+                                "white"
+                            } else {
+                                "black"
+                            }
+                        ),
+                        json!(square_name(b)),
+                    );
+                    score += sign * 25;
+                }
             }
         }
     }
     if evidence.is_empty() {
         return None;
     }
-    let (f, m) = favors(score, 12, 35)?;
+    let (f, m) = favors_or_balanced(score, 12, 35);
     Some(Imbalance {
         kind: ImbalanceKind::SquaresOutposts,
         favors: f,
@@ -630,15 +1344,32 @@ fn knight_route_to(
         }
     }
     let blocked = board.colors(color) | enemy_pawn_attacks | outgunned;
+    // The DESTINATION hole may still be piece-contested by one unit — a
+    // hole is permanent while piece cover is tradeable (Jeremy Silman,
+    // How to Reassess Your Chess, ex. 60: trade away every defender of
+    // d5, then settle the knight there). Waypoints stay strict; a hole
+    // outgunned by two or more is a fantasy, not a plan.
+    let target_ok = |n: Square| {
+        if board.colors(color).has(n) || enemy_pawn_attacks.has(n) {
+            return false;
+        }
+        let att = crate::attack::attackers_of(board, n, enemy, occ).len() as i32;
+        let def =
+            (crate::attack::attackers_of(board, n, color, occ) & !from.bitboard()).len() as i32;
+        // Uncontested, or contested by at most one extra unit while we
+        // hold at least one defender to trade behind (an attacked square
+        // with NO defenders is an invasion fantasy, not a route).
+        att == 0 || (def >= 1 && att - def <= 1)
+    };
     let mut prev: [Option<Square>; 64] = [None; 64];
     let mut seen = from.bitboard();
     let mut frontier = vec![from];
     for _depth in 0..3 {
         let mut next_frontier = Vec::new();
         for &s in &frontier {
-            for n in get_knight_moves(s) & !seen & !blocked {
-                prev[n as usize] = Some(s);
-                if targets.has(n) {
+            for n in get_knight_moves(s) & !seen {
+                if targets.has(n) && target_ok(n) {
+                    prev[n as usize] = Some(s);
                     // Reconstruct path (exclusive of from, inclusive of n
                     // handled by caller).
                     let mut path = Vec::new();
@@ -650,6 +1381,10 @@ fn knight_route_to(
                     path.reverse();
                     return Some((n, path));
                 }
+                if blocked.has(n) {
+                    continue;
+                }
+                prev[n as usize] = Some(s);
                 seen |= n.bitboard();
                 next_frontier.push(n);
             }
@@ -685,15 +1420,21 @@ pub fn space(board: &Board) -> Option<Imbalance> {
     let w = control(Color::White);
     let b = control(Color::Black);
     // A space edge over an undeveloped position is noise; require a real
-    // presence in the enemy half before reporting.
-    if w.max(b) < 3 {
+    // presence in the enemy half before reporting. And space is a story
+    // about pawn FRONTS — with most pawns gone it degenerates to noise.
+    if w.max(b) < 3 || board.pieces(Piece::Pawn).len() < 8 {
         return None;
     }
     let diff = (w - b) * 12;
     let mut evidence = BTreeMap::new();
     evidence.insert("white_space".into(), json!(w));
     evidence.insert("black_space".into(), json!(b));
-    let (f, m) = favors(diff, 24, 60)?;
+    // A big mutual territorial presence is worth reporting even level.
+    let (f, m) = if w.max(b) >= 5 {
+        favors_or_balanced(diff, 24, 60)
+    } else {
+        favors(diff, 24, 60)?
+    };
     // Plans are phrased for the favored side (the verbalizer attributes
     // them that way): keep pieces on, use the extra room.
     let plans = vec![PlanHint {
@@ -714,6 +1455,11 @@ pub fn development(board: &Board) -> Option<Imbalance> {
     if board.fullmove_number() > 15 {
         return None;
     }
+    // Development is an opening/middlegame story; once the wood is off,
+    // king "undevelopment" is usually king ACTIVITY.
+    if phase(board) == crate::record::Phase::Endgame {
+        return None;
+    }
     let developed = |c: Color| {
         let back = match c {
             Color::White => Rank::First,
@@ -721,10 +1467,10 @@ pub fn development(board: &Board) -> Option<Imbalance> {
         };
         let minors = board.colors(c) & (board.pieces(Piece::Knight) | board.pieces(Piece::Bishop));
         let out = (minors & !back.bitboard()).len() as i32;
-        let castled = {
-            let k = board.king(c);
-            k.rank() == back && (k.file() as i8 - File::E as i8).abs() >= 2
-        };
+        // Castled-ish: the king has left the central files. Judged by
+        // file alone so a castled king that later stepped up a rank (as
+        // in reconstructed middlegame positions) still gets credit.
+        let castled = (board.king(c).file() as i8 - File::E as i8).abs() >= 2;
         out + if castled { 2 } else { 0 }
     };
     let w = developed(Color::White);
@@ -782,7 +1528,14 @@ pub fn initiative(board: &Board) -> Option<Imbalance> {
     let mut evidence = BTreeMap::new();
     evidence.insert("white_forcing_moves".into(), json!(w));
     evidence.insert("black_forcing_moves".into(), json!(b));
-    let (f, m) = favors(diff, 45, 90)?;
+    // A two-forcing-move edge is worth NAMING but not worth a side-lean:
+    // report it as Balanced/Minor; a three-move edge picks a side as
+    // before (recall tuning against the book corpus, run 8.5).
+    let (f, m) = if diff.abs() >= 30 {
+        favors_or_balanced(diff, 45, 90)
+    } else {
+        favors(diff, 45, 90)?
+    };
     Some(Imbalance {
         kind: ImbalanceKind::Initiative,
         favors: f,
@@ -830,5 +1583,204 @@ pub fn phase(board: &Board) -> crate::record::Phase {
         crate::record::Phase::Opening
     } else {
         crate::record::Phase::Middlegame
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Cited unit tests for the run-8.5 plan hints. Each position is a
+    //! book diagram given as FEN + citation only (no book prose).
+
+    use super::*;
+
+    fn board(fen: &str) -> Board {
+        fen.parse().unwrap()
+    }
+
+    fn hints(imb: Option<Imbalance>) -> Vec<PlanHint> {
+        imb.map(|i| i.plans).unwrap_or_default()
+    }
+
+    fn has(plans: &[PlanHint], hint: &str) -> bool {
+        plans.iter().any(|p| p.hint == hint)
+    }
+
+    /// Jeremy Silman, The Amateur's Mind, p. 323, test 15: wing storm
+    /// justified — the blocked e5 pawn can never be levered.
+    #[test]
+    fn wing_storm_fires_when_center_is_locked() {
+        let b = board("r1bq1rk1/pp1nb1pp/4p3/2ppPp2/5B2/2PBP3/PP1N1PPP/R2QK2R w KQ - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(has(&plans, "WingPawnStormClosedCenter"), "{plans:?}");
+    }
+
+    /// Jeremy Silman, The Amateur's Mind, p. 322, test 14: the SAME storm
+    /// idea is wrong here — the center can still be levered open. The
+    /// discriminating partner of test 15.
+    #[test]
+    fn wing_storm_silent_when_center_is_fluid() {
+        let b = board("r3nrk1/pppq1pbp/2np2p1/4p3/4P3/2NP1NP1/PPP2PKP/R1BQ1R2 w - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(!has(&plans, "WingPawnStormClosedCenter"), "{plans:?}");
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 202, entry
+    /// 'Minority Attack': Carlsbad structure, White's b-pawn lever
+    /// targets c6.
+    #[test]
+    fn minority_attack_white_carlsbad() {
+        let b = board("r1bqrnk1/pp2bppp/2p2n2/3p2B1/3P4/2NBPN2/PPQ2PPP/R4RK1 w - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(plans
+            .iter()
+            .any(|p| p.hint == "MinorityAttack" && p.squares == vec!["b5", "c6"]));
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 203, entry
+    /// 'Minority Attack': the mirrored structure — BLACK owns the
+    /// minority attack against c3.
+    #[test]
+    fn minority_attack_black_mirror() {
+        let b = board("r2qkbnr/pp3ppp/2n1p3/3p4/3P4/2PQ1N2/PP3PPP/RNB1K2R w KQkq - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(plans
+            .iter()
+            .any(|p| p.hint == "MinorityAttack" && p.squares == vec!["b4", "c3"]));
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 329, entry
+    /// 'Two Hogs on the Seventh': rooks already on the seventh press on.
+    #[test]
+    fn rook_to_seventh_two_hogs() {
+        let b = board("r3k3/pRR5/8/5p2/6p1/6P1/r4PK1/8 w - - 0 1");
+        let imb = files_diagonals(&b).expect("files imbalance");
+        assert!(has(&imb.plans, "RookToSeventh"));
+        assert_eq!(imb.favors, Favors::White);
+        assert_eq!(imb.magnitude, Magnitude::Winning);
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 225, entry
+    /// 'No Entrance!': doubled rooks on the open a-file, but every entry
+    /// square is covered — RookToSeventh must NOT fire.
+    #[test]
+    fn rook_to_seventh_denied_without_entry_squares() {
+        let b = board("r5k1/rbqn1pb1/3p1npp/2pPp3/1pP1P3/1P4NP/1B1Q1PPN/1B2RRK1 b - - 0 1");
+        let plans = hints(files_diagonals(&b));
+        assert!(!has(&plans, "RookToSeventh"), "{plans:?}");
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 323, entry
+    /// 'Rooks Behind Passed Pawns': the rook belongs behind the a4
+    /// passer.
+    #[test]
+    fn rook_behind_passer_tarrasch() {
+        let b = board("8/5pk1/6p1/7p/P7/6P1/2r2PKP/1R6 w - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(plans
+            .iter()
+            .any(|p| p.hint == "RookBehindPasser" && p.squares.contains(&"a4".to_string())));
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 240, entry
+    /// 'Pawn Structure - Doubled Pawns': the front doubled c4 pawn can
+    /// never be defended by a pawn — pile up on it.
+    #[test]
+    fn pressure_doubled_pawn_saemisch_c4() {
+        let b = board("rnbq1rk1/p1pp1ppp/1p2pn2/8/2PPP3/P1P2P2/6PP/R1BQKBNR b KQ - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(plans
+            .iter()
+            .any(|p| p.hint == "PressureDoubledPawn" && p.squares == vec!["c4"]));
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 239, entry
+    /// 'Pawn Structure - Doubled Pawns': USEFUL doubled e3/e4 pawns — the
+    /// pressure plan must NOT fire against them.
+    #[test]
+    fn pressure_doubled_pawn_silent_on_useful_doubled_pawns() {
+        let b = board("r1bq1rk1/ppp2pp1/2np1n1p/4p3/2B1P3/2NPPN2/PPP3PP/R2Q1RK1 w - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(!has(&plans, "PressureDoubledPawn"), "{plans:?}");
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 279, entry
+    /// 'Trading Pieces': the e7 bishop buried behind the c5/d6/e5 chain
+    /// wants to be traded or freed.
+    #[test]
+    fn trade_or_activate_bad_bishop() {
+        let b = board("rnbq1rk1/pp2bpnp/3p2pB/2pPp3/2P1P1P1/2N2N1P/PP1Q1P2/R3R1K1 b - - 0 1");
+        let plans = hints(minor_pieces(&b));
+        assert!(plans
+            .iter()
+            .any(|p| p.hint == "TradeOrActivateBadBishop" && p.squares == vec!["e7"]));
+    }
+
+    /// Jeremy Silman, How to Reassess Your Chess, 3rd ed., p. 367,
+    /// problem 27: queens off — the king marches toward the center.
+    #[test]
+    fn activate_king_in_endgame() {
+        let b = board("r4rk1/pb1p1ppp/1p2pn2/8/1PPP4/P1N2P2/3K2PP/R4B1R b - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(has(&plans, "ActivateKingInEndgame"), "{plans:?}");
+    }
+
+    /// Jeremy Silman, How to Reassess Your Chess, 3rd ed., p. 371,
+    /// problem 82: the b8 knight has no stable square anywhere — keep it
+    /// that way, and open the position for the bishop.
+    #[test]
+    fn restrict_knight_with_no_home() {
+        let b = board("1n1rr1k1/p1p2ppp/1p1p4/4q3/2P5/P3PB2/1PQR1PPP/5RK1 w - - 0 1");
+        let plans = hints(minor_pieces(&b));
+        assert!(plans
+            .iter()
+            .any(|p| p.hint == "RestrictKnight" && p.squares == vec!["b8"]));
+        assert!(has(&plans, "OpenPositionForBishops"));
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 269, entry
+    /// 'Queenside Pawn Majority': in a middlegame the CENTRAL majority
+    /// outranks the queenside one — the central hint fires, the wing
+    /// hint is withheld.
+    #[test]
+    fn central_majority_outranks_queenside_in_middlegame() {
+        let b = board("2rr2k1/p1qn1ppb/1p2p2p/8/2P5/1P2BN2/P3QPPP/3RR1K1 b - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(has(&plans, "AdvanceCentralMajority"), "{plans:?}");
+        assert!(!has(&plans, "AdvanceQueensideMajority"), "{plans:?}");
+    }
+
+    /// Jeremy Silman, The Amateur's Mind, p. 316, test 2: the black king
+    /// is airy and White owns the half-open f-file beside it.
+    #[test]
+    fn open_lines_toward_weak_king() {
+        let b = board("r3r1k1/pb3p2/4pR2/1p1p2p1/3P1n2/B1P5/PP1N2PP/R5K1 w - - 0 1");
+        let imb = files_diagonals(&b).expect("files imbalance");
+        assert_eq!(imb.favors, Favors::White);
+        assert!(imb
+            .plans
+            .iter()
+            .any(|p| p.hint == "OpenLinesTowardWeakKing" && p.squares == vec!["f7"]));
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 236, entry
+    /// 'Pawn Structure - Backward Pawns': the backward d6 pawn on
+    /// White's half-open file, with White in charge of the stop square.
+    #[test]
+    fn pressure_backward_pawn_on_half_open_file() {
+        let b = board("r1q2rk1/1p2bppp/pBnp4/4p3/P7/2NB1QP1/1PP2P1P/R2R2K1 w - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(plans
+            .iter()
+            .any(|p| p.hint == "PressureBackwardPawn" && p.squares == vec!["d6", "d5"]));
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 237, entry
+    /// 'Pawn Structure - Backward Pawns': d6 is backward but WELL
+    /// DEFENDED — the pressure plan goes nowhere and must stay silent.
+    #[test]
+    fn pressure_backward_pawn_silent_when_well_defended() {
+        let b = board("r2r1bk1/1pq1ppp1/p1npbn1p/8/4P3/1NN1BP2/PPPQB1PP/R2R2K1 w - - 0 1");
+        let plans = hints(pawn_structure(&b));
+        assert!(!has(&plans, "PressureBackwardPawn"), "{plans:?}");
     }
 }
