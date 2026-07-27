@@ -33,6 +33,19 @@ pub struct Entry {
     pub confidence: String,
     #[serde(default)]
     pub expected: Expected,
+    #[serde(default)]
+    pub not_expected: NotExpected,
+}
+
+/// Negative assertions: things the analyzer must NOT claim here. The
+/// counter-example positions (a "useful" doubled pawn, an open file with
+/// no entry squares...) anchor precision while thresholds chase recall.
+#[derive(Debug, Default, Deserialize)]
+pub struct NotExpected {
+    #[serde(default)]
+    pub imbalances: Vec<String>,
+    #[serde(default)]
+    pub plan_tags: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -93,6 +106,9 @@ pub struct Report {
     pub vocabulary_gaps: BTreeMap<String, u32>,
     /// (entry id, axis, expected item) for every miss.
     pub misses: Vec<(String, &'static str, String)>,
+    /// Precision: negative assertions that FIRED anyway.
+    pub false_fires: Vec<(String, &'static str, String)>,
+    pub negative_checks: u32,
 }
 
 pub fn eval_corpus(corpus: &Corpus) -> Report {
@@ -150,6 +166,20 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
                 r.alerts.hits += 1;
             } else {
                 r.misses.push((e.id.clone(), "alert", want.clone()));
+            }
+        }
+
+        for banned in &e.not_expected.imbalances {
+            r.negative_checks += 1;
+            if detected_kinds.iter().any(|k| k == banned) {
+                r.false_fires
+                    .push((e.id.clone(), "imbalance", banned.clone()));
+            }
+        }
+        for banned in &e.not_expected.plan_tags {
+            r.negative_checks += 1;
+            if detected_hints.iter().any(|h| h == banned) {
+                r.false_fires.push((e.id.clone(), "plan", banned.clone()));
             }
         }
 
@@ -236,6 +266,16 @@ pub fn print_report(book: &str, r: &Report, verbose: bool) {
         println!("  vocabulary gaps (no matching hint yet):");
         for (tag, n) in &r.vocabulary_gaps {
             println!("    {tag} ×{n}");
+        }
+    }
+    if r.negative_checks > 0 {
+        println!(
+            "  negatives    {}/{} clean",
+            r.negative_checks - r.false_fires.len() as u32,
+            r.negative_checks
+        );
+        for (id, axis, what) in &r.false_fires {
+            println!("  FALSE-FIRE {axis:<9} {id}: {what}");
         }
     }
     if verbose {
