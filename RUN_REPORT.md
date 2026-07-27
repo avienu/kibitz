@@ -1,3 +1,59 @@
+# Run 9 — 2026-07-27 (field-feedback batch + go-public ops)
+
+## Headline
+
+Your first real session produced six reports; all six are fixed, tested
+and merged the same day — plus the go-public operations you authorized:
+**the history scrub is done (80 commits rewritten, zero traces),
+https://kibitzchess.org is live with HTTPS enforced, mail forwarding is
+verified end-to-end (infra, SES), and you blessed the screenshots.**
+Remaining before v0.1.0: Apple enrollment + signing secrets, updater
+keygen, the donation URL. 754 tests green (362 Rust + 46 shell + 346
+frontend).
+
+## The six reports
+
+1. **TWIC needs a real UI** → the full weekly catalog from issue 920 to
+   the probed latest (imported status, game counts, approx dates),
+   select-and-download or download-all-missing on a serial cancellable
+   worker, the personal-use notice acknowledged in-app, and an
+   auto-download-new toggle. Catalog refresh costs ~2 polite HEAD
+   requests.
+2. **Account syncs need a UI** → per-service cards with saved
+   usernames, one-click incremental sync, persisted last-run reports,
+   honest 429 behavior; ICC stays manual-export with the reason stated.
+   The rail badges (week number, linked accounts) are now real data.
+3. **Endgame drill felt stuck** → it was never stuck; it was silent.
+   Explicit turn/status line, SOLVED/FAILED panels with Retry and Next
+   drill, where-it-went-wrong from the tablebase verdicts, and the
+   defender's thinking beat made visible. Play to mate.
+4. **Tactics continuation unclear** → prompt under the board at every
+   state ("✓ Keep going — 2 to find"), rating delta on finish, Next on
+   Enter/N. No dead ends.
+5. **Database search lost on back-navigation** → search, page, scroll
+   and selected row survive leaving and returning (session-scoped;
+   restart starts clean; Clear chip).
+6. **Re-analyze "does nothing" (round 2)** → ruled and fixed properly:
+   an explicit click is an explicit engine request, so Re-analyze and
+   Annotate now enqueue AND run immediately, with a live progress row
+   under the game header and auto-refresh of evals/annotations on
+   completion. The engine-off principle governs defaults — untouched,
+   and its assertions still pass.
+
+Plus your design question, answered in code: **repertoire marks in the
+game view** — a tick on every move matching a trained card, a mark on
+the first deviation per color with the expected move in the tooltip.
+Every replay is now passive repertoire training.
+
+## Go-public status
+
+DONE: history scrub (force-pushed; any old clone must re-clone),
+screenshots blessed, kibitzchess.org live + HTTPS, mail forwarding live
+(SES, hard-fail SPF, p=reject DMARC — infra's setup, verified
+end-to-end), repo public. REMAINING: Apple enrollment → signing
+secrets; `tauri signer generate` → pubkey + CI secrets; donation URL
+(drops into the site on receipt); tag v0.1.0.
+
 # Run 8.5 — 2026-07-27 (book-trial validation & tuning)
 
 ## Headline
