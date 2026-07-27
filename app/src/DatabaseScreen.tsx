@@ -109,7 +109,7 @@ export default function DatabaseScreen({
       saveDbPath(path);
       setPage(0);
       const filename = s.path.split(/[\\/]/).pop() ?? s.path;
-      setWindowTitle(`silman — ${filename}`).catch(() => {});
+      setWindowTitle(`kibitz — ${filename}`).catch(() => {});
     } catch (e) {
       onSummary(null);
       setDbError(String(e));

@@ -1,7 +1,7 @@
 [package]
-name = "silman-app"
+name = "kibitz-app"
 version = "0.0.1"
-description = "Silman Phase 0 spike demo — Tauri shell (board + PGN stepping + UCI engine panel)"
+description = "Kibitz Phase 0 spike demo — Tauri shell (board + PGN stepping + UCI engine panel)"
 authors = ["Shawn O'Connor"]
 license = "GPL-3.0-only"
 edition = "2021"
@@ -12,7 +12,7 @@ edition = "2021"
 [workspace]
 
 [lib]
-name = "silman_app_lib"
+name = "kibitz_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -31,13 +31,13 @@ tokio = { version = "1", features = [
     "rt-multi-thread",
 ] }
 # GPL app-layer database core (pulls the BSD workspace crates in as path deps).
-silman-db = { path = "../silman-db" }
+kibitz-db = { path = "../kibitz-db" }
 # BSD workspace crates (app -> crates dependency direction, CLAUDE.md #2).
-silman-core = { path = "../../crates/silman-core" }
-silman-profile = { path = "../../crates/silman-profile" }
-silman-srs = { path = "../../crates/silman-srs" }
-silman-tb = { path = "../../crates/silman-tb" }
-silman-verbalize = { path = "../../crates/silman-verbalize" }
+kibitz-core = { path = "../../crates/kibitz-core" }
+kibitz-profile = { path = "../../crates/kibitz-profile" }
+kibitz-srs = { path = "../../crates/kibitz-srs" }
+kibitz-tb = { path = "../../crates/kibitz-tb" }
+kibitz-verbalize = { path = "../../crates/kibitz-verbalize" }
 # Keep these versions in lockstep with the root workspace so the types unify.
 rusqlite = { version = "0.32", features = ["bundled"] }
 cozy-chess = "0.3"

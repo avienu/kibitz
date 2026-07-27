@@ -24,7 +24,7 @@ export function TwicPlaceholder() {
     <PlaceholderView title="TWIC ingest">
       <p className="page-prose">
         The Week in Chess ingester runs from the command line for now:{" "}
-        <code>silman-cli twic-sync</code> downloads new weekly issues into the open database
+        <code>kibitz-cli twic-sync</code> downloads new weekly issues into the open database
         (personal use only — TWIC data is never bundled or redistributed). The last ingested week
         will appear here, and in the rail badge, once the desktop surface lands.
       </p>
@@ -37,7 +37,7 @@ export function SyncsPlaceholder() {
     <PlaceholderView title="Account syncs">
       <p className="page-prose">
         Online-account game sync (Lichess, chess.com, FICS) lives in the data layer and the CLI:{" "}
-        <code>silman-cli lichess-sync</code> / <code>chesscom-sync</code> /{" "}
+        <code>kibitz-cli lichess-sync</code> / <code>chesscom-sync</code> /{" "}
         <code>fics-sync</code>. Connected accounts and their last sync will appear here once
         the desktop surface lands. Provenance of every imported game is tracked in the database.
       </p>

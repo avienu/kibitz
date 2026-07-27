@@ -1,0 +1,10 @@
+---
+source: crates/kibitz-verbalize/tests/verbalize.rs
+assertion_line: 509
+expression: out
+---
+No tactics are shouting for attention; the pieces are settling in for a long positional argument.
+
+In this endgame White's pawn structure should decide the game. White has a passed pawn on a5. Meanwhile, as for material, the position is level. The engine's overall verdict: about +3.5, and it likes a6 here.
+
+Here is what White should be dreaming about: walk the king up as an escort and let the passed pawn chase its dream of the last rank (key squares: a5, a6, a7 and a8).

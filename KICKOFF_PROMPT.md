@@ -1,6 +1,6 @@
 # First Claude Code session — paste this as your opening instruction
 
-Read CLAUDE.md, docs/ARCHITECTURE.md, docs/SILMAN_ENGINE_SPEC.md, and
+Read CLAUDE.md, docs/ARCHITECTURE.md, docs/KIBITZ_ENGINE_SPEC.md, and
 docs/ROADMAP.md in full before writing any code.
 
 Then execute Phase 0 from ROADMAP.md, in this order:
@@ -10,7 +10,7 @@ Then execute Phase 0 from ROADMAP.md, in this order:
    docs/LICENSES.md with the initial dependency registry, and CI
    (GitHub Actions): fmt, clippy -D warnings, test, and a cargo-license job
    that FAILS if any crates/* member has a GPL/LGPL/AGPL dependency.
-2. Pin cozy-chess in silman-core. Write the perft correctness suite
+2. Pin cozy-chess in kibitz-core. Write the perft correctness suite
    (standard perft positions, depths per published tables) and a criterion
    benchmark for movegen + attack-map queries. Record results in
    docs/BENCHMARKS.md with hardware notes.

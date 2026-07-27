@@ -1,6 +1,6 @@
 //! Read-only database game browser (ROADMAP Phase 1, browse half).
 //!
-//! IPC commands over silman-db: `open_database`, `list_games`, `get_game`,
+//! IPC commands over kibitz-db: `open_database`, `list_games`, `get_game`,
 //! `opening_tree`, `find_games_at`. One SQLite connection is held in Tauri
 //! state (`DbState`); all commands fail cleanly with "no database open"
 //! until `open_database` succeeds.
@@ -95,17 +95,17 @@ pub struct DbSummary {
     pub path: String,
 }
 
-/// Open a silman SQLite database and keep the connection in state.
+/// Open a kibitz SQLite database and keep the connection in state.
 /// Refuses paths that do not exist (opening would silently create an
 /// empty database, which is never what a browser user wants).
 #[tauri::command]
 pub async fn open_database(state: State<'_, DbState>, path: String) -> Result<DbSummary, String> {
     let resolved = resolve_db_path(&path)?;
-    let conn = silman_db::db::open(&resolved).map_err(|e| e.to_string())?;
+    let conn = kibitz_db::db::open(&resolved).map_err(|e| e.to_string())?;
     // Tolerate short write locks from the run_jobs worker connection.
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
-    let stats = silman_db::query::stats(&conn).map_err(|e| e.to_string())?;
+    let stats = kibitz_db::query::stats(&conn).map_err(|e| e.to_string())?;
     let summary = DbSummary {
         games: stats.games,
         players: stats.players,
@@ -373,7 +373,7 @@ pub(crate) fn get_game_impl(conn: &Connection, id: i64) -> Result<GameDetail, St
     ) = row;
 
     let opening_name = match eco.as_deref() {
-        Some(code) => silman_db::eco::name_for(conn, code).map_err(|e| e.to_string())?,
+        Some(code) => kibitz_db::eco::name_for(conn, code).map_err(|e| e.to_string())?,
         None => None,
     };
 
@@ -383,12 +383,12 @@ pub(crate) fn get_game_impl(conn: &Connection, id: i64) -> Result<GameDetail, St
             .map_err(|e| format!("game {id} has a bad start FEN {fen:?}: {e:?}"))?,
         None => Board::default(),
     };
-    let moves = silman_db::movebin::decode_game(&start, &movetext)
+    let moves = kibitz_db::movebin::decode_game(&start, &movetext)
         .map_err(|e| format!("game {id} movetext failed to decode: {e}"))?;
     let mut board = start;
     let mut sans = Vec::with_capacity(moves.len());
     for mv in moves {
-        sans.push(silman_db::san::format_san(&board, mv));
+        sans.push(kibitz_db::san::format_san(&board, mv));
         board.play(mv);
     }
 
@@ -445,7 +445,7 @@ pub struct OpeningTree {
 pub async fn opening_tree(state: State<'_, DbState>, fen: String) -> Result<OpeningTree, String> {
     with_conn(&state, |conn| {
         let (moves, elapsed) =
-            silman_db::query::opening_tree(conn, &fen).map_err(|e| e.to_string())?;
+            kibitz_db::query::opening_tree(conn, &fen).map_err(|e| e.to_string())?;
         Ok(OpeningTree {
             rows: moves
                 .into_iter()
@@ -493,7 +493,7 @@ pub struct GamesAt {
 #[tauri::command]
 pub async fn find_games_at(state: State<'_, DbState>, fen: String) -> Result<GamesAt, String> {
     with_conn(&state, |conn| {
-        let (hits, elapsed) = silman_db::query::find_fen(conn, &fen).map_err(|e| e.to_string())?;
+        let (hits, elapsed) = kibitz_db::query::find_fen(conn, &fen).map_err(|e| e.to_string())?;
         let total = hits.len() as i64;
         let rows = hits
             .into_iter()
@@ -524,10 +524,10 @@ pub(crate) fn eco_names_impl(
 ) -> Result<std::collections::HashMap<String, Option<String>>, String> {
     // The openings table is populated at import time; make sure it exists
     // for databases that somehow skipped that (cheap when already loaded).
-    silman_db::eco::ensure_openings(conn).map_err(|e| e.to_string())?;
+    kibitz_db::eco::ensure_openings(conn).map_err(|e| e.to_string())?;
     let mut out = std::collections::HashMap::with_capacity(codes.len());
     for code in codes {
-        let name = silman_db::eco::name_for(conn, code).map_err(|e| e.to_string())?;
+        let name = kibitz_db::eco::name_for(conn, code).map_err(|e| e.to_string())?;
         out.insert(code.clone(), name);
     }
     Ok(out)
@@ -545,7 +545,7 @@ pub async fn eco_names(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use silman_db::import::{import_pgn, SourceInfo, SourceKind};
+    use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
     use std::io::Cursor;
 
     /// Opera game (public domain), a fool's-mate miniature with elos, and a
@@ -580,7 +580,7 @@ mod tests {
 
     fn fixture_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
-        let conn = silman_db::db::open(&dir.path().join("test.sqlite")).unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("test.sqlite")).unwrap();
         let source = SourceInfo {
             name: "fixture".into(),
             origin: "unit test".into(),
@@ -706,20 +706,20 @@ mod tests {
             Some("Scandinavian Defense")
         );
         assert_eq!(out.get("Z99").unwrap(), &None);
-        assert_eq!(silman_db::engine::spawn_count(), 0);
+        assert_eq!(kibitz_db::engine::spawn_count(), 0);
     }
 
     #[test]
     fn search_and_tree_report_measured_timing() {
         let (_dir, conn) = fixture_db();
-        // Impl-level check via silman-db (the command wrappers only convert
+        // Impl-level check via kibitz-db (the command wrappers only convert
         // the Duration): both queries return a real measured duration.
         let start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-        let (hits, elapsed) = silman_db::query::find_fen(&conn, start).unwrap();
+        let (hits, elapsed) = kibitz_db::query::find_fen(&conn, start).unwrap();
         assert_eq!(hits.len(), 3, "every game reaches the start position");
         assert!(elapsed.as_secs_f64() >= 0.0);
         let after_e4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
-        let (hits, elapsed) = silman_db::query::find_fen(&conn, after_e4).unwrap();
+        let (hits, elapsed) = kibitz_db::query::find_fen(&conn, after_e4).unwrap();
         assert_eq!(hits.len(), 1, "only the Opera game opens 1.e4");
         assert!(elapsed.as_secs_f64() * 1000.0 < 10_000.0, "sane magnitude");
     }

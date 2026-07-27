@@ -1,5 +1,8 @@
 # Handoff: Silman — round 2 (home + remaining screens)
 
+> **Note (2026-07):** “Silman” in this document is the working-era name of what is now **Kibitz**. The handoff is preserved verbatim as the design source of truth.
+
+
 ## Overview
 Round 1 specified the board, the evidence-overlay language, the tokens and the game view. **Round 2 fills in every other surface** inside that same shell: Home (two directions + recommendation), Database, Opening tree, Position search, Profile, Opponent prep, Tactics, Openings SRS, Endgames, Settings, Help & first-run tour.
 

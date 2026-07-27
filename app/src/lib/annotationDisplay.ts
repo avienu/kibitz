@@ -10,7 +10,7 @@ export type AnnotationDisplay = "full" | "hover" | "hidden";
 
 export const ANNOTATION_DISPLAY_MODES: readonly AnnotationDisplay[] = ["full", "hover", "hidden"];
 
-const KEY = "silman.annotationDisplay";
+const KEY = "kibitz.annotationDisplay";
 
 export function getSavedAnnotationDisplay(): AnnotationDisplay {
   try {

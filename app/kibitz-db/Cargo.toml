@@ -1,0 +1,37 @@
+[package]
+name = "kibitz-db"
+description = "GPL app-layer database core: SQLite schema, importers, position index, CLI"
+license = "GPL-3.0-only"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kibitz-core = { path = "../../crates/kibitz-core" }
+kibitz-profile = { path = "../../crates/kibitz-profile" }
+kibitz-srs = { path = "../../crates/kibitz-srs" }
+kibitz-tb = { path = "../../crates/kibitz-tb" }
+kibitz-verbalize = { path = "../../crates/kibitz-verbalize", features = ["llm"] }
+cozy-chess = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+
+si4-read = { path = "../../crates/si4-read" }
+ureq = { workspace = true }
+zip = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+tempfile = { workspace = true }
+
+[[bin]]
+name = "kibitz-cli"
+path = "src/bin/kibitz-cli.rs"
+
+[[bin]]
+name = "wsui-validate"
+path = "src/bin/wsui-validate.rs"

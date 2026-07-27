@@ -1,0 +1,110 @@
+# coach.tmpl — the "Kibitz voice" (run-5 item 3): an anthropomorphized-piece
+# coaching OVERLAY on the base templates. When the Coach voice is selected,
+# every lookup first tries `coach.<key>` from this file and falls back to the
+# plain `<key>`; the Neutral voice never reads this file. So this file only
+# carries the lines where the coaching voice genuinely improves on the
+# neutral phrasing — alert leads, imbalance leads, plan leads — and every
+# slot works exactly as in the base template of the same name.
+#
+# Style contract: pieces have desires and grievances (a knight dreams of an
+# outpost, a bishop bites on granite), the student may be addressed directly
+# but only sparingly, and the voice may never add a chess fact the record
+# does not contain. Vivid but concrete, never cute for its own sake.
+#
+# A key with a coach override uses only its own `coach.<key>.alt` for the
+# seeded phrasing variety; base .alt variants do not mix into coach prose.
+
+# --- Tactical alert leads (see alerts.tmpl for slots) ---
+coach.alert.Undefended.high = {subject} has been abandoned — not one defender is watching over it.
+coach.alert.Undefended.medium = {subject} stands alone — nobody has taken the job of defending it.
+coach.alert.Undefended.medium.alt = Nobody is looking after {subject} — it has been left to fend for itself.
+coach.alert.Undefended.low = {subject} is on its own for the moment — don't forget about it.
+coach.alert.Undefended.loose = {subject} has lost its bodyguard — keep half an eye on it.
+coach.alert.Undefended.attacked-and-undefended = {subject} hangs — it stands under attack with no friend in sight.
+
+coach.alert.InadequatelyDefended.high = {subject} is crying out for help that its defenders cannot give.
+coach.alert.InadequatelyDefended.high.alt = The defenders of {subject} are overworked, and they know it.
+coach.alert.InadequatelyDefended.medium = {subject} is calling for reinforcements — the defense around it is stretched thin.
+coach.alert.InadequatelyDefended.medium.alt = {subject} has collected more enemies than friends.
+coach.alert.InadequatelyDefended.low = {subject} could use one more friend — its defense is a little thin.
+
+coach.alert.overloaded = {subject} is wearing two hats — it alone is holding {defenders} together.
+
+coach.alert.TrappedPiece.high = {subject} is caged — it dreams of open squares and cannot reach a single safe one.
+coach.alert.TrappedPiece.medium = {subject} is running out of air — its list of safe squares is nearly empty.
+coach.alert.TrappedPiece.low = {subject} is starting to feel the walls — it has very little room to move.
+coach.alert.TrappedPiece.trapped-and-attacked = {subject} is trapped — the cage is shut, and there is no safe square left.
+coach.alert.TrappedPiece.trapped-attackable = {subject} has nowhere to run — the cage is built, and the door is about to close.
+
+coach.alert.WeakKing.high = {subject} is standing in a gale{target_clause} — its shelter has fallen apart.
+coach.alert.WeakKing.medium = {subject} is feeling a draft{target_clause} — the shelter is thinner than it would like.
+coach.alert.WeakKing.low = {subject} feels a slight draft{target_clause} — nothing serious yet, but keep it in mind.
+
+# --- Section-level lines (common.tmpl) ---
+coach.tactics.quiet = No tactics are shouting for attention; the pieces are settling in for a long positional argument.
+coach.empty = Nothing here is complaining and nothing is dreaming big — a level position. Find your worst-placed piece and give it a better life.
+
+# --- Known alert detail follow-ons (common.tmpl) ---
+coach.detail.overloaded-defender = That defender is overloaded — no piece can be in two places at once.
+
+# --- Imbalance headlines (imbalances.tmpl; slots {beneficiary}, {aspect}) ---
+coach.imbalance.PawnStructure.minor = {beneficiary}'s pawn structure has a little less to complain about.
+coach.imbalance.PawnStructure.clear = {beneficiary}'s pawn structure is the happier one — the opponent's carries scars that will not heal by themselves.
+coach.imbalance.PawnStructure.winning = {beneficiary}'s pawn structure should win the game on its own; the opponent's weaknesses are not going anywhere.
+
+coach.imbalance.MinorPieces.minor = {beneficiary}'s minor pieces are a touch happier with their squares.
+coach.imbalance.MinorPieces.clear = {beneficiary}'s minor pieces have found real work; their counterparts are still waiting for a career.
+coach.imbalance.MinorPieces.winning = {beneficiary}'s minor pieces own this board — their rivals can only stand and watch.
+
+coach.imbalance.Material.winning = {beneficiary} has won enough material to decide the game; the rest is care and technique.
+
+coach.imbalance.FilesDiagonals.clear = {beneficiary}'s heavy pieces have the open lines to themselves.
+coach.imbalance.FilesDiagonals.winning = every line that matters belongs to {beneficiary}, and the opponent's pieces are pressed against the wall.
+
+coach.imbalance.SquaresOutposts.minor = {beneficiary} is winning the quiet fight for the squares both sides dream about.
+coach.imbalance.SquaresOutposts.clear = {beneficiary} owns the squares that matter, and pieces that own squares soon find homes on them.
+coach.imbalance.SquaresOutposts.winning = {beneficiary}'s grip on the key squares is total — the opponent's pieces have nowhere good left to live.
+
+coach.imbalance.Space.minor = {beneficiary}'s pieces have a little more elbow room.
+coach.imbalance.Space.clear = {beneficiary}'s army breathes freely while the opponent's pieces queue for the same few squares.
+coach.imbalance.Space.winning = {beneficiary}'s space advantage is a slow strangle — the opponent's pieces are stepping on each other's toes.
+
+coach.imbalance.Development.clear = {beneficiary}'s pieces are up and working while the opponent's are still putting their boots on.
+coach.imbalance.Development.winning = {beneficiary}'s whole army is in the game — the opponent's is still at home, and that bill is coming due.
+
+coach.imbalance.Initiative.clear = {beneficiary} is asking the questions; the opponent is stuck finding answers.
+coach.imbalance.Initiative.winning = {beneficiary}'s initiative has become a stampede — every move arrives with a new demand.
+
+# --- Selected evidence clauses (evidence.tmpl; no terminal period) ---
+coach.evidence.bad_bishop = {side}'s {square}-bishop is biting on granite — its own pawns on {pawns} block every road it wants to travel
+coach.evidence.bad_bishop.bare = {side}'s {square}-bishop is biting on granite, staring at its own pawns
+coach.evidence.established_outpost = {side}'s knight has found a permanent home on {items} and has no intention of leaving
+coach.evidence.holes = there is a hole on {items} in {side}'s camp — a square that dreams of hosting an enemy piece
+coach.evidence.holes.plural = there are holes on {items} in {side}'s camp — squares that dream of hosting enemy pieces
+
+# --- Plan leads and selected plan phrases (plans.tmpl) ---
+coach.plan.lead.side = Here is what {side} should be dreaming about: {plan}{squares_clause}.
+coach.plan.lead.side.more = Another dream for {side}: {plan}{squares_clause}.
+coach.plan.lead.neutral = A plan worth taking to heart: {plan}{squares_clause}.
+coach.plan.lead.neutral.more = And tuck this idea away too: {plan}{squares_clause}.
+
+coach.plan.BlockadeThenPressure = park a piece in front of the weak pawn so it can never move again, then pile on it at your leisure
+coach.plan.OpenThePosition = look for the break that throws the position open
+coach.plan.EscortThePasser = walk the king up as an escort and let the passed pawn chase its dream of the last rank
+coach.plan.PushThePasser = push the passed pawn — it has somewhere important to be
+coach.plan.ManeuverKnight = find the knight the square it has been dreaming of
+coach.plan.ManeuverKnightToOutpost = steer the knight toward the outpost — it would love a permanent home there
+coach.plan.TradePieces = trade pieces and let the cramped position breathe
+coach.plan.PrepareBreak = prepare the freeing pawn break and give the position air
+coach.plan.KeepPositionClosed = keep the position closed — this is knight country, and the bishops know it
+coach.plan.OpenPositionForBishops = open the position and let the bishops finally stretch their diagonals
+coach.plan.AdvanceQueensideMajority = march the queenside majority — those pawns outnumber their opposition and they know it
+coach.plan.BlockadeWhitePasser = put a piece in front of White's passer and put its dreams on hold
+coach.plan.BlockadeBlackPasser = put a piece in front of Black's passer and put its dreams on hold
+coach.plan.DoubleOnOpenFile = double the heavy pieces on the open file and make it their private highway
+coach.plan.UseSpaceAvoidExchanges = keep the extra space and refuse trades — cramped pieces suffer most when nobody leaves the room
+coach.plan.OpenPositionBeforeOpponentCompletes = open the position while half the opponent's army is still asleep at home
+
+# --- Composite plans (plans.tmpl; slots {target}, {clauses}, {side}) ---
+coach.plan.composite.lead = The whole position is pointing at {target} — every signpost reads the same: {clauses}.
+coach.plan.composite.runner_up = {side} has a second dream worth keeping alive around {target}.

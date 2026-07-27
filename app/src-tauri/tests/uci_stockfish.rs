@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use silman_app_lib::uci::{Engine, UciPosition};
+use kibitz_app_lib::uci::{Engine, UciPosition};
 
 fn repo_engine_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

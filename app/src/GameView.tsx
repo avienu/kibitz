@@ -285,7 +285,7 @@ export default function GameView({
               >
                 {gv.selectedSquare && (
                   <div
-                    className="silman-mark silman-mark-selected"
+                    className="kibitz-mark kibitz-mark-selected"
                     style={squarePos(gv.selectedSquare, gv.flipped)}
                   />
                 )}

@@ -11,7 +11,7 @@ import { whitePovCp, type AnalysisRow } from "./analyses";
 import { DEFAULT_INTENSITY, type Evidence, type EvidenceArrow } from "./evidence";
 
 /* ------------------------------------------------------------------ */
-/* The explanation contract (backend: silman_core::record::Explanation,
+/* The explanation contract (backend: kibitz_core::record::Explanation,
  * serialized snake_case; evidence arrays are omitted when empty).      */
 /* ------------------------------------------------------------------ */
 
@@ -282,7 +282,7 @@ export function keyboardAction(key: string, opts: KeyboardOpts = {}): GameKeyAct
 
 /**
  * Fresh analyses store mate as an eval_cp sentinel of ±10000
- * (app/silman-db/src/engine.rs); anything at or beyond this threshold is
+ * (app/kibitz-db/src/engine.rs); anything at or beyond this threshold is
  * displayed as a mate, never as a centipawn number.
  */
 export const MATE_SENTINEL_CP = 9500;

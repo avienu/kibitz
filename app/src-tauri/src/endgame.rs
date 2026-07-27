@@ -1,15 +1,15 @@
-//! Endgame trainer IPC commands (ROADMAP Phase 5) over silman_db::endgame:
+//! Endgame trainer IPC commands (ROADMAP Phase 5) over kibitz_db::endgame:
 //! curriculum + progress overview, drill sessions (user vs tablebase/
 //! heuristic opponent) and attempt recording.
 //!
 //! Engine-off principle (CLAUDE.md #6): nothing here can spawn an engine.
-//! The opponent is Syzygy tablebase probing (silman-tb / Fathom, in
+//! The opponent is Syzygy tablebase probing (kibitz-tb / Fathom, in
 //! process) where the piece count is covered, else the deterministic
-//! heuristic documented in silman_db::endgame. With only the 3-man test
+//! heuristic documented in kibitz_db::endgame. With only the 3-man test
 //! set most drills use the heuristic; a 3-4-5 set covers the whole
 //! curriculum.
 //!
-//! The Syzygy directory resolves from SILMAN_SYZYGY, else by walking up
+//! The Syzygy directory resolves from KIBITZ_SYZYGY, else by walking up
 //! from the cwd looking for `testdata/syzygy` (the dev layout, mirroring
 //! the Stockfish and puzzle-CSV resolution conventions). Fathom keeps
 //! process-global state, so the Tablebase is initialized once and kept for
@@ -20,8 +20,8 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use serde::Serialize;
-use silman_db::endgame::{self, DrillProgress, DrillSession, Goal, StepReport, Tier};
-use silman_tb::Tablebase;
+use kibitz_db::endgame::{self, DrillProgress, DrillSession, Goal, StepReport, Tier};
+use kibitz_tb::Tablebase;
 use tauri::State;
 
 use crate::browse::{with_conn, DbState};
@@ -60,7 +60,7 @@ impl Default for EndgameState {
 }
 
 fn resolve_tb_dir() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("SILMAN_SYZYGY") {
+    if let Ok(p) = std::env::var("KIBITZ_SYZYGY") {
         let p = PathBuf::from(p);
         if p.is_dir() {
             return Some(p);
@@ -85,7 +85,7 @@ impl Inner {
         if matches!(self.tb, TbSlot::Untried) {
             self.tb = match resolve_tb_dir() {
                 None => TbSlot::Unavailable(
-                    "no Syzygy directory found (set SILMAN_SYZYGY or fetch testdata/syzygy)"
+                    "no Syzygy directory found (set KIBITZ_SYZYGY or fetch testdata/syzygy)"
                         .to_string(),
                 ),
                 Some(dir) => match Tablebase::init(&dir) {

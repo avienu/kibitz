@@ -88,7 +88,7 @@ export default function ExplainPanel({
       ) : (
         <div className="explain-body explain-empty">
           <p className="explain-empty-prose">
-            No screen has fired on this position. Silman keeps the engine cold until you ask, or
+            No screen has fired on this position. Kibitz keeps the engine cold until you ask, or
             until a tactical screen actually trips.
           </p>
           <button className="btn-primary" onClick={onExplain} disabled={explaining}>

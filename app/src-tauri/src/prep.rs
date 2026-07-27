@@ -1,7 +1,7 @@
 //! Opponent-prep IPC commands (ROADMAP Phase 2, prep view).
 //!
-//! `matching_players` wraps silman_db::fingerprint::matching_players for
-//! the opponent-name suggestions; `prep_view` wraps silman_db::prep::
+//! `matching_players` wraps kibitz_db::fingerprint::matching_players for
+//! the opponent-name suggestions; `prep_view` wraps kibitz_db::prep::
 //! prep_view with default options. Read-only over the open database; the
 //! engine is never involved (CLAUDE.md #6).
 
@@ -46,10 +46,10 @@ pub struct WeakLineDto {
     pub master_games: Vec<MasterGameDto>,
 }
 
-fn parse_color(color: &str) -> Result<silman_profile::Color, String> {
+fn parse_color(color: &str) -> Result<kibitz_profile::Color, String> {
     match color {
-        "white" => Ok(silman_profile::Color::White),
-        "black" => Ok(silman_profile::Color::Black),
+        "white" => Ok(kibitz_profile::Color::White),
+        "black" => Ok(kibitz_profile::Color::Black),
         other => Err(format!(
             "color must be \"white\" or \"black\", got {other:?}"
         )),
@@ -62,11 +62,11 @@ pub(crate) fn prep_view_impl(
     color: &str,
 ) -> Result<Vec<WeakLineDto>, String> {
     let color = parse_color(color)?;
-    let lines = silman_db::prep::prep_view(
+    let lines = kibitz_db::prep::prep_view(
         conn,
         player,
         color,
-        &silman_db::prep::PrepOptions::default(),
+        &kibitz_db::prep::PrepOptions::default(),
     )
     .map_err(|e| e.to_string())?;
     Ok(lines
@@ -145,15 +145,15 @@ pub(crate) fn prep_fingerprint_impl(
     color: &str,
 ) -> Result<PrepFingerprintDto, String> {
     let color = parse_color(color)?;
-    let fp = silman_db::fingerprint::player_fingerprint(
+    let fp = kibitz_db::fingerprint::player_fingerprint(
         conn,
         player,
-        silman_db::fingerprint::DEFAULT_MAX_PLIES,
+        kibitz_db::fingerprint::DEFAULT_MAX_PLIES,
     )
     .map_err(|e| e.to_string())?;
     let cf = match color {
-        silman_profile::Color::White => &fp.white,
-        silman_profile::Color::Black => &fp.black,
+        kibitz_profile::Color::White => &fp.white,
+        kibitz_profile::Color::Black => &fp.black,
     };
     let total = cf.games.max(1);
     let rows = cf
@@ -162,7 +162,7 @@ pub(crate) fn prep_fingerprint_impl(
         .map(|f| {
             Ok(FingerprintRowDto {
                 eco: f.eco.clone(),
-                name: silman_db::eco::name_for(conn, &f.eco).map_err(|e| e.to_string())?,
+                name: kibitz_db::eco::name_for(conn, &f.eco).map_err(|e| e.to_string())?,
                 games: f.games,
                 share_pct: (f.games as f64 / total as f64 * 1000.0).round() / 10.0,
                 score_pct: f.score_pct,
@@ -174,7 +174,7 @@ pub(crate) fn prep_fingerprint_impl(
         .iter()
         .map(|d| {
             let named =
-                silman_db::eco::classify_hash(conn, d.hash_before).map_err(|e| e.to_string())?;
+                kibitz_db::eco::classify_hash(conn, d.hash_before).map_err(|e| e.to_string())?;
             let (eco, opening_name) = match named {
                 Some((e, n)) => (Some(e), Some(n)),
                 None => (None, None),
@@ -217,7 +217,7 @@ pub async fn matching_players(
     pattern: String,
 ) -> Result<Vec<String>, String> {
     with_conn(&state, |conn| {
-        silman_db::fingerprint::matching_players(conn, &pattern).map_err(|e| e.to_string())
+        kibitz_db::fingerprint::matching_players(conn, &pattern).map_err(|e| e.to_string())
     })
 }
 
@@ -235,12 +235,12 @@ pub async fn prep_view(
 mod tests {
     use super::*;
     use rusqlite::Connection;
-    use silman_db::import::{import_pgn, SourceInfo, SourceKind};
+    use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
     use std::io::Cursor;
 
     /// Villain scores 0.5/4 in the Scandinavian as Black; one 2600+ master
     /// game shares the line, one 1500-rated game must be excluded
-    /// (mirrors silman-db's own hand-computed prep fixture).
+    /// (mirrors kibitz-db's own hand-computed prep fixture).
     const CORPUS: &str = r#"[White "Hero"]
 [Black "Villain"]
 [Date "2024.01.01"]
@@ -292,7 +292,7 @@ mod tests {
 
     fn fixture_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
-        let conn = silman_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("t.sqlite")).unwrap();
         let source = SourceInfo {
             name: "fixture".into(),
             origin: "unit test".into(),
@@ -364,13 +364,13 @@ mod tests {
 
         assert!(prep_fingerprint_impl(&conn, "Villain", "purple").is_err());
         // No engine involvement anywhere in prep.
-        assert_eq!(silman_db::engine::spawn_count(), 0);
+        assert_eq!(kibitz_db::engine::spawn_count(), 0);
     }
 
     #[test]
     fn matching_players_suggests_substrings() {
         let (_dir, conn) = fixture_db();
-        let names = silman_db::fingerprint::matching_players(&conn, "illa").unwrap();
+        let names = kibitz_db::fingerprint::matching_players(&conn, "illa").unwrap();
         assert_eq!(names, vec!["Villain".to_string()]);
     }
 }

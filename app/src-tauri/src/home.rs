@@ -197,7 +197,7 @@ pub(crate) fn cache_profile_impl(
     conn: &Connection,
     player: &str,
 ) -> Result<CachedProfileInfo, String> {
-    let profile = silman_db::profile::build_profile(conn, player, PROFILE_MAX_GAMES)
+    let profile = kibitz_db::profile::build_profile(conn, player, PROFILE_MAX_GAMES)
         .map_err(|e| e.to_string())?;
     let built_at = now_utc(conn)?;
     let envelope = serde_json::json!({
@@ -471,15 +471,15 @@ pub(crate) fn home_summary_impl(
     let findings_available = profile_built_at.is_some();
 
     let now = now_utc(conn)?;
-    let due_srs = silman_db::repertoire::counts(conn, silman_profile::Color::White, &now)
+    let due_srs = kibitz_db::repertoire::counts(conn, kibitz_profile::Color::White, &now)
         .map_err(|e| e.to_string())?
         .due
-        + silman_db::repertoire::counts(conn, silman_profile::Color::Black, &now)
+        + kibitz_db::repertoire::counts(conn, kibitz_profile::Color::Black, &now)
             .map_err(|e| e.to_string())?
             .due;
 
     let (pending, running, done, failed) =
-        silman_db::jobs::counts(conn).map_err(|e| e.to_string())?;
+        kibitz_db::jobs::counts(conn).map_err(|e| e.to_string())?;
 
     Ok(HomeSummary {
         last_game: last_game(conn)?,
@@ -514,7 +514,7 @@ pub async fn home_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use silman_db::import::{import_pgn, SourceInfo, SourceKind};
+    use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
     use std::io::Cursor;
 
     /// Opera game + a decisive miniature: enough for a profile build and a
@@ -539,7 +539,7 @@ mod tests {
 
     fn fixture_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
-        let conn = silman_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("t.sqlite")).unwrap();
         let source = SourceInfo {
             name: "fixture".into(),
             origin: "unit test".into(),
@@ -657,7 +657,7 @@ mod tests {
         }
 
         // No engine anywhere on the Home path.
-        assert_eq!(silman_db::engine::spawn_count(), 0);
+        assert_eq!(kibitz_db::engine::spawn_count(), 0);
     }
 
     #[test]

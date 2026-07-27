@@ -1,7 +1,7 @@
 //! JSON-facing annotation-token layer (Phase 2 annotation editing).
 //!
 //! IPC commands `get_game_tokens` / `update_game_tokens` expose a game's
-//! full movetext token stream (silman_db::movebin::Token) as a tagged JSON
+//! full movetext token stream (kibitz_db::movebin::Token) as a tagged JSON
 //! list the frontend can render and transform:
 //!
 //! ```json
@@ -17,8 +17,8 @@
 
 use cozy_chess::Board;
 use serde::{Deserialize, Serialize};
-use silman_db::movebin::Token;
-use silman_db::san::{format_san, parse_san};
+use kibitz_db::movebin::Token;
+use kibitz_db::san::{format_san, parse_san};
 use tauri::State;
 
 use crate::browse::{with_conn, DbState};
@@ -165,7 +165,7 @@ pub(crate) fn get_game_tokens_impl(
     conn: &rusqlite::Connection,
     game_id: i64,
 ) -> Result<GameTokens, String> {
-    let (start, tokens) = silman_db::edit::game_tokens(conn, game_id).map_err(|e| e.to_string())?;
+    let (start, tokens) = kibitz_db::edit::game_tokens(conn, game_id).map_err(|e| e.to_string())?;
     Ok(GameTokens {
         start_fen: start.to_string(),
         tokens: tokens_to_json(&start, &tokens)?,
@@ -177,9 +177,9 @@ pub(crate) fn update_game_tokens_impl(
     game_id: i64,
     tokens: &[JsonToken],
 ) -> Result<(), String> {
-    let (start, _) = silman_db::edit::game_tokens(conn, game_id).map_err(|e| e.to_string())?;
+    let (start, _) = kibitz_db::edit::game_tokens(conn, game_id).map_err(|e| e.to_string())?;
     let decoded = json_to_tokens(&start, tokens)?;
-    silman_db::edit::update_game_tokens(conn, game_id, &decoded).map_err(|e| e.to_string())
+    kibitz_db::edit::update_game_tokens(conn, game_id, &decoded).map_err(|e| e.to_string())
 }
 
 /// Full annotation token stream of one game, as JSON tokens.
@@ -207,11 +207,11 @@ pub async fn update_game_tokens(
 mod tests {
     use super::*;
     use rusqlite::Connection;
-    use silman_db::import::{import_pgn, SourceInfo, SourceKind};
+    use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
     use std::io::Cursor;
 
     /// Annotated fixture: comment, NAG, nested variations — imported
-    /// through the real silman-db PGN importer so the movetext blob is
+    /// through the real kibitz-db PGN importer so the movetext blob is
     /// exactly what production games carry.
     const ANNOTATED: &str = r#"[White "A"]
 [Black "B"]
@@ -222,7 +222,7 @@ mod tests {
 
     fn fixture_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
-        let conn = silman_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("t.sqlite")).unwrap();
         let source = SourceInfo {
             name: "fixture".into(),
             origin: "unit test".into(),
@@ -258,7 +258,7 @@ mod tests {
         assert_eq!(reparsed, gt.tokens);
 
         // JSON -> movebin tokens equals the stored stream exactly.
-        let (start, stored) = silman_db::edit::game_tokens(&conn, 1).unwrap();
+        let (start, stored) = kibitz_db::edit::game_tokens(&conn, 1).unwrap();
         let back = json_to_tokens(&start, &gt.tokens).unwrap();
         assert_eq!(back, stored);
 
@@ -299,7 +299,7 @@ mod tests {
         );
 
         update_game_tokens_impl(&conn, 1, &tokens).unwrap();
-        let pgn = silman_db::export::export_pgn(&conn, 1).unwrap();
+        let pgn = kibitz_db::export::export_pgn(&conn, 1).unwrap();
         assert!(pgn.contains("2. Nf3 {develops}"), "{pgn}");
         assert!(pgn.contains("Nc6 (2... d6)"), "{pgn}");
         // Prior annotations still intact.

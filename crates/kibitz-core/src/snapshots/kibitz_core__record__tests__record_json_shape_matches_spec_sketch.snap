@@ -1,0 +1,69 @@
+---
+source: crates/kibitz-core/src/record.rs
+assertion_line: 384
+expression: json
+---
+{
+  "schema_version": 3,
+  "fen": "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2",
+  "side_to_move": "white",
+  "phase": "middlegame",
+  "wsui": {
+    "alerts": [
+      {
+        "kind": "InadequatelyDefended",
+        "side": "black",
+        "target": "c6",
+        "attackers": [
+          "e5",
+          "d4"
+        ],
+        "defenders": [
+          "b7"
+        ],
+        "see": 200,
+        "severity": "high",
+        "engine_check": {
+          "status": "confirmed",
+          "pv": [
+            "Nxc6",
+            "bxc6",
+            "Qd4"
+          ],
+          "score_delta_cp": 180,
+          "budget_nodes": 2000000
+        }
+      }
+    ],
+    "screen_fired": true
+  },
+  "imbalances": [
+    {
+      "kind": "PawnStructure",
+      "favors": "white",
+      "magnitude": "clear",
+      "evidence": {
+        "half_open_files": [
+          "d"
+        ],
+        "isolated": [
+          "d5"
+        ]
+      },
+      "plans": [
+        {
+          "hint": "BlockadeThenPressure",
+          "squares": [
+            "d4",
+            "d5"
+          ]
+        }
+      ]
+    }
+  ],
+  "engine": null,
+  "provenance": {
+    "generator": "kibitz-core",
+    "version": "0.1.0"
+  }
+}

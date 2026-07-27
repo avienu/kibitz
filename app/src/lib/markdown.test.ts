@@ -58,7 +58,7 @@ describe("parseMarkdown", () => {
 
 describe("splitSections (Help TOC, round 2)", () => {
   const FIXTURE = [
-    "# Silman User Guide",
+    "# Kibitz User Guide",
     "",
     "Intro paragraph before any section.",
     "",
@@ -73,7 +73,7 @@ describe("splitSections (Help TOC, round 2)", () => {
     "## CLI-only features",
     "",
     "```",
-    "silman-cli --db x.sqlite stats",
+    "kibitz-cli --db x.sqlite stats",
     "```",
     "",
   ].join("\n");
@@ -81,7 +81,7 @@ describe("splitSections (Help TOC, round 2)", () => {
   it("splits at every h1/h2 and keeps deeper headings inside", () => {
     const sections = splitSections(parseMarkdown(FIXTURE));
     expect(sections.map((s) => s.title)).toEqual([
-      "Silman User Guide",
+      "Kibitz User Guide",
       "The Game view",
       "CLI-only features",
     ]);
@@ -92,7 +92,7 @@ describe("splitSections (Help TOC, round 2)", () => {
     expect(game.blocks.some((b) => b.kind === "heading" && b.level <= 2)).toBe(false);
     // Code blocks land in their section (the CLI card).
     expect(sections[2].blocks).toEqual([
-      { kind: "code", text: "silman-cli --db x.sqlite stats" },
+      { kind: "code", text: "kibitz-cli --db x.sqlite stats" },
     ]);
   });
 

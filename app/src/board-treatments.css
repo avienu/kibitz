@@ -15,7 +15,7 @@
 
 /* ---- structure ---------------------------------------------------------- */
 
-.silman-board {
+.kibitz-board {
   position: relative;
   display: inline-block;
   line-height: 0;
@@ -25,11 +25,11 @@
     calc(var(--sb-frame-pad) + var(--sb-gutter)) calc(var(--sb-frame-pad) + var(--sb-gutter));
 }
 
-.silman-grid {
+.kibitz-grid {
   position: relative;
   line-height: 0;
 }
-.silman-grid .cg-wrap {
+.kibitz-grid .cg-wrap {
   width: 100%;
   height: 100%;
 }
@@ -39,43 +39,43 @@
    (z-index 2) — which realises the spec's paint order:
    base → last-move → imbalance → key → defender → attacker → alert ring →
    selected ring → piece. Arrows (.cg-shapes, z-index 2) draw above pieces. */
-.silman-overlay {
+.kibitz-overlay {
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
 }
-.silman-sq,
-.silman-mark {
+.kibitz-sq,
+.kibitz-mark {
   position: absolute;
   width: 12.5%;
   height: 12.5%;
   pointer-events: none;
 }
-.silman-board cg-board square {
+.kibitz-board cg-board square {
   z-index: 1;
 }
 
 /* Evidence arrows: the overlay's own SVG layer, filled polygons in
    board-pixel coordinates. "Arrows draw above squares, below nothing" —
    z-index above chessground's pieces (2). Outline stroke is themed. */
-.silman-arrows {
+.kibitz-arrows {
   position: absolute;
   inset: 0;
   overflow: visible;
   pointer-events: none;
   z-index: 3;
 }
-.silman-arrows polygon {
+.kibitz-arrows polygon {
   stroke: rgba(10, 13, 15, 0.5);
 }
-:root[data-theme="light"] .silman-arrows polygon {
+:root[data-theme="light"] .kibitz-arrows polygon {
   stroke: rgba(255, 255, 255, 0.5);
 }
 
 /* ---- Studio Walnut ------------------------------------------------------ */
 
-.silman-walnut {
+.kibitz-walnut {
   --sb-light-sq: #e6cda2;
   --sb-dark-sq: #a5703e;
   --sb-coord: #d8b989;
@@ -87,7 +87,7 @@
     inset 0 2px 0 rgba(255, 236, 198, 0.14),
     0 26px 60px -24px rgba(0, 0, 0, 0.85);
 }
-:root[data-theme="light"] .silman-walnut {
+:root[data-theme="light"] .kibitz-walnut {
   --sb-light-sq: #f3e2c0;
   --sb-dark-sq: #b98552;
   --sb-coord: #f6e9cd;
@@ -98,22 +98,22 @@
     0 20px 44px -22px rgba(78, 50, 20, 0.5);
 }
 
-.silman-walnut .silman-grid {
+.kibitz-walnut .kibitz-grid {
   border-radius: 2px;
   box-shadow:
     inset 0 0 0 1px rgba(38, 22, 8, 0.55),
     0 0 22px -6px rgba(0, 0, 0, 0.6);
 }
-:root[data-theme="light"] .silman-walnut .silman-grid {
+:root[data-theme="light"] .kibitz-walnut .kibitz-grid {
   box-shadow: inset 0 0 0 1px rgba(96, 62, 32, 0.4);
 }
-.silman-walnut cg-board,
-.silman-walnut .silman-overlay {
+.kibitz-walnut cg-board,
+.kibitz-walnut .kibitz-overlay {
   border-radius: 2px;
 }
 
 /* Grain, per square, over the base colour (92deg on dark, 88deg on light). */
-.silman-walnut .silman-sq-dark {
+.kibitz-walnut .kibitz-sq-dark {
   background-image:
     repeating-linear-gradient(
       92deg,
@@ -122,7 +122,7 @@
     ),
     radial-gradient(140% 100% at 30% 0%, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0) 70%);
 }
-.silman-walnut .silman-sq-light {
+.kibitz-walnut .kibitz-sq-light {
   background-image:
     repeating-linear-gradient(
       88deg,
@@ -132,23 +132,23 @@
     radial-gradient(140% 100% at 30% 0%, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0) 70%);
 }
 
-.silman-walnut piece {
+.kibitz-walnut piece {
   filter: drop-shadow(0 3px 3px rgba(28, 16, 6, 0.42));
 }
-:root[data-theme="light"] .silman-walnut piece {
+:root[data-theme="light"] .kibitz-walnut piece {
   filter: drop-shadow(0 3px 3px rgba(90, 60, 26, 0.32));
 }
 
-.silman-walnut .cg-wrap coords {
+.kibitz-walnut .cg-wrap coords {
   opacity: 0.92;
 }
-.silman-walnut .cg-wrap coords.files {
+.kibitz-walnut .cg-wrap coords.files {
   text-transform: uppercase; /* A–H on the frame gutter */
 }
 
 /* ---- Instrument --------------------------------------------------------- */
 
-.silman-instrument {
+.kibitz-instrument {
   --sb-light-sq: #c4ccd1;
   --sb-dark-sq: #59666f;
   --sb-coord: #77848d;
@@ -156,134 +156,134 @@
   border-radius: 2px;
   box-shadow: none;
 }
-:root[data-theme="light"] .silman-instrument {
+:root[data-theme="light"] .kibitz-instrument {
   --sb-light-sq: #eaeef0;
   --sb-dark-sq: #8d9ba4;
   --sb-coord: #6a767e;
 }
 
-.silman-instrument .silman-grid {
+.kibitz-instrument .kibitz-grid {
   border-radius: 1px;
   box-shadow:
     inset 0 0 0 1px rgba(226, 236, 242, 0.14),
     0 0 0 1px rgba(9, 12, 14, 0.9);
 }
-:root[data-theme="light"] .silman-instrument .silman-grid {
+:root[data-theme="light"] .kibitz-instrument .kibitz-grid {
   box-shadow:
     inset 0 0 0 1px rgba(52, 66, 76, 0.22),
     0 0 0 1px rgba(52, 66, 76, 0.12);
 }
-.silman-instrument cg-board,
-.silman-instrument .silman-overlay {
+.kibitz-instrument cg-board,
+.kibitz-instrument .kibitz-overlay {
   border-radius: 1px;
 }
 
 /* No frame, no grain — a hairline seam per square. */
-.silman-instrument .silman-sq {
+.kibitz-instrument .kibitz-sq {
   box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.06);
 }
 
-.silman-instrument piece {
+.kibitz-instrument piece {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.34));
 }
-:root[data-theme="light"] .silman-instrument piece {
+:root[data-theme="light"] .kibitz-instrument piece {
   filter: drop-shadow(0 1px 1px rgba(60, 72, 80, 0.22));
 }
 
-.silman-instrument .cg-wrap coords {
+.kibitz-instrument .cg-wrap coords {
   opacity: 0.75;
 }
-.silman-instrument .cg-wrap coords.files {
+.kibitz-instrument .cg-wrap coords.files {
   text-transform: none; /* outside, lowercase a–h */
 }
 
 /* ---- shared board surface ----------------------------------------------- */
 
 /* Checkerboard: one 2×2-square conic tile — a8/top-left is light. */
-.silman-board cg-board {
+.kibitz-board cg-board {
   background-image: repeating-conic-gradient(var(--sb-dark-sq) 0 25%, var(--sb-light-sq) 0 50%);
   background-size: 25% 25%;
 }
 
 /* pieceScale 0.87 of the cell (cburnett sprites untouched). */
-.silman-board piece {
+.kibitz-board piece {
   background-size: 87% 87%;
   background-position: 50% 50%;
   background-repeat: no-repeat;
 }
 
 /* Coordinates: chessground's own coords elements, pushed into the gutter. */
-.silman-board .cg-wrap coords {
+.kibitz-board .cg-wrap coords {
   font: 600 var(--sb-coord-fs) / 1 "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   color: var(--sb-coord);
 }
 /* Doubled class: outrank chessground.brown.css's alternating
    .orientation-* .files/.ranks :nth-child(…) coord colours. */
-.silman-board.silman-board .cg-wrap coords coord {
+.kibitz-board.kibitz-board .cg-wrap coords coord {
   color: var(--sb-coord);
 }
-.silman-board .cg-wrap coords.files {
+.kibitz-board .cg-wrap coords.files {
   left: 0;
   width: 100%;
   height: var(--sb-coord-fs);
   bottom: calc(var(--sb-coord-inset-b) - var(--sb-frame-pad) - var(--sb-gutter));
   letter-spacing: 0.1em;
 }
-.silman-board .cg-wrap coords.files coord {
+.kibitz-board .cg-wrap coords.files coord {
   text-align: center;
 }
-.silman-board .cg-wrap coords.ranks {
+.kibitz-board .cg-wrap coords.ranks {
   top: 0;
   height: 100%;
   width: var(--sb-coord-fs);
   left: calc(var(--sb-coord-inset-l) - var(--sb-frame-pad) - var(--sb-gutter));
   align-items: flex-start;
 }
-.silman-board .cg-wrap coords.ranks coord {
+.kibitz-board .cg-wrap coords.ranks coord {
   transform: none;
   display: flex;
   align-items: center;
 }
 
 /* Selected square (chessground move-input selection), themed. */
-.silman-board cg-board square.selected {
+.kibitz-board cg-board square.selected {
   background: none;
   box-shadow: inset 0 0 0 max(2px, calc(var(--sb-cell) * 0.035)) rgba(255, 255, 255, 0.8);
 }
-:root[data-theme="light"] .silman-board cg-board square.selected {
+:root[data-theme="light"] .kibitz-board cg-board square.selected {
   box-shadow: inset 0 0 0 max(2px, calc(var(--sb-cell) * 0.035)) rgba(30, 38, 44, 0.7);
 }
 
 /* ---- evidence marks (hues identical in both themes) ---------------------- */
 
 /* Last move: full-square wash + 1px inset of the same hue (themed). */
-.silman-mark-last-move {
+.kibitz-mark-last-move {
   background: rgba(238, 206, 102, 0.24);
   box-shadow: inset 0 0 0 1px rgba(238, 206, 102, 0.3);
 }
-:root[data-theme="light"] .silman-mark-last-move {
+:root[data-theme="light"] .kibitz-mark-last-move {
   background: rgba(214, 178, 58, 0.32);
   box-shadow: inset 0 0 0 1px rgba(160, 124, 20, 0.4);
 }
 
 /* Imbalance: full-square wash. */
-.silman-mark-imbalance {
+.kibitz-mark-imbalance {
   background: rgba(95, 176, 138, 0.2);
 }
 
 /* Corner wedges: linear-gradient(135deg, fill 0 28%, transparent 28%). */
-.silman-mark-key {
+.kibitz-mark-key {
   background: linear-gradient(135deg, rgba(169, 139, 212, 0.2) 0 28%, rgba(0, 0, 0, 0) 28%);
 }
-.silman-mark-defender {
+.kibitz-mark-defender {
   background: linear-gradient(135deg, rgba(79, 154, 216, 0.16) 0 28%, rgba(0, 0, 0, 0) 28%);
 }
-.silman-mark-attacker {
+.kibitz-mark-attacker {
   background: linear-gradient(135deg, rgba(232, 161, 60, 0.18) 0 28%, rgba(0, 0, 0, 0) 28%);
 }
 
 /* Alert target: ring inset 9%, border max(2, cell×0.045), glow cell×0.18. */
-.silman-mark-alert-target::after {
+.kibitz-mark-alert-target::after {
   content: "";
   position: absolute;
   inset: 9%;
@@ -293,9 +293,9 @@
 }
 
 /* Selected ring (programmatic selection mark), themed. */
-.silman-mark-selected {
+.kibitz-mark-selected {
   box-shadow: inset 0 0 0 max(2px, calc(var(--sb-cell) * 0.035)) rgba(255, 255, 255, 0.8);
 }
-:root[data-theme="light"] .silman-mark-selected {
+:root[data-theme="light"] .kibitz-mark-selected {
   box-shadow: inset 0 0 0 max(2px, calc(var(--sb-cell) * 0.035)) rgba(30, 38, 44, 0.7);
 }

@@ -6,8 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { EngineDone, EngineInfo } from "./engineView";
 
-const USER_PATH_KEY = "silman.enginePath";
-const NODES_KEY = "silman.engineNodes";
+const USER_PATH_KEY = "kibitz.enginePath";
+const NODES_KEY = "kibitz.engineNodes";
 
 export const DEFAULT_NODES = 2_000_000;
 

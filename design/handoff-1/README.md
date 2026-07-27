@@ -1,5 +1,8 @@
 # Handoff: Silman — board treatment (“Studio Walnut”) + game view
 
+> **Note (2026-07):** “Silman” in this document is the working-era name of what is now **Kibitz**. The handoff is preserved verbatim as the design source of truth.
+
+
 ## Overview
 This bundle specifies two things for the Silman desktop app (Tauri v2 + React, macOS/Linux):
 

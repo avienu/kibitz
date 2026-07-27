@@ -1,11 +1,11 @@
-//! "Annotate this position" IPC command: static Silman analysis + template
-//! prose for one FEN. Purely static — silman_core::analyze never touches
+//! "Annotate this position" IPC command: static Kibitz analysis + template
+//! prose for one FEN. Purely static — kibitz_core::analyze never touches
 //! the engine (CLAUDE.md #6), so this is safe to call from a button press.
 
 use serde::Serialize;
 
 /// `explain_position` payload: the FeatureRecord (spec JSON shape, snake_case
-/// fields per docs/SILMAN_ENGINE_SPEC.md) plus the rendered prose.
+/// fields per docs/KIBITZ_ENGINE_SPEC.md) plus the rendered prose.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Explanation {
@@ -18,13 +18,13 @@ pub struct Explanation {
 
 pub(crate) fn explain_position_impl(
     fen: &str,
-    voice: silman_verbalize::Voice,
+    voice: kibitz_verbalize::Voice,
 ) -> Result<Explanation, String> {
     let board: cozy_chess::Board = fen.parse().map_err(|e| format!("bad FEN {fen:?}: {e:?}"))?;
-    let record = silman_core::analyze(&board);
-    let prose = silman_verbalize::verbalize_voiced(&record, voice);
+    let record = kibitz_core::analyze(&board);
+    let prose = kibitz_verbalize::verbalize_voiced(&record, voice);
     let explanation =
-        serde_json::to_value(silman_verbalize::explain(&record)).map_err(|e| e.to_string())?;
+        serde_json::to_value(kibitz_verbalize::explain(&record)).map_err(|e| e.to_string())?;
     let record = serde_json::to_value(&record).map_err(|e| e.to_string())?;
     Ok(Explanation {
         record,
@@ -39,7 +39,7 @@ pub(crate) fn explain_position_impl(
 pub fn explain_position(fen: String, voice: Option<String>) -> Result<Explanation, String> {
     let voice = voice
         .as_deref()
-        .map(silman_verbalize::Voice::from_setting)
+        .map(kibitz_verbalize::Voice::from_setting)
         .unwrap_or_default();
     explain_position_impl(&fen, voice)
 }
@@ -50,14 +50,14 @@ mod tests {
 
     #[test]
     fn explains_a_position_without_an_engine() {
-        use silman_verbalize::Voice;
+        use kibitz_verbalize::Voice;
         // Position after 1.e4 e5 2.Nf3 — legal, quiet.
         const FEN: &str = "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
         let e = explain_position_impl(FEN, Voice::default()).unwrap();
         assert!(!e.prose.is_empty());
         assert_eq!(
             e.record["schema_version"],
-            silman_core::record::SCHEMA_VERSION
+            kibitz_core::record::SCHEMA_VERSION
         );
         assert_eq!(e.record["side_to_move"], "black");
         assert!(e.record["engine"].is_null(), "engine stays untouched");
@@ -80,7 +80,7 @@ mod tests {
         );
         assert_eq!(
             coach.explanation["schema_version"],
-            silman_core::record::SCHEMA_VERSION
+            kibitz_core::record::SCHEMA_VERSION
         );
         assert!(coach.explanation["headline"]["coach"].is_string());
         assert!(coach.explanation["headline"]["neutral"].is_string());

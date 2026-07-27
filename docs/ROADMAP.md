@@ -49,24 +49,24 @@ Build:
 Accept: end-to-end prep against a real opponent (user picks one) produces a
 line-level report and a playable master-game list in < 5 min including download.
 
-## Phase 3 — Silman annotator v1 (templated, offline)
+## Phase 3 — Kibitz annotator v1 (templated, offline)
 
 Build:
-- silman-core WSUI detectors + imbalance detectors + FeatureRecord (per spec).
+- kibitz-core WSUI detectors + imbalance detectors + FeatureRecord (per spec).
 - Analysis job queue; WSUI-gated bounded Stockfish confirmation.
-- silman-verbalize template mode.
+- kibitz-verbalize template mode.
 - UI: annotate-this-position panel with board overlays from evidence squares;
   batch-annotate-game job producing inline comments.
-- Validation harness per SILMAN_ENGINE_SPEC.md; publish precision/recall.
+- Validation harness per KIBITZ_ENGINE_SPEC.md; publish precision/recall.
 
 Accept: validation numbers published; annotating a full game stays within the
 engine-off principle (engine runs only on fired screens); golden-file tests
 green; the user judges annotations on 5 of his own games "useful, not wrong".
 
-## Phase 4 — Profiling + Silman v2 (LLM verbalizer)
+## Phase 4 — Profiling + Kibitz v2 (LLM verbalizer)
 
 Build:
-- silman-profile: PlayerProfile per spec; batch pipeline over corpora.
+- kibitz-profile: PlayerProfile per spec; batch pipeline over corpora.
 - Profile report UI (self and opponent); prep view upgraded with profile data.
 - LLM verbalizer behind feature flag + app-layer client (user-supplied API key),
   with post-validation and template fallback. Offline mode remains default.
@@ -81,7 +81,7 @@ Build:
 - Opening SRS: repertoire import (PGN + Lichess studies), FSRS scheduling,
   training UI. Do not use the name "MoveTrainer".
 - Tactics: bundle Lichess CC0 puzzles; rated drill, motif filter, Heisman speed
-  mode, Woodpecker cycles; weakness-targeted queue from silman-profile.
+  mode, Woodpecker cycles; weakness-targeted queue from kibitz-profile.
 - Endgames: rating-tiered curriculum structure; drill-vs-engine from
   tablebase positions; Fathom (≤5 piece) local, Lichess API for 6-7 piece.
 

@@ -1,20 +1,20 @@
 //! Repertoire Trainer IPC commands (ROADMAP Phase 5, opening SRS).
 //!
-//! Thin camelCase wrappers over `silman_db::repertoire`: due counts for
+//! Thin camelCase wrappers over `kibitz_db::repertoire`: due counts for
 //! the Train tab badge, the due queue, FSRS grading, and adding a line to
 //! a repertoire from the game view. All scheduling math lives in the BSD
-//! `silman-srs` crate; the engine is never involved (CLAUDE.md #6).
+//! `kibitz-srs` crate; the engine is never involved (CLAUDE.md #6).
 
 use serde::Serialize;
-use silman_srs::{Grade, Scheduler};
+use kibitz_srs::{Grade, Scheduler};
 use tauri::State;
 
 use crate::browse::{with_conn, DbState};
 
-fn parse_color(color: &str) -> Result<silman_profile::Color, String> {
+fn parse_color(color: &str) -> Result<kibitz_profile::Color, String> {
     match color {
-        "white" => Ok(silman_profile::Color::White),
-        "black" => Ok(silman_profile::Color::Black),
+        "white" => Ok(kibitz_profile::Color::White),
+        "black" => Ok(kibitz_profile::Color::Black),
         other => Err(format!(
             "color must be \"white\" or \"black\", got {other:?}"
         )),
@@ -63,7 +63,7 @@ pub struct DueCardDto {
     /// Next interval per grade in raw days ({again, hard, good, easy});
     /// the UI formats ("<1 m", "2 d", ... — see lib/train.ts). Computed by
     /// the real scheduler, so it always equals what grading will set.
-    pub previews: silman_db::repertoire::GradePreviews,
+    pub previews: kibitz_db::repertoire::GradePreviews,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,10 +88,10 @@ pub struct AddLineDto {
 
 fn counts_impl(
     conn: &rusqlite::Connection,
-    color: silman_profile::Color,
+    color: kibitz_profile::Color,
     now: &str,
 ) -> Result<TrainCountsDto, String> {
-    let c = silman_db::repertoire::counts(conn, color, now).map_err(|e| e.to_string())?;
+    let c = kibitz_db::repertoire::counts(conn, color, now).map_err(|e| e.to_string())?;
     Ok(TrainCountsDto {
         due: c.due,
         total: c.total,
@@ -99,10 +99,10 @@ fn counts_impl(
 }
 
 pub(crate) fn train_summary_impl(conn: &rusqlite::Connection) -> Result<TrainSummaryDto, String> {
-    let now = silman_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
+    let now = kibitz_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
     Ok(TrainSummaryDto {
-        white: counts_impl(conn, silman_profile::Color::White, &now)?,
-        black: counts_impl(conn, silman_profile::Color::Black, &now)?,
+        white: counts_impl(conn, kibitz_profile::Color::White, &now)?,
+        black: counts_impl(conn, kibitz_profile::Color::Black, &now)?,
     })
 }
 
@@ -112,9 +112,9 @@ pub(crate) fn train_queue_impl(
     limit: u32,
 ) -> Result<Vec<DueCardDto>, String> {
     let color = parse_color(color)?;
-    let now = silman_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
+    let now = kibitz_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
     let scheduler = Scheduler::default();
-    let cards = silman_db::repertoire::due_cards(conn, &scheduler, color, &now, limit)
+    let cards = kibitz_db::repertoire::due_cards(conn, &scheduler, color, &now, limit)
         .map_err(|e| e.to_string())?;
     Ok(cards
         .into_iter()
@@ -141,9 +141,9 @@ pub(crate) fn train_grade_impl(
     grade: &str,
 ) -> Result<GradedDto, String> {
     let grade = parse_grade(grade)?;
-    let now = silman_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
+    let now = kibitz_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
     let scheduler = Scheduler::default();
-    let g = silman_db::repertoire::grade_card(conn, &scheduler, card_id, grade, &now)
+    let g = kibitz_db::repertoire::grade_card(conn, &scheduler, card_id, grade, &now)
         .map_err(|e| e.to_string())?;
     Ok(GradedDto {
         card_id: g.card_id,
@@ -169,16 +169,16 @@ pub(crate) fn train_add_line_impl(
         Some(fen) => fen.parse().map_err(|e| format!("bad start FEN: {e:?}"))?,
         None => cozy_chess::Board::default(),
     };
-    let source = silman_db::import::SourceInfo {
+    let source = kibitz_db::import::SourceInfo {
         name: "Repertoire Trainer".into(),
         origin: "added from the game view".into(),
         license: "personal data".into(),
-        kind: silman_db::import::SourceKind::Personal,
+        kind: kibitz_db::import::SourceKind::Personal,
     };
-    let rep_id = silman_db::repertoire::ensure_repertoire(conn, parsed, name, &source)
+    let rep_id = kibitz_db::repertoire::ensure_repertoire(conn, parsed, name, &source)
         .map_err(|e| e.to_string())?;
-    let now = silman_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
-    let st = silman_db::repertoire::add_line(conn, rep_id, parsed, &start, sans, &now)
+    let now = kibitz_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
+    let st = kibitz_db::repertoire::add_line(conn, rep_id, parsed, &start, sans, &now)
         .map_err(|e| e.to_string())?;
     Ok(AddLineDto {
         repertoire: format!("{name} ({color})"),
@@ -235,7 +235,7 @@ mod tests {
 
     fn open_db() -> (tempfile::TempDir, rusqlite::Connection) {
         let dir = tempfile::tempdir().unwrap();
-        let conn = silman_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("t.sqlite")).unwrap();
         (dir, conn)
     }
 
@@ -285,6 +285,6 @@ mod tests {
         assert!(train_queue_impl(&conn, "purple", 10).is_err());
         assert!(train_grade_impl(&conn, 999_999, "good").is_err());
         assert!(train_grade_impl(&conn, queue[0].card_id, "meh").is_err());
-        assert_eq!(silman_db::engine::spawn_count(), 0);
+        assert_eq!(kibitz_db::engine::spawn_count(), 0);
     }
 }

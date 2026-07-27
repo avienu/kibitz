@@ -79,7 +79,7 @@ export default function ImportView({ onLoad, status }: ImportViewProps) {
         <div className="panel-box-title">SCID (.si4)</div>
         <p className="page-prose">
           SCID databases import through the command line for now:{" "}
-          <code>silman-cli import-si4 &lt;base&gt;</code> converts a .si4/.sg4/.sn4 base into the
+          <code>kibitz-cli import-si4 &lt;base&gt;</code> converts a .si4/.sg4/.sn4 base into the
           SQLite database this app opens (Database in the rail). Legacy engine analysis is
           preserved and tagged — it is never deleted, only superseded by fresh analysis.
         </p>

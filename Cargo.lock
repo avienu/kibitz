@@ -694,6 +694,77 @@ dependencies = [
 ]
 
 [[package]]
+name = "kibitz-core"
+version = "0.1.0"
+dependencies = [
+ "cozy-chess",
+ "insta",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "kibitz-db"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cozy-chess",
+ "insta",
+ "kibitz-core",
+ "kibitz-profile",
+ "kibitz-srs",
+ "kibitz-tb",
+ "kibitz-verbalize",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "si4-read",
+ "tempfile",
+ "thiserror",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "kibitz-profile"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "kibitz-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "kibitz-srs"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "kibitz-tb"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "cozy-chess",
+ "thiserror",
+]
+
+[[package]]
+name = "kibitz-verbalize"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "kibitz-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1116,77 +1187,6 @@ dependencies = [
  "cozy-chess",
  "tempfile",
  "thiserror",
-]
-
-[[package]]
-name = "silman-core"
-version = "0.1.0"
-dependencies = [
- "cozy-chess",
- "insta",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "silman-db"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "cozy-chess",
- "insta",
- "rusqlite",
- "serde",
- "serde_json",
- "si4-read",
- "silman-core",
- "silman-profile",
- "silman-srs",
- "silman-tb",
- "silman-verbalize",
- "tempfile",
- "thiserror",
- "ureq",
- "zip",
-]
-
-[[package]]
-name = "silman-profile"
-version = "0.1.0"
-dependencies = [
- "insta",
- "serde",
- "serde_json",
- "silman-core",
-]
-
-[[package]]
-name = "silman-srs"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "silman-tb"
-version = "0.1.0"
-dependencies = [
- "cc",
- "cozy-chess",
- "thiserror",
-]
-
-[[package]]
-name = "silman-verbalize"
-version = "0.1.0"
-dependencies = [
- "insta",
- "serde",
- "serde_json",
- "silman-core",
 ]
 
 [[package]]

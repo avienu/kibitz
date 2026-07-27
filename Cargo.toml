@@ -1,20 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/silman-core",
-    "crates/silman-profile",
-    "crates/silman-srs",
-    "crates/silman-verbalize",
-    "crates/silman-tb",
+    "crates/kibitz-core",
+    "crates/kibitz-profile",
+    "crates/kibitz-srs",
+    "crates/kibitz-verbalize",
+    "crates/kibitz-tb",
     "crates/si4-read",
-    "app/silman-db",
+    "app/kibitz-db",
     "bench/movegen-bench",
 ]
 
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
-repository = "https://example.invalid/silman"
+repository = "https://example.invalid/kibitz"
 rust-version = "1.82"
 
 [workspace.dependencies]

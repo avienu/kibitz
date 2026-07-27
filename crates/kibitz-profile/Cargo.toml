@@ -1,0 +1,15 @@
+[package]
+name = "kibitz-profile"
+description = "Corpus batch profiling and aggregation over kibitz-core feature records"
+license = "BSD-3-Clause"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kibitz-core = { path = "../kibitz-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

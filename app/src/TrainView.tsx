@@ -482,7 +482,7 @@ export default function TrainView({ onSummary, treatment }: TrainViewProps) {
               idempotent: positions that already have a card are left untouched.
             </p>
             <pre className="modal-cli">
-              {"silman-cli --db <path.sqlite> import-repertoire study.pgn " + color + ' --name "main"'}
+              {"kibitz-cli --db <path.sqlite> import-repertoire study.pgn " + color + ' --name "main"'}
             </pre>
             <p className="modal-prose">
               From inside the app, load a game and use &ldquo;→ repertoire&rdquo; under the Moves

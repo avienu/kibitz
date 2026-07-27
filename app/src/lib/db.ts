@@ -9,7 +9,7 @@ import type { FeatureRecordJson } from "./explainView";
 import type { ExplanationJson } from "./gameView";
 import type { JsonToken } from "./tokens";
 
-const DB_PATH_KEY = "silman.dbPath";
+const DB_PATH_KEY = "kibitz.dbPath";
 
 /** Repo-root-relative default; the Rust side resolves it upward from cwd. */
 export const DEFAULT_DB_PATH = "testdata/corpus/scid.sqlite";
@@ -262,7 +262,7 @@ export interface Explanation {
 /** Narration voice (run-5 item 3): coach (default) or neutral. */
 export type NarrationVoice = "coach" | "neutral";
 
-const VOICE_KEY = "silman.narrationVoice";
+const VOICE_KEY = "kibitz.narrationVoice";
 
 /** Locally saved voice, used before/without an open database. */
 export function getSavedVoice(): NarrationVoice {
@@ -302,7 +302,7 @@ export interface AnnotateSummary {
   commentsAdded: number;
 }
 
-/** Static Silman annotation pass over one game (enqueues confirm jobs). */
+/** Static Kibitz annotation pass over one game (enqueues confirm jobs). */
 export function annotateGame(gameId: number): Promise<AnnotateSummary> {
   return invoke<AnnotateSummary>("annotate_game", { gameId });
 }
@@ -338,7 +338,7 @@ export function exportGamePgn(gameId: number): Promise<string> {
 }
 
 /* Player profile (goal 4). Field names are snake_case: the payload is the
- * silman-profile PlayerProfile record serialized as-is. */
+ * kibitz-profile PlayerProfile record serialized as-is. */
 
 export interface PhaseAcpl {
   moves: number;

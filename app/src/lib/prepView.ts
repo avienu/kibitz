@@ -71,7 +71,7 @@ export function lineWhy(opponent: string, color: PrepColor, l: WeakLine): string
   return s.join(" ");
 }
 
-/** The ranking rule, stated honestly (silman-db prep defaults). */
+/** The ranking rule, stated honestly (kibitz-db prep defaults). */
 export const MASTER_RANKING_RULE =
   "Games reaching this exact position with both players rated 2200 or above, strongest pairings first.";
 

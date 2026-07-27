@@ -278,7 +278,7 @@ export default function SettingsView({
             />
             <Row
               label="Annotate database"
-              help="Static Silman pass over every game; fired alerts queue bounded engine confirmations. Resumable — pause anytime."
+              help="Static Kibitz pass over every game; fired alerts queue bounded engine confirmations. Resumable — pause anytime."
               value={<div className="set-value mono">{jobsValue}</div>}
               action={ghost(
                 estimating === "annotate" ? "Estimating…" : "Estimate & run…",
@@ -312,7 +312,7 @@ export default function SettingsView({
             />
             <Row
               label="LLM verbaliser"
-              help="Optional and strictly grounded: it may only rewrite detector output, never add claims; on any failure Silman falls back to template prose silently. No key is stored by the app — set ANTHROPIC_API_KEY for the CLI explain-llm command."
+              help="Optional and strictly grounded: it may only rewrite detector output, never add claims; on any failure Kibitz falls back to template prose silently. No key is stored by the app — set ANTHROPIC_API_KEY for the CLI explain-llm command."
               value={<div className="set-value mono">not set · template prose</div>}
             />
           </div>
@@ -337,7 +337,7 @@ export default function SettingsView({
             />
             <Row
               label="Tablebase"
-              help="Resolves from SILMAN_SYZYGY, else a repo-local testdata/syzygy directory."
+              help="Resolves from KIBITZ_SYZYGY, else a repo-local testdata/syzygy directory."
               value={
                 <div className="set-value mono" title={tb?.note ?? undefined}>
                   {tb

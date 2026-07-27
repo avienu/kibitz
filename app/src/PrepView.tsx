@@ -344,14 +344,14 @@ export default function PrepView({
                 <button
                   className="btn-secondary"
                   disabled
-                  title="Account fetch ships with the sync surface; today it runs from the CLI: silman-cli lichess-sync."
+                  title="Account fetch ships with the sync surface; today it runs from the CLI: kibitz-cli lichess-sync."
                 >
                   Fetch from Lichess
                 </button>
                 <button
                   className="btn-secondary"
                   disabled
-                  title="Account fetch ships with the sync surface; today it runs from the CLI: silman-cli chesscom-sync."
+                  title="Account fetch ships with the sync surface; today it runs from the CLI: kibitz-cli chesscom-sync."
                 >
                   Fetch from chess.com
                 </button>
@@ -381,7 +381,7 @@ export default function PrepView({
               <p className="prep2-footnote">
                 Local hits come from your own database first. Fetching would pull that player&rsquo;s
                 public games on demand — the engine stays cold; nothing is analysed until you ask
-                for it. Account fetch currently runs from the CLI (silman-cli lichess-sync /
+                for it. Account fetch currently runs from the CLI (kibitz-cli lichess-sync /
                 chesscom-sync).
               </p>
             </div>

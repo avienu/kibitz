@@ -1,4 +1,4 @@
-//! Run-4 UI wiring commands over silman-db: per-game analyses for the
+//! Run-4 UI wiring commands over kibitz-db: per-game analyses for the
 //! legacy-vs-fresh eval display (verdict 3c), annotate / re-analyze / job
 //! runner (goal 2 + verdict 3d), annotated-PGN export (goal 2), player
 //! profile (goal 4), and window-title cosmetics (verdict 4).
@@ -110,7 +110,7 @@ pub async fn annotate_game(
     game_id: i64,
 ) -> Result<AnnotateSummary, String> {
     with_conn(&state, |conn| {
-        let r = silman_db::annotate::annotate_game(conn, game_id, UI_NODES, UI_MAX_COMMENTS)
+        let r = kibitz_db::annotate::annotate_game(conn, game_id, UI_NODES, UI_MAX_COMMENTS)
             .map_err(|e| e.to_string())?;
         Ok(AnnotateSummary {
             positions_analyzed: r.positions_analyzed,
@@ -127,19 +127,19 @@ pub async fn annotate_game(
 #[tauri::command]
 pub async fn reanalyze_game(state: State<'_, DbState>, game_id: i64) -> Result<u32, String> {
     with_conn(&state, |conn| {
-        silman_db::jobs::enqueue_reanalyze(conn, game_id, UI_NODES).map_err(|e| e.to_string())
+        kibitz_db::jobs::enqueue_reanalyze(conn, game_id, UI_NODES).map_err(|e| e.to_string())
     })
 }
 
 fn run_jobs_worker(db_path: &Path, engine_path: &Path, stop: &AtomicBool) -> Result<(), String> {
     // A dedicated connection: the UI connection stays free for polling.
-    let conn = silman_db::db::open(db_path).map_err(|e| e.to_string())?;
+    let conn = kibitz_db::db::open(db_path).map_err(|e| e.to_string())?;
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
-    silman_db::jobs::reset_running(&conn).map_err(|e| e.to_string())?;
-    silman_db::jobs::run_pending_until(&conn, engine_path, u32::MAX, Some(stop))
+    kibitz_db::jobs::reset_running(&conn).map_err(|e| e.to_string())?;
+    kibitz_db::jobs::run_pending_until(&conn, engine_path, u32::MAX, Some(stop))
         .map_err(|e| e.to_string())?;
-    silman_db::annotate::fold_back(&conn).map_err(|e| e.to_string())?;
+    kibitz_db::annotate::fold_back(&conn).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -159,8 +159,8 @@ pub async fn run_jobs(
         )
         .map_err(|e| e.to_string())
     })?;
-    let engine_path = silman_db::engine::resolve_engine_path().ok_or_else(|| {
-        "no engine found (set SILMAN_STOCKFISH, add tools/stockfish, or put stockfish on PATH)"
+    let engine_path = kibitz_db::engine::resolve_engine_path().ok_or_else(|| {
+        "no engine found (set KIBITZ_STOCKFISH, add tools/stockfish, or put stockfish on PATH)"
             .to_string()
     })?;
     if worker.active.swap(true, Ordering::SeqCst) {
@@ -171,7 +171,7 @@ pub async fn run_jobs(
     let stop = Arc::clone(&worker.stop);
     std::thread::spawn(move || {
         if let Err(e) = run_jobs_worker(Path::new(&db_path), &engine_path, &stop) {
-            eprintln!("silman job worker failed: {e}");
+            eprintln!("kibitz job worker failed: {e}");
         }
         active.store(false, Ordering::SeqCst);
     });
@@ -209,7 +209,7 @@ pub(crate) fn jobs_status_impl(
     worker_active: bool,
 ) -> Result<JobsStatus, String> {
     let (pending, running, done, failed) =
-        silman_db::jobs::counts(conn).map_err(|e| e.to_string())?;
+        kibitz_db::jobs::counts(conn).map_err(|e| e.to_string())?;
     let last_result: Option<String> = conn
         .query_row(
             // batch-annotate jobs are static (no engine) — they carry no
@@ -271,10 +271,10 @@ pub struct BatchEstimate {
     pub estimate_basis: String,
 }
 
-fn parse_batch_kind(kind: &str) -> Result<silman_db::jobs::Purpose, String> {
+fn parse_batch_kind(kind: &str) -> Result<kibitz_db::jobs::Purpose, String> {
     match kind {
-        "annotate" => Ok(silman_db::jobs::Purpose::BatchAnnotate),
-        "fresh-analysis" => Ok(silman_db::jobs::Purpose::Reanalyze),
+        "annotate" => Ok(kibitz_db::jobs::Purpose::BatchAnnotate),
+        "fresh-analysis" => Ok(kibitz_db::jobs::Purpose::Reanalyze),
         other => Err(format!(
             "batch kind must be \"annotate\" or \"fresh-analysis\", got {other:?}"
         )),
@@ -283,12 +283,12 @@ fn parse_batch_kind(kind: &str) -> Result<silman_db::jobs::Purpose, String> {
 
 pub(crate) fn batch_estimate_impl(conn: &Connection, kind: &str) -> Result<BatchEstimate, String> {
     let purpose = parse_batch_kind(kind)?;
-    let remaining = silman_db::jobs::games_without_job(conn, purpose)
+    let remaining = kibitz_db::jobs::games_without_job(conn, purpose)
         .map_err(|e| e.to_string())?
         .len() as i64;
 
     match purpose {
-        silman_db::jobs::Purpose::BatchAnnotate => {
+        kibitz_db::jobs::Purpose::BatchAnnotate => {
             // MEASURED, live, read-only: run the real static analyzer over
             // every mainline position of a small sample of games. Nothing
             // is written and no engine exists anywhere near this path.
@@ -317,13 +317,13 @@ pub(crate) fn batch_estimate_impl(conn: &Connection, kind: &str) -> Result<Batch
                     },
                     None => cozy_chess::Board::default(),
                 };
-                let Ok(moves) = silman_db::movebin::decode_game(&start, &movetext) else {
+                let Ok(moves) = kibitz_db::movebin::decode_game(&start, &movetext) else {
                     continue;
                 };
                 let mut board = start;
                 for mv in moves {
                     board.play(mv);
-                    let _ = silman_core::analyze(&board);
+                    let _ = kibitz_core::analyze(&board);
                 }
             }
             let per_game_ms = start_t.elapsed().as_secs_f64() * 1000.0 / sampled as f64;
@@ -386,15 +386,15 @@ pub struct BatchStarted {
 pub(crate) fn batch_start_impl(conn: &Connection, kind: &str) -> Result<BatchStarted, String> {
     let purpose = parse_batch_kind(kind)?;
     let (games, jobs) = match purpose {
-        silman_db::jobs::Purpose::BatchAnnotate => {
-            let n = silman_db::jobs::enqueue_batch_annotate(conn, UI_NODES, UI_MAX_COMMENTS)
+        kibitz_db::jobs::Purpose::BatchAnnotate => {
+            let n = kibitz_db::jobs::enqueue_batch_annotate(conn, UI_NODES, UI_MAX_COMMENTS)
                 .map_err(|e| e.to_string())?;
             (n, n)
         }
-        _ => silman_db::jobs::enqueue_batch_fresh(conn, UI_NODES).map_err(|e| e.to_string())?,
+        _ => kibitz_db::jobs::enqueue_batch_fresh(conn, UI_NODES).map_err(|e| e.to_string())?,
     };
     let (pending, running, done, _failed) =
-        silman_db::jobs::counts(conn).map_err(|e| e.to_string())?;
+        kibitz_db::jobs::counts(conn).map_err(|e| e.to_string())?;
     Ok(BatchStarted {
         games_enqueued: games,
         jobs_enqueued: jobs,
@@ -421,7 +421,7 @@ pub async fn batch_start(state: State<'_, DbState>, kind: String) -> Result<Batc
 #[tauri::command]
 pub async fn get_narration_voice(state: State<'_, DbState>) -> Result<String, String> {
     with_conn(&state, |conn| {
-        silman_db::narrate::narration_voice(conn)
+        kibitz_db::narrate::narration_voice(conn)
             .map(|voice| voice.as_str().to_string())
             .map_err(|e| e.to_string())
     })
@@ -431,9 +431,9 @@ pub async fn get_narration_voice(state: State<'_, DbState>) -> Result<String, St
 /// regenerated in the new voice by the next annotate / fold-back pass.
 #[tauri::command]
 pub async fn set_narration_voice(state: State<'_, DbState>, voice: String) -> Result<(), String> {
-    let voice: silman_verbalize::Voice = voice.parse().map_err(|e| format!("{e}"))?;
+    let voice: kibitz_verbalize::Voice = voice.parse().map_err(|e| format!("{e}"))?;
     with_conn(&state, |conn| {
-        silman_db::narrate::set_narration_voice(conn, voice).map_err(|e| e.to_string())
+        kibitz_db::narrate::set_narration_voice(conn, voice).map_err(|e| e.to_string())
     })
 }
 
@@ -445,7 +445,7 @@ pub async fn set_narration_voice(state: State<'_, DbState>, voice: String) -> Re
 #[tauri::command]
 pub async fn export_game_pgn(state: State<'_, DbState>, game_id: i64) -> Result<String, String> {
     with_conn(&state, |conn| {
-        silman_db::export::export_pgn(conn, game_id).map_err(|e| e.to_string())
+        kibitz_db::export::export_pgn(conn, game_id).map_err(|e| e.to_string())
     })
 }
 
@@ -458,14 +458,14 @@ const PROFILE_MAX_GAMES: u32 = 2000;
 pub async fn build_profile(
     state: State<'_, DbState>,
     player: String,
-) -> Result<silman_profile::PlayerProfile, String> {
+) -> Result<kibitz_profile::PlayerProfile, String> {
     with_conn(&state, |conn| {
-        silman_db::profile::build_profile(conn, &player, PROFILE_MAX_GAMES)
+        kibitz_db::profile::build_profile(conn, &player, PROFILE_MAX_GAMES)
             .map_err(|e| e.to_string())
     })
 }
 
-/// Set the native window title (used as "silman — <db filename>" once a
+/// Set the native window title (used as "kibitz — <db filename>" once a
 /// database is open).
 #[tauri::command]
 pub fn set_window_title(window: tauri::Window, title: String) -> Result<(), String> {
@@ -476,7 +476,7 @@ pub fn set_window_title(window: tauri::Window, title: String) -> Result<(), Stri
 mod tests {
     use super::*;
     use rusqlite::params;
-    use silman_db::import::{import_pgn, SourceInfo, SourceKind};
+    use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
     use std::io::Cursor;
 
     /// Opera game (public domain, 33 plies): long enough for the profile
@@ -495,7 +495,7 @@ mod tests {
 
     fn fixture_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
-        let conn = silman_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("t.sqlite")).unwrap();
         let source = SourceInfo {
             name: "fixture".into(),
             origin: "unit test".into(),
@@ -559,7 +559,7 @@ mod tests {
         // read +1.50 and never trip the defense counter.
         plant(&conn, 1, 9, "legacy-import", "Rybka 4 x64", -150);
 
-        let p = silman_db::profile::build_profile(&conn, "Morphy, Paul", 100).unwrap();
+        let p = kibitz_db::profile::build_profile(&conn, "Morphy, Paul", 100).unwrap();
         assert_eq!(p.games, 1);
         assert_eq!(
             p.conversion.winning_reached, 1,
@@ -576,7 +576,7 @@ mod tests {
     #[test]
     fn batch_estimate_returns_sane_numbers_without_an_engine() {
         let (_dir, conn) = fixture_db();
-        let spawns = silman_db::engine::spawn_count();
+        let spawns = kibitz_db::engine::spawn_count();
 
         let est = batch_estimate_impl(&conn, "annotate").unwrap();
         assert_eq!(est.games, 1);
@@ -607,7 +607,7 @@ mod tests {
 
         assert!(batch_estimate_impl(&conn, "nope").is_err());
         assert_eq!(
-            silman_db::engine::spawn_count(),
+            kibitz_db::engine::spawn_count(),
             spawns,
             "estimates must never spawn an engine"
         );
@@ -635,7 +635,7 @@ mod tests {
 
         // Starting is enqueue-only: nothing ran, no engine was spawned.
         assert_eq!(f2.done, 0);
-        assert_eq!(silman_db::engine::spawn_count(), 0);
+        assert_eq!(kibitz_db::engine::spawn_count(), 0);
     }
 
     #[test]

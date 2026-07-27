@@ -1,6 +1,6 @@
 /**
  * View helpers for the explain-position panel: turn a FeatureRecord (spec
- * JSON shape, snake_case fields — docs/SILMAN_ENGINE_SPEC.md) into the
+ * JSON shape, snake_case fields — docs/KIBITZ_ENGINE_SPEC.md) into the
  * shared evidence-overlay input (lib/evidence.ts). Pure; unit-testable.
  */
 

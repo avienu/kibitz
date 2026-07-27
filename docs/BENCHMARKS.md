@@ -32,13 +32,13 @@ position (`ignore_too_much_material`); this does not affect movegen speed.
 
 ### Correctness
 
-Perft suite in `silman-core` green: startpos d1–d5, CPW pos 2 d1–d4,
+Perft suite in `kibitz-core` green: startpos d1–d5, CPW pos 2 d1–d4,
 pos 3 d1–d5, pos 4 d1–d4, pos 5 d1–d4, quiet-middlegame d1–d4. The
 quiet-middlegame node counts were cross-validated three ways (cozy-chess,
 shakmaty, Stockfish 18 `go perft`) after the commonly published CPW pos-6
 figures turned out not to match the FEN as transcribed.
 
-Reproduce: `cargo bench -p movegen-bench`, `cargo test -p silman-core`.
+Reproduce: `cargo bench -p movegen-bench`, `cargo test -p kibitz-core`.
 
 ## Phase 1 checkpoint: import + position search (2026-07-25)
 
@@ -46,10 +46,10 @@ Same hardware. Corpus: Lichess standard rated 2013-01 (CC0), 121,332 games
 in the file; 121,220 imported, 112 duplicates skipped, 0 parse failures,
 8,154,858 positions indexed. Database size ≈ 640 MB (SQLite, WAL).
 
-- Import (silman-cli release build, single-threaded): **86.1 s ≈ 1,409
+- Import (kibitz-cli release build, single-threaded): **86.1 s ≈ 1,409
   games/s** including SAN replay, move encoding, ep-normalized hashing and
   position-index inserts.
-- Position search (`silman-cli find-fen`, warm cache):
+- Position search (`kibitz-cli find-fen`, warm cache):
 
 | Query | Hits | Time |
 |---|---|---|

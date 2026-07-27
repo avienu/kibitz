@@ -28,17 +28,17 @@ interface HelpProps {
  * equivalent — only where one actually applies (no invented hints).
  */
 const SECTION_META: Record<string, string> = {
-  "Silman User Guide": "EVERY SURFACE · ESC CLOSES HELP",
+  "Kibitz User Guide": "EVERY SURFACE · ESC CLOSES HELP",
   "The window at a glance": "SHELL · RAIL NAVIGATION · STATUS STRIP",
-  "The Game view": "GAME VIEW · ← → ↑ ↓ · F FLIP · E EXPLAIN · CLI: silman-cli export-pgn",
-  "STUDY views": "DATABASE · TREE · SEARCH · CLI: silman-cli find-fen",
-  "COACH views": "EXPLAIN · PROFILE · PREP · CLI: silman-cli explain / profile / fingerprint",
-  "TRAIN views": "OPENINGS SRS · 1–4 GRADE · ⏎ SUBMIT · CLI: silman-cli import-repertoire",
-  "DATA IN / OUT views": "IMPORT · TWIC · SYNCS · JOBS · CLI: silman-cli import-pgn / run-jobs",
+  "The Game view": "GAME VIEW · ← → ↑ ↓ · F FLIP · E EXPLAIN · CLI: kibitz-cli export-pgn",
+  "STUDY views": "DATABASE · TREE · SEARCH · CLI: kibitz-cli find-fen",
+  "COACH views": "EXPLAIN · PROFILE · PREP · CLI: kibitz-cli explain / profile / fingerprint",
+  "TRAIN views": "OPENINGS SRS · 1–4 GRADE · ⏎ SUBMIT · CLI: kibitz-cli import-repertoire",
+  "DATA IN / OUT views": "IMPORT · TWIC · SYNCS · JOBS · CLI: kibitz-cli import-pgn / run-jobs",
   "Status strip": "ALWAYS VISIBLE · ENGINE DOT · BATCH PROGRESS",
   Settings: "RAIL FOOTER",
   "Deep links": "URL HASH · #game=…&ply=…",
-  "CLI-only features": "TERMINAL · silman-cli --db <path.sqlite>",
+  "CLI-only features": "TERMINAL · kibitz-cli --db <path.sqlite>",
 };
 
 function Spans({ spans }: { spans: InlineSpan[] }) {

@@ -16,7 +16,7 @@ import {
   type TourAnchor,
 } from "./lib/tour";
 
-const TOUR_KEY = "silman.tourSeen";
+const TOUR_KEY = "kibitz.tourSeen";
 
 /** True until the user dismisses the first-run overlay once. */
 export function shouldShowFirstRun(): boolean {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetch the Syzygy tablebase files needed by the silman-tb test suite into
+# Fetch the Syzygy tablebase files needed by the kibitz-tb test suite into
 # testdata/syzygy/ (git-ignored — Syzygy files are generated data, freely
 # redistributed by lichess.org, but they do not belong in the repo).
 #

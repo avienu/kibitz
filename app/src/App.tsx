@@ -79,9 +79,9 @@ import { insertVariation, type JsonToken } from "./lib/tokens";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-const THEME_KEY = "silman.theme";
-const TREATMENT_KEY = "silman.boardTreatment";
-const EXPLAIN_KEY = "silman.explainOn";
+const THEME_KEY = "kibitz.theme";
+const TREATMENT_KEY = "kibitz.boardTreatment";
+const EXPLAIN_KEY = "kibitz.explainOn";
 
 function initialGameView(): GameViewState {
   return {

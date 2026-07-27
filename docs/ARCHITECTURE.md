@@ -16,15 +16,15 @@
 └───────────────┬──────────────────────────────────────────────────────────┘
                 │ (app depends on crates; never the reverse)
 ┌───────────────▼──────────  crates/ (BSD-3-Clause)  ──────────────────────┐
-│  silman-core: board features on cozy-chess                               │
+│  kibitz-core: board features on cozy-chess                               │
 │   ├─ wsui: tactical screen (weak king, undefended, inadequately         │
 │   │        defended, trapped/stalemated pieces) → TacticAlert           │
 │   ├─ imbalance: minor pieces, pawn structure, files, squares/outposts,  │
 │   │        space, material, development, initiative → Imbalance[]       │
 │   ├─ motifs: tactical motif taggers (fork, pin, skewer, ...)            │
 │   └─ record: versioned FeatureRecord (serde)                            │
-│  silman-profile: batch corpus analysis → PlayerProfile                   │
-│  silman-verbalize: FeatureRecord → prose (templates; optional LLM)       │
+│  kibitz-profile: batch corpus analysis → PlayerProfile                   │
+│  kibitz-verbalize: FeatureRecord → prose (templates; optional LLM)       │
 │  si4-read (if cleanroomed): .si4/.sg4/.sn4 → game structs               │
 └──────────────────────────────────────────────────────────────────────────┘
 External processes: Stockfish (UCI, GPL — arm's length subprocess),
@@ -58,7 +58,7 @@ Lichess tablebase API (app layer).
   {game/position set, engine, limits (depth|nodes|movetime), purpose}.
   Purposes: wsui-confirm (bounded, e.g. nodes-limited), user-analysis,
   batch-annotate, batch-profile. Progress events to UI. Resumable across restarts.
-- The Silman flow: silman-core runs statically (microseconds). Only a fired
+- The Kibitz flow: kibitz-core runs statically (microseconds). Only a fired
   TacticAlert (or explicit user request) enqueues a bounded engine job whose
   result is folded back into the FeatureRecord (verified/refuted, PV, score).
 
@@ -69,25 +69,25 @@ Lichess tablebase API (app layer).
 - Tactics: Lichess CC0 puzzle DB (bundled), modes: rated drill, motif-filtered,
   Heisman speed drill (simple tactics, time-pressure), Woodpecker (fixed set,
   repeated accelerating cycles). Weakness-targeted selection driven by
-  silman-profile output (motifs the user misses most).
-- Endgames: curriculum tiers by rating band (Silman Complete Endgame Course
+  kibitz-profile output (motifs the user misses most).
+- Endgames: curriculum tiers by rating band (Kibitz Complete Endgame Course
   structure as the organizing model — structure only, no copyrighted text);
   drill-vs-engine from tablebase-won/drawn positions; Fathom for ≤5-piece truth.
 
-## Opponent prep (app layer + silman-profile)
+## Opponent prep (app layer + kibitz-profile)
 
 - Player search over local db + on-demand ingestion from Lichess
   (api/games/user/{u}, NDJSON, honor throttles) and chess.com (monthly archives,
   serial requests, descriptive User-Agent).
 - Repertoire fingerprint: frequency/score by ECO and by first-N-plies transposition-
   aware (position-hash based, not move-order based), split by color.
-- PlayerProfile (from silman-profile batch run): per-phase ACPL, blunder rate by
+- PlayerProfile (from kibitz-profile batch run): per-phase ACPL, blunder rate by
   motif (missed vs allowed), performance by pawn-structure family, conversion
   rate from ≥+2.0, defensive hold rate from ≤−1.0, later Maia-predictability.
 - Prep view: opponent's weakest lines/structures → surface master games in those
   exact positions from the local megabase via position index.
 
-## LLM verbalizer (silman-verbalize optional feature + app-layer client)
+## LLM verbalizer (kibitz-verbalize optional feature + app-layer client)
 
 - Input: FeatureRecord ONLY. The prompt forbids introducing chess facts not in
   the record. Output validated: every move mentioned must be legal and present

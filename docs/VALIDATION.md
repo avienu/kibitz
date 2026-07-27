@@ -1,7 +1,7 @@
 # VALIDATION.md — WSUI screen precision/recall
 
-Per docs/SILMAN_ENGINE_SPEC.md (validation plan). First measured 2026-07-25
-(run 3). Harness: `app/silman-db/src/bin/wsui-validate.rs`.
+Per docs/KIBITZ_ENGINE_SPEC.md (validation plan). First measured 2026-07-25
+(run 3). Harness: `app/kibitz-db/src/bin/wsui-validate.rs`.
 
 ## Data
 
@@ -29,13 +29,13 @@ holdout numbers below are reported; nothing was tuned on them.
 Reproduce:
 
 ```
-cargo run --release -p silman-db --bin wsui-validate -- \
+cargo run --release -p kibitz-db --bin wsui-validate -- \
   --build-quiet-from <db.sqlite> --per-class 500 > quiet_fens.txt
-cargo run --release -p silman-db --bin wsui-validate -- \
+cargo run --release -p kibitz-db --bin wsui-validate -- \
   --puzzles lichess_db_puzzle.csv --quiet quiet_fens.txt --per-class 2000
 ```
 
-## Results (2026-07-25, silman-core @ run-3 detectors)
+## Results (2026-07-25, kibitz-core @ run-3 detectors)
 
 Chosen config (train): **fire ≥ Medium, see_medium = 150, see_high = 400,
 king_zone_surplus = 2** — these are the shipped `WsuiConfig::default()`
@@ -83,7 +83,7 @@ Train-grid trade-off curve (recall / FP-rate):
   dominate firing); finer tuning belongs to a later pass with per-detector
   thresholds.
 
-## Firing-rule study (2026-07-26, run 5, silman-core @ run-5 detectors)
+## Firing-rule study (2026-07-26, run 5, kibitz-core @ run-5 detectors)
 
 Question (maintainer feedback item 5): should the screen fire on a solo
 element, a pair, high-solo-or-two-distinct, or a severity-weighted score?

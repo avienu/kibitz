@@ -143,7 +143,7 @@ pub fn parse_bestmove_line(line: &str) -> Option<BestMove> {
 ///
 /// 1. Explicit user-set path (persisted in the UI). If set but missing,
 ///    this is a hard error — an explicit choice is never silently ignored.
-/// 2. `SILMAN_STOCKFISH` environment variable (skipped if stale/missing).
+/// 2. `KIBITZ_STOCKFISH` environment variable (skipped if stale/missing).
 /// 3. `tools/stockfish/stockfish-macos-m1-apple-silicon` relative to the
 ///    repo root, found by walking up from the current dir and the exe dir.
 /// 4. `stockfish` on `PATH`.
@@ -156,7 +156,7 @@ pub fn resolve_engine_path(user_path: Option<&str>) -> Result<PathBuf, String> {
             Err(format!("Configured engine path does not exist: {p}"))
         };
     }
-    if let Some(p) = std::env::var_os("SILMAN_STOCKFISH") {
+    if let Some(p) = std::env::var_os("KIBITZ_STOCKFISH") {
         let path = PathBuf::from(p);
         if path.is_file() {
             return Ok(path);
@@ -188,7 +188,7 @@ pub fn resolve_engine_path(user_path: Option<&str>) -> Result<PathBuf, String> {
         }
     }
     Err(
-        "No Stockfish binary found. Set an engine path in the UI, set SILMAN_STOCKFISH, \
+        "No Stockfish binary found. Set an engine path in the UI, set KIBITZ_STOCKFISH, \
          or install stockfish on PATH."
             .to_owned(),
     )

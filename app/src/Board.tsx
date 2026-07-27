@@ -69,7 +69,7 @@ const TEXTURE_CELLS = (() => {
       const dark = (x + y) % 2 === 1; // top-left (a8 from White) is light
       cells.push({
         key: `t${x}${y}`,
-        className: `silman-sq ${dark ? "silman-sq-dark" : "silman-sq-light"}`,
+        className: `kibitz-sq ${dark ? "kibitz-sq-dark" : "kibitz-sq-light"}`,
         style: { left: `${x * 12.5}%`, top: `${y * 12.5}%` },
       });
     }
@@ -197,16 +197,16 @@ export default function Board({
   const markEl = (m: SquareMark) => (
     <div
       key={`${m.square}-${m.role}`}
-      className={`silman-mark silman-mark-${m.role}`}
+      className={`kibitz-mark kibitz-mark-${m.role}`}
       style={{ ...squarePos(m.square, orientation ?? "white"), opacity: m.opacity }}
     />
   );
 
   return (
-    <div className={`board silman-board silman-${treatment}`} style={styleVars}>
-      <div className="silman-grid" style={{ width: geo.size, height: geo.size }}>
+    <div className={`board kibitz-board kibitz-${treatment}`} style={styleVars}>
+      <div className="kibitz-grid" style={{ width: geo.size, height: geo.size }}>
         <div ref={elRef} style={{ width: geo.size, height: geo.size }} />
-        <div className="silman-overlay" aria-hidden>
+        <div className="kibitz-overlay" aria-hidden>
           {TEXTURE_CELLS.map((c) => (
             <div key={c.key} className={c.className} style={c.style} />
           ))}
@@ -214,7 +214,7 @@ export default function Board({
         </div>
         {view.shapes.length > 0 && (
           <svg
-            className="silman-arrows"
+            className="kibitz-arrows"
             viewBox={`0 0 ${geo.size} ${geo.size}`}
             width={geo.size}
             height={geo.size}

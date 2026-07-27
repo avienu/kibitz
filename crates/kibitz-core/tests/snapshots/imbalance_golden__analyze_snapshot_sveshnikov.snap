@@ -1,0 +1,98 @@
+---
+source: crates/kibitz-core/tests/imbalance_golden.rs
+assertion_line: 166
+expression: record
+---
+{
+  "schema_version": 3,
+  "fen": "r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7",
+  "side_to_move": "white",
+  "phase": "opening",
+  "wsui": {
+    "alerts": [],
+    "screen_fired": false
+  },
+  "imbalances": [
+    {
+      "kind": "MinorPieces",
+      "favors": "white",
+      "magnitude": "minor",
+      "evidence": {
+        "bad_bishop_black": {
+          "bishop": "f8",
+          "blocking_pawns": [
+            "e5",
+            "d6"
+          ]
+        },
+        "character": "open",
+        "locked_center_pawns": 1
+      }
+    },
+    {
+      "kind": "PawnStructure",
+      "favors": "white",
+      "magnitude": "minor",
+      "evidence": {
+        "backward_black": [
+          "d6"
+        ],
+        "queenside_majority": "white"
+      },
+      "plans": [
+        {
+          "hint": "AdvanceQueensideMajority"
+        },
+        {
+          "hint": "PressureBackwardPawn",
+          "squares": [
+            "d6",
+            "d5"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "SquaresOutposts",
+      "favors": "white",
+      "magnitude": "minor",
+      "evidence": {
+        "holes_in_black_camp": [
+          "d5"
+        ]
+      },
+      "plans": [
+        {
+          "hint": "ManeuverKnightToOutpost",
+          "squares": [
+            "d5"
+          ]
+        }
+      ]
+    }
+  ],
+  "composite_plans": [
+    {
+      "target": "d5",
+      "hints": [
+        "PressureBackwardPawn",
+        "ManeuverKnightToOutpost"
+      ],
+      "supporting": [
+        "PawnStructure",
+        "SquaresOutposts"
+      ],
+      "squares": [
+        "d6",
+        "d5"
+      ],
+      "score": 2,
+      "favors": "white"
+    }
+  ],
+  "engine": null,
+  "provenance": {
+    "generator": "kibitz-core",
+    "version": "[version]"
+  }
+}

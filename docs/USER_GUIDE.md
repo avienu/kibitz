@@ -1,4 +1,4 @@
-# Silman User Guide
+# Kibitz User Guide
 
 This guide covers everything you can click in the app and every feature that
 is currently CLI-only. It is also available inside the app: press
@@ -8,7 +8,7 @@ is currently CLI-only. It is also available inside the app: press
 
 ## The window at a glance
 
-- **Navigation rail** (left edge) — the SILMAN wordmark, a line showing the
+- **Navigation rail** (left edge) — the KIBITZ wordmark, a line showing the
   open database ("scid.sqlite · 121,438 games"), four capability groups
   (**STUDY**, **COACH**, **TRAIN**, **DATA IN / OUT**), and a footer with
   **Settings** and **Help & tour**. Rail items carry live badges (game
@@ -94,7 +94,7 @@ of padding the screen.
   count, and the game's identity (`database #N` or `pasted PGN`).
 - **walnut | instrument** — switches the board treatment (same control as
   in Settings).
-- **Annotate** — the *static* Silman annotation pass over the loaded
+- **Annotate** — the *static* Kibitz annotation pass over the loaded
   database game: imbalance comments plus tactical alerts from the WSUI
   screen. **No engine runs**; each fired alert enqueues a bounded engine
   confirmation job for the Jobs queue.
@@ -108,7 +108,7 @@ These three buttons are enabled only for games loaded from the database.
 ### Board column
 
 - **Eval bar** (left of the board) — per-ply evaluation from the game's
-  *stored* analyses; fresh silman engine rows are preferred over legacy
+  *stored* analyses; fresh kibitz engine rows are preferred over legacy
   SCID-imported ones. The fill is White's share, anchored at the bottom.
   With no stored analysis for the ply it shows an empty track and a muted
   "—" (never a fake 0.0). On a forced mate the bar pins to the winning
@@ -401,7 +401,7 @@ Building a repertoire:
   the exact command (a Lichess study export works):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-repertoire study.pgn white --name "main"
 ```
 
@@ -487,7 +487,7 @@ popularity 50 are skipped). Download `lichess_db_puzzle.csv` from
 database.lichess.org (CC0). The CLI import adds knobs:
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000
 ```
 
@@ -525,7 +525,7 @@ feedback aside.
 - A drill is **mastered** after 2 clean completions ("Clean streak 1/2" →
   "Drill mastered.").
 
-Tablebases: the Syzygy directory resolves from the `SILMAN_SYZYGY`
+Tablebases: the Syzygy directory resolves from the `KIBITZ_SYZYGY`
 environment variable, else by walking up to `testdata/syzygy`. The repo
 script
 
@@ -535,7 +535,7 @@ scripts/fetch_syzygy_test_files.sh
 
 downloads the complete 3-man set (under 100 KB) — enough for the test
 suite, but most drills have more pieces and then fall back to the
-heuristic defender; point `SILMAN_SYZYGY` at a 3-4-5-man set for
+heuristic defender; point `KIBITZ_SYZYGY` at a 3-4-5-man set for
 tablebase-verified play across the whole curriculum.
 
 ---
@@ -548,7 +548,7 @@ tablebase-verified play across the whole curriculum.
   `.pgn`/`.txt` file, or **Sample game** (Anderssen–Kieseritzky, London
   1851). Loading switches to the Game view.
 - **SCID (.si4)** — imports through the command line for now:
-  `silman-cli import-si4 <base>` converts a `.si4`/`.sg4`/`.sn4` base into
+  `kibitz-cli import-si4 <base>` converts a `.si4`/`.sg4`/`.sn4` base into
   the SQLite database the app opens. Legacy engine analysis is preserved
   and tagged — never deleted, only superseded by fresh analysis.
 
@@ -604,7 +604,7 @@ A single column of grouped cards; each row is label + explanation, the
 current value, and an action.
 
 - **ENGINE & ANALYSIS** — Engine path (Edit; auto-resolved when empty —
-  resolution order: override, `SILMAN_STOCKFISH`, a repo-local `tools/`
+  resolution order: override, `KIBITZ_STOCKFISH`, a repo-local `tools/`
   binary, `stockfish` on PATH); Node budget (Edit; bounds every engine
   job); Spawn policy (stated in words — the engine-off default is a
   product principle, not a setting); **Annotate database** and **Fresh
@@ -733,30 +733,30 @@ Any subset works. Handy for demos, screenshots and shared findings.
 ## CLI-only features
 
 Everything below has **no UI entry point** (exceptions are noted inline) —
-it exists only in the developer CLI (`silman-cli`) or the validation harness
+it exists only in the developer CLI (`kibitz-cli`) or the validation harness
 (`wsui-validate`). Run them from the repository root. The general form is:
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db <path.sqlite> <subcommand> [args]
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db <path.sqlite> <subcommand> [args]
 ```
 
-`--db` defaults to `silman.sqlite` in the current directory; the database is
+`--db` defaults to `kibitz.sqlite` in the current directory; the database is
 created and migrated automatically. (A built binary works the same:
-`silman-cli --db <path.sqlite> <subcommand> [args]`.)
+`kibitz-cli --db <path.sqlite> <subcommand> [args]`.)
 
 ### Database creation & import (CLI-only)
 
 - **Create / migrate a database**
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite init
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite init
 ```
 
 - **Import a PGN file** (streaming; malformed games are skipped; provenance
   is recorded with every source):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-pgn games.pgn --source-name "My games" --origin "local file" \
   --license "personal data" --kind personal
 ```
@@ -768,7 +768,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   triple; inline comments, NAGs, and variations are preserved):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-si4 /path/to/scidbase --source-name "SCID import" --kind personal
 ```
 
@@ -778,7 +778,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   re-import is idempotent:
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-repertoire study.pgn white --name "main"
 ```
 
@@ -789,7 +789,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   many):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000
 ```
 
@@ -800,27 +800,27 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   prints on first run). `--from` is required the first time:
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   twic-sync --from 1580 --max-issues 5
 ```
 
   Later runs resume where the last one stopped:
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite twic-sync
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite twic-sync
 ```
 
 - **Lichess user games** (resumable):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   lichess-sync SomeUsername
 ```
 
 - **chess.com monthly archives** (resumable):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   chesscom-sync SomeUsername
 ```
 
@@ -828,7 +828,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   occasional; personal use only). Whole year, or one month with `--month`:
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   fics-sync SomeUsername 2025 --month 6
 ```
 
@@ -839,7 +839,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   Opponent-prep screen shows a per-colour summary of the same data):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   fingerprint "Carlsen, Magnus"
 ```
 
@@ -847,7 +847,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   Prep/Profile):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   players carlsen
 ```
 
@@ -856,7 +856,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   up on its board):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
   find-fen "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
 ```
 
@@ -865,7 +865,7 @@ cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite \
   (needs `$ANTHROPIC_API_KEY` or `--api-key`):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- \
+cargo run --release -p kibitz-db --bin kibitz-cli -- \
   explain-llm "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"
 ```
 
@@ -876,14 +876,14 @@ These duplicate UI functionality, useful for scripting and batch work
 tree view, the Explain panel, and the database summary):
 
 ```
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite export-pgn 123
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite annotate-game 123
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite reanalyze-game 123 --nodes 200000
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite run-jobs --max-jobs 100
-cargo run --release -p silman-db --bin silman-cli -- --db mygames.sqlite profile "Carlsen, Magnus" --json
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite export-pgn 123
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite annotate-game 123
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite reanalyze-game 123 --nodes 200000
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite run-jobs --max-jobs 100
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite profile "Carlsen, Magnus" --json
 ```
 
-`run-jobs` needs an engine binary (set `SILMAN_STOCKFISH` if it is not on
+`run-jobs` needs an engine binary (set `KIBITZ_STOCKFISH` if it is not on
 PATH) and, like the Jobs view, folds verdicts back into annotations when
 the jobs finish.
 
@@ -896,21 +896,21 @@ are recorded in `docs/VALIDATION.md`.
 - Build the quiet-position set from an imported master-game database:
 
 ```
-cargo run --release -p silman-db --bin wsui-validate -- \
+cargo run --release -p kibitz-db --bin wsui-validate -- \
   --build-quiet-from mygames.sqlite --per-class 500 > quiet_fens.txt
 ```
 
 - Run the validation (train/holdout split, holdout numbers reported):
 
 ```
-cargo run --release -p silman-db --bin wsui-validate -- \
+cargo run --release -p kibitz-db --bin wsui-validate -- \
   --puzzles lichess_db_puzzle.csv --quiet quiet_fens.txt --per-class 2000
 ```
 
 - Emit a small committed fixture subset from the full puzzle dump:
 
 ```
-cargo run --release -p silman-db --bin wsui-validate -- \
+cargo run --release -p kibitz-db --bin wsui-validate -- \
   --puzzles lichess_db_puzzle.csv --emit-fixture 500 > puzzles_sample.csv
 ```
 

@@ -1,4 +1,4 @@
-//! Silman Tauri shell.
+//! Kibitz Tauri shell.
 //!
 //! Exposes IPC commands over the UCI manager (src/uci.rs) —
 //! `resolve_engine_path`, `analyze_position`, `stop_analysis` — the
@@ -56,7 +56,7 @@ struct DonePayload {
 }
 
 /// Report which engine binary would be used for `user_path` (may be null).
-/// Resolution order: user path > SILMAN_STOCKFISH > repo binary > PATH.
+/// Resolution order: user path > KIBITZ_STOCKFISH > repo binary > PATH.
 #[tauri::command]
 fn resolve_engine_path(user_path: Option<String>) -> Result<String, String> {
     uci::resolve_engine_path(user_path.as_deref()).map(|p| p.display().to_string())

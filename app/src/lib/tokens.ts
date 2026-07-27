@@ -3,7 +3,7 @@
  *
  * Mirrors the wire format of the `get_game_tokens` / `update_game_tokens`
  * commands (src-tauri/src/tokens.rs), which itself mirrors
- * silman_db::movebin::Token. Replay semantics are the movebin ones: a
+ * kibitz_db::movebin::Token. Replay semantics are the movebin ones: a
  * variation branches from the position BEFORE the last move at the current
  * nesting level, so consecutive variations all replace the same move.
  *

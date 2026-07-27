@@ -1779,6 +1779,91 @@ dependencies = [
 ]
 
 [[package]]
+name = "kibitz-app"
+version = "0.0.1"
+dependencies = [
+ "cozy-chess",
+ "kibitz-core",
+ "kibitz-db",
+ "kibitz-profile",
+ "kibitz-srs",
+ "kibitz-tb",
+ "kibitz-verbalize",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "kibitz-core"
+version = "0.1.0"
+dependencies = [
+ "cozy-chess",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "kibitz-db"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cozy-chess",
+ "kibitz-core",
+ "kibitz-profile",
+ "kibitz-srs",
+ "kibitz-tb",
+ "kibitz-verbalize",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "si4-read",
+ "thiserror 2.0.19",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "kibitz-profile"
+version = "0.1.0"
+dependencies = [
+ "kibitz-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "kibitz-srs"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "kibitz-tb"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "cozy-chess",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "kibitz-verbalize"
+version = "0.1.0"
+dependencies = [
+ "kibitz-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2991,91 +3076,6 @@ checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
 dependencies = [
  "errno",
  "libc",
-]
-
-[[package]]
-name = "silman-app"
-version = "0.0.1"
-dependencies = [
- "cozy-chess",
- "rusqlite",
- "serde",
- "serde_json",
- "silman-core",
- "silman-db",
- "silman-profile",
- "silman-srs",
- "silman-tb",
- "silman-verbalize",
- "tauri",
- "tauri-build",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "silman-core"
-version = "0.1.0"
-dependencies = [
- "cozy-chess",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "silman-db"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "cozy-chess",
- "rusqlite",
- "serde",
- "serde_json",
- "si4-read",
- "silman-core",
- "silman-profile",
- "silman-srs",
- "silman-tb",
- "silman-verbalize",
- "thiserror 2.0.19",
- "ureq",
- "zip",
-]
-
-[[package]]
-name = "silman-profile"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "silman-core",
-]
-
-[[package]]
-name = "silman-srs"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "silman-tb"
-version = "0.1.0"
-dependencies = [
- "cc",
- "cozy-chess",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "silman-verbalize"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "silman-core",
 ]
 
 [[package]]

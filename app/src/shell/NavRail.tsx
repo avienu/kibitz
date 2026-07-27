@@ -1,5 +1,5 @@
 /**
- * Nav rail (design/handoff-1 §A): SILMAN wordmark + db line, the four
+ * Nav rail (design/handoff-1 §A): KIBITZ wordmark + db line, the four
  * capability groups and the footer (Settings · Help & tour). Badges are
  * live data or absent — never fake numbers. Collapses to icon-only 56px
  * below 1280px window width (deliverable 2c).
@@ -65,7 +65,7 @@ export default function NavRail({
   return (
     <nav className={`rail${collapsed ? " collapsed" : ""}`}>
       <div className="rail-header">
-        <div className="rail-wordmark">{collapsed ? "S" : "SILMAN"}</div>
+        <div className="rail-wordmark">{collapsed ? "S" : "KIBITZ"}</div>
         {!collapsed && <div className="rail-db">{dbLine ?? "no database open"}</div>}
       </div>
       <div className="rail-body">

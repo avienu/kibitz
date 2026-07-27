@@ -1,9 +1,9 @@
 # CLAUDE.md
 
-Working name: **silman** (rename later; keep crate names stable once published).
+Name: **Kibitz** (renamed from the working-era name in run 8; crate names are now stable — do not rename again).
 
 Open-source chess training + database platform: ChessBase-class database, Chessable-class
-training, plus a novel explanatory engine ("Silman engine") that explains positions in
+training, plus a novel explanatory engine ("Kibitz engine") that explains positions in
 human terms. Solo maintainer, experienced CTO. macOS primary, Linux/BSD portable.
 
 ## Non-negotiable architectural decisions (do not relitigate)
@@ -38,11 +38,11 @@ human terms. Solo maintainer, experienced CTO. macOS primary, Linux/BSD portable
 ```
 /
 ├── CLAUDE.md
-├── docs/                      # ARCHITECTURE.md, SILMAN_ENGINE_SPEC.md, ROADMAP.md, LICENSES.md
+├── docs/                      # ARCHITECTURE.md, KIBITZ_ENGINE_SPEC.md, ROADMAP.md, LICENSES.md
 ├── crates/                    # BSD-3-Clause workspace members
-│   ├── silman-core/           # feature detectors, WSUI screen, imbalance extractor, feature records
-│   ├── silman-profile/        # corpus batch profiling & aggregation (player strengths/weaknesses)
-│   ├── silman-verbalize/      # templated NL renderer + LLM-verbalizer trait (LLM impl optional feature)
+│   ├── kibitz-core/           # feature detectors, WSUI screen, imbalance extractor, feature records
+│   ├── kibitz-profile/        # corpus batch profiling & aggregation (player strengths/weaknesses)
+│   ├── kibitz-verbalize/      # templated NL renderer + LLM-verbalizer trait (LLM impl optional feature)
 │   └── si4-read/              # ONLY if cleanroomed from si4spec; else this lives in app/
 ├── app/                       # GPL-3.0 Tauri application
 │   ├── src-tauri/             # Rust: db layer, UCI manager, job queue, TWIC ingester, importers
@@ -53,16 +53,16 @@ human terms. Solo maintainer, experienced CTO. macOS primary, Linux/BSD portable
 ## Conventions
 
 - Rust edition 2021+, `cargo clippy -- -D warnings`, `cargo fmt` enforced.
-- Every detector in silman-core ships with unit tests against known FEN positions
-  (test names cite the position source, e.g. Silman HTRYC examples, classic games).
+- Every detector in kibitz-core ships with unit tests against known FEN positions
+  (test names cite the position source, e.g. Jeremy Silman HTRYC examples, classic games).
 - Feature records are the contract between all components: versioned serde structs,
-  JSON-serializable, schema documented in docs/SILMAN_ENGINE_SPEC.md. Breaking
+  JSON-serializable, schema documented in docs/KIBITZ_ENGINE_SPEC.md. Breaking
   changes bump the record schema version.
 - UI text and explanation templates live in data files, not string literals.
 - SQLite schema changes only via numbered migrations.
 - Conventional commits. One logical change per commit.
-- No network calls in silman-core or silman-profile. Network (TWIC, Lichess,
-  chess.com, LLM APIs) is app-layer or silman-verbalize's optional LLM feature only.
+- No network calls in kibitz-core or kibitz-profile. Network (TWIC, Lichess,
+  chess.com, LLM APIs) is app-layer or kibitz-verbalize's optional LLM feature only.
 
 ## External data ground rules
 

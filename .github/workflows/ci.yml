@@ -36,6 +36,8 @@ jobs:
         run: cargo test --workspace
       - name: License gate (crates/* must stay GPL-free)
         run: bash scripts/license_gate.sh
+      - name: Name gate (working-era name only in handoffs/history)
+        run: bash scripts/name_gate.sh
 
   app:
     strategy:

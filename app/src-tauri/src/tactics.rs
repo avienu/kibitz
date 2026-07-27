@@ -1,4 +1,4 @@
-//! Tactics trainer IPC commands (ROADMAP Phase 5) over silman_db::tactics:
+//! Tactics trainer IPC commands (ROADMAP Phase 5) over kibitz_db::tactics:
 //! puzzle import, drill selection (rated / motif / weakness-weighted /
 //! Woodpecker / speed), solve verification and attempt recording.
 //!
@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use silman_db::tactics::{
+use kibitz_db::tactics::{
     self, AttemptOutcome, CycleStats, MotifWeight, MoveVerdict, PuzzleRow, TacticsRating,
     ThemeCount, WoodpeckerSet,
 };
@@ -19,7 +19,7 @@ use tauri::State;
 
 use crate::browse::{with_conn, DbState};
 
-/// Time-derived selection seed (tests in silman-db pin their own seeds).
+/// Time-derived selection seed (tests in kibitz-db pin their own seeds).
 fn time_seed() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -103,14 +103,14 @@ pub async fn tactics_import_puzzles(
     let csv_path = resolve_csv_path(&path)?;
     tauri::async_runtime::spawn_blocking(move || {
         let conn =
-            silman_db::db::open(std::path::Path::new(&db_path)).map_err(|e| e.to_string())?;
+            kibitz_db::db::open(std::path::Path::new(&db_path)).map_err(|e| e.to_string())?;
         conn.busy_timeout(std::time::Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
-        let source = silman_db::import::SourceInfo {
+        let source = kibitz_db::import::SourceInfo {
             name: "lichess-puzzles".into(),
             origin: "https://database.lichess.org/#puzzles".into(),
             license: "CC0-1.0".into(),
-            kind: silman_db::import::SourceKind::Other,
+            kind: kibitz_db::import::SourceKind::Other,
         };
         let reader = std::io::BufReader::with_capacity(
             1 << 20,

@@ -42,7 +42,7 @@ export const TOUR_STEPS: TourStep[] = [
     anchor: "coach",
     title: "This is Coach.",
     body:
-      "Everything Silman knows about your play lives in these screens — " +
+      "Everything Kibitz knows about your play lives in these screens — " +
       "Explain reads positions, Profile reads your games, Prep reads your " +
       "opponent. No engine runs unless a screen fires or you ask.",
   },
