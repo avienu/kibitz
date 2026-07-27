@@ -1,3 +1,146 @@
+# Run 8 — 2026-07-27
+
+## Headline
+
+**Kibitz is release-shaped.** The Great Rename landed whole (CI-gated:
+the working-era name survives only in the design handoffs, this
+report's history, and Jeremy Silman author attributions), the repo
+passed its public-readiness audit with one history finding for your
+decision, verified 0.1.0 bundles exist (Kibitz.app 22 MB / dmg 7.2 MB,
+org.kibitzchess.app — the domain input arrived mid-run and was
+finalized end to end), the signing/notarization/updater pipeline is
+built and dry-run-verified pending Apple enrollment, the website
+scaffold is ready for Pages, and live analysis shipped per the ruling.
+Six maintainer reports filed DURING the run were fixed the same day
+(details below). 619 tests green (327 Rust incl. src-tauri + 292
+frontend); scale test skipped by its own condition.
+
+## Item 1 — the rename
+
+One pass, one commit (71e37b0): crates kibitz-{core,profile,verbalize,
+srs,tb} (si4-read unchanged), app/kibitz-db, kibitz-cli, kibitz-app,
+env vars KIBITZ_*, CSS classes, localStorage keys, product name, window
+title. Bundle ID went placeholder→final within the run when you secured
+kibitzchess.org: org.kibitzchess.app, still isolated in
+tauri.conf.json. The personal Gmail is out of the code — the User-Agent
+contact is env-supplied (KIBITZ_CONTACT) defaulting to
+contact@kibitzchess.org. Design handoffs annotated, not rewritten.
+CI name gate enforces all of this permanently. Breaking notes for your
+environment: KIBITZ_STOCKFISH / KIBITZ_SYZYGY replace the old env vars,
+and localStorage keys reset once (theme/db-path/tour re-pick).
+
+## Item 2 — public-readiness audit
+
+- **History finding (your decision #1):** contact@kibitzchess.org sits in the
+  committed contents of ~50 historical commits (the old hardcoded
+  User-Agent). Gone at HEAD, fully recoverable from history. Since the
+  repo has never been public, a pre-publication scrub is zero-cost:
+  fresh clone → git filter-repo --replace-text → verify → force-push.
+  Proposed, NOT executed. The alternative (accept it) is defensible —
+  it matches your public git identity — but decide before the switch.
+- Everything else in history is clean: no tokens ever committed, no
+  databases, no TWIC data (the twic-named test fixtures are synthetic),
+  testdata/{corpus,private,syzygy} never in any revision.
+- **Screenshot inventory (your decision #2)** — third-party names:
+  | Screenshots | Names | Call |
+  |---|---|---|
+  | run6/01-04 (game view ×4), website hero | Jacobs, Brian (club game 2012) | bless or replace |
+  | run7/01-home + website home.png | Khachian, Melik (commitment line), Jacobs | bless or replace |
+  | run7/05-prep | Khachian, Melik as prep target | most sensitive framing — bless or replace |
+  | run7/09-tree, 10-search | FICS friends (christoforo, Greg, JGK01…) | bless or replace |
+  | run7/03-database | Zupanja Open 2011 players | public tournament record — fine |
+  | run7/02,04,06,07,08,11,12 | none | fine (11-settings shows a home-dir path — cosmetic) |
+  README deliberately uses only the name-clean three (profile,
+  endgames, tactics). The website currently carries two flagged images
+  (hero + home) — swap or bless deliberately.
+- Licensing: cargo-license reconciled into LICENSES.md; per-crate BSD
+  files, GPL app licenses, font OFLs, Fathom MIT all verified;
+  THIRD-PARTY-NOTICES.md generated and committed.
+- README (coach identity first, build-from-source commands actually
+  executed), CONTRIBUTING (license-boundary rules), SECURITY, issue
+  templates: all committed. Committed .pyc removed (decision #3 done).
+
+## Item 3 — packaging & release
+
+Local verified artifacts: Kibitz.app (22 MB) and Kibitz_0.1.0_aarch64
+.dmg (7.2 MB), identifier and version checked inside the bundles.
+ARM64-first (universal deferred, rationale in RELEASING.md). Linux
+AppImage/.deb configured for CI. Signing/notarization/stapling as
+gated scripts with working --dry-run; release.yml builds both
+platforms on tag, signs only when secrets exist, drafts the Release;
+from-source jobs execute the README commands on both platforms. Tauri
+updater wired with an HONEST unconfigured state (placeholder pubkey
+detected → Settings says so; 18 mock-feed tests for semver/platform
+selection; no network in tests). CHANGELOG.md covers runs 1-8 under
+0.1.0. RELEASE_CHECKLIST.md has the exact secrets list.
+
+## Item 4 — website
+
+website/ static scaffold on the app tokens with the bundled fonts,
+three real screenshots, honest download copy (unsigned-first-release
+note), rendered USER_GUIDE via a deterministic stdlib builder
+(differential-tested against the app's own markdown renderer), the
+Temecula Chess Club donation section with an obvious placeholder link,
+and WEBSITE.md with concrete Route 53 records for kibitzchess.org.
+Pages deploy is workflow_dispatch-only until Pages is enabled.
+
+## Live analysis (ruling: build) — shipped
+
+Explicit toggle beside the move controls: go-infinite on the shown
+position, streaming depth/eval/PV strip, restart on position change,
+hard stop on toggle-off/game change/view leave. Always starts OFF,
+never persisted. Pure controller logic unit-tested; the engine-off
+assertions (which test defaults) stay green untouched.
+
+## Maintainer reports fixed mid-run
+
+1. **Re-analyze "does nothing / super fast"**: two real causes — it
+   only enqueues (by design; the message now says exactly where to
+   run), and finished jobs never refreshed the open game. The jobs
+   poller now reloads evals and fold-back narrations the moment the
+   worker goes idle. (Your dev session also predated the rename —
+   restart `npm run tauri dev` to get current code.)
+2. **Tactics vs imbalances**: your instinct is now the rule — an
+   engine-CONFIRMED tactic mutes positional prose in proportion to its
+   size. ≥2 pawns or mate: tactics only. Below: the single strongest
+   theme survives, plans wait. UNconfirmed static alerts keep full
+   positional context, because the screen may yet be refuted — that is
+   the honest hedge, and it answers "how do we balance": confidence
+   times magnitude gates the positional voice. Applied in the shared
+   verbalizer, so narration, Explain, and fold-back all inherit it.
+3. **Resume orientation**: the board side you were analyzing persists
+   with the last-game pointer and restores on Resume.
+4. **Moves panel**: follows the game — the current move scrolls into
+   view while stepping.
+5. **Profile name field**: typed suggestions are now VISIBLE (datalist
+   renders nothing in WKWebView — a genuine platform trap).
+6. **Prep + Database**: search-as-you-type in prep step 1; the
+   Database filter already live-filtered but now says so
+   ("filtering…" readout + clearer placeholder).
+
+## Remaining human steps — the go-public checklist
+
+1. **History rewrite decision**: scrub contact@kibitzchess.org from history
+   (filter-repo plan above) or accept it. Before the public switch.
+2. **Screenshot blessing**: rule on the flagged rows above (especially
+   the two on the website); after ruling, one recapture pass also
+   refreshes the pre-rename SILMAN wordmark visible in all shots.
+3. **Apple**: enroll (Developer ID), then per RELEASE_CHECKLIST.md:
+   create the Developer ID Application cert + app-specific password,
+   set APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD /
+   APPLE_CERT_IDENTITY (+ CI cert secrets), re-tag to sign.
+4. **Updater keys**: `tauri signer generate` locally, store the private
+   key in your password manager (NEVER the repo), set the pubkey in
+   tauri.conf.json and TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) in CI.
+5. **DNS (Route 53, kibitzchess.org)**: the four A + four AAAA records
+   on the apex, www CNAME to avienu.github.io, then enable Pages
+   (Settings → Pages → GitHub Actions), restore pages.yml's push
+   trigger, set the custom domain, enforce HTTPS.
+6. **Mail**: forwarding for contact@kibitzchess.org (it is now the
+   shipped UA contact).
+7. **Donation URL**: fill the placeholder in website/index.html.
+8. **Go public** (after 1-2): flip repo visibility, then tag v0.1.0.
+
 # Run 7 — 2026-07-26
 
 ## Headline

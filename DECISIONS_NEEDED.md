@@ -3,6 +3,15 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+Run-8 note: three go-public decisions are with the maintainer, listed
+as the checklist closing RUN_REPORT.md run-8: (1) history rewrite for
+the personal email (proposed filter-repo plan, not executed); (2)
+screenshot blessing for third-party names (inventory table in the
+report; two flagged images are on the website); (3) the operational
+steps (Apple enrollment, updater keys, DNS, mail forwarding, donation
+URL). Everything else from the run-8 brief is done, including both
+prior deferred calls ratified as built and live analysis shipped.
+
 Run-7 note: no parked decisions. All four run-6 judgment calls stand as
 ruled (ECO names now in scope and implemented; the other three
 provisionally ratified, untouched). New judgment calls documented in
