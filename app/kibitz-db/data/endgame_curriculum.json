@@ -8,29 +8,35 @@
     "theory (Lucena, Philidor, opposition, the square of the pawn, key",
     "squares, Vancura, ...), described in our own words.",
     "Every FEN's theoretical result was verified against Syzygy tablebases",
-    "(lichess.ovh tablebase API, 2026-07-26). The side to move in each FEN",
-    "is the side the user plays; `goal` is the theoretical result the user",
-    "must achieve. `material` is white-vs-black piece letters (KQRBNP order)",
-    "and is asserted against the FEN by the curriculum tests."
+    "(lichess.ovh tablebase API, 2026-07-26; second batch 2026-07-27). The",
+    "one exception is pawn-breakthrough (8 men, beyond the 7-man tables):",
+    "the centuries-old three-abreast breakthrough, with both capture",
+    "branches and both decline branches verified by hand. shouldering-race",
+    "is the public-domain game Schlage-Ahues, Berlin 1921 (with Maizelis's",
+    "winning king route) at its critical white-to-move moment. The side to",
+    "move in each FEN is the side the user plays; `goal` is the theoretical",
+    "result the user must achieve. `material` is white-vs-black piece",
+    "letters (KQRBNP order) and is asserted against the FEN by the",
+    "curriculum tests."
   ],
   "tiers": [
     {
       "id": "beginner",
       "name": "Essentials",
       "ratingBand": "up to ~1000",
-      "summary": "The two basic mates, the square of the pawn, and king-and-pawn fundamentals every player must know cold."
+      "summary": "The two basic mates, the square of the pawn, king-and-pawn fundamentals every player must know cold, and the stalemate traps that undo them."
     },
     {
       "id": "intermediate",
       "name": "Building technique",
       "ratingBand": "~1000-1500",
-      "summary": "Opposition in all its forms, key squares, spare tempi, and queen against a pawn on the seventh."
+      "summary": "Opposition in all its forms, key squares, spare tempi, queen against a pawn on the seventh, outside passers, and knowing when to trade into a pawn ending."
     },
     {
       "id": "advanced",
       "name": "Rook endings and tempo play",
       "ratingBand": "~1500-1900",
-      "summary": "The rook endings that decide practical games — Lucena, Philidor, Vancura — plus tempo maneuvering."
+      "summary": "The rook endings that decide practical games — Lucena, Philidor, Vancura and their rescue setups — plus pawn breakthroughs, king races, and tempo maneuvering."
     }
   ],
   "drills": [
@@ -145,6 +151,16 @@
       "instruction": "The defending king starts a file too far from the queening corner. Run the pawn before the king crosses — then mate with the new queen."
     },
     {
+      "id": "stalemate-alert",
+      "tier": "beginner",
+      "title": "Win the queen ending without stalemating",
+      "concept": "stalemate_alert",
+      "material": "KQvKP",
+      "fen": "6k1/8/4K2p/8/8/8/8/2Q5 w - - 0 1",
+      "goal": "win",
+      "instruction": "The pawn hangs, but grabbing it leaves the trapped king without a single legal move. Let the defender keep that one breathing hole and close in for mate — greed here is the only way to spoil the win."
+    },
+    {
       "id": "distant-opposition",
       "tier": "intermediate",
       "title": "Distant opposition",
@@ -235,6 +251,26 @@
       "instruction": "Head for the corner next to your pawn: if the queen ever takes it, the position is stalemate. That standing threat stops the winning ladder cold."
     },
     {
+      "id": "outside-passer-decoy",
+      "tier": "intermediate",
+      "title": "The outside passer is a decoy",
+      "concept": "outside_passer",
+      "material": "KPPvKP",
+      "fen": "8/8/3k4/5p2/P2K1P2/8/8/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "Push the faraway pawn and make the defending king chase it; that pawn's job is to die far from the real battle. While it is being run down, march your own king the other way, harvest the frozen pawn, and promote."
+    },
+    {
+      "id": "trade-into-pawn-win",
+      "tier": "intermediate",
+      "title": "Trade rooks — the pawn ending is won",
+      "concept": "simplify_to_pawn_ending",
+      "material": "KRPvKR",
+      "fen": "2rk4/8/8/3K4/3P4/8/8/2R5 w - - 0 1",
+      "goal": "win",
+      "instruction": "The rooks stand face to face, and the whole position is one calculation: after the swap your king sits on a key square in front of its pawn. Work that pawn ending out to the end, then trade with confidence — retreating instead lets the defense escape."
+    },
+    {
       "id": "lucena",
       "tier": "advanced",
       "title": "Lucena position: build the bridge",
@@ -303,6 +339,66 @@
       "fen": "7k/8/6KP/8/8/3B4/8/8 b - - 0 1",
       "goal": "draw",
       "instruction": "The bishop does not control the promotion corner, so the corner is yours: shuttle between it and the neighboring square — driving you out stalemates, and the pawn never queens."
+    },
+    {
+      "id": "pawn-breakthrough",
+      "tier": "advanced",
+      "title": "Three-pawn breakthrough",
+      "concept": "pawn_breakthrough",
+      "material": "KPPPvKPPP",
+      "fen": "6k1/ppp5/8/PPP5/8/8/8/6K1 w - - 0 1",
+      "goal": "win",
+      "instruction": "Three pawns stand shoulder to shoulder against three, and the kings are spectators: throw the middle pawn forward, answer either capture by sacrificing a second pawn on the far side, and the survivor walks through the cleared lane to promote."
+    },
+    {
+      "id": "shouldering-race",
+      "tier": "advanced",
+      "title": "Shoulder the king out of the race",
+      "concept": "shouldering",
+      "material": "KPvKP",
+      "fen": "8/p7/P3K3/8/8/1k6/8/8 w - - 0 1",
+      "goal": "win",
+      "instruction": "Both kings sprint for the blocked pawns, but the straightest route is not the point: angle your king so each step toward the pawn also bars the defender from the saving corner. Win the pawn, then keep the late-arriving king at arm's length while yours steps aside to promote."
+    },
+    {
+      "id": "short-side-defense",
+      "tier": "advanced",
+      "title": "Short side and checking distance",
+      "concept": "short_side_defense",
+      "material": "KRPvKR",
+      "fen": "6k1/1R6/5K2/5P2/8/8/8/r7 b - - 0 1",
+      "goal": "draw",
+      "instruction": "The attacking king already leads its pawn, so the calm third-rank fence is gone. Your king belongs on the pawn's narrow side; your rook belongs far away on the other, checking across the full width of the board — three clear files of distance keep the checks alive forever."
+    },
+    {
+      "id": "rook-behind-passer",
+      "tier": "advanced",
+      "title": "Rook behind the passer: the king walks in",
+      "concept": "rook_behind_passer",
+      "material": "KRPvKR",
+      "fen": "r7/P5k1/8/8/8/3K4/8/R7 w - - 0 1",
+      "goal": "win",
+      "instruction": "Your rook drives the pawn from behind and their rook is condemned to sit in front of it forever. Leave your rook exactly where it is — every tempo belongs to your king, which strolls across the board and evicts the blockader."
+    },
+    {
+      "id": "rook-in-front-defense",
+      "tier": "advanced",
+      "title": "Rook in front of the passer: hold the jail shut",
+      "concept": "rook_in_front_defense",
+      "material": "KRPvKR",
+      "fen": "R7/P5k1/8/8/4K3/8/8/r7 b - - 0 1",
+      "goal": "draw",
+      "instruction": "The enemy rook is imprisoned in front of its own pawn and yours guards the cell from behind. Never capture the pawn while its rook watches, keep your king tucked beside the corner, and when their king comes to free the prisoner, drive it off with checks from behind the pawn."
+    },
+    {
+      "id": "vancura-transition",
+      "tier": "advanced",
+      "title": "Reroute into the Vancura stand",
+      "concept": "vancura_transition",
+      "material": "KRPvKR",
+      "fen": "R7/6k1/P7/8/8/8/4K3/r7 b - - 0 1",
+      "goal": "draw",
+      "instruction": "With the pawn already on the sixth, hiding behind it will not save you forever. Bring the rook around to attack the pawn from the side — staying out of the approaching king's reach — so the pawn is nailed in place and your sideways checks stand ready when the king finally arrives."
     }
   ]
 }

@@ -143,6 +143,18 @@ fn curriculum_structure_tiers_and_required_concepts() {
         "rook_cutoff",
         "triangulation",
         "wrong_bishop",
+        // Round-7 additions (all public-domain theory or original
+        // compositions; results tablebase-verified except the 8-man
+        // breakthrough, which is hand-verified classic theory).
+        "stalemate_alert",
+        "outside_passer",
+        "simplify_to_pawn_ending",
+        "pawn_breakthrough",
+        "shouldering",
+        "short_side_defense",
+        "rook_behind_passer",
+        "rook_in_front_defense",
+        "vancura_transition",
     ] {
         assert!(
             c.drills.iter().any(|d| d.concept == concept),
@@ -179,10 +191,21 @@ fn every_fen_is_legal_with_the_stated_material() {
             "square_of_pawn" | "key_squares" | "opposition" | "spare_tempo" | "rook_pawn_draw" => {
                 "KPvK"
             }
-            "queen_vs_pawn" => "KQvKP",
-            "lucena" | "philidor" | "back_rank_defense" | "vancura" | "rook_cutoff" => "KRPvKR",
-            "triangulation" => "KPvKP",
+            "queen_vs_pawn" | "stalemate_alert" => "KQvKP",
+            "lucena"
+            | "philidor"
+            | "back_rank_defense"
+            | "vancura"
+            | "rook_cutoff"
+            | "simplify_to_pawn_ending"
+            | "short_side_defense"
+            | "rook_behind_passer"
+            | "rook_in_front_defense"
+            | "vancura_transition" => "KRPvKR",
+            "triangulation" | "shouldering" => "KPvKP",
             "wrong_bishop" => "KBPvK",
+            "outside_passer" => "KPPvKP",
+            "pawn_breakthrough" => "KPPPvKPPP",
             other => panic!("unexpected concept {other}"),
         }
     }
