@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kibitz — a chess coach that explains positions in human terms</title>
+  <meta name="description" content="Kibitz is an open-source desktop chess coach that explains positions in human terms and trains you on your own weaknesses, with a full game database underneath.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-inner">
+    <a class="wordmark" href="index.html">KIBITZ</a>
+    <nav class="site-nav">
+      <a href="guide.html">User guide</a>
+      <a href="#download">Download</a>
+      <a href="#club">Chess club</a>
+      <a href="https://github.com/avienu/kibitz">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="container">
+      <p class="kicker accent">Open-source desktop app · macOS &amp; Linux</p>
+      <h1>Kibitz is a chess coach that explains positions in human terms — and trains you on your own weaknesses.</h1>
+      <p class="sub">Underneath the coach sits a ChessBase-class database: SCID and PGN
+      import, opening prep, spaced-repetition repertoires, tactics, and tablebase
+      endgames. Everything stays on your machine, and the engine stays off until a
+      tactical screen fires or you ask.</p>
+      <div class="cta-row">
+        <a class="btn primary" href="#download">Download</a>
+        <a class="btn" href="guide.html">Read the user guide</a>
+        <span class="cta-note">GPL-3.0 app on BSD-3-Clause libraries · no account, no telemetry</span>
+      </div>
+      <img class="shot" src="assets/game-view-dark-walnut.png"
+           alt="The Kibitz game view: a walnut chess board with tactical-alert rings and attacker arrows drawn on the squares, beside an Explain panel that describes the position in plain English sentences and an annotated move list."
+           width="1608" height="1035">
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <p class="kicker">The coach</p>
+      <h2>Explanations you can read, evidence you can see.</h2>
+      <p class="lede">The Explain panel narrates each position in plain sentences —
+      tactical alerts, imbalances, plans — and every sentence is wired to marks on the
+      board. Hover a sentence and its evidence lights up. The prose comes from Kibitz's
+      own static analysis, so it runs instantly and works offline; the full engine is
+      reserved for confirming what the screens find.</p>
+      <div class="feature-grid">
+        <figure class="feature-card">
+          <img src="assets/home.png"
+               alt="The Kibitz home screen: a continue-review card, an openings-due count, an opponent-prep search box, a findings panel naming the player's biggest leaks, and a list of games imported this week."
+               width="1608" height="1020" loading="lazy">
+          <figcaption class="body">
+            <h3>Your day at a glance</h3>
+            <p>Home shows only real data: the game you left open, cards due, new imports
+            this week, and your profile's top findings. Absent data means absent panels —
+            never invented widgets.</p>
+          </figcaption>
+        </figure>
+        <figure class="feature-card">
+          <img src="assets/profile.png"
+               alt="The Kibitz profile screen: a motif matrix of missed and allowed tactics, per-structure score bars, phase accuracy in ACPL, and an evidence pane listing the exact games behind one finding."
+               width="1608" height="1020" loading="lazy">
+          <figcaption class="body">
+            <h3>Trained on your own games</h3>
+            <p>The profiler reads your corpus and names your leaks — loose pieces,
+            exposed kings, weak structures — with every number linked to the games that
+            produced it. One click drills the weakness it found.</p>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <p class="kicker">The database</p>
+      <h2>A serious database underneath.</h2>
+      <p class="lede">Kibitz keeps everything in one SQLite file you own — games,
+      annotations, engine evaluations, training history, and the provenance of every
+      import.</p>
+      <ul class="capability-list">
+        <li>Import SCID (.si4) databases and PGN files, with comments, NAGs, and variations preserved</li>
+        <li>Opening tree and full-board position search across the whole database</li>
+        <li>Opponent prep: repertoire fingerprints and book deviations for any player</li>
+        <li>Openings repertoires trained with FSRS spaced repetition</li>
+        <li>Tactics training from the Lichess puzzle database</li>
+        <li>Endgame drills with Syzygy tablebase verdicts</li>
+        <li>TWIC, Lichess, chess.com, and FICS game downloads to your machine</li>
+        <li>Batch engine analysis through a job queue — the engine is cold by default</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="download">
+    <div class="container">
+      <p class="kicker">Download</p>
+      <h2>Get Kibitz</h2>
+      <p class="lede">Builds are published on GitHub Releases. Kibitz is free software
+      under the GPL-3.0.</p>
+      <div class="cta-row" style="margin-top: 22px;">
+        <a class="btn primary" href="https://github.com/avienu/kibitz/releases/latest">Latest release</a>
+        <a class="btn" href="https://github.com/avienu/kibitz/releases">All releases</a>
+      </div>
+      <div class="dl-grid">
+        <div class="dl-card">
+          <h3>macOS</h3>
+          <p>Download the <code>.dmg</code>, drag Kibitz to Applications.</p>
+          <p>The first release is unsigned while Apple enrollment completes —
+          right-click the app → <strong>Open</strong> the first time you launch it.</p>
+        </div>
+        <div class="dl-card">
+          <h3>Linux</h3>
+          <p><code>.AppImage</code>: make it executable (<code>chmod +x</code>) and run it.</p>
+          <p><code>.deb</code>: install with <code>sudo dpkg -i</code> on Debian and Ubuntu.</p>
+        </div>
+        <div class="dl-card">
+          <h3>Build from source</h3>
+          <p>Rust + Node are all you need. See
+          <a href="https://github.com/avienu/kibitz#building-from-source">Building from
+          source</a> in the README.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section club" id="club">
+    <div class="container">
+      <p class="kicker">Support</p>
+      <h2>Support the Temecula Chess Club</h2>
+      <p>Kibitz's maintainer runs and supports the Temecula Chess Club. If the app is
+      useful to you, a donation to the club is the best way to say thanks — it keeps
+      club nights going: boards, clocks, space, and coffee.</p>
+      <a class="todo-link" href="#DONATION-URL-PLACEHOLDER">Donate to the club</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <p>Kibitz — free software. Application: GPL-3.0. Core libraries: BSD-3-Clause.
+    <a href="https://github.com/avienu/kibitz">Source on GitHub</a> ·
+    <a href="guide.html">User guide</a></p>
+    <p>Screenshots are unedited captures of the real app. Bundled fonts (Public Sans,
+    Source Serif 4, JetBrains Mono) are licensed under the SIL Open Font License 1.1.</p>
+  </div>
+</footer>
+
+</body>
+</html>

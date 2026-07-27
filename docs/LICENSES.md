@@ -45,8 +45,10 @@ versions.
 | Name | Req. version | License | Notes |
 |---|---|---|---|
 | react / react-dom | 19.2.x | MIT | |
-| chessground | 9.2.x | **GPL-3.0-or-later** | Board UI. app layer only. |
+| scheduler | 0.27.x | MIT | Transitive (react-dom). |
+| chessground | 9.2.x | **GPL-3.0-or-later** | Board UI. app layer only. Bundles the cburnett chess piece set as embedded SVG data URIs in `assets/chessground.cburnett.css`, distributed under chessground's GPL-3.0-or-later (artwork by Colin M. L. Burnett). |
 | chessops | 0.14.x | **GPL-3.0-or-later** | TS chess rules/PGN. app layer only. |
+| @badrap/result | 0.2.x | MIT | Transitive (chessops). |
 | @tauri-apps/api | 2.11.x | Apache-2.0 OR MIT | |
 | @tauri-apps/cli | 2.11.x | Apache-2.0 OR MIT | dev |
 | typescript | 5.9.x | Apache-2.0 | dev |
@@ -63,6 +65,10 @@ versions.
 | tauri-build | 2.6.x | Apache-2.0 OR MIT | build |
 | tokio | 1.x | MIT | UCI subprocess I/O |
 | serde / serde_json | 1.x | MIT OR Apache-2.0 | |
+| rusqlite (bundled) | 0.32 | MIT | Kept in lockstep with the root workspace. Bundles SQLite (public domain). |
+| cozy-chess | 0.3 | MIT | Kept in lockstep with the root workspace. |
+| tempfile | 3 | MIT OR Apache-2.0 | dev-deps (tests only) |
+| kibitz-db (path dep) | 0.1.0 | GPL-3.0 (first-party) | `app/kibitz-db`; pulls the BSD workspace crates (kibitz-core/-profile/-srs/-tb/-verbalize, si4-read) as path deps. |
 
 ## External tools / data (not linked)
 
@@ -70,10 +76,15 @@ versions.
 |---|---|---|
 | Stockfish | GPL-3.0 | Arm's-length UCI subprocess. Never linked, never bundled in the repo (user-local `tools/`, git-ignored). |
 
+## Bundled fonts (app UI assets)
+
+| Name | Version | License | Layer | Notes |
+|---|---|---|---|---|
+| Public Sans (font, bundled woff2) | v21 latin | SIL OFL 1.1 (license bundled) | app (UI asset) | `app/public/fonts/public-sans/` (LICENSE.md) |
+| Source Serif 4 (font, bundled woff2) | v14 latin | SIL OFL 1.1 (license bundled) | app (UI asset) | `app/public/fonts/source-serif-4/` (LICENSE.md) |
+| JetBrains Mono (font, bundled woff2) | v24 latin | SIL OFL 1.1 (license bundled) | app (UI asset) | `app/public/fonts/jetbrains-mono/` (OFL.txt) |
+
 ## CI enforcement
 
 `cargo license` is run per `crates/*` member in CI; the build fails if any
 GPL/AGPL/LGPL-licensed crate appears in their dependency trees.
-| Public Sans (font, bundled woff2) | v21 latin | SIL OFL 1.1 (license bundled) | app (UI asset) |
-| Source Serif 4 (font, bundled woff2) | v14 latin | SIL OFL 1.1 (license bundled) | app (UI asset) |
-| JetBrains Mono (font, bundled woff2) | v24 latin | SIL OFL 1.1 (license bundled) | app (UI asset) |

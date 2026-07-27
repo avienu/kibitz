@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import ScreenHeader from "./shell/ScreenHeader";
+import UpdatesSettings from "./UpdatesSettings";
 import {
   batchEstimate,
   batchStart,
@@ -382,6 +383,9 @@ export default function SettingsView({
             />
             {commitNote && <div className="set-note">{commitNote}</div>}
           </div>
+
+          {/* ---- UPDATES (own file: UpdatesSettings.tsx, run-8 packaging) ---- */}
+          <UpdatesSettings />
 
           {/* ---- APPEARANCE ---- */}
           <div className="set-group">

@@ -4,7 +4,7 @@
  * Moves). Owns the prose⇄board linkage wiring; all derivations live in
  * lib/gameView.ts.
  */
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Board, { type BoardMovable } from "./Board";
 import EvalBar from "./EvalBar";
@@ -12,7 +12,10 @@ import ExplainPanel from "./ExplainPanel";
 import MovesPanel, { type MovesEditing } from "./MovesPanel";
 import { evalsByPly, type AnalysisRow } from "./lib/analyses";
 import { annotateGame, exportGamePgn, reanalyzeGame, type AnnotateSummary } from "./lib/db";
+import { analyzeLive, getSavedEnginePath, onEngineInfo, stopAnalysis } from "./lib/engine";
+import { summarizeInfo, type EngineInfo } from "./lib/engineView";
 import { boardGeometry } from "./lib/evidence";
+import { liveInitial, liveReduce, type LiveEvent } from "./lib/liveAnalysis";
 import {
   deriveEvidence,
   deriveIntensity,
@@ -106,6 +109,43 @@ export default function GameView({
 }: GameViewProps) {
   const colRef = useRef<HTMLDivElement | null>(null);
   const [boardSize, setBoardSize] = useState(656);
+
+  /* ---- live analysis (run-8): explicit toggle, go-infinite, hard stop ---- */
+  const [live, setLive] = useState(liveInitial);
+  const [liveInfo, setLiveInfo] = useState<EngineInfo | null>(null);
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const liveDispatch = useCallback((event: LiveEvent) => {
+    const { next, commands } = liveReduce(liveRef.current, event);
+    liveRef.current = next;
+    setLive(next);
+    for (const c of commands) {
+      if (c.kind === "stop") void stopAnalysis().catch(() => {});
+      else void analyzeLive(c.fen, getSavedEnginePath()).catch(() => {});
+    }
+    if (!next.on) setLiveInfo(null);
+  }, []);
+  useEffect(() => {
+    // Follow the shown position while live; no-op when off.
+    liveDispatch({ type: "fenChanged", fen });
+  }, [fen, liveDispatch]);
+  useEffect(() => {
+    // Streamed PV/eval while live only.
+    let un: (() => void) | undefined;
+    onEngineInfo((info) => {
+      if (liveRef.current.on) setLiveInfo(info);
+    }).then((u) => {
+      un = u;
+    });
+    return () => un?.();
+  }, []);
+  useEffect(
+    () => () => {
+      // Unmount (view change / game close) hard-stops the search.
+      liveDispatch({ type: "leave" });
+    },
+    [liveDispatch],
+  );
   const [exportText, setExportText] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
 
@@ -319,8 +359,24 @@ export default function GameView({
             <button className="btn" onClick={() => dispatch({ type: "toggleFlip" })}>
               Flip
             </button>
+            <button
+              className={`btn live-toggle${live.on ? " live-on" : ""}`}
+              onClick={() => liveDispatch({ type: "toggle", fen })}
+              title="Infinite engine analysis of the shown position — runs until switched off"
+            >
+              {live.on ? "■ Live analysis" : "Live analysis"}
+            </button>
             <span className="kbd-hint">← → step · ↑ ↓ jump 5 · f flip · e explain</span>
           </div>
+
+          {live.on && (
+            <div className="live-strip" role="status">
+              <span className="live-dot" aria-hidden />
+              <span className="live-text">
+                {liveInfo ? summarizeInfo(liveInfo, fen) : "engine starting…"}
+              </span>
+            </div>
+          )}
 
           {pendingVar && (
             <div className="var-offer">

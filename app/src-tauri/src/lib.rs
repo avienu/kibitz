@@ -25,6 +25,7 @@ pub mod tactics;
 pub mod tokens;
 pub mod train;
 pub mod uci;
+pub mod updates;
 
 use std::sync::Arc;
 
@@ -70,10 +71,18 @@ async fn analyze_position(
     state: State<'_, EngineState>,
     fen: String,
     nodes: Option<u64>,
+    infinite: Option<bool>,
     user_path: Option<String>,
 ) -> Result<(), String> {
     let path = uci::resolve_engine_path(user_path.as_deref())?;
-    let nodes = nodes.unwrap_or(uci::DEFAULT_NODES).max(1);
+    // Live analysis (run-8 ruling): `infinite` runs `go infinite`, ended
+    // only by stop_analysis — an explicit user action either way, so the
+    // engine-off principle (which governs defaults) is untouched.
+    let nodes = if infinite.unwrap_or(false) {
+        None
+    } else {
+        Some(nodes.unwrap_or(uci::DEFAULT_NODES).max(1))
+    };
     let engine_slot = Arc::clone(&state.engine);
 
     tauri::async_runtime::spawn(async move {
@@ -115,7 +124,7 @@ async fn run_search(
     engine_slot: &Arc<Mutex<Option<Engine>>>,
     path: std::path::PathBuf,
     fen: String,
-    nodes: u64,
+    nodes: Option<u64>,
 ) -> Result<uci::BestMove, String> {
     let mut slot = engine_slot.lock().await;
     let needs_spawn = match slot.as_ref() {
@@ -152,6 +161,7 @@ async fn run_search(
 /// Build and run the Tauri application.
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(EngineState::default())
         .manage(browse::DbState::default())
         .manage(dbops::JobsWorker::default())
@@ -210,7 +220,8 @@ pub fn run() {
             home::commitment_get,
             home::commitment_set,
             home::prep_state_get,
-            home::prep_state_set
+            home::prep_state_set,
+            updates::update_check
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

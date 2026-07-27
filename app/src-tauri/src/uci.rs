@@ -301,19 +301,24 @@ impl Engine {
             .map_err(|_| format!("Timed out waiting for '{expected}'"))?
     }
 
-    /// Run `go nodes <nodes>` on `position`, invoking `on_info` for every
-    /// parsed `info` line, until the engine reports `bestmove`.
+    /// Run a search on `position`, invoking `on_info` for every parsed
+    /// `info` line, until the engine reports `bestmove`. `nodes: Some(n)`
+    /// runs `go nodes n`; `None` runs `go infinite` — which ends ONLY via
+    /// [`Engine::stop_handle`] (live analysis, a deliberate user action).
     ///
-    /// The search can be interrupted early via [`Engine::stop_handle`];
-    /// the engine then emits `bestmove` promptly and this returns normally.
+    /// Either way the search can be interrupted early; the engine then
+    /// emits `bestmove` promptly and this returns normally.
     pub async fn analyze(
         &mut self,
         position: &UciPosition,
-        nodes: u64,
+        nodes: Option<u64>,
         mut on_info: impl FnMut(UciInfo),
     ) -> Result<BestMove, String> {
         self.send(&position.to_command()).await?;
-        self.send(&format!("go nodes {nodes}")).await?;
+        match nodes {
+            Some(n) => self.send(&format!("go nodes {n}")).await?,
+            None => self.send("go infinite").await?,
+        }
         while let Some(line) = self
             .lines
             .next_line()

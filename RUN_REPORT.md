@@ -787,7 +787,7 @@ tested, CI-verified:
   headers+movetext and the losing copy is recorded in a `duplicates` link
   table — nothing deleted. Tested both orders (personal-then-TWIC,
   TWIC-then-personal-upgrades).
-- **Etiquette**: User-Agent contact filled in (contact@kibitzchess.org); FICS
+- **Etiquette**: User-Agent contact filled in (config-supplied); FICS
   sync prints a personal-use/bandwidth notice, same posture as TWIC.
 - **This phase 1 blocker is now closed.** Phase 1 outstanding items are
   only: annotation *editing* UI (storage now exists; UI is run-3 work with

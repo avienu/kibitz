@@ -16,9 +16,9 @@
 //! nesting level.
 
 use cozy_chess::Board;
-use serde::{Deserialize, Serialize};
 use kibitz_db::movebin::Token;
 use kibitz_db::san::{format_san, parse_san};
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::browse::{with_conn, DbState};
@@ -206,8 +206,8 @@ pub async fn update_game_tokens(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::Connection;
     use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
+    use rusqlite::Connection;
     use std::io::Cursor;
 
     /// Annotated fixture: comment, NAG, nested variations — imported

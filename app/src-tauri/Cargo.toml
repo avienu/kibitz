@@ -1,6 +1,6 @@
 [package]
 name = "kibitz-app"
-version = "0.0.1"
+version = "0.1.0"
 description = "Kibitz Phase 0 spike demo — Tauri shell (board + PGN stepping + UCI engine panel)"
 authors = ["Shawn O'Connor"]
 license = "GPL-3.0-only"
@@ -20,6 +20,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+# Official first-party updater plugin (Apache-2.0 OR MIT). Endpoint + pubkey
+# live in tauri.conf.json > plugins > updater; until a real pubkey is set the
+# update_check command reports "not configured" and never touches the network.
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = [

@@ -19,9 +19,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
 
-use serde::Serialize;
 use kibitz_db::endgame::{self, DrillProgress, DrillSession, Goal, StepReport, Tier};
 use kibitz_tb::Tablebase;
+use serde::Serialize;
 use tauri::State;
 
 use crate::browse::{with_conn, DbState};

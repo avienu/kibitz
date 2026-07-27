@@ -49,6 +49,15 @@ export function analyzePosition(fen: string, nodes: number, userPath: string): P
   });
 }
 
+/** Start `go infinite` on `fen` (live analysis — explicit user action). */
+export function analyzeLive(fen: string, userPath: string): Promise<void> {
+  return invoke<void>("analyze_position", {
+    fen,
+    infinite: true,
+    userPath: userPath.trim() === "" ? null : userPath.trim(),
+  });
+}
+
 export function stopAnalysis(): Promise<void> {
   return invoke<void>("stop_analysis");
 }

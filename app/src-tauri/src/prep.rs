@@ -234,8 +234,8 @@ pub async fn prep_view(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::Connection;
     use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
+    use rusqlite::Connection;
     use std::io::Cursor;
 
     /// Villain scores 0.5/4 in the Scandinavian as Black; one 2600+ master

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kibitz User Guide</title>
+  <meta name="description" content="The Kibitz user guide: every screen, every feature, and every CLI-only command of the open-source desktop chess coach.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-inner">
+    <a class="wordmark" href="index.html">KIBITZ</a>
+    <nav class="site-nav">
+      <a href="index.html">Home</a>
+      <a href="index.html#download">Download</a>
+      <a href="https://github.com/avienu/kibitz">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main class="guide-layout">
+  <nav class="guide-toc" aria-label="Guide sections">
+    <p class="kicker">Contents</p>
+    <a href="#the-window-at-a-glance">The window at a glance</a>
+    <a href="#home">Home</a>
+    <a href="#the-game-view">The Game view</a>
+    <a href="#study-views">STUDY views</a>
+    <a href="#coach-views">COACH views</a>
+    <a href="#train-views">TRAIN views</a>
+    <a href="#data-in-out-views">DATA IN / OUT views</a>
+    <a href="#status-strip">Status strip</a>
+    <a href="#settings">Settings</a>
+    <a href="#deep-links">Deep links</a>
+    <a href="#end-to-end-workflows">End-to-end workflows</a>
+    <a href="#cli-only-features">CLI-only features</a>
+    <a href="#where-things-are-stored">Where things are stored</a>
+  </nav>
+  <article class="guide-body">
+<h1 id="kibitz-user-guide">Kibitz User Guide</h1>
+<p>This guide covers everything you can click in the app and every feature that is currently CLI-only. It is also available inside the app: press <strong>Help &amp; tour</strong> at the bottom of the navigation rail (Esc closes it).</p>
+<hr>
+<h2 id="the-window-at-a-glance">The window at a glance</h2>
+<ul>
+<li><strong>Navigation rail</strong> (left edge) — the KIBITZ wordmark, a line showing the open database ("scid.sqlite · 121,438 games"), four capability groups (<strong>STUDY</strong>, <strong>COACH</strong>, <strong>TRAIN</strong>, <strong>DATA IN / OUT</strong>), and a footer with <strong>Settings</strong> and <strong>Help &amp; tour</strong>. Rail items carry live badges (game count, cards due, job counts…) — a badge is real data or absent, never a fake number. Below 1280 px window width the rail collapses to icons (hover an icon for its label and badge). Minimum window size is 1180×760.</li>
+<li><strong>Main column</strong> — the active screen, with the <strong>status strip</strong> along the bottom.</li>
+<li>The app starts on <strong>Home</strong> and automatically re-opens the last database you used (the path is remembered; the default is <code>testdata/corpus/scid.sqlite</code>, resolved from the repository root). A first-run tour walks the rail groups, one card anchored beside each group; replay it any time from Help &amp; tour.</li>
+</ul>
+<h3 id="the-rail-item-by-item">The rail, item by item</h3>
+<ul>
+<li><strong>STUDY</strong> — <strong>Database</strong> (badge: game count), <strong>Game</strong>, <strong>Opening tree</strong>, <strong>Position search</strong>.</li>
+<li><strong>COACH</strong> — <strong>Home</strong> (the startup screen), <strong>Explain</strong> (a toggle, not a page — switches the Game view's Explain panel on/off; badge shows "on"/"off"), <strong>Profile</strong> (badge: "N findings" once a profile is built), <strong>Opponent prep</strong>.</li>
+<li><strong>TRAIN</strong> — <strong>Openings SRS</strong> (badge: "N due"), <strong>Tactics</strong> (badge: attempts, or puzzle count before any attempt), <strong>Endgames</strong>.</li>
+<li><strong>DATA IN / OUT</strong> — <strong>Import PGN / SCID</strong>, <strong>TWIC ingest</strong>, <strong>Account syncs</strong>, <strong>Jobs</strong> (badge: "N running" / "N pending" / done count).</li>
+<li>Footer — <strong>Settings</strong>, <strong>Help &amp; tour</strong> (this guide + the replayable tour).</li>
+</ul>
+<p>In the data tables used across the app (Database, Opening tree, Position search, Profile, Prep), some column headers sort: clicking one cycles ascending → descending → original order.</p>
+<hr>
+<h2 id="home">Home</h2>
+<p>The startup screen: your day at a glance, built only from real data — absent data produces absent panels, never invented widgets. Needs an open database ("Open a database to see your day." otherwise).</p>
+<ul>
+<li><strong>Greeting</strong> — the date, plus a commitment clause when you have set one in Settings' Schedule row (e.g. "Club night Thursday — no prep started for R. Halvorsen yet." — the "no prep started" part appears only when the commitment names an opponent and no prep exists for them).</li>
+<li><strong>CONTINUE</strong> card — the last game you actually had open, with the ply you stopped at; <strong>Resume review</strong> reopens it there. Absent until a database game has been opened.</li>
+<li><strong>DUE TODAY</strong> card — the openings-SRS due count, with <strong>Review openings</strong> and <strong>Solve tactics</strong> buttons. The tactics numeral is a grayed dash on purpose: the tactics queue is endless, so there is no honest due count.</li>
+<li><strong>PREP AN OPPONENT</strong> card — type a name and <strong>Go</strong> (or Enter) to open Opponent prep with the name prefilled and searched; recently prepped opponents are listed.</li>
+<li><strong>YOUR CHESS</strong> findings panel — from your cached profile: a serif sentence naming your biggest leaks, then finding rows (motif or structure, value, supporting-game count). <strong>Clicking a finding opens Profile with that exact claim preselected</strong> in the evidence aside; <strong>Full profile</strong> opens Profile plain. A "BUILT &lt;date&gt;" pill shows the profile's age. Until a profile is built the panel says so honestly.</li>
+<li><strong>NEW SINCE &lt;weekday&gt;</strong> panel — games imported this week (source tag, players, result; click one to open it), with the total for the week.</li>
+<li><strong>RUNNING</strong> panel — the engine-jobs progress bar while a batch runs, the queue counts when jobs are pending but the worker is stopped, or "Nothing is running — the engine is cold."</li>
+</ul>
+<p>When nothing at all is due — no cards, no new games, no findings, no commitment — Home degrades to a short honest list ("Nothing due today. / No new games this week. / Build a profile to surface findings.") instead of padding the screen.</p>
+<hr>
+<h2 id="the-game-view">The Game view</h2>
+<h3 id="header-bar">Header bar</h3>
+<ul>
+<li><strong>Title block</strong> — "White — Black" with the result, and a meta line: site, year, opening name and ECO (when the database resolved them), ply count, and the game's identity (<code>database #N</code> or <code>pasted PGN</code>).</li>
+<li><strong>walnut | instrument</strong> — switches the board treatment (same control as in Settings).</li>
+<li><strong>Annotate</strong> — the *static* Kibitz annotation pass over the loaded database game: imbalance comments plus tactical alerts from the WSUI screen. <strong>No engine runs</strong>; each fired alert enqueues a bounded engine confirmation job for the Jobs queue.</li>
+<li><strong>Re-analyze</strong> — enqueues one bounded engine evaluation per mainline position. Nothing runs yet: "N eval jobs enqueued — run them from Jobs".</li>
+<li><strong>Export PGN</strong> — renders the game (with annotations) as PGN in a modal with <strong>Copy</strong> / <strong>Close</strong>.</li>
+</ul>
+<p>These three buttons are enabled only for games loaded from the database.</p>
+<h3 id="board-column">Board column</h3>
+<ul>
+<li><strong>Eval bar</strong> (left of the board) — per-ply evaluation from the game's *stored* analyses; fresh kibitz engine rows are preferred over legacy SCID-imported ones. The fill is White's share, anchored at the bottom. With no stored analysis for the ply it shows an empty track and a muted "—" (never a fake 0.0). On a forced mate the bar pins to the winning side and the readout shows <strong>#N</strong> in that side's colour. Hover the bar for the eval source — engine name, depth/nodes, fresh vs legacy import.</li>
+<li><strong>The board</strong> — resizes with the window (the grid snaps to multiples of 8, never below 496 px). Yellow wash marks the last move. Clicking a square selects it (see the Explain panel below); clicking it again clears the selection.</li>
+<li><strong>Move controls</strong> — |◀ ◀ Prev · Next ▶ ▶| buttons, a "ply N / M" pill, and <strong>Flip</strong>.</li>
+</ul>
+<h3 id="keyboard-map-game-view">Keyboard map (Game view)</h3>
+<ul>
+<li><strong>← / →</strong> — one ply back / forward</li>
+<li><strong>↑ / ↓</strong> — jump five plies back / forward</li>
+<li><strong>Home / End</strong> — start / end of the game</li>
+<li><strong>f</strong> — flip the board</li>
+<li><strong>e</strong> — explain the current position</li>
+</ul>
+<p>Global to the Game view, but ignored while you are typing in a text field, while a modifier key is held, and while a dialog (help, tour, promotion picker) is open. The status strip's right cell repeats the active screen's working shortcuts.</p>
+<h3 id="explain-panel">Explain panel</h3>
+<p>The <strong>Explain</strong> rail item (COACH) toggles the panel on or off. While it is on, the free static screen runs automatically at <strong>every ply</strong> — no keypress, and still no engine: the tactical screen is static analysis.</p>
+<ul>
+<li>Positions where the screen fires (<strong>TACTICAL SCREEN FIRED</strong>, or <strong>FORCED MATE</strong>) narrate immediately.</li>
+<li><strong>QUIET POSITION</strong> plies keep the empty state — "No screen has fired on this position…" — until you explicitly ask with <strong>E</strong> or the <strong>Explain position</strong> button. The empty state also lists which plies already have cached explanations.</li>
+</ul>
+<p>Panel anatomy:</p>
+<ul>
+<li><strong>Verdict pill</strong> — the tag plus the eval readout (e.g. "TACTICAL SCREEN FIRED  +2.6", "FORCED MATE  #5").</li>
+<li><strong>Coach | Neutral</strong> — narration voice. Switching is instant: both voices arrive pre-rendered with every explanation. (The same voice state drives the Tactics reasoning aside and lives in Settings.)</li>
+<li><strong>Sentences</strong> — each has a role dot and a kind label (TACTICAL ALERT / IMBALANCE / PLAN). <strong>Hovering a sentence isolates its board evidence</strong>: only that sentence's marks show, at full intensity.</li>
+<li><strong>Square filtering</strong> — click a board square to filter the prose to sentences that reference that square (the rest fade); the footer shows "filtered to d7". Click the same square again to clear. Stepping to another ply clears both hover and selection.</li>
+<li><strong>Footer</strong> — "Static screen · no engine spawned", the active voice, and the selection state.</li>
+</ul>
+<h3 id="evidence-overlay-language">Evidence overlay language</h3>
+<p>One shared vocabulary, identical in both themes and both board treatments:</p>
+<ul>
+<li><strong>Red ring</strong> — alert target (the piece/square in tactical danger).</li>
+<li><strong>Amber corner wedge + arrow</strong> — attacker (arrows always point attacker → target).</li>
+<li><strong>Blue corner wedge</strong> — defender.</li>
+<li><strong>Green square wash</strong> — imbalance evidence.</li>
+<li><strong>Violet corner wedge</strong> — key square / plan target.</li>
+<li><strong>Yellow square wash</strong> — the last move played.</li>
+<li><strong>Neutral ring</strong> — your selected square.</li>
+</ul>
+<p>Evidence renders at 44 % intensity by default and at 100 % for the hovered sentence.</p>
+<h3 id="moves-panel">Moves panel</h3>
+<p>A move-pair grid: number column, White's and Black's moves per row, NAG glyphs on the moves, and the per-move stored evals (muted = legacy import; hover any eval for its engine). Comments render as serif rows under their move; variations render as tagged rows — <strong>FRESH</strong> (named after one of the game's fresh engine identities), <strong>LEGACY</strong> (imported engine lines / pre-2020 years), or plain human lines.</p>
+<ul>
+<li><strong>full | hover | hidden</strong> — how comments and variations display (hover dims them until pointed at; hidden removes them). Also in Settings.</li>
+<li>Click a move to jump the board there.</li>
+</ul>
+<p><strong>Editing</strong> (database games only):</p>
+<ul>
+<li><strong>Click the current move again — or right-click any move —</strong> to open the annotation popover: NAG choices <strong>! !! ? ?? !? ?!</strong>, <strong>clear</strong>, and <strong>comment</strong> (starts a new comment under that move).</li>
+<li><strong>Click a comment</strong> to edit it in place: <strong>Enter</strong> commits, <strong>Esc</strong> cancels, an <strong>empty text deletes</strong> the comment.</li>
+<li><strong>× on a variation row</strong> deletes that variation.</li>
+<li><strong>Enter a variation from the board:</strong> play a legal move that differs from the mainline move — an "Add … as a variation of …?" offer appears with <strong>Add as variation</strong> / <strong>Dismiss</strong>. (Playing the mainline move just advances.)</li>
+<li><strong>Save / Revert</strong> — edits are local until saved; the Save button highlights while there are unsaved changes.</li>
+</ul>
+<p>Below the Moves panel, the repertoire footer — "Mainline → repertoire" (or "Line (first N plies) → repertoire" after stepping forward) with <strong>as White</strong> / <strong>as Black</strong> — sends the current line to the Openings SRS trainer. Re-adding a line never duplicates cards.</p>
+<h3 id="promotion-picker">Promotion picker</h3>
+<p>Wherever a board accepts moves — Game-view variations, Openings SRS, Tactics, Endgames — dragging a pawn to the last rank opens a picker: choose <strong>Q / R / B / N</strong> by click or keys <strong>1–4</strong>; <strong>Esc</strong> cancels. Underpromotions are fully supported, including tactics puzzles whose solution underpromotes.</p>
+<h3 id="when-does-the-engine-run">When does the engine run?</h3>
+<p>Stockfish is <strong>off by default</strong> and never runs behind your back:</p>
+<ol>
+<li><strong>Annotate</strong> and the Explain panel are static analysis — no engine.</li>
+<li><strong>Re-analyze</strong> and Annotate's confirmation checks only *enqueue* jobs.</li>
+<li>The engine actually runs when you start the worker — <strong>Run pending jobs</strong> in the Jobs view, or confirming a database-wide batch (Database header / Settings), or the CLI <code>run-jobs</code>. The status strip's engine dot and batch progress show it happening.</li>
+</ol>
+<hr>
+<h2 id="study-views">STUDY views</h2>
+<h3 id="database">Database</h3>
+<p>The database screen: filter bar, the games table, and the two database-wide batch actions.</p>
+<ul>
+<li><strong>Header actions</strong> — <strong>Annotate database</strong> and <strong>Fresh analysis pass</strong>. Both first show an <strong>estimate-confirm dialog</strong>: how many games are still uncovered, the estimated duration, and an "Estimate basis:" line quoting exactly how the estimate was derived (measured from your own completed jobs where possible, stated assumption otherwise). Jobs are resumable — pause anytime and the run picks up where it left off; already-covered games are skipped. <strong>Start</strong> enqueues the jobs *and* starts the worker.</li>
+<li><strong>Filter chips</strong> — <strong>Player</strong> (substring), <strong>ECO</strong> (prefix), and <strong>Result</strong> are wired; <strong>Event</strong>, <strong>Date</strong> and <strong>Source</strong> render as disabled "soon" chips because no backend field exists yet. The right edge shows the range readout ("1–50 of 121,438").</li>
+<li><strong>Inline job row</strong> — while a batch runs (or jobs are pending), a progress row appears above the table: the batch label (ANNOTATING DATABASE / FRESH ANALYSIS PASS / ENGINE JOBS), the progress bar, "% · done / total · time left", and <strong>Pause</strong> (pauses between jobs — everything unstarted stays pending; run again to resume).</li>
+<li><strong>Games table</strong> — columns: <strong>⑂</strong> (duplicate flag — the game is linked to its higher-priority copy, never deleted; source priority is personal &gt; TWIC &gt; online), White, Black, Result, Event, Date, ECO, <strong>Source</strong> (a colour-coded tag per origin), and <strong>Analysis</strong> ("fresh d28" / "legacy" / "—"). Click a row to open the game in the Game view; 50 games per page with a pager.</li>
+<li>With no database open, the path field + <strong>Open</strong> appear (the window title takes the database filename).</li>
+</ul>
+<h3 id="opening-tree">Opening tree</h3>
+<p>Transposition-aware: counts merge every move order that reaches the position, and the header shows the <strong>measured query time</strong> in ms.</p>
+<ul>
+<li>The <strong>move line</strong> across the top is your clicked-through line; click a crumb to rewind to it, <strong>Back to start</strong> to reset.</li>
+<li>The <strong>moves table</strong> — move, games, a stacked W/D/L bar (hover for exact counts), average Elo, and <strong>PERF</strong> shown as the performance rating's signed delta against the movers' average Elo (hover for both absolute numbers). Clicking a move descends the tree.</li>
+<li>The <strong>aside</strong> — a board following the displayed position, and "GAMES REACHING THIS POSITION" (up to 12, click one to open it at that ply, with the total below).</li>
+</ul>
+<h3 id="position-search">Position search</h3>
+<p>Which games reached a position you set up yourself.</p>
+<ul>
+<li><strong>Board editor</strong> — drag pieces freely to set up the position (drop a piece off the board to remove it). Castling rights are derived from king and rook home squares.</li>
+<li><strong>FEN field</strong> — edit and press Enter (or blur) to apply; <strong>Paste FEN</strong> reads the clipboard; <strong>White to move / Black to move</strong> toggles the side; <strong>Start position</strong> and <strong>Clear board</strong> reset.</li>
+<li><strong>Results</strong> — the pill shows "N GAMES · X ms" with the *measured* query time, above a table of White / Black / Result / Event / Date / Ply. Click a row to open the game at the matching ply. Elo / Date / Result result-filters are disabled "soon" chips (no backend field yet). Long hit lists state "Showing the first N of M hits."</li>
+</ul>
+<p>For an arbitrary FEN from a script, the CLI <code>find-fen</code> does the same query.</p>
+<hr>
+<h2 id="coach-views">COACH views</h2>
+<h3 id="explain">Explain</h3>
+<p>A toggle for the Game view's Explain panel (documented above), not a page. The badge shows whether it is on.</p>
+<h3 id="profile">Profile</h3>
+<p>Engine-derived findings about one player — and <strong>every number on the screen is a control</strong>: clicking a motif cell, a structure bar, a phase tile or a rate tile re-targets the evidence aside on the right.</p>
+<ul>
+<li><strong>Build form</strong> — player name (suggestions after two characters), <strong>Build profile</strong> (Enter works). Building your own profile also caches it so Home's findings panel stays current. <strong>Rebuild</strong> re-runs it.</li>
+<li><strong>Serif lede</strong> — names the one or two dominant findings in plain language, from real data only (or honestly declines: "No dominant weakness stands out yet…").</li>
+<li><strong>MOTIF MATRIX</strong> — per motif ("Loose piece (LPDO)", "Under-defended piece", "Trapped piece", "Exposed king"): <strong>MISSED</strong> (a tactic was available to the player and not played) and <strong>ALLOWED</strong> (their move created the weakness against them) — both clickable; <strong>VS PEERS</strong> is an honest "—" until peer baselines ship.</li>
+<li><strong>STRUCTURE REPORT</strong> — a bar per recurring pawn-structure flag showing the player's score in those games against the 50 % baseline tick.</li>
+<li><strong>PHASE ACCURACY</strong> — ACPL tiles for opening / middlegame / endgame with blunder/mistake/inaccuracy counts.</li>
+<li><strong>CONVERSION &amp; DEFENCE</strong> — conversion rate from +2.00, defence rate from −1.00 (both "—" when no data). These need stored evals: run a Fresh analysis pass (or Re-analyze + Jobs per game) first.</li>
+<li><strong>Evidence aside</strong> (right, 420 px) — the selected claim's count pill, a what-this-is paragraph citing real numbers, and the supporting games. <strong>Opening an evidence row jumps to the game at the ply that produced the claim</strong> — for "missed", the ply where the tactic became available; for "allowed", the ply where the weakness appeared; for structures, the ply where the structure was assessed. Examples are capped at three per claim ("Showing 3 of 12"); phase and rate claims aggregate eval traces and honestly state that no per-game example list exists yet.</li>
+<li><strong>Train this weakness</strong> — enabled for motif claims only: seeds the Tactics queue with that motif and switches to Tactics.</li>
+<li><strong>You | &lt;opponent&gt; subject switch</strong> — appears when you arrive from Opponent prep's "Open his profile": the same screen shows the opponent's profile (built on demand), and the switch flips between your profile and theirs.</li>
+</ul>
+<h3 id="opponent-prep">Opponent prep</h3>
+<p>A four-step workflow in a header stepper — <strong>① Opponent → ② Fingerprint → ③ Weak lines → ④ Master games</strong> — with free backward navigation (click any reached chip; each chip shows its chosen value) beside a persistent aside.</p>
+<ol>
+<li><strong>Opponent</strong> — <strong>Search local</strong> lists up to eight matching names from your own database with their game counts. <strong>Fetch from Lichess / chess.com</strong> are visible but honestly disabled — account fetch runs from the CLI today (<code>lichess-sync</code> / <code>chesscom-sync</code>). Picking a name advances. (Home's "Prep an opponent" lands here pre-searched.)</li>
+<li><strong>Fingerprint</strong> — their repertoire by ECO family for the chosen colour (<strong>as White / as Black</strong>): share of games, score bar against the 50 % tick (weak families — under 50 % on 3+ games — marked), and the <strong>book-exit</strong> column ("leaves book at Nf6 (ply 5, 12×)"). AVG ELO is an honest "—" (not recorded per family yet). Click a row to rank the weak lines.</li>
+<li><strong>Weak lines — ranked</strong> — cards ordered by prep value: rank, the line name (opening name, ECO, or "Out of book"), "by ply N · plays …", the score chip ("38% in 21"), and a serif paragraph explaining *why* this spot is weak, citing real counts (plus a note when it is also a book-exit point). Click one to see its master games.</li>
+<li><strong>Master games</strong> — games reaching the exact position, with the stated ranking rule: both players rated 2200 or above, strongest pairings first. Click a row to open it in the Game view at the prep ply.</li>
+</ol>
+<p>The <strong>aside</strong> persists across steps: a board showing the position under discussion (with a caption naming the line, ply and score), a <strong>PROFILE FINDING</strong> about this opponent (from *their* profile only — an honest absence line otherwise), <strong>Open his profile</strong> (Profile with the opponent subject), and <strong>Study in game view</strong>. Starting a prep is recorded, which keeps Home's "no prep started for X yet" truthful.</p>
+<hr>
+<h2 id="train-views">TRAIN views</h2>
+<h3 id="openings-srs-repertoire-trainer">Openings SRS (Repertoire Trainer)</h3>
+<p>Spaced-repetition review of your opening repertoires, scheduled with FSRS-4.5. Each card is a position where it is your colour's turn plus the repertoire move you must know there. Layout: repertoire column | board | session aside.</p>
+<p>Building a repertoire:</p>
+<ul>
+<li><strong>From a loaded game:</strong> the "→ repertoire: as White / as Black" footer under the Moves panel (see the Game view). Lines land in the default repertoire for that colour ("main (white)" / "main (black)").</li>
+<li><strong>From a PGN study (CLI-only)</strong> — the <strong>Import repertoire</strong> button shows the exact command (a Lichess study export works):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  import-repertoire study.pgn white --name "main"</code></pre>
+<p><code>--name</code> defaults to <code>main</code>; re-importing is idempotent (positions that already have a card are left untouched — first move in wins).</p>
+<p>Reviewing:</p>
+<ul>
+<li>The repertoire column switches <strong>as White / as Black</strong> and lists the due queue grouped by repertoire name with real due counts. The rail badge and the status strip's "Openings SRS · N due today" nudge show the combined total.</li>
+<li><strong>Start review</strong> runs the due queue (up to 100 cards). Answer each prompt by <strong>playing the move on the board</strong> or <strong>typing its SAN</strong> (<strong>⏎</strong> submits; an illegal string is called out as a typo, a legal but different move counts as wrong).</li>
+<li>The reveal shows the repertoire move — after a wrong answer a green arrow points it out on the board — and then <strong>you grade yourself</strong>: <strong>Again 1 · Hard 2 · Good 3 · Easy 4</strong>. Each grade button shows the <strong>real next interval</strong> the FSRS scheduler will set for that answer ("&lt;1d", "13d", "3mo", "1.5y"). Keys 1–4 work after the reveal.</li>
+<li>The card's <strong>LAPSE ×N</strong> pill and the session aside's prose call out cards you keep missing ("You keep lapsing on … It stays in the queue until you answer it cleanly.").</li>
+<li>The session aside tracks DUE / DONE / LAPSES / NEW; the session ends with "N reviewed — X correct, Y to relearn".</li>
+</ul>
+<h3 id="tactics">Tactics</h3>
+<p>Puzzle drills over the Lichess puzzle database. Layout: mode column | board | <strong>WHY THIS PUZZLE</strong> reasoning aside. No engine is involved — solving is checked against the stored solution line. The header shows puzzle count, your tactics rating and attempt count.</p>
+<p><strong>The five modes</strong> (mode column; badges are real numbers or absent):</p>
+<ul>
+<li><strong>Weakness-targeted</strong> — *the default.* "Seeded from your motif matrix": the queue favours the motifs your profile says you suffer from. Needs your profile (or a seed). Arriving via Profile's <strong>Train this weakness</strong> shows a <strong>SEEDED &lt;motif&gt;</strong> chip (× clears it) and restricts the queue to that motif.</li>
+<li><strong>Rated drill</strong> — "Rating in, rating out": an unsolved puzzle within ±100 of your rating (the band widens only when empty).</li>
+<li><strong>Motif filter</strong> — pick a theme from the dropdown (with puzzle counts) and grind it.</li>
+<li><strong>Heisman speed drill</strong> — "Easy positions, hard clock": puzzles rated 300–900 below you; recognition speed is the training variable; already-solved puzzles stay in the pool.</li>
+<li><strong>Woodpecker cycles</strong> — the same fixed set, faster each pass. The Woodpecker panel shows the latest set's last cycles as accuracy bars with times, <strong>Start next cycle</strong>, or a create-set form (name + size).</li>
+</ul>
+<p><strong>Solving</strong> — <strong>Next puzzle</strong> (⏎): the opponent's setup move plays after a beat, the clock starts (the clock renders <strong>only in the timed modes</strong>: speed and Woodpecker), and you play every solution move on the board, oriented to your side (opponent replies play automatically).</p>
+<ul>
+<li><strong>Hint (H)</strong> — highlights the square the answer moves *from*.</li>
+<li><strong>Skip (S)</strong> — fails the puzzle and shows the solution.</li>
+<li><strong>Give up (G)</strong> — jumps to the final position with the solution.</li>
+<li>Keys H / S / G / ⏎ never fire inside a text field.</li>
+<li>A wrong move fails the puzzle (answer + full solution shown; no retries on a rated attempt); an <strong>alternate checkmate is accepted</strong>; promotion moves open the picker (underpromotions included). After finishing, <strong>◀ / ▶</strong> replay the solution.</li>
+<li>The meta row tracks side to move, your <strong>STREAK</strong>, your <strong>RATING</strong> with the session delta, and the clock (timed modes).</li>
+</ul>
+<p><strong>WHY THIS PUZZLE aside</strong> — a <strong>Coach | Neutral</strong> voice toggle (the same voice state as Explain), a voice-aware headline, and the body quoting the selector's per-pick reasoning verbatim in weakness mode ("picked because your games allow many … tactics (N allowed, M missed in your profile) — this puzzle's themes […] train that motif"). The facts block stays non-spoiling: MOTIF shows your profiled motif in weakness mode but otherwise says "revealed when solved" until you finish; SOURCE credits your profile or the Lichess puzzle id (CC0); RATING is the puzzle's. The footer tracks the session (solved/attempts) or the Woodpecker queue.</p>
+<p><strong>Importing puzzles</strong> — when no puzzles are imported yet, the board column offers the import: CSV path (default <code>testdata/corpus/lichess_db_puzzle.csv</code>) + <strong>Import CSV</strong> (puzzles below popularity 50 are skipped). Download <code>lichess_db_puzzle.csv</code> from database.lichess.org (CC0). The CLI import adds knobs:</p>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000</code></pre>
+<p>The rating is Elo-style against fixed puzzle ratings (K = 40 for your first 30 rated attempts, then K = 20); only rated, motif and weakness attempts move it.</p>
+<h3 id="endgames">Endgames</h3>
+<p>A rating-tiered curriculum of classic theoretical positions, played out against the toughest defence available and <strong>graded against tablebase truth, never an engine score</strong>. Layout: curriculum column | board | feedback aside.</p>
+<ul>
+<li><strong>Curriculum column</strong> — tiers (Essentials, up to ~1000 · Building technique, ~1000–1500 · Rook endings and tempo play, ~1500–1900) with mastered/total progress bars; the active tier expands to its drills (✓ = mastered, material like "KQvK", hover for the concept).</li>
+<li><strong>Board column</strong> — the drill title plus an honest <strong>verification label</strong>: "TABLEBASE TRUTH · N PIECES" when the defender actually probes the tablebase for this drill, else "HEURISTIC DEFENDER · TERMINAL GRADING". The objective line states the goal ("Objective: win with White. The defender replies from the tablebase."). Buttons: <strong>Restart</strong> (restarting mid-attempt concedes it first — recorded honestly), <strong>Show the idea</strong> (the instruction stays hidden until asked), <strong>Give up</strong>.</li>
+<li><strong>DRILL FEEDBACK aside</strong> — one graded row per move: - <strong>WINNING</strong> — still winning (tablebase-verified); - <strong>SLOWER</strong> — still winning but slower, with the DTZ cost ("DTZ +6 plies"); - <strong>THROWS</strong> — the move forfeits the theoretical result (fails the drill); - <strong>ENGINE</strong> — the defender's reply row; - <strong>UNVERIFIED</strong> — outside tablebase coverage; graded only at terminal positions (checkmate / stalemate / draw).</li>
+<li>A drill is <strong>mastered</strong> after 2 clean completions ("Clean streak 1/2" → "Drill mastered.").</li>
+</ul>
+<p>Tablebases: the Syzygy directory resolves from the <code>KIBITZ_SYZYGY</code> environment variable, else by walking up to <code>testdata/syzygy</code>. The repo script</p>
+<pre><code>scripts/fetch_syzygy_test_files.sh</code></pre>
+<p>downloads the complete 3-man set (under 100 KB) — enough for the test suite, but most drills have more pieces and then fall back to the heuristic defender; point <code>KIBITZ_SYZYGY</code> at a 3-4-5-man set for tablebase-verified play across the whole curriculum.</p>
+<hr>
+<h2 id="data-in-out-views">DATA IN / OUT views</h2>
+<h3 id="import-pgn-scid">Import PGN / SCID</h3>
+<ul>
+<li><strong>PGN</strong> — paste into the text area and <strong>Load</strong>, <strong>Open file…</strong> for a <code>.pgn</code>/<code>.txt</code> file, or <strong>Sample game</strong> (Anderssen–Kieseritzky, London 1851). Loading switches to the Game view.</li>
+<li><strong>SCID (.si4)</strong> — imports through the command line for now: <code>kibitz-cli import-si4 &lt;base&gt;</code> converts a <code>.si4</code>/<code>.sg4</code>/<code>.sn4</code> base into the SQLite database the app opens. Legacy engine analysis is preserved and tagged — never deleted, only superseded by fresh analysis.</li>
+</ul>
+<p>Note: pasting a PGN loads it for *viewing* — storing games in the database is a CLI import.</p>
+<h3 id="twic-ingest-account-syncs">TWIC ingest / Account syncs</h3>
+<p>Placeholder screens: both capabilities live in the data layer and the CLI (<code>twic-sync</code>; <code>lichess-sync</code> / <code>chesscom-sync</code> / <code>fics-sync</code> — see "CLI-only features"). The screens reserve the rail entry and will grow status displays when the desktop surface lands.</p>
+<h3 id="jobs">Jobs</h3>
+<p>The engine job queue — the engine only ever runs through it:</p>
+<ul>
+<li>Counts table: pending / running / done / failed.</li>
+<li><strong>Run pending jobs</strong> — starts the worker (disabled while running or when nothing is pending). When the batch finishes, confirm-verdicts fold back into stored annotations (each tactical alert becomes confirmed, refuted, or unclear).</li>
+<li>"last engine:" shows the most recent engine identity.</li>
+</ul>
+<p>Everything the engine does goes through this queue — annotate confirmations, re-analyze passes, database-wide batches. Nothing runs until you (or a batch confirmation) start the worker.</p>
+<hr>
+<h2 id="status-strip">Status strip</h2>
+<p>Always visible along the bottom:</p>
+<ul>
+<li><strong>Engine dot</strong> — "ENGINE RUNNING" / "ENGINE IDLE", with the engine identity and node budget.</li>
+<li><strong>JOBS</strong> — pending / running / done / failed counts (polled every few seconds).</li>
+<li><strong>ENGINE JOBS progress bar</strong> — appears while a batch runs, with percent complete.</li>
+<li><strong>Message cell</strong> — transient app status (load results, save confirmations…).</li>
+<li><strong>Keyboard hints</strong> — the active screen's working shortcuts (only where shortcuts actually exist: the Game view and Openings SRS).</li>
+<li><strong>"Openings SRS · N due today"</strong> (right edge) — appears when repertoire cards are due; clicking it jumps to the Openings SRS view.</li>
+</ul>
+<hr>
+<h2 id="settings">Settings</h2>
+<p>A single column of grouped cards; each row is label + explanation, the current value, and an action.</p>
+<ul>
+<li><strong>ENGINE &amp; ANALYSIS</strong> — Engine path (Edit; auto-resolved when empty — resolution order: override, <code>KIBITZ_STOCKFISH</code>, a repo-local <code>tools/</code> binary, <code>stockfish</code> on PATH); Node budget (Edit; bounds every engine job); Spawn policy (stated in words — the engine-off default is a product principle, not a setting); <strong>Annotate database</strong> and <strong>Fresh analysis pass</strong> rows ("Estimate &amp; run…" — the same estimate-confirm dialog as the Database header, quoting its basis).</li>
+<li><strong>COACH</strong> — Default voice (Coach/Neutral switch; applies to Explain, drill feedback and puzzle reasons; also stored in the open database); LLM verbaliser (read-only: optional and strictly grounded — it may only rewrite detector output, never add claims, and falls back to template prose on any failure; no key is stored by the app — set <code>ANTHROPIC_API_KEY</code> for the CLI <code>explain-llm</code>).</li>
+<li><strong>DATA</strong> — Database path (read-only; change it from the Database screen); Account syncs and TWIC schedule (read-only CLI pointers); Tablebase status (Syzygy loaded / not found, with the covered piece count); <strong>Schedule</strong> — the recurring commitment Home plans around (label, e.g. "Club night · Thursday", plus an optional opponent name; <strong>Save</strong> / <strong>Clear</strong>).</li>
+<li><strong>APPEARANCE</strong> — Theme (Dark default / Light); Board treatment (Studio Walnut default / Instrument); Annotation display (full / hover / hidden); Piece set (cburnett — fixed for now).</li>
+</ul>
+<hr>
+<h2 id="deep-links">Deep links</h2>
+<p>A URL hash applies once at startup, after the database opens:</p>
+<pre><code>#game=123&amp;ply=24&amp;theme=light&amp;treatment=instrument&amp;voice=neutral
+#screen=profile&amp;player=Carlsen, Magnus&amp;claim=motif:WeakKing:allowed
+#screen=prep&amp;opponent=R. Halvorsen
+#db=/path/to/other.sqlite&amp;screen=home</code></pre>
+<ul>
+<li><code>game=</code> / <code>ply=</code> — open a database game at a ply (wins over <code>screen=</code>).</li>
+<li><code>theme=</code> / <code>treatment=</code> / <code>voice=</code> — apply appearance and voice.</li>
+<li><code>screen=</code> — home | database | tree | search | profile | prep | tactics | srs (Openings SRS) | endgames | settings | help.</li>
+<li><code>player=</code> — Profile: auto-build this player as the self subject.</li>
+<li><code>opponent=</code> — Prep: prefill and search step 1; Profile: opponent subject.</li>
+<li><code>claim=</code> — Profile: pre-select this claim's evidence ("motif:&lt;Kind&gt;:missed|allowed" / "structure:&lt;flag&gt;"); Tactics: seed the weakness queue with the motif.</li>
+<li><code>db=</code> — open this database instead of the saved one (not persisted).</li>
+</ul>
+<p>Any subset works. Handy for demos, screenshots and shared findings.</p>
+<hr>
+<h2 id="end-to-end-workflows">End-to-end workflows</h2>
+<h3 id="start-your-day-from-home">Start your day from Home</h3>
+<ol>
+<li>Launch — the last database opens and Home greets you (with your commitment, if one is set in Settings → Schedule).</li>
+<li><strong>Resume review</strong> continues the game you left; <strong>DUE TODAY → Review openings</strong> clears the SRS queue; <strong>Solve tactics</strong> drills weaknesses.</li>
+<li>A finding row under <strong>YOUR CHESS</strong> opens Profile with that claim's evidence preselected; <strong>NEW SINCE …</strong> rows open this week's imports.</li>
+</ol>
+<h3 id="import-games-and-browse-them">Import games and browse them</h3>
+<ol>
+<li>CLI: <code>import-pgn</code> / <code>import-si4</code> (or a sync command) into a <code>.sqlite</code> file — see below.</li>
+<li>STUDY → Database → enter the path → <strong>Open</strong> (subsequent launches auto-open it).</li>
+<li>Filter, click a game, step through it in the Game view.</li>
+</ol>
+<h3 id="run-a-database-wide-annotate-or-fresh-analysis">Run a database-wide annotate (or fresh analysis)</h3>
+<ol>
+<li>STUDY → Database → <strong>Annotate database</strong> (or <strong>Fresh analysis pass</strong>; both also live in Settings → ENGINE &amp; ANALYSIS).</li>
+<li>Read the estimate dialog — games to cover, estimated duration, and the quoted estimate basis — then <strong>Start</strong>. The jobs enqueue *and* the worker starts.</li>
+<li>Watch the inline job row (or Home's RUNNING panel / the status strip); <strong>Pause</strong> anytime — the run resumes exactly where it left off, and already-covered games are skipped on a re-run.</li>
+</ol>
+<h3 id="annotate-a-single-game-and-confirm-tactics-with-the-engine">Annotate a single game and confirm tactics with the engine</h3>
+<ol>
+<li>Load a game from the Database view.</li>
+<li>Header bar → <strong>Annotate</strong> — instant static comments; engine checks are queued.</li>
+<li>DATA IN / OUT → Jobs → <strong>Run pending jobs</strong> — verdicts fold back automatically when the batch finishes.</li>
+<li>Edit by hand in the Moves panel (comments, NAGs, variations) and <strong>Save</strong>; <strong>Export PGN</strong> to take the annotated game elsewhere.</li>
+</ol>
+<h3 id="drill-a-weakness-end-to-end">Drill a weakness end to end</h3>
+<ol>
+<li>COACH → Profile → <strong>Build profile</strong> (evals from a Fresh analysis pass make the phase/conversion numbers live).</li>
+<li>Click the loudest number — say a motif's ALLOWED cell. The evidence aside shows the supporting games; open one to land on the exact ply where the weakness appeared.</li>
+<li>Press <strong>Train this weakness</strong> — Tactics opens in weakness mode, seeded with that motif (the SEEDED chip shows it).</li>
+<li>Solve — the WHY THIS PUZZLE aside quotes why each puzzle was picked, and every result feeds your tactics rating.</li>
+</ol>
+<h3 id="prep-for-an-opponent">Prep for an opponent</h3>
+<ol>
+<li>Home → "Prep an opponent" (or COACH → Opponent prep) → search, pick the name.</li>
+<li>Fingerprint their colour, click a weak family → ranked weak lines → master games; <strong>Study in game view</strong> opens the top game at the prep position.</li>
+<li><strong>Open his profile</strong> for the full findings; the prep is recorded so Home stops nagging about it.</li>
+</ol>
+<h3 id="build-and-train-an-opening-repertoire">Build and train an opening repertoire</h3>
+<ol>
+<li>Load a model game, step to where your line ends, and use "→ repertoire: <strong>as White</strong> / <strong>as Black</strong>" under the Moves panel — or bulk-import a PGN study with the CLI <code>import-repertoire</code>.</li>
+<li>TRAIN → Openings SRS → pick the colour → <strong>Start review</strong>.</li>
+<li>Answer on the board or by typing; grade yourself <strong>Again/Hard/Good/ Easy</strong> — the buttons show the real next intervals.</li>
+<li>Come back when the rail badge (or the status-strip nudge) shows cards due — FSRS schedules the rest.</li>
+</ol>
+<hr>
+<h2 id="cli-only-features">CLI-only features</h2>
+<p>Everything below has <strong>no UI entry point</strong> (exceptions are noted inline) — it exists only in the developer CLI (<code>kibitz-cli</code>) or the validation harness (<code>wsui-validate</code>). Run them from the repository root. The general form is:</p>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db &lt;path.sqlite&gt; &lt;subcommand&gt; [args]</code></pre>
+<p><code>--db</code> defaults to <code>kibitz.sqlite</code> in the current directory; the database is created and migrated automatically. (A built binary works the same: <code>kibitz-cli --db &lt;path.sqlite&gt; &lt;subcommand&gt; [args]</code>.)</p>
+<h3 id="database-creation-import-cli-only">Database creation &amp; import (CLI-only)</h3>
+<ul>
+<li><strong>Create / migrate a database</strong></li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite init</code></pre>
+<ul>
+<li><strong>Import a PGN file</strong> (streaming; malformed games are skipped; provenance is recorded with every source):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  import-pgn games.pgn --source-name "My games" --origin "local file" \
+  --license "personal data" --kind personal</code></pre>
+<p><code>--kind</code> is one of <code>personal|twic|online|other</code> and controls duplicate priority.</p>
+<ul>
+<li><strong>Import a SCID database</strong> (pass the base path of the <code>.si4</code>/<code>.sg4</code>/<code>.sn4</code> triple; inline comments, NAGs, and variations are preserved):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  import-si4 /path/to/scidbase --source-name "SCID import" --kind personal</code></pre>
+<ul>
+<li><strong>Import a repertoire PGN</strong> for the Openings SRS trainer — every mainline move of the chosen color becomes a training card (the UI can only add lines from a loaded game, one at a time). <code>--name</code> defaults to <code>main</code>; re-import is idempotent:</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  import-repertoire study.pgn white --name "main"</code></pre>
+<ul>
+<li><strong>Import Lichess puzzles</strong> for the Tactics trainer. The Tactics view's "Import CSV" button does the same import (fixed popularity cutoff 50); the CLI adds <code>--min-popularity</code> (skip puzzles below that Lichess popularity, −100..100) and <code>--max-rows</code> (stop after importing that many):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000</code></pre>
+<h3 id="downloading-games-cli-only">Downloading games (CLI-only)</h3>
+<ul>
+<li><strong>TWIC incremental sync</strong> — downloads The Week in Chess issues to *your* machine for personal use (TWIC data must never be redistributed; a notice prints on first run). <code>--from</code> is required the first time:</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  twic-sync --from 1580 --max-issues 5</code></pre>
+<p>Later runs resume where the last one stopped:</p>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite twic-sync</code></pre>
+<ul>
+<li><strong>Lichess user games</strong> (resumable):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  lichess-sync SomeUsername</code></pre>
+<ul>
+<li><strong>chess.com monthly archives</strong> (resumable):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  chesscom-sync SomeUsername</code></pre>
+<ul>
+<li><strong>FICS games via ficsgames.org</strong> (volunteer-run archive — keep requests occasional; personal use only). Whole year, or one month with <code>--month</code>:</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  fics-sync SomeUsername 2025 --month 6</code></pre>
+<h3 id="queries-reports-cli-only">Queries &amp; reports (CLI-only)</h3>
+<ul>
+<li><strong>Repertoire fingerprint</strong> — per-color openings, most-visited positions, and book deviations for a player (<code>--json</code> for the full record; the Opponent-prep screen shows a per-colour summary of the same data):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  fingerprint "Carlsen, Magnus"</code></pre>
+<ul>
+<li><strong>List matching player names</strong> (the UI only offers autocomplete inside Prep/Profile):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  players carlsen</code></pre>
+<ul>
+<li><strong>Find games by FEN</strong> — games reaching an arbitrary typed position, with query timing (the UI's Position search does this for a position you set up on its board):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite \
+  find-fen "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"</code></pre>
+<ul>
+<li><strong>LLM-verbalized explanation</strong> — the static analysis explained via the Anthropic API, post-validated with automatic fallback to template prose (needs <code>$ANTHROPIC_API_KEY</code> or <code>--api-key</code>):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- \
+  explain-llm "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"</code></pre>
+<h3 id="cli-equivalents-of-app-features">CLI equivalents of app features</h3>
+<p>These duplicate UI functionality, useful for scripting and batch work (<code>opening-tree</code>, <code>explain</code>, <code>stats</code> also exist and mirror the Opening tree view, the Explain panel, and the database summary):</p>
+<pre><code>cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite export-pgn 123
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite annotate-game 123
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite reanalyze-game 123 --nodes 200000
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite run-jobs --max-jobs 100
+cargo run --release -p kibitz-db --bin kibitz-cli -- --db mygames.sqlite profile "Carlsen, Magnus" --json</code></pre>
+<p><code>run-jobs</code> needs an engine binary (set <code>KIBITZ_STOCKFISH</code> if it is not on PATH) and, like the Jobs view, folds verdicts back into annotations when the jobs finish.</p>
+<h3 id="wsui-validation-harness-cli-only">WSUI validation harness (CLI-only)</h3>
+<p><code>wsui-validate</code> measures the tactical screen's precision/recall against Lichess puzzles (positives) and engine-quiet positions (negatives); results are recorded in <code>docs/VALIDATION.md</code>.</p>
+<ul>
+<li>Build the quiet-position set from an imported master-game database:</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin wsui-validate -- \
+  --build-quiet-from mygames.sqlite --per-class 500 &gt; quiet_fens.txt</code></pre>
+<ul>
+<li>Run the validation (train/holdout split, holdout numbers reported):</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin wsui-validate -- \
+  --puzzles lichess_db_puzzle.csv --quiet quiet_fens.txt --per-class 2000</code></pre>
+<ul>
+<li>Emit a small committed fixture subset from the full puzzle dump:</li>
+</ul>
+<pre><code>cargo run --release -p kibitz-db --bin wsui-validate -- \
+  --puzzles lichess_db_puzzle.csv --emit-fixture 500 &gt; puzzles_sample.csv</code></pre>
+<hr>
+<h2 id="where-things-are-stored">Where things are stored</h2>
+<ul>
+<li>Everything lives in the SQLite database you open — games, annotations, engine evaluations, the job queue, repertoire cards and their review history, imported puzzles with your attempts and tactics rating, endgame drill progress, and the provenance (source, license, date) of every import. Home's memory lives there too: the last-opened game, started preps, your commitment, the cached profile behind the findings panel, and the narration-voice setting.</li>
+<li>UI preferences (database path, theme, board treatment, Explain on/off, annotation display, narration-voice fallback, engine path, node budget, the first-run-tour flag) persist in the app's local storage.</li>
+</ul>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <p>Kibitz — free software. Application: GPL-3.0. Core libraries: BSD-3-Clause.
+    <a href="https://github.com/avienu/kibitz">Source on GitHub</a> ·
+    <a href="index.html">Home</a></p>
+    <p>This page is generated from docs/USER_GUIDE.md by scripts/site_build_guide.py —
+    the same guide the app shows under Help &amp; tour.</p>
+  </div>
+</footer>
+
+</body>
+</html>

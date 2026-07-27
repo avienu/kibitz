@@ -10,11 +10,11 @@
 
 use std::path::PathBuf;
 
-use serde::Serialize;
 use kibitz_db::tactics::{
     self, AttemptOutcome, CycleStats, MotifWeight, MoveVerdict, PuzzleRow, TacticsRating,
     ThemeCount, WoodpeckerSet,
 };
+use serde::Serialize;
 use tauri::State;
 
 use crate::browse::{with_conn, DbState};

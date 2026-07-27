@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "notes": "Mock release notes for the updater dry-run test fixture.",
+  "pub_date": "2026-08-01T12:00:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "bW9jay1taW5pc2lnbi1zaWduYXR1cmUtZGFyd2luLWFhcmNoNjQ=",
+      "url": "https://github.com/avienu/kibitz/releases/download/v0.2.0/Kibitz_0.2.0_aarch64.app.tar.gz"
+    },
+    "linux-x86_64": {
+      "signature": "bW9jay1taW5pc2lnbi1zaWduYXR1cmUtbGludXgteDg2XzY0=",
+      "url": "https://github.com/avienu/kibitz/releases/download/v0.2.0/Kibitz_0.2.0_amd64.AppImage"
+    }
+  }
+}

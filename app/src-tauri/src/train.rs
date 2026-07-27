@@ -5,8 +5,8 @@
 //! a repertoire from the game view. All scheduling math lives in the BSD
 //! `kibitz-srs` crate; the engine is never involved (CLAUDE.md #6).
 
-use serde::Serialize;
 use kibitz_srs::{Grade, Scheduler};
+use serde::Serialize;
 use tauri::State;
 
 use crate::browse::{with_conn, DbState};

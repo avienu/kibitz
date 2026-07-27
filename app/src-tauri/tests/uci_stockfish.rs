@@ -30,7 +30,9 @@ async fn stockfish_startpos_go_nodes_reports_info_and_bestmove() {
 
     let mut infos = Vec::new();
     let best = engine
-        .analyze(&UciPosition::Startpos, 100_000, |info| infos.push(info))
+        .analyze(&UciPosition::Startpos, Some(100_000), |info| {
+            infos.push(info)
+        })
         .await
         .expect("search should complete with a bestmove");
 
@@ -72,7 +74,8 @@ async fn stop_handle_interrupts_a_long_search() {
     // Huge node budget; without `stop` this would run for a very long time.
     let position =
         UciPosition::Fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".into());
-    let search = engine.analyze(&position, u64::MAX / 2, |_| {});
+    // Interruptibility now exercises the live-analysis path: go infinite.
+    let search = engine.analyze(&position, None, |_| {});
     let stopper = async {
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         stop.stop().await.expect("stop write");

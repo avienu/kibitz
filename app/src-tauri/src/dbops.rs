@@ -475,8 +475,8 @@ pub fn set_window_title(window: tauri::Window, title: String) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::params;
     use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
+    use rusqlite::params;
     use std::io::Cursor;
 
     /// Opera game (public domain, 33 plies): long enough for the profile
