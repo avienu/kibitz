@@ -304,6 +304,7 @@ mod tests {
                         .into(),
                     kind: "example".into(),
                     confidence: "high".into(),
+                    not_expected: NotExpected::default(),
                     expected: Expected {
                         favors: Some("white".into()),
                         imbalances: vec!["SquaresOutposts".into(), "PawnStructure".into()],
@@ -321,6 +322,7 @@ mod tests {
                     fen: "not a fen".into(),
                     kind: "example".into(),
                     confidence: "high".into(),
+                    not_expected: NotExpected::default(),
                     expected: Expected::default(),
                 },
             ],
