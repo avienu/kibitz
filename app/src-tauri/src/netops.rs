@@ -626,6 +626,32 @@ pub struct ServiceAccount {
     /// duplicatesSkipped, gamesFailed, and per-service extras — or
     /// {at, error} for a failed run). Null before the first sync.
     pub last_report: Option<serde_json::Value>,
+    /// Games in the database from this service, counted live from the
+    /// provenance rows (`sources`) — the idle card's "N games imported
+    /// total" (audit #16/#21). Survives report resets and counts imports
+    /// from every run, not just the last one.
+    pub games_total: i64,
+}
+
+/// The `sources.name` prefix each service's client stamps on its imports
+/// (see kibitz-db::net::{lichess,chesscom,fics}) — the provenance handle
+/// for per-service totals.
+fn service_source_prefix(service: &str) -> &'static str {
+    match service {
+        "lichess" => "Lichess: ",
+        "chesscom" => "chess.com: ",
+        _ => "FICS: ",
+    }
+}
+
+fn service_games_total(conn: &Connection, service: &str) -> Result<i64, String> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM games g JOIN sources s ON s.id = g.source_id
+         WHERE s.kind = 'online' AND s.name LIKE ?1 || '%'",
+        [service_source_prefix(service)],
+        |r| r.get(0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -636,7 +662,7 @@ pub struct SyncAccounts {
     pub fics: ServiceAccount,
 }
 
-fn service_account(conn: &Connection, service: &str) -> ServiceAccount {
+fn service_account(conn: &Connection, service: &str) -> Result<ServiceAccount, String> {
     let username = net::meta_get(conn, &user_key(service))
         .ok()
         .flatten()
@@ -645,17 +671,18 @@ fn service_account(conn: &Connection, service: &str) -> ServiceAccount {
         .ok()
         .flatten()
         .and_then(|s| serde_json::from_str(&s).ok());
-    ServiceAccount {
+    Ok(ServiceAccount {
         username,
         last_report,
-    }
+        games_total: service_games_total(conn, service)?,
+    })
 }
 
 pub(crate) fn sync_accounts_impl(conn: &Connection) -> Result<SyncAccounts, String> {
     Ok(SyncAccounts {
-        lichess: service_account(conn, "lichess"),
-        chesscom: service_account(conn, "chesscom"),
-        fics: service_account(conn, "fics"),
+        lichess: service_account(conn, "lichess")?,
+        chesscom: service_account(conn, "chesscom")?,
+        fics: service_account(conn, "fics")?,
     })
 }
 
@@ -1233,6 +1260,33 @@ mod tests {
         sync_set_username_impl(&conn, "lichess", "").unwrap();
         let a = sync_accounts_impl(&conn).unwrap();
         assert_eq!(a.lichess.username, None);
+    }
+
+    #[test]
+    fn accounts_carry_per_service_totals_from_provenance_rows() {
+        use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
+        let (_dir, conn) = temp_db();
+        let a = sync_accounts_impl(&conn).unwrap();
+        assert_eq!(a.lichess.games_total, 0, "empty db: honest zero");
+
+        // One Lichess import (the client's exact source-name shape).
+        let source = SourceInfo {
+            name: "Lichess: SomeUser".into(),
+            origin: "https://lichess.org/api/games/user/SomeUser".into(),
+            license: "user's own games".into(),
+            kind: SourceKind::Online,
+        };
+        let pgn = "[White \"SomeUser\"]\n[Black \"Opp\"]\n[Result \"1-0\"]\n\n1. e4 e5 1-0\n";
+        let st = import_pgn(&conn, &source, std::io::Cursor::new(pgn)).unwrap();
+        assert_eq!(st.games_imported, 1, "failures: {:?}", st.failures);
+
+        let a = sync_accounts_impl(&conn).unwrap();
+        assert_eq!(a.lichess.games_total, 1);
+        assert_eq!(a.chesscom.games_total, 0, "prefixes do not cross-count");
+        assert_eq!(a.fics.games_total, 0);
+        // Wire shape: the idle card reads gamesTotal.
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(json.contains("\"gamesTotal\":1"), "{json}");
     }
 
     #[test]

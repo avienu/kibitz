@@ -25,9 +25,10 @@ function accountsFixture(overrides: Partial<SyncAccounts> = {}): SyncAccounts {
         duplicatesSkipped: 40,
         gamesFailed: 0,
       },
+      gamesTotal: 12345,
     },
-    chesscom: { username: null, lastReport: null },
-    fics: { username: null, lastReport: null },
+    chesscom: { username: null, lastReport: null, gamesTotal: 0 },
+    fics: { username: null, lastReport: null, gamesTotal: 0 },
     ...overrides,
   };
 }
@@ -47,9 +48,13 @@ describe("account cards", () => {
     const input = container.querySelector<HTMLInputElement>('input[aria-label="Lichess username"]')!;
     await waitFor(() => expect(input.value).toBe("SomeUser"));
     // The stored UTC timestamp renders in the machine's LOCAL time
-    // (audit #10) — assert via the same helper the component uses.
+    // (audit #10) — assert via the same helper the component uses — and
+    // the idle line carries the live per-service total (audit #16/#21).
     expect(container.textContent).toContain(
-      `Last sync ${utcDateTimeLocal("2026-07-26 21:00:00")}: 128 imported · 40 duplicates · 0 failed`,
+      `Last synced ${utcDateTimeLocal("2026-07-26 21:00:00")} · 12,345 games imported total`,
+    );
+    expect(container.textContent).toContain(
+      "Last run: 128 imported · 40 duplicates · 0 failed",
     );
   });
 
@@ -123,6 +128,7 @@ describe("honesty", () => {
         lichess: {
           username: "SomeUser",
           lastReport: { at: "2026-07-25 10:00:00", error: "aborting after 4 rate-limit (429) responses" },
+          gamesTotal: 12345,
         },
       }),
     );
@@ -131,6 +137,17 @@ describe("honesty", () => {
     expect(container.textContent).toContain(
       `Failed (${utcDateTimeLocal("2026-07-25 10:00:00")}): aborting after 4 rate-limit (429) responses`,
     );
+  });
+
+  it("idle card still states its totals when no report exists (audit #16/#21)", async () => {
+    vi.mocked(syncAccounts).mockResolvedValue(
+      accountsFixture({
+        lichess: { username: "SomeUser", lastReport: null, gamesTotal: 777 },
+      }),
+    );
+    const { container } = render(<SyncsView progress={null} />);
+    await waitFor(() => expect(syncAccounts).toHaveBeenCalled());
+    expect(container.textContent).toContain("No sync recorded · 777 games imported total");
   });
 
   it("keeps the FICS personal-use notice and the honest ICC note", async () => {
@@ -157,6 +174,7 @@ describe("honesty", () => {
             month: null,
             savedArchive: "/tmp/fics_FicsUser_2025_0.pgn.bz2",
           },
+          gamesTotal: 0,
         },
       }),
     );

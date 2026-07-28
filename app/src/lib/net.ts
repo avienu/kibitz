@@ -86,6 +86,8 @@ export interface SyncReport {
 export interface ServiceAccount {
   username: string | null;
   lastReport: SyncReport | null;
+  /** Games in the database from this service (live provenance count). */
+  gamesTotal: number;
 }
 
 export interface SyncAccounts {
@@ -153,15 +155,33 @@ export function missingIssues(rows: readonly TwicCatalogRow[]): number[] {
   return rows.filter((r) => !r.imported).map((r) => r.issue);
 }
 
+/**
+ * The service card's always-visible idle line (audit #16/#21): "Last
+ * synced <local time> · N games imported total". Shown even when idle so
+ * the card states what it has done. Null only when there is truly
+ * nothing to say (no report AND no imported games).
+ */
+export function idleLine(account: ServiceAccount | null, zone?: string): string | null {
+  if (!account) return null;
+  const at = account.lastReport?.at;
+  if (!at && account.gamesTotal === 0) return null;
+  const when = at ? `Last synced ${utcDateTimeLocal(at, zone)}` : "No sync recorded";
+  const total = account.gamesTotal.toLocaleString("en-US");
+  return `${when} · ${total} game${account.gamesTotal === 1 ? "" : "s"} imported total`;
+}
+
 /** One-line rendering of a stored last-sync report; null when none. The
- * stored `at` is UTC; it renders in the user's local time (audit #10).
- * `zone` is test injection only. */
+ * timestamp lives on the idle line ([`idleLine`]); this line carries the
+ * per-run counts. A failure keeps its own timestamp, rendered in the
+ * user's local time (audit #10). `zone` is test injection only. */
 export function formatReport(report: SyncReport | null, zone?: string): string | null {
   if (!report) return null;
-  const at = report.at ? utcDateTimeLocal(report.at, zone) : "unknown time";
-  if (report.error) return `Failed (${at}): ${report.error}`;
+  if (report.error) {
+    const at = report.at ? utcDateTimeLocal(report.at, zone) : "unknown time";
+    return `Failed (${at}): ${report.error}`;
+  }
   let s =
-    `Last sync ${at}: ${report.gamesImported ?? 0} imported · ` +
+    `Last run: ${report.gamesImported ?? 0} imported · ` +
     `${report.duplicatesSkipped ?? 0} duplicates · ${report.gamesFailed ?? 0} failed`;
   if (report.monthsFetched !== undefined) s += ` · ${report.monthsFetched} month(s)`;
   if (report.year !== undefined) {

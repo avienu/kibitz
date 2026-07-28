@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   formatReport,
+  idleLine,
   missingIssues,
   netStripProgress,
   type NetProgress,
+  type ServiceAccount,
   type TwicCatalogRow,
 } from "./net";
 
@@ -30,19 +32,21 @@ describe("formatReport", () => {
     expect(formatReport(null)).toBeNull();
   });
 
-  it("renders a success report with counts, timestamp in LOCAL time", () => {
+  it("renders the per-run counts (the timestamp lives on the idle line)", () => {
     const report = {
       at: "2026-07-27 12:00:00",
       gamesImported: 128,
       duplicatesSkipped: 40,
       gamesFailed: 1,
     };
-    expect(formatReport(report, "UTC")).toBe(
-      "Last sync 2026-07-27 12:00: 128 imported · 40 duplicates · 1 failed",
-    );
-    // Audit #10: the stored UTC timestamp renders in the viewer's zone.
+    expect(formatReport(report)).toBe("Last run: 128 imported · 40 duplicates · 1 failed");
+  });
+
+  it("failure lines carry a LOCAL timestamp (audit #10)", () => {
+    const report = { at: "2026-07-27 12:00:00", error: "HTTP 500" };
+    expect(formatReport(report, "UTC")).toBe("Failed (2026-07-27 12:00): HTTP 500");
     expect(formatReport(report, "America/Los_Angeles")).toBe(
-      "Last sync 2026-07-27 05:00: 128 imported · 40 duplicates · 1 failed",
+      "Failed (2026-07-27 05:00): HTTP 500",
     );
   });
 
@@ -60,6 +64,37 @@ describe("formatReport", () => {
 
   it("surfaces a stored error honestly (malformed timestamps unmangled)", () => {
     expect(formatReport({ at: "t", error: "HTTP 500 for …" })).toBe("Failed (t): HTTP 500 for …");
+  });
+});
+
+describe("idleLine (audit #16/#21: the card states what it has done)", () => {
+  const account = (over: Partial<ServiceAccount>): ServiceAccount => ({
+    username: "SomeUser",
+    lastReport: null,
+    gamesTotal: 0,
+    ...over,
+  });
+
+  it("shows last-synced LOCAL time and the live total", () => {
+    const a = account({
+      lastReport: { at: "2026-07-26 21:00:00", gamesImported: 5 },
+      gamesTotal: 12345,
+    });
+    expect(idleLine(a, "UTC")).toBe("Last synced 2026-07-26 21:00 · 12,345 games imported total");
+    expect(idleLine(a, "America/Los_Angeles")).toBe(
+      "Last synced 2026-07-26 14:00 · 12,345 games imported total",
+    );
+  });
+
+  it("still reports totals when no sync report survives", () => {
+    expect(idleLine(account({ gamesTotal: 1 }))).toBe(
+      "No sync recorded · 1 game imported total",
+    );
+  });
+
+  it("is null only when there is truly nothing to say", () => {
+    expect(idleLine(null)).toBeNull();
+    expect(idleLine(account({}))).toBeNull();
   });
 });
 
