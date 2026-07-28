@@ -8,8 +8,10 @@ cd "$(dirname "$0")/.."
 # testdata/private is git-ignored (never ships) and holds book-trial
 # transcriptions whose notes cite the author's own game captions
 # ("Silman-Wolski") and book titles verbatim.
+# --exclude=.git: in a git WORKTREE .git is a pointer file (not a dir)
+# whose contents name the parent checkout's path — never repo content.
 hits=$(grep -rIni 'silman' \
-  --exclude-dir=.git --exclude-dir=target --exclude-dir=node_modules \
+  --exclude-dir=.git --exclude=.git --exclude-dir=target --exclude-dir=node_modules \
   --exclude-dir=dist --exclude-dir=handoff-1 --exclude-dir=handoff-2 \
   --exclude-dir=testdata \
   --exclude-dir=private \
