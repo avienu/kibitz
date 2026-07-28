@@ -68,6 +68,7 @@ versions.
 | serde / serde_json | 1.x | MIT OR Apache-2.0 | |
 | rusqlite (bundled) | 0.32 | MIT | Kept in lockstep with the root workspace. Bundles SQLite (public domain). |
 | cozy-chess | 0.3 | MIT | Kept in lockstep with the root workspace. |
+| ureq | 2 | MIT OR Apache-2.0 | Lichess Board API client (src/lichess_play.rs, run 10). Same crate/version the kibitz-db ingesters already use — no new package enters the tree. Network is app-layer only. |
 | tempfile | 3 | MIT OR Apache-2.0 | dev-deps (tests only) |
 | kibitz-db (path dep) | 0.1.0 | GPL-3.0 (first-party) | `app/kibitz-db`; pulls the BSD workspace crates (kibitz-core/-profile/-srs/-tb/-verbalize, si4-read) as path deps. |
 
