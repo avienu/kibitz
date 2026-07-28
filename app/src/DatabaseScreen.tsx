@@ -162,9 +162,14 @@ export default function DatabaseScreen({
 
   const [filtering, setFiltering] = useState(false);
 
-  // Game list: refetch on open / filter (debounced) / page change.
+  // Game list: refetch on open / filter (debounced) / page change — and
+  // whenever the shared summary's game count moves (App re-polls
+  // db_summary on one cadence during syncs), so the header count and the
+  // list's "1–50 of N" total change at the same moment (audit #8).
+  const dbOpen = summary !== null;
+  const gamesCount = summary?.games;
   useEffect(() => {
-    if (!summary) return;
+    if (!dbOpen) return;
     let cancelled = false;
     setFiltering(true);
     const t = setTimeout(
@@ -196,7 +201,10 @@ export default function DatabaseScreen({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [summary, playerFilter, ecoFilter, resultFilter, page]);
+    // gamesCount (not the summary object): identity churns on every
+    // shared-cadence refresh; refetch only when the count actually moved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbOpen, gamesCount, playerFilter, ecoFilter, resultFilter, page]);
 
   const loadById = useCallback(
     async (id: number) => {
@@ -460,6 +468,17 @@ export default function DatabaseScreen({
               )}
 
               {listError && <div className="error">{listError}</div>}
+              {!list && !listError && (
+                // First list query still in flight (it can queue behind a
+                // bulk sync for seconds — audit #7): show skeleton rows,
+                // never a bare void.
+                <div className="db-skeleton" role="status" aria-label="Loading games">
+                  {Array.from({ length: 8 }, (_, i) => (
+                    <div key={i} className="db-skeleton-row" />
+                  ))}
+                  <div className="db-skeleton-note">Loading games…</div>
+                </div>
+              )}
               {list && (
                 <DataTable
                   columns={columns}

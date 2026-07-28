@@ -34,6 +34,7 @@ import type { AnalysisRow } from "./lib/analyses";
 import { getSavedAnnotationDisplay, saveAnnotationDisplay } from "./lib/annotationDisplay";
 import {
   explainPosition,
+  fetchDbSummary,
   gameAnalyses,
   getGame,
   getGameTokens,
@@ -288,21 +289,40 @@ export default function App() {
     tick();
     const t = setInterval(tick, 3000);
     return () => clearInterval(t);
-  }, [dbSummary]);
+    // Boolean dep: dbSummary's identity changes on every counts refresh
+    // during a sync; this poller only cares whether a database is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbSummary !== null]);
 
   // Network worker (TWIC downloads / account syncs): poll its in-memory
   // progress (cheap, no db) and refresh the rail badges when a job ends.
+  // While a sync is importing, db_summary is re-polled on this SAME
+  // cadence — the one shared refresh path for every game-count display
+  // (rail badge, Database header, list totals), so counts stop drifting
+  // apart mid-sync (audit #8).
   const netWasActive = useRef(false);
+  const dbOpenRef = useRef(false);
+  dbOpenRef.current = dbSummary !== null;
   useEffect(() => {
     if (!dbSummary) return;
     const refreshBadges = () =>
       railNetBadges().then(setNetBadges).catch(() => setNetBadges(null));
+    const refreshDbCounts = () =>
+      fetchDbSummary()
+        .then((s) => {
+          if (dbOpenRef.current) setDbSummary(s);
+        })
+        .catch(() => {}); // counts refresh is best-effort
     refreshBadges();
     const tick = () => {
       fetchNetProgress()
         .then((p) => {
-          if (netWasActive.current && !(p?.active ?? false)) refreshBadges();
-          netWasActive.current = p?.active ?? false;
+          const active = p?.active ?? false;
+          if (netWasActive.current && !active) refreshBadges();
+          // During a sync AND once when it finishes: one final refresh
+          // lands the settled counts everywhere at the same moment.
+          if (active || (netWasActive.current && !active)) refreshDbCounts();
+          netWasActive.current = active;
           setNetProg(p);
         })
         .catch(() => setNetProg(null));
@@ -310,7 +330,8 @@ export default function App() {
     tick();
     const t = setInterval(tick, 3000);
     return () => clearInterval(t);
-  }, [dbSummary]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbSummary !== null]);
 
   // Engine activity (the status-strip dot) from the UCI manager's events.
   useEffect(() => {

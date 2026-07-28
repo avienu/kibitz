@@ -132,6 +132,14 @@ export function openDatabase(path: string): Promise<DbSummary> {
   return invoke<DbSummary>("open_database", { path });
 }
 
+/** Fresh summary counts for the open database — the SINGLE count source
+ * every display shares (rail badge, Database header, list refetch). App
+ * re-polls it on one cadence while a network sync runs so all counts
+ * move together instead of drifting (audit #8). */
+export function fetchDbSummary(): Promise<DbSummary> {
+  return invoke<DbSummary>("db_summary");
+}
+
 export function listGames(filter: GameFilter, offset: number, limit: number): Promise<GameList> {
   return invoke<GameList>("list_games", { filter, offset, limit });
 }
