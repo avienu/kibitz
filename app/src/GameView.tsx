@@ -29,6 +29,7 @@ import { liveInitial, liveReduce, type LiveEvent } from "./lib/liveAnalysis";
 import { numberSanLine, uciPvToSan, PV_DISPLAY_PLIES, PV_INSERT_PLIES } from "./lib/pv";
 import type { VariationPreview } from "./lib/preview";
 import {
+  COACH_HOVER_INDEX,
   deriveEvidence,
   deriveIntensity,
   fitBoardSize,
@@ -749,6 +750,19 @@ export default function GameView({
             repGlyphs={repGlyphs}
             onPreviewVariation={onPreviewVariation}
             previewVarIndex={preview?.varStartIndex ?? null}
+            onNarrationHover={
+              // COACH-row hover lights the current ply's evidence union
+              // through the ONE hover pipeline (COACH_HOVER_INDEX);
+              // meaningless while Explain is off or a preview repaints
+              // the board (audit #4 kept: no stale overlays).
+              explainOn && !preview
+                ? (h) =>
+                    dispatch({
+                      type: "hoverSentence",
+                      index: h ? COACH_HOVER_INDEX : null,
+                    })
+                : undefined
+            }
           />
           {game && game.sans.length > 0 && (
             <div className="rep-footer">

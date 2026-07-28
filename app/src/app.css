@@ -4626,6 +4626,25 @@ input.set-value.editing.invalid {
   border-left: 2px solid var(--accent);
   margin: 2px 0 8px;
 }
+/* Run-10 unification: COACH rows are first-class — click navigates to
+ * the ply; on the current ply, hover lights the board evidence. The
+ * button reset keeps .mv-narration's serif look and accent left rule. */
+button.mv-narration-nav {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 2px solid var(--accent);
+  cursor: pointer;
+}
+button.mv-narration-nav:hover {
+  color: var(--tx);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+button.mv-narration-nav.evidence:hover {
+  border-left-width: 3px;
+}
 .mv-narration-tag {
   display: inline-block;
   margin-right: 7px;
