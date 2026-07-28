@@ -632,9 +632,11 @@ week ("wk NNNN").
   first-run notice (TWIC is donation-funded; personal use only) must be
   acknowledged in-UI.
 - **Auto-download** — a toggle (mirrored in Settings → Data): when on,
-  opening the database quietly downloads NEW issues only (resuming after
-  the newest import, max 5 per launch), with progress in the status
-  strip.
+  opening the database quietly downloads the NEWEST missing issues,
+  newest first, max 5 per app launch — the cap is enforced in the
+  backend, so window reloads never restart the allowance. Older missing
+  issues are a deliberate manual step (Download all missing / checkbox
+  selection). Progress shows in the status strip.
 
 TWIC data is for personal use only and is never bundled or redistributed;
 downloads go to your own database with full provenance. CLI equivalent:
@@ -723,8 +725,9 @@ current value, and an action.
 - **DATA** — Database path (read-only; change it from the Database
   screen); Account syncs (configured-account count; manage them on the
   Account syncs screen); **TWIC auto-download** (the same toggle as the
-  TWIC ingest screen: new issues download quietly at database open, max 5
-  per launch); Tablebase status (Syzygy loaded / not found, with the
+  TWIC ingest screen: the newest issues download quietly at database
+  open, newest first, max 5 per app launch); Tablebase status (Syzygy
+  loaded / not found, with the
   covered piece count); **Schedule** — the recurring commitment Home
   plans around
   (label, e.g. "Club night · Thursday", plus an optional opponent name;
