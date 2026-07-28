@@ -19,6 +19,7 @@ pub mod browse;
 pub mod dbops;
 pub mod endgame;
 pub mod explain;
+pub mod explorer;
 pub mod home;
 mod identity;
 pub mod netops;
@@ -217,6 +218,7 @@ pub fn run() {
             browse::find_games_at,
             browse::eco_names,
             browse::crosstable_games,
+            explorer::explorer_fetch,
             prep::matching_players,
             prep::prep_view,
             prep::prep_fingerprint,

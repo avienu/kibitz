@@ -2397,6 +2397,52 @@ button.strip-nudge:hover:not(:disabled) {
   color: var(--warn, #c9a227);
 }
 
+/* ---- Opening tree: online explorer pane (run 10) ---- */
+.tree-tables.with-online {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.tree-tables.with-online > .tree-local,
+.tree-tables.with-online > .tree-online {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.tree-pane-tag {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font: 600 10.5px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  margin: 0 2px 7px;
+}
+.tree-pane-tag.online {
+  color: var(--info, var(--accent));
+}
+.online-total {
+  font: 500 10.5px/1 var(--font-mono);
+  color: var(--faint);
+  letter-spacing: 0;
+}
+.online-error {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 500 12px/1.5 var(--font-ui);
+  color: var(--dim);
+  background: var(--panel);
+}
+.online-foot {
+  margin: 8px 2px 0;
+  font: 400 10.5px/1.5 var(--font-ui);
+  color: var(--faint);
+}
+.btn-secondary.online-toggle-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ---- Crosstable modal (run 10) ---- */
 .xt-modal {
   max-width: min(1100px, 92vw);
