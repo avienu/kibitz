@@ -198,6 +198,10 @@ fn suggestions_for(record: &FeatureRecord, swing: i32) -> Vec<SuggestionOut> {
                 score: s.score,
                 serving: s.serving,
                 prophylactic: s.prophylactic,
+                // The static veto's mark rides the contract (run 11): the
+                // UI hides marked chips until engine verification clears
+                // them; without an engine they are never shown.
+                static_risk: s.static_risk,
                 evidence,
             }
         })

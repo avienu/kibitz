@@ -544,6 +544,44 @@ fn suggestion_closing_sentence() {
     assert_eq!(suggestion_closing(&empty_record(), Voice::Coach), None);
 }
 
+/// Run 11: the closing respects the whole-board static veto and the
+/// engine-verification context. French Winawer after 5.a3 (maintainer
+/// field report): every static candidate is marked (the b4-bishop hangs
+/// to axb4), so without an engine there is NO closing; a cleared list
+/// from the bounded engine review resurrects exactly its members.
+#[test]
+fn suggestion_closing_respects_verification() {
+    use kibitz_verbalize::{suggestion_closing, suggestion_closing_verified};
+    const WINAWER: &str = "rnbqk1nr/pp3ppp/4p3/2ppP3/1b1P4/P1N5/1PP2PPP/R1BQKBNR b KQkq - 0 5";
+    let board: kibitz_core::cozy_chess::Board = WINAWER.parse().unwrap();
+    let record = kibitz_core::analyze(&board);
+    // Sanity: the mappers DO propose moves here (they shipped as chips),
+    // and every one of them carries the static mark.
+    let raw = kibitz_core::suggest::suggest(&record, &board);
+    assert!(!raw.is_empty());
+    assert!(raw.iter().all(|s| s.static_risk.is_some()), "{raw:?}");
+    // No engine: the static veto drops every marked candidate — silence.
+    assert_eq!(suggestion_closing(&record, Voice::Coach), None);
+    assert_eq!(
+        suggestion_closing_verified(&record, Voice::Coach, None),
+        None
+    );
+    // Engine cleared cxd4 (the theory move): only it renders.
+    let cleared = vec!["c5d4".to_string()];
+    let closing = suggestion_closing_verified(&record, Voice::Coach, Some(&cleared))
+        .expect("cleared move renders");
+    assert!(closing.contains("cxd4"), "{closing}");
+    assert!(
+        !closing.contains("f5") && !closing.contains("f6"),
+        "{closing}"
+    );
+    // Engine refuted everything: an empty cleared list silences it too.
+    assert_eq!(
+        suggestion_closing_verified(&record, Voice::Coach, Some(&[])),
+        None
+    );
+}
+
 #[test]
 fn endgame_prose() {
     let out = verbalize(&endgame_record());

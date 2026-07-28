@@ -279,6 +279,13 @@ pub struct SuggestionOut {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub serving: Vec<String>,
     pub prophylactic: bool,
+    /// Whole-board static risk (run 11): present when the static veto
+    /// marked this candidate as leaving a piece en prise (net SEE swing
+    /// in centipawns). A marked suggestion must NOT be shown to the user
+    /// unless bounded engine verification clears it; consumers with no
+    /// engine drop it. Additive optional field — schema stays v3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub static_risk: Option<i32>,
     /// Board overlay while the suggestion chip is hovered (the move as a
     /// key arrow), in the shared evidence language.
     pub evidence: Evidence,
