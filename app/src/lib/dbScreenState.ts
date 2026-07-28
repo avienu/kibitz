@@ -15,6 +15,13 @@ export interface DbScreenState {
   eco: string;
   /** Exact result filter ("" = any). */
   result: string;
+  /** Event-name substring filter (run 10). */
+  event: string;
+  /** Date bounds ("" = unbounded): YYYY, YYYY.MM or YYYY.MM.DD. */
+  dateMin: string;
+  dateMax: string;
+  /** Source-kind filter ("" = any): personal | twic | online | other. */
+  sourceKind: string;
   /** 0-based page. */
   page: number;
   /** Scroll offset of the screen's scroll container, in px. */
@@ -27,6 +34,10 @@ const INITIAL: DbScreenState = {
   player: "",
   eco: "",
   result: "",
+  event: "",
+  dateMin: "",
+  dateMax: "",
+  sourceKind: "",
   page: 0,
   scrollTop: 0,
   selectedGameId: null,
@@ -73,5 +84,14 @@ export function clearDbScreenState(): DbScreenState {
 
 /** True when Clear would change anything the user can see. */
 export function hasActiveFilters(s: DbScreenState): boolean {
-  return s.player !== "" || s.eco !== "" || s.result !== "" || s.page !== 0;
+  return (
+    s.player !== "" ||
+    s.eco !== "" ||
+    s.result !== "" ||
+    s.event !== "" ||
+    s.dateMin !== "" ||
+    s.dateMax !== "" ||
+    s.sourceKind !== "" ||
+    s.page !== 0
+  );
 }

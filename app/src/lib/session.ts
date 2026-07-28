@@ -63,10 +63,16 @@ export function parseSession(json: string | null | undefined): UiSession | null 
   if (s.version !== SESSION_VERSION) return null;
   if (!s.view || !VIEW_IDS.includes(s.view)) return null;
   const d = s.dbScreen;
+  // New fields default defensively (blobs written before run 10 lack the
+  // event/date/source filters — no version bump needed).
   const dbScreen: DbScreenState = {
     player: typeof d?.player === "string" ? d.player : "",
     eco: typeof d?.eco === "string" ? d.eco : "",
     result: typeof d?.result === "string" ? d.result : "",
+    event: typeof d?.event === "string" ? d.event : "",
+    dateMin: typeof d?.dateMin === "string" ? d.dateMin : "",
+    dateMax: typeof d?.dateMax === "string" ? d.dateMax : "",
+    sourceKind: typeof d?.sourceKind === "string" ? d.sourceKind : "",
     page: typeof d?.page === "number" && d.page >= 0 ? Math.floor(d.page) : 0,
     scrollTop: typeof d?.scrollTop === "number" && d.scrollTop >= 0 ? d.scrollTop : 0,
     selectedGameId: typeof d?.selectedGameId === "number" ? d.selectedGameId : null,

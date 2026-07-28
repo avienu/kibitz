@@ -40,6 +40,15 @@ export interface GameFilter {
   eco?: string;
   /** Exact result: "1-0" | "0-1" | "1/2-1/2" | "*". */
   result?: string;
+  /** Case-insensitive substring match on the event name (run 10). */
+  eventSubstring?: string;
+  /** Inclusive date bounds: "YYYY", "YYYY.MM" or "YYYY.MM.DD". Wildcard
+   * PGN date components ("1992.??.??") match permissively; games with no
+   * date or an unknown year are excluded when a bound is set. */
+  dateMin?: string;
+  dateMax?: string;
+  /** Exact source kind: "personal" | "twic" | "online" | "other". */
+  sourceKind?: string;
 }
 
 export interface GameRow {
@@ -106,10 +115,24 @@ export interface GameAtRow {
   id: number;
   white: string;
   black: string;
+  whiteElo: number | null;
+  blackElo: number | null;
   event: string;
   date: string;
   result: string;
   ply: number;
+}
+
+/** Result filters for `find_games_at` (run 10). Elo bounds apply to the
+ * game's HIGHER rating; unrated games are excluded when a bound is set.
+ * Dates follow the same permissive-wildcard rule as the game list. */
+export interface GamesAtFilter {
+  minElo?: number;
+  maxElo?: number;
+  dateMin?: string;
+  dateMax?: string;
+  /** Exact result: "1-0" | "0-1" | "1/2-1/2" | "*". */
+  result?: string;
 }
 
 export interface GamesAt {
@@ -186,8 +209,8 @@ export function ecoNames(codes: string[]): Promise<Record<string, string | null>
   return invoke<Record<string, string | null>>("eco_names", { codes });
 }
 
-export function findGamesAt(fen: string): Promise<GamesAt> {
-  return invoke<GamesAt>("find_games_at", { fen });
+export function findGamesAt(fen: string, filter?: GamesAtFilter): Promise<GamesAt> {
+  return invoke<GamesAt>("find_games_at", { fen, filter });
 }
 
 /* ---- Phase 2: opponent prep ---- */

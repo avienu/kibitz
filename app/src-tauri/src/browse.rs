@@ -200,7 +200,108 @@ pub struct GameFilter {
     pub eco: Option<String>,
     /// Exact result: "1-0" | "0-1" | "1/2-1/2" | "*".
     pub result: Option<String>,
+    /// Case-insensitive substring match on the event name (run 10).
+    pub event_substring: Option<String>,
+    /// Inclusive date lower bound: "YYYY", "YYYY.MM" or "YYYY.MM.DD".
+    pub date_min: Option<String>,
+    /// Inclusive date upper bound: "YYYY", "YYYY.MM" or "YYYY.MM.DD".
+    pub date_max: Option<String>,
+    /// Exact source kind: "personal" | "twic" | "online" | "other".
+    pub source_kind: Option<String>,
 }
+
+/* ---- PGN date-range filtering (run 10) ----
+ *
+ * PGN dates are "YYYY.MM.DD" strings where unknown components are "?"
+ * ("1992.??.??"). Filtering is lexicographic on the digits with wildcard
+ * components treated PERMISSIVELY: for the lower bound every '?' is read
+ * as '9' (the latest the date could be), for the upper bound as '0' (the
+ * earliest), so a game matches when its date COULD fall inside the range
+ * given its known parts. Games with no date at all, or a fully-unknown
+ * year ("????.…"), are excluded whenever a date filter is set — they can
+ * never confirm the range. */
+
+/// Validate a user-typed date bound. Accepts YYYY, YYYY.MM, YYYY.MM.DD.
+/// Returns the components (year, month?, day?).
+fn parse_date_bound(s: &str) -> Result<(u16, Option<u8>, Option<u8>), String> {
+    let bad = || format!("bad date bound {s:?} (use YYYY, YYYY.MM or YYYY.MM.DD)");
+    let mut parts = s.split('.');
+    let year: u16 = parts
+        .next()
+        .filter(|y| y.len() == 4)
+        .and_then(|y| y.parse().ok())
+        .ok_or_else(bad)?;
+    let month: Option<u8> = match parts.next() {
+        None => None,
+        Some(m) if m.len() == 2 => Some(m.parse().map_err(|_| bad())?),
+        Some(_) => return Err(bad()),
+    };
+    let day: Option<u8> = match parts.next() {
+        None => None,
+        Some(d) if d.len() == 2 => Some(d.parse().map_err(|_| bad())?),
+        Some(_) => return Err(bad()),
+    };
+    if parts.next().is_some() {
+        return Err(bad());
+    }
+    if let Some(m) = month {
+        if !(1..=12).contains(&m) {
+            return Err(bad());
+        }
+    }
+    if let Some(d) = day {
+        if !(1..=31).contains(&d) {
+            return Err(bad());
+        }
+    }
+    Ok((year, month, day))
+}
+
+/// Normalize a MIN bound: kept as typed ("1992" compares as a prefix, so
+/// any 1992 date sorts at or above it).
+pub(crate) fn normalize_date_min(s: &str) -> Result<String, String> {
+    parse_date_bound(s)?;
+    Ok(s.to_string())
+}
+
+/// Normalize a MAX bound: missing components pad HIGH ("1992" →
+/// "1992.99.99") so the bound covers the whole typed period.
+pub(crate) fn normalize_date_max(s: &str) -> Result<String, String> {
+    let (_, month, day) = parse_date_bound(s)?;
+    let mut out = s.to_string();
+    if month.is_none() {
+        out.push_str(".99");
+    }
+    if day.is_none() {
+        out.push_str(".99");
+    }
+    Ok(out)
+}
+
+/// Pure date-range check mirroring the SQL predicate (used by the
+/// position-search result filter, which runs over already-fetched hits).
+pub(crate) fn date_in_range(date: Option<&str>, min: Option<&str>, max: Option<&str>) -> bool {
+    if min.is_none() && max.is_none() {
+        return true;
+    }
+    let Some(date) = date else { return false };
+    if date.is_empty() || date.starts_with('?') {
+        return false; // year unknown: can never confirm the range
+    }
+    if let Some(min) = min {
+        if date.replace('?', "9").as_str() < min {
+            return false;
+        }
+    }
+    if let Some(max) = max {
+        if date.replace('?', "0").as_str() > max {
+            return false;
+        }
+    }
+    true
+}
+
+const SOURCE_KINDS: [&str; 4] = ["personal", "twic", "online", "other"];
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -241,7 +342,15 @@ const LIST_WHERE: &str = "WHERE (?1 IS NULL
              OR wp.name LIKE '%' || ?1 || '%'
              OR bp.name LIKE '%' || ?1 || '%')
         AND (?2 IS NULL OR g.eco LIKE ?2 || '%')
-        AND (?3 IS NULL OR g.result = ?3)";
+        AND (?3 IS NULL OR g.result = ?3)
+        AND (?4 IS NULL OR e.name LIKE '%' || ?4 || '%')
+        AND (?5 IS NULL OR (g.date IS NOT NULL
+             AND substr(g.date, 1, 1) != '?'
+             AND replace(g.date, '?', '9') >= ?5))
+        AND (?6 IS NULL OR (g.date IS NOT NULL
+             AND substr(g.date, 1, 1) != '?'
+             AND replace(g.date, '?', '0') <= ?6))
+        AND (?7 IS NULL OR s.kind = ?7)";
 
 pub(crate) fn list_games_impl(
     conn: &Connection,
@@ -249,30 +358,46 @@ pub(crate) fn list_games_impl(
     offset: i64,
     limit: i64,
 ) -> Result<GameList, String> {
-    let player = filter
-        .player_substring
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
-    let eco = filter
-        .eco
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let clean = |s: &Option<String>| {
+        s.as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let player = clean(&filter.player_substring);
+    let eco = clean(&filter.eco);
     let result = filter.result.as_deref().map(result_code).transpose()?;
+    let event = clean(&filter.event_substring);
+    let date_min = clean(&filter.date_min)
+        .map(|s| normalize_date_min(&s))
+        .transpose()?;
+    let date_max = clean(&filter.date_max)
+        .map(|s| normalize_date_max(&s))
+        .transpose()?;
+    let source_kind = clean(&filter.source_kind);
+    if let Some(k) = source_kind.as_deref() {
+        if !SOURCE_KINDS.contains(&k) {
+            return Err(format!("unknown source kind {k:?}"));
+        }
+    }
     let limit = limit.clamp(1, 500);
     let offset = offset.max(0);
 
     let count_sql = format!(
         "SELECT COUNT(*)
          FROM games g
+         JOIN sources s ON s.id = g.source_id
          LEFT JOIN players wp ON wp.id = g.white_id
          LEFT JOIN players bp ON bp.id = g.black_id
+         LEFT JOIN events e ON e.id = g.event_id
          {LIST_WHERE}"
     );
+    let filter_params = rusqlite::params![
+        player, eco, result, event, date_min, date_max, source_kind
+    ];
     let total: i64 = conn
         .prepare_cached(&count_sql)
-        .and_then(|mut stmt| stmt.query_row(rusqlite::params![player, eco, result], |r| r.get(0)))
+        .and_then(|mut stmt| stmt.query_row(filter_params, |r| r.get(0)))
         .map_err(|e| e.to_string())?;
 
     // The list-row extras (source tag, ⑂ dup flag, analysis presence) ride
@@ -298,12 +423,14 @@ pub(crate) fn list_games_impl(
          LEFT JOIN events e ON e.id = g.event_id
          {LIST_WHERE}
          ORDER BY g.id DESC
-         LIMIT ?4 OFFSET ?5"
+         LIMIT ?8 OFFSET ?9"
     );
     let mut stmt = conn.prepare_cached(&rows_sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(
-            rusqlite::params![player, eco, result, limit, offset],
+            rusqlite::params![
+                player, eco, result, event, date_min, date_max, source_kind, limit, offset
+            ],
             |row| {
                 let has_fresh: bool = row.get(13)?;
                 let has_legacy: bool = row.get(14)?;
@@ -540,11 +667,92 @@ pub struct GameAtRow {
     pub id: i64,
     pub white: String,
     pub black: String,
+    pub white_elo: Option<i64>,
+    pub black_elo: Option<i64>,
     pub event: String,
     pub date: String,
     pub result: &'static str,
     /// First ply at which the position occurred (1-based).
     pub ply: i64,
+}
+
+/// Result filters for `find_games_at` (run 10 — the position-search
+/// "Elo / Date / Result" chips). Elo bounds apply to the game's HIGHER
+/// rating (min = at least one player that strong, max = both at or
+/// below); games with no rating at all are excluded when an Elo bound is
+/// set. Dates follow the same permissive-wildcard rule as the game list.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GamesAtFilter {
+    pub min_elo: Option<i64>,
+    pub max_elo: Option<i64>,
+    pub date_min: Option<String>,
+    pub date_max: Option<String>,
+    /// Exact result: "1-0" | "0-1" | "1/2-1/2" | "*".
+    pub result: Option<String>,
+}
+
+/// Normalized, validated form of [`GamesAtFilter`].
+pub(crate) struct GamesAtBounds {
+    min_elo: Option<i64>,
+    max_elo: Option<i64>,
+    date_min: Option<String>,
+    date_max: Option<String>,
+    result: Option<&'static str>,
+}
+
+pub(crate) fn games_at_bounds(f: &GamesAtFilter) -> Result<GamesAtBounds, String> {
+    let clean = |s: &Option<String>| {
+        s.as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    // Result validation reuses result_code, then keeps the display form
+    // (hits carry the formatted result string).
+    let result = clean(&f.result)
+        .map(|s| result_code(&s))
+        .transpose()?
+        .map(result_str);
+    Ok(GamesAtBounds {
+        min_elo: f.min_elo,
+        max_elo: f.max_elo,
+        date_min: clean(&f.date_min)
+            .map(|s| normalize_date_min(&s))
+            .transpose()?,
+        date_max: clean(&f.date_max)
+            .map(|s| normalize_date_max(&s))
+            .transpose()?,
+        result,
+    })
+}
+
+pub(crate) fn games_at_matches(hit: &kibitz_db::query::GameHit, b: &GamesAtBounds) -> bool {
+    if b.min_elo.is_some() || b.max_elo.is_some() {
+        let strength = match (hit.white_elo, hit.black_elo) {
+            (Some(w), Some(bk)) => Some(w.max(bk)),
+            (Some(w), None) => Some(w),
+            (None, Some(bk)) => Some(bk),
+            (None, None) => None,
+        };
+        let Some(strength) = strength else {
+            return false; // unrated games can never confirm an Elo bound
+        };
+        if b.min_elo.is_some_and(|min| strength < min) {
+            return false;
+        }
+        if b.max_elo.is_some_and(|max| strength > max) {
+            return false;
+        }
+    }
+    if let Some(result) = b.result {
+        if hit.result != result {
+            return false;
+        }
+    }
+    // find_fen COALESCEs a missing date to "?", which date_in_range
+    // already treats as unknown-year (excluded under any date bound).
+    date_in_range(Some(&hit.date), b.date_min.as_deref(), b.date_max.as_deref())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -560,24 +768,38 @@ pub struct GamesAt {
 }
 
 /// Games whose mainline reached the position `fen` (position-hash lookup).
+/// `filter` (optional) narrows the results by Elo, date range and result;
+/// `total` counts the FILTERED hits.
 #[tauri::command]
-pub async fn find_games_at(state: State<'_, DbState>, fen: String) -> Result<GamesAt, String> {
+pub async fn find_games_at(
+    state: State<'_, DbState>,
+    fen: String,
+    filter: Option<GamesAtFilter>,
+) -> Result<GamesAt, String> {
+    let bounds = games_at_bounds(&filter.unwrap_or_default())?;
     with_conn(&state, |conn| {
         let (hits, elapsed) = kibitz_db::query::find_fen(conn, &fen).map_err(|e| e.to_string())?;
-        let total = hits.len() as i64;
-        let rows = hits
-            .into_iter()
-            .take(FIND_GAMES_MAX_ROWS)
-            .map(|h| GameAtRow {
-                id: h.game_id,
-                white: h.white,
-                black: h.black,
-                event: h.event,
-                date: h.date,
-                result: h.result,
-                ply: h.ply,
-            })
-            .collect();
+        let mut total = 0i64;
+        let mut rows = Vec::new();
+        for h in hits {
+            if !games_at_matches(&h, &bounds) {
+                continue;
+            }
+            total += 1;
+            if rows.len() < FIND_GAMES_MAX_ROWS {
+                rows.push(GameAtRow {
+                    id: h.game_id,
+                    white: h.white,
+                    black: h.black,
+                    white_elo: h.white_elo,
+                    black_elo: h.black_elo,
+                    event: h.event,
+                    date: h.date,
+                    result: h.result,
+                    ply: h.ply,
+                });
+            }
+        }
         Ok(GamesAt {
             total,
             rows,
@@ -833,6 +1055,182 @@ mod tests {
             ..Default::default()
         };
         assert!(list_games_impl(&conn, &filter, 0, 50).is_err());
+    }
+
+    /// Games with wildcard and missing dates for the date-range tests
+    /// (the base FIXTURE only dates the Opera game).
+    const DATED_FIXTURE: &str = r#"[Event "Wildcard Open"]
+[Date "1992.??.??"]
+[White "Fuzzy"]
+[Black "Dates"]
+[Result "1/2-1/2"]
+
+1. c4 e5 1/2-1/2
+
+[Event "Unknown Era"]
+[Date "????.??.??"]
+[White "No"]
+[Black "Year"]
+[Result "*"]
+
+1. b3 *
+"#;
+
+    #[test]
+    fn date_bounds_normalize_and_reject_garbage() {
+        assert_eq!(normalize_date_min("1992").unwrap(), "1992");
+        assert_eq!(normalize_date_min("1992.05").unwrap(), "1992.05");
+        assert_eq!(normalize_date_max("1992").unwrap(), "1992.99.99");
+        assert_eq!(normalize_date_max("1992.05").unwrap(), "1992.05.99");
+        assert_eq!(normalize_date_max("1992.05.10").unwrap(), "1992.05.10");
+        for bad in ["92", "1992-05-10", "1992.13", "1992.05.32", "1992.5", "x"] {
+            assert!(normalize_date_min(bad).is_err(), "{bad} should be rejected");
+            assert!(normalize_date_max(bad).is_err(), "{bad} should be rejected");
+        }
+    }
+
+    #[test]
+    fn date_in_range_is_permissive_on_wildcards_and_excludes_unknown_years() {
+        // Exact date inside/outside.
+        assert!(date_in_range(Some("1858.11.02"), Some("1858"), Some("1858.99.99")));
+        assert!(!date_in_range(Some("1858.11.02"), Some("1859"), None));
+        assert!(!date_in_range(Some("1858.11.02"), None, Some("1857.99.99")));
+        // Wildcard month/day: could fall inside any 1992 sub-range.
+        assert!(date_in_range(Some("1992.??.??"), Some("1992.06"), Some("1992.06.99")));
+        assert!(!date_in_range(Some("1992.??.??"), Some("1993"), None));
+        // Unknown year (or no date at all) never confirms a bound.
+        assert!(!date_in_range(Some("????.??.??"), Some("1000"), None));
+        assert!(!date_in_range(Some("?"), None, Some("3000.99.99")));
+        assert!(!date_in_range(None, Some("1000"), None));
+        // No bounds: everything passes, dated or not.
+        assert!(date_in_range(None, None, None));
+        assert!(date_in_range(Some("????.??.??"), None, None));
+    }
+
+    #[test]
+    fn list_games_filters_by_event_date_and_source_kind() {
+        let (_dir, conn) = fixture_db();
+        let source = SourceInfo {
+            name: "wildcards".into(),
+            origin: "unit test".into(),
+            license: "public domain".into(),
+            kind: SourceKind::Twic,
+        };
+        let st = import_pgn(&conn, &source, Cursor::new(DATED_FIXTURE)).unwrap();
+        assert_eq!(st.games_imported, 2, "failures: {:?}", st.failures);
+
+        // Event substring, case-insensitive.
+        let filter = GameFilter {
+            event_substring: Some("casual".into()),
+            ..Default::default()
+        };
+        let hits = list_games_impl(&conn, &filter, 0, 50).unwrap();
+        assert_eq!(hits.total, 1);
+        assert_eq!(hits.rows[0].white, "Morphy, Paul");
+
+        // Source kind.
+        let filter = GameFilter {
+            source_kind: Some("twic".into()),
+            ..Default::default()
+        };
+        assert_eq!(list_games_impl(&conn, &filter, 0, 50).unwrap().total, 2);
+        let filter = GameFilter {
+            source_kind: Some("bogus".into()),
+            ..Default::default()
+        };
+        assert!(list_games_impl(&conn, &filter, 0, 50).is_err());
+
+        // Date range: an exact 1858 game and the permissive 1992 wildcard;
+        // undated and unknown-year games never match a date filter.
+        let filter = GameFilter {
+            date_min: Some("1858".into()),
+            date_max: Some("1858".into()),
+            ..Default::default()
+        };
+        let hits = list_games_impl(&conn, &filter, 0, 50).unwrap();
+        assert_eq!(hits.total, 1);
+        assert_eq!(hits.rows[0].date.as_deref(), Some("1858.11.02"));
+
+        let filter = GameFilter {
+            date_min: Some("1992.06".into()),
+            date_max: Some("1992.06".into()),
+            ..Default::default()
+        };
+        let hits = list_games_impl(&conn, &filter, 0, 50).unwrap();
+        assert_eq!(hits.total, 1, "1992.??.?? COULD be June 1992 — permissive");
+        assert_eq!(hits.rows[0].white, "Fuzzy");
+
+        let filter = GameFilter {
+            date_min: Some("1000".into()),
+            ..Default::default()
+        };
+        let hits = list_games_impl(&conn, &filter, 0, 50).unwrap();
+        assert_eq!(
+            hits.total, 2,
+            "only the dated games — ????.??.?? and undated are excluded"
+        );
+
+        let filter = GameFilter {
+            date_min: Some("1992-06-01".into()),
+            ..Default::default()
+        };
+        assert!(list_games_impl(&conn, &filter, 0, 50).is_err(), "bad format");
+    }
+
+    #[test]
+    fn games_at_filter_bounds_elo_date_and_result() {
+        let (_dir, conn) = fixture_db();
+        let start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        let (hits, _) = kibitz_db::query::find_fen(&conn, start).unwrap();
+        assert_eq!(hits.len(), 3);
+
+        // Elo bounds apply to the game's higher rating; unrated games are
+        // excluded whenever an Elo bound is set.
+        let b = games_at_bounds(&GamesAtFilter {
+            min_elo: Some(2250),
+            ..Default::default()
+        })
+        .unwrap();
+        let kept: Vec<_> = hits.iter().filter(|h| games_at_matches(h, &b)).collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].white, "Someone");
+        let b = games_at_bounds(&GamesAtFilter {
+            max_elo: Some(2400),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(hits.iter().filter(|h| games_at_matches(h, &b)).count(), 1);
+
+        // Result.
+        let b = games_at_bounds(&GamesAtFilter {
+            result: Some("1-0".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        let kept: Vec<_> = hits.iter().filter(|h| games_at_matches(h, &b)).collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].white, "Morphy, Paul");
+        assert!(games_at_bounds(&GamesAtFilter {
+            result: Some("2-0".into()),
+            ..Default::default()
+        })
+        .is_err());
+
+        // Date: only the Opera game is dated; find_fen COALESCEs the
+        // others to "?", which any date bound excludes.
+        let b = games_at_bounds(&GamesAtFilter {
+            date_min: Some("1850".into()),
+            date_max: Some("1860".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        let kept: Vec<_> = hits.iter().filter(|h| games_at_matches(h, &b)).collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].date, "1858.11.02");
+
+        // No filter: everything passes.
+        let b = games_at_bounds(&GamesAtFilter::default()).unwrap();
+        assert_eq!(hits.iter().filter(|h| games_at_matches(h, &b)).count(), 3);
     }
 
     #[test]

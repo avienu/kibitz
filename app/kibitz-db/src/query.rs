@@ -10,6 +10,8 @@ pub struct GameHit {
     pub game_id: i64,
     pub white: String,
     pub black: String,
+    pub white_elo: Option<i64>,
+    pub black_elo: Option<i64>,
     pub event: String,
     pub date: String,
     pub result: &'static str,
@@ -46,6 +48,7 @@ pub fn find_fen(conn: &Connection, fen: &str) -> Result<(Vec<GameHit>, Duration)
     let mut stmt = conn.prepare_cached(
         "SELECT g.id,
                 COALESCE(wp.name, '?'), COALESCE(bp.name, '?'),
+                g.white_elo, g.black_elo,
                 COALESCE(e.name, '?'), COALESCE(g.date, '?'),
                 g.result, MIN(p.ply)
          FROM positions p
@@ -63,10 +66,12 @@ pub fn find_fen(conn: &Connection, fen: &str) -> Result<(Vec<GameHit>, Duration)
                 game_id: row.get(0)?,
                 white: row.get(1)?,
                 black: row.get(2)?,
-                event: row.get(3)?,
-                date: row.get(4)?,
-                result: result_str(row.get(5)?),
-                ply: row.get(6)?,
+                white_elo: row.get(3)?,
+                black_elo: row.get(4)?,
+                event: row.get(5)?,
+                date: row.get(6)?,
+                result: result_str(row.get(7)?),
+                ply: row.get(8)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;

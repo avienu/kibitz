@@ -4,9 +4,9 @@
  * progress cell promoted into the screen that owns the job), the games
  * table on the shared DataTable, and pagination.
  *
- * Honesty rules: only filters with a real backend field are active
- * (player / ECO / result); Event, Date and Source render as disabled
- * "soon" chips. The batch confirm dialog shows the measured-or-assumed
+ * Every filter chip is real since run 10: player / ECO / result plus
+ * event substring, date range (permissive on PGN "?" wildcards) and
+ * source kind. The batch confirm dialog shows the measured-or-assumed
  * `estimateBasis` string verbatim, and states that jobs are resumable.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -38,6 +38,7 @@ import {
   type JobsStatus,
 } from "./lib/db";
 import { fmtDurationMs, rangeReadout, sourceTagTone } from "./lib/home";
+import { dateBoundParam, dateRangeHint, SOURCE_KINDS } from "./lib/filters";
 
 const PAGE_SIZE = 50;
 
@@ -100,6 +101,10 @@ export default function DatabaseScreen({
   const [playerFilter, setPlayerFilter] = useState(() => dbScreenState().player);
   const [ecoFilter, setEcoFilter] = useState(() => dbScreenState().eco);
   const [resultFilter, setResultFilter] = useState(() => dbScreenState().result);
+  const [eventFilter, setEventFilter] = useState(() => dbScreenState().event);
+  const [dateMinFilter, setDateMinFilter] = useState(() => dbScreenState().dateMin);
+  const [dateMaxFilter, setDateMaxFilter] = useState(() => dbScreenState().dateMax);
+  const [sourceKindFilter, setSourceKindFilter] = useState(() => dbScreenState().sourceKind);
   const [page, setPage] = useState(() => dbScreenState().page);
   const [selectedId, setSelectedId] = useState<number | null>(
     () => dbScreenState().selectedGameId,
@@ -113,16 +118,34 @@ export default function DatabaseScreen({
       player: playerFilter,
       eco: ecoFilter,
       result: resultFilter,
+      event: eventFilter,
+      dateMin: dateMinFilter,
+      dateMax: dateMaxFilter,
+      sourceKind: sourceKindFilter,
       page,
       selectedGameId: selectedId,
     });
-  }, [playerFilter, ecoFilter, resultFilter, page, selectedId]);
+  }, [
+    playerFilter,
+    ecoFilter,
+    resultFilter,
+    eventFilter,
+    dateMinFilter,
+    dateMaxFilter,
+    sourceKindFilter,
+    page,
+    selectedId,
+  ]);
 
   const clearFilters = useCallback(() => {
     clearDbScreenState();
     setPlayerFilter("");
     setEcoFilter("");
     setResultFilter("");
+    setEventFilter("");
+    setDateMinFilter("");
+    setDateMaxFilter("");
+    setSourceKindFilter("");
     setPage(0);
     setSelectedId(null);
   }, []);
@@ -179,6 +202,12 @@ export default function DatabaseScreen({
             playerSubstring: playerFilter || undefined,
             eco: ecoFilter || undefined,
             result: resultFilter || undefined,
+            eventSubstring: eventFilter || undefined,
+            // Invalid/partial date bounds are held back until they parse
+            // (typing "19" must not error every keystroke).
+            dateMin: dateBoundParam(dateMinFilter),
+            dateMax: dateBoundParam(dateMaxFilter),
+            sourceKind: sourceKindFilter || undefined,
           },
           page * PAGE_SIZE,
           PAGE_SIZE,
@@ -195,7 +224,7 @@ export default function DatabaseScreen({
             setFiltering(false);
           });
       },
-      playerFilter || ecoFilter ? 250 : 0,
+      playerFilter || ecoFilter || eventFilter || dateMinFilter || dateMaxFilter ? 250 : 0,
     );
     return () => {
       cancelled = true;
@@ -204,7 +233,18 @@ export default function DatabaseScreen({
     // gamesCount (not the summary object): identity churns on every
     // shared-cadence refresh; refetch only when the count actually moved.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbOpen, gamesCount, playerFilter, ecoFilter, resultFilter, page]);
+  }, [
+    dbOpen,
+    gamesCount,
+    playerFilter,
+    ecoFilter,
+    resultFilter,
+    eventFilter,
+    dateMinFilter,
+    dateMaxFilter,
+    sourceKindFilter,
+    page,
+  ]);
 
   const loadById = useCallback(
     async (id: number) => {
@@ -390,12 +430,41 @@ export default function DatabaseScreen({
                   placeholder="Player — type to filter"
                   spellCheck={false}
                 />
-                <span className="filter-chip disabled" title="No backend field yet — coming with event filtering">
-                  Event · soon
-                </span>
-                <span className="filter-chip disabled" title="No backend field yet — coming with date filtering">
-                  Date · soon
-                </span>
+                <input
+                  className="filter-chip-input"
+                  type="text"
+                  value={eventFilter}
+                  onChange={(e) => {
+                    setEventFilter(e.target.value);
+                    setPage(0);
+                  }}
+                  placeholder="Event"
+                  spellCheck={false}
+                />
+                <input
+                  className="filter-chip-input date"
+                  type="text"
+                  value={dateMinFilter}
+                  onChange={(e) => {
+                    setDateMinFilter(e.target.value);
+                    setPage(0);
+                  }}
+                  placeholder="From YYYY[.MM[.DD]]"
+                  title="Inclusive lower date bound. PGN wildcard dates (1992.??.??) match any range they could fall in; undated games are excluded."
+                  spellCheck={false}
+                />
+                <input
+                  className="filter-chip-input date"
+                  type="text"
+                  value={dateMaxFilter}
+                  onChange={(e) => {
+                    setDateMaxFilter(e.target.value);
+                    setPage(0);
+                  }}
+                  placeholder="To YYYY[.MM[.DD]]"
+                  title="Inclusive upper date bound"
+                  spellCheck={false}
+                />
                 <input
                   className="filter-chip-input eco"
                   type="text"
@@ -422,13 +491,30 @@ export default function DatabaseScreen({
                   <option value="1/2-1/2">½-½</option>
                   <option value="*">*</option>
                 </select>
-                <span className="filter-chip disabled" title="No backend field yet — coming with source filtering">
-                  Source · soon
-                </span>
+                <select
+                  className="filter-chip-select"
+                  value={sourceKindFilter}
+                  onChange={(e) => {
+                    setSourceKindFilter(e.target.value);
+                    setPage(0);
+                  }}
+                  title="Provenance kind of the game's source"
+                >
+                  <option value="">Source</option>
+                  {SOURCE_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
                 {hasActiveFilters({
                   player: playerFilter,
                   eco: ecoFilter,
                   result: resultFilter,
+                  event: eventFilter,
+                  dateMin: dateMinFilter,
+                  dateMax: dateMaxFilter,
+                  sourceKind: sourceKindFilter,
                   page,
                   scrollTop: 0,
                   selectedGameId: null,
@@ -450,6 +536,9 @@ export default function DatabaseScreen({
                   </span>
                 )}
               </div>
+              {dateRangeHint(dateMinFilter, dateMaxFilter) && (
+                <div className="filter-hint">{dateRangeHint(dateMinFilter, dateMaxFilter)}</div>
+              )}
 
               {batchWorking && (
                 <div className="inline-job-row">
