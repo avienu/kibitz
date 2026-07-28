@@ -116,7 +116,7 @@ fn update_progress(slot: &Mutex<Option<NetProgress>>, f: impl FnOnce(&mut NetPro
 
 /// Path of the open database (so workers can open their own connection,
 /// leaving the UI connection free for polling — same trick as `run_jobs`).
-fn open_db_path(state: &State<'_, DbState>) -> Result<String, String> {
+pub(crate) fn open_db_path(state: &State<'_, DbState>) -> Result<String, String> {
     with_conn(state, |conn| {
         conn.query_row(
             "SELECT file FROM pragma_database_list WHERE name = 'main'",
@@ -127,7 +127,7 @@ fn open_db_path(state: &State<'_, DbState>) -> Result<String, String> {
     })
 }
 
-fn worker_conn(db_path: &str) -> Result<Connection, String> {
+pub(crate) fn worker_conn(db_path: &str) -> Result<Connection, String> {
     let conn = kibitz_db::db::open(Path::new(db_path)).map_err(|e| e.to_string())?;
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
@@ -367,7 +367,9 @@ fn twic_worker_impl(
 /// starts immediately; otherwise it waits its turn (the click is never
 /// discarded). The current progress snapshot advertises the waiting
 /// labels so every surface can say "queued behind …".
-fn spawn_net_worker(
+/// `pub(crate)` so lichess_play.rs can enqueue its finished-game import
+/// on the SAME serial worker (one import path, one refresh path).
+pub(crate) fn spawn_net_worker(
     worker: &State<'_, NetWorker>,
     initial: NetProgress,
     job: impl FnOnce(&AtomicBool, &Mutex<Option<NetProgress>>) -> Result<(), String> + Send + 'static,

@@ -45,6 +45,9 @@ kibitz-verbalize = { path = "../../crates/kibitz-verbalize" }
 # Keep these versions in lockstep with the root workspace so the types unify.
 rusqlite = { version = "0.32", features = ["bundled"] }
 cozy-chess = "0.3"
+# Lichess Board API client (src/lichess_play.rs): same blocking HTTP stack
+# kibitz-db's ingesters use — already in the tree, kept in lockstep.
+ureq = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
