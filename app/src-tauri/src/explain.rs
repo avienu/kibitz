@@ -16,13 +16,6 @@ pub struct Explanation {
     pub explanation: serde_json::Value,
 }
 
-pub(crate) fn explain_position_impl(
-    fen: &str,
-    voice: kibitz_verbalize::Voice,
-) -> Result<Explanation, String> {
-    explain_position_ctx(fen, voice, None)
-}
-
 /// Like [`explain_position_impl`], optionally with last-move context
 /// (`prev_fen` + the SAN just played) so the prose gates can tell a
 /// pending recapture from a real hang.
@@ -86,7 +79,7 @@ mod tests {
         use kibitz_verbalize::Voice;
         // Position after 1.e4 e5 2.Nf3 — legal, quiet.
         const FEN: &str = "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
-        let e = explain_position_impl(FEN, Voice::default()).unwrap();
+        let e = explain_position_ctx(FEN, Voice::default(), None).unwrap();
         assert!(!e.prose.is_empty());
         assert_eq!(
             e.record["schema_version"],
@@ -97,12 +90,12 @@ mod tests {
 
         // The default voice is Coach; Neutral is selectable and both
         // voices describe the same record.
-        let coach = explain_position_impl(FEN, Voice::Coach).unwrap();
-        let neutral = explain_position_impl(FEN, Voice::Neutral).unwrap();
+        let coach = explain_position_ctx(FEN, Voice::Coach, None).unwrap();
+        let neutral = explain_position_ctx(FEN, Voice::Neutral, None).unwrap();
         assert_eq!(e.prose, coach.prose);
         assert_eq!(coach.record, neutral.record);
 
-        assert!(explain_position_impl("not a fen", Voice::default()).is_err());
+        assert!(explain_position_ctx("not a fen", Voice::default(), None).is_err());
 
         // The explanation contract rides along: dual-voice headline and
         // per-block evidence, independent of the requested prose voice.
