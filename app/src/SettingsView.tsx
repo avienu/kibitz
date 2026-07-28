@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import ScreenHeader from "./shell/ScreenHeader";
+import LichessSection from "./settings/LichessSection";
 import UpdatesSettings from "./UpdatesSettings";
 import {
   batchEstimate,
@@ -427,6 +428,9 @@ export default function SettingsView({
             />
             {commitNote && <div className="set-note">{commitNote}</div>}
           </div>
+
+          {/* ---- LICHESS PLAY (own file: settings/LichessSection.tsx, run 10) ---- */}
+          <LichessSection />
 
           {/* ---- UPDATES (own file: UpdatesSettings.tsx, run-8 packaging) ---- */}
           <UpdatesSettings />

@@ -20,6 +20,7 @@ import GameView from "./GameView";
 import Help from "./Help";
 import ImportView from "./ImportView";
 import JobsView from "./JobsView";
+import PlayView from "./PlayView";
 import PrepView from "./PrepView";
 import SyncsView from "./SyncsView";
 import TwicView from "./TwicView";
@@ -151,6 +152,7 @@ const VIEW_TITLES: Record<ViewId, string> = {
   train: "Openings SRS",
   tactics: "Tactics",
   endgames: "Endgames",
+  play: "Play online",
   import: "Import PGN / SCID",
   twic: "TWIC ingest",
   syncs: "Account syncs",
@@ -884,7 +886,8 @@ export default function App() {
     view === "profile" ||
     view === "prep" ||
     view === "tactics" ||
-    view === "twic";
+    view === "twic" ||
+    view === "play";
 
   const pageView = (() => {
     switch (view) {
@@ -962,6 +965,8 @@ export default function App() {
         );
       case "endgames":
         return <EndgameView treatment={gv.boardTreatment} />;
+      case "play":
+        return <PlayView treatment={gv.boardTreatment} onNavigate={navigate} />;
       case "import":
         return <ImportView onLoad={doLoad} status={status} />;
       case "twic":
