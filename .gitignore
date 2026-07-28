@@ -11,3 +11,4 @@
 /testdata/syzygy/
 __pycache__/
 *.pyc
+.claude/
