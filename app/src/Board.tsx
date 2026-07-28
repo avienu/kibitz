@@ -4,6 +4,7 @@ import { Chessground } from "chessground";
 import type { Api } from "chessground/api";
 import type { DrawBrushes, DrawShape } from "chessground/draw";
 import type { Key } from "chessground/types";
+import { fenTurn } from "./lib/fen";
 import {
   EVIDENCE_COLORS,
   arrowPolygonPoints,
@@ -115,6 +116,7 @@ export default function Board({
     if (!elRef.current) return;
     apiRef.current = Chessground(elRef.current, {
       fen,
+      turnColor: fenTurn(fen),
       orientation: orientation ?? "white",
       coordinates: true,
       animation: { enabled: true, duration: 150 },
@@ -129,6 +131,9 @@ export default function Board({
         },
       },
       draggable: { deleteOnDropOff: !!free },
+      // The app never uses premoves; without this, a mismatched turnColor
+      // turns user moves into silently-queued premoves (purple squares).
+      premovable: { enabled: false },
       movable: {
         free: !!free,
         color: free ? "both" : undefined,
@@ -169,6 +174,7 @@ export default function Board({
   useEffect(() => {
     apiRef.current?.set({
       fen,
+      turnColor: fenTurn(fen),
       orientation: orientation ?? "white",
       lastMove: lastMove as Key[] | undefined,
       movable: free
