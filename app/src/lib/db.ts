@@ -132,6 +132,35 @@ export function openDatabase(path: string): Promise<DbSummary> {
   return invoke<DbSummary>("open_database", { path });
 }
 
+/* ---- session restore (run 10): reopen where you were ---- */
+
+/** Database path remembered Rust-side on the last successful open. */
+export function lastDatabase(): Promise<string | null> {
+  return invoke<string | null>("last_database");
+}
+
+/** Opaque ui_session blob from the open db's meta table (lib/session.ts
+ * owns the schema). */
+export function uiSessionGet(): Promise<string | null> {
+  return invoke<string | null>("ui_session_get");
+}
+
+export function uiSessionSet(json: string): Promise<void> {
+  return invoke<void>("ui_session_set", { json });
+}
+
+/** Last-game pointer (id/ply/orientation) maintained by the game view;
+ * null when absent, corrupt, or pointing at a deleted game. */
+export interface LastGameMeta {
+  gameId: number;
+  ply: number;
+  flipped: boolean;
+  openedAt: string;
+}
+export function lastGameGet(): Promise<LastGameMeta | null> {
+  return invoke<LastGameMeta | null>("last_game_get");
+}
+
 /** Fresh summary counts for the open database — the SINGLE count source
  * every display shares (rail badge, Database header, list refetch). App
  * re-polls it on one cadence while a network sync runs so all counts

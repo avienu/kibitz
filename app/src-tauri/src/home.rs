@@ -147,7 +147,7 @@ pub async fn prep_state_set(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LastGameMeta {
+pub struct LastGameMeta {
     game_id: i64,
     ply: i64,
     /// Board orientation when the user left (resume restores it).
@@ -173,6 +173,30 @@ pub(crate) fn touch_last_game_impl(
         "last_game",
         Some(&serde_json::to_string(&meta).map_err(|e| e.to_string())?),
     )
+}
+
+/// Raw last-game pointer for session restore at launch (the Continue
+/// card uses the richer `home_summary`; this is the cheap direct read).
+/// Verifies the game still exists — a deleted game degrades to None.
+#[tauri::command]
+pub async fn last_game_get(
+    state: State<'_, crate::browse::DbState>,
+) -> Result<Option<LastGameMeta>, String> {
+    crate::browse::with_conn(&state, |conn| {
+        let Some(json) = meta_get(conn, "last_game")? else {
+            return Ok(None);
+        };
+        let Ok(meta) = serde_json::from_str::<LastGameMeta>(&json) else {
+            return Ok(None);
+        };
+        let exists: Option<i64> = conn
+            .query_row("SELECT id FROM games WHERE id = ?1", [meta.game_id], |r| {
+                r.get(0)
+            })
+            .optional()
+            .map_err(|e| e.to_string())?;
+        Ok(exists.map(|_| meta))
+    })
 }
 
 /// Record that the user is viewing `game_id` at `ply` (the UI calls this

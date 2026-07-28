@@ -23,6 +23,7 @@ pub mod home;
 mod identity;
 pub mod netops;
 pub mod prep;
+pub mod session;
 pub mod tactics;
 pub mod tokens;
 pub mod train;
@@ -196,6 +197,10 @@ pub fn run() {
             stop_analysis,
             browse::open_database,
             browse::db_summary,
+            session::last_database,
+            session::ui_session_get,
+            session::ui_session_set,
+            home::last_game_get,
             browse::list_games,
             browse::get_game,
             browse::opening_tree,

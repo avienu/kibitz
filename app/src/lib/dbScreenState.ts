@@ -2,9 +2,10 @@
  * Database screen session state (run-9 field report 1): the filter /
  * page / scroll / selection state of the Database screen, held in a
  * module-level store so it survives navigating away and back (the screen
- * unmounts on every view switch). Deliberately SESSION-scoped — unlike
- * the localStorage helpers in lib/db.ts this is never persisted, so a
- * restart starts clean.
+ * unmounts on every view switch). Since run 10 the snapshot is ALSO
+ * persisted across restarts via the ui_session meta blob (lib/session.ts)
+ * — App hydrates the store at launch and subscribes to change events to
+ * write it back.
  */
 
 export interface DbScreenState {
@@ -32,21 +33,41 @@ const INITIAL: DbScreenState = {
 };
 
 let current: DbScreenState = { ...INITIAL };
+const listeners = new Set<(s: DbScreenState) => void>();
+
+function notify() {
+  for (const fn of listeners) fn(current);
+}
 
 /** Current snapshot (read on mount to restore the screen). */
 export function dbScreenState(): DbScreenState {
   return current;
 }
 
+/** Subscribe to store changes (App persists them). Returns unsubscribe. */
+export function subscribeDbScreenState(fn: (s: DbScreenState) => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+/** Replace the whole snapshot (session restore at launch). Silent: the
+ * hydrated state is what was already persisted — echoing it back would
+ * just rewrite the same blob. */
+export function hydrateDbScreenState(s: DbScreenState): void {
+  current = { ...s };
+}
+
 /** Merge a partial update into the store; returns the new snapshot. */
 export function updateDbScreenState(patch: Partial<DbScreenState>): DbScreenState {
   current = { ...current, ...patch };
+  notify();
   return current;
 }
 
 /** The Clear affordance: back to a pristine screen. */
 export function clearDbScreenState(): DbScreenState {
   current = { ...INITIAL };
+  notify();
   return current;
 }
 

@@ -140,7 +140,11 @@ pub struct DbSummary {
 /// Refuses paths that do not exist (opening would silently create an
 /// empty database, which is never what a browser user wants).
 #[tauri::command]
-pub async fn open_database(state: State<'_, DbState>, path: String) -> Result<DbSummary, String> {
+pub async fn open_database(
+    app: tauri::AppHandle,
+    state: State<'_, DbState>,
+    path: String,
+) -> Result<DbSummary, String> {
     let resolved = resolve_db_path(&path)?;
     let conn = kibitz_db::db::open(&resolved).map_err(|e| e.to_string())?;
     // Wait out write locks held by worker connections (run_jobs, TWIC /
@@ -154,6 +158,9 @@ pub async fn open_database(state: State<'_, DbState>, path: String) -> Result<Db
         .lock()
         .map_err(|_| "db state poisoned".to_string())?;
     *guard = Some(conn);
+    // Session restore: remember this database for the next launch
+    // (best-effort — a failed write must never fail the open).
+    crate::session::remember_db(&app, &summary.path);
     Ok(summary)
 }
 

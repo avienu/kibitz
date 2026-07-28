@@ -42,6 +42,8 @@ import {
   getSavedDbPath,
   getSavedVoice,
   jobsStatus,
+  lastDatabase,
+  lastGameGet,
   openDatabase,
   repertoireMarks,
   runJobs,
@@ -50,6 +52,8 @@ import {
   touchLastGame,
   trainAddLine,
   trainSummary,
+  uiSessionGet,
+  uiSessionSet,
   updateGameTokens,
   type DbSummary,
   type GameDetail,
@@ -96,6 +100,8 @@ import {
 import type { PromoRole } from "./lib/promotion";
 import type { RepertoireMark } from "./lib/repMarks";
 import { viewKeyHints, type ViewId, type ViewParams } from "./lib/shell";
+import { dbScreenState, hydrateDbScreenState, subscribeDbScreenState } from "./lib/dbScreenState";
+import { hasDeepLinkOverride, parseSession, serializeSession } from "./lib/session";
 import { tacticsState as fetchTacticsState, type TacticsState } from "./lib/tactics";
 import { insertVariation, type JsonToken } from "./lib/tokens";
 
@@ -243,22 +249,57 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Auto-open the saved database so the shell shows real data at launch.
-    // A #db=<path> deep link opens that database instead (not persisted).
+    // Session restore (run 10): reopen the last database (remembered
+    // Rust-side, surviving webview cache clears; localStorage is the
+    // fallback), then land where the user was — screen, database-screen
+    // filters, and the open game at its exact ply and orientation.
+    // A #db=/#game=/#screen= deep link overrides restore (not persisted).
     const dbOverride = new URLSearchParams(window.location.hash.slice(1)).get("db");
-    openDatabase(dbOverride || getSavedDbPath())
-      .then((s) => {
-        setDbSummary(s);
-        refreshCounts();
-        getNarrationVoice()
-          .then((v) => dispatch({ type: "setVoice", voice: v }))
-          .catch(() => {});
-        // TWIC auto-download hook: quietly syncs NEW issues only when the
-        // user enabled the toggle (netops.rs; no-op otherwise).
-        twicAutoSyncCheck().catch(() => {});
-      })
-      .catch(() => {}); // no database yet — badges stay empty
+    const deepLinked = hasDeepLinkOverride(window.location.hash);
+    (async () => {
+      const remembered = dbOverride || (await lastDatabase().catch(() => null));
+      const s = await openDatabase(remembered || getSavedDbPath());
+      setDbSummary(s);
+      refreshCounts();
+      getNarrationVoice()
+        .then((v) => dispatch({ type: "setVoice", voice: v }))
+        .catch(() => {});
+      // TWIC auto-download hook: quietly syncs NEW issues only when the
+      // user enabled the toggle (netops.rs; no-op otherwise).
+      twicAutoSyncCheck().catch(() => {});
+      if (deepLinked) return; // deep links own the destination
+      const session = parseSession(await uiSessionGet().catch(() => null));
+      if (!session) return;
+      hydrateDbScreenState(session.dbScreen);
+      if (session.view === "game") {
+        const lg = await lastGameGet().catch(() => null);
+        // Exact restore: the saved ply, not the resume heuristic.
+        if (lg) await loadDbGameAtRef.current(lg.gameId, lg.ply, lg.flipped, false);
+        else setView("home");
+      } else {
+        setView(session.view);
+      }
+    })().catch(() => {}); // no database yet — badges stay empty
   }, [refreshCounts]);
+
+  // Persist the ui_session blob: on screen change and on database-screen
+  // store changes, debounced — a meta write per keystroke would thrash.
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const sessionWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistSession = useCallback((v: ViewId) => {
+    if (sessionWriteTimer.current) clearTimeout(sessionWriteTimer.current);
+    sessionWriteTimer.current = setTimeout(() => {
+      uiSessionSet(serializeSession(v, dbScreenState())).catch(() => {});
+    }, 600);
+  }, []);
+  useEffect(() => {
+    if (dbSummary) persistSession(view);
+  }, [view, dbSummary, persistSession]);
+  useEffect(() => {
+    const unsub = subscribeDbScreenState(() => persistSession(viewRef.current));
+    return unsub;
+  }, [persistSession]);
 
   useEffect(() => {
     // Counts go stale while training; refresh on every view switch.
@@ -453,6 +494,10 @@ export default function App() {
     },
     [loadDbGame],
   );
+  // Session restore runs in the boot effect, textually above this
+  // definition — the ref bridges the ordering.
+  const loadDbGameAtRef = useRef(loadDbGameAt);
+  loadDbGameAtRef.current = loadDbGameAt;
 
   // Deep link: #game=123&ply=24&theme=light&treatment=instrument&voice=neutral
   // &screen=database — applies once after the database opens. Handy for
