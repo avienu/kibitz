@@ -136,10 +136,12 @@ export default function GameView({
 
   /* ---- live analysis (run-8): explicit toggle, go-infinite, hard stop ---- */
   const [live, setLive] = useState(liveInitial);
-  // Each info payload is stamped with the FEN being searched when it
-  // arrived, so a stale PV/eval from the previous position is never
-  // rendered against the new one (it would flip the score's sign and
-  // produce an illegal SAN line).
+  // Each info payload arrives stamped (by the backend) with the FEN the
+  // search was STARTED on, so a stale PV/eval from the previous position
+  // is never rendered against the new one — it would flip the score's
+  // sign (audit 2026-07 #5) and produce an illegal SAN line. Stamping
+  // client-side with "the fen we are currently searching" is NOT enough:
+  // infos from a just-stopped search keep streaming after a restart.
   const [liveInfo, setLiveInfo] = useState<{ info: EngineInfo; fen: string } | null>(null);
   const liveRef = useRef(live);
   liveRef.current = live;
@@ -158,11 +160,12 @@ export default function GameView({
     liveDispatch({ type: "fenChanged", fen });
   }, [fen, liveDispatch]);
   useEffect(() => {
-    // Streamed PV/eval while live only.
+    // Streamed PV/eval while live only, attributed to the fen the search
+    // actually ran on (the event's own stamp — see the note above).
     let un: (() => void) | undefined;
     onEngineInfo((info) => {
-      if (liveRef.current.on && liveRef.current.searching) {
-        setLiveInfo({ info, fen: liveRef.current.searching });
+      if (liveRef.current.on && info.fen) {
+        setLiveInfo({ info, fen: info.fen });
       }
     }).then((u) => {
       un = u;

@@ -21,6 +21,17 @@ describe("formatScore", () => {
   it("falls back when no score present", () => {
     expect(formatScore({}, START)).toBe("…");
   });
+
+  it("audit #5: a Black-to-move UCI cp score displays white-relative", () => {
+    // Stockfish reports side-to-move POV: at a Black-to-move position
+    // where White is winning by 2.58, the engine says cp -258 (bad for
+    // Black). The strip — and the ENGINE tag written by Add-as-variation,
+    // which uses the same formatter on the same info — must show +2.58,
+    // matching the white-relative stored eval next to it (+2.5-ish).
+    expect(formatScore({ scoreCp: -258 }, BLACK_TO_MOVE)).toBe("+2.58");
+    // The same white-relative truth at a White-to-move position: cp +258.
+    expect(formatScore({ scoreCp: 258 }, START)).toBe("+2.58");
+  });
 });
 
 describe("pvToSan", () => {

@@ -46,6 +46,20 @@ pub struct EngineState {
     stop: std::sync::Mutex<Option<StopHandle>>,
 }
 
+/// Streamed `engine-info` payload: the parsed UCI info line PLUS the FEN
+/// of the position the search was started on. The frontend must attribute
+/// every eval/PV to this fen — never to "whatever position is currently
+/// shown" — otherwise infos still streaming from a just-stopped search get
+/// stamped with the new position and the score renders with a flipped
+/// sign (audit 2026-07 #5).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InfoPayload {
+    fen: String,
+    #[serde(flatten)]
+    info: uci::UciInfo,
+}
+
 /// Terminal event payload for an analysis run (`engine-done`).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,11 +157,18 @@ async fn run_search(
         *slot = Some(engine);
     }
     let engine = slot.as_mut().expect("engine just ensured");
+    let searched_fen = fen.clone();
     let result = engine
         .analyze(&UciPosition::Fen(fen), nodes, |info| {
             // Skip currmove/progress lines that carry no evaluation.
             if info.has_score() {
-                let _ = app.emit("engine-info", info);
+                let _ = app.emit(
+                    "engine-info",
+                    InfoPayload {
+                        fen: searched_fen.clone(),
+                        info,
+                    },
+                );
             }
         })
         .await;
@@ -244,4 +265,31 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Audit 2026-07 #5: every streamed info carries the searched FEN so
+    /// the frontend can attribute the (side-to-move POV) score to the
+    /// right position; the score itself passes through unflipped.
+    #[test]
+    fn info_payload_carries_searched_fen_with_flattened_info() {
+        let fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
+        let payload = InfoPayload {
+            fen: fen.to_string(),
+            info: uci::UciInfo {
+                depth: Some(20),
+                score_cp: Some(-258),
+                ..Default::default()
+            },
+        };
+        let v = serde_json::to_value(&payload).expect("serializes");
+        assert_eq!(v["fen"], fen);
+        // Flattened camelCase fields — the TS EngineInfo contract.
+        assert_eq!(v["depth"], 20);
+        assert_eq!(v["scoreCp"], -258);
+        assert!(v.get("scoreMate").is_none());
+    }
 }
