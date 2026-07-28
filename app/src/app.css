@@ -4535,3 +4535,41 @@ button.mv-var-line:hover {
 .mv-var.previewing {
   box-shadow: inset 0 0 0 1px var(--accent), inset 2px 0 0 var(--accent);
 }
+
+/* ---- Play online (run 10, lichess Board API) ---------------------------- */
+.play-page { display: flex; flex-direction: column; gap: 14px; max-width: 1080px; }
+.play-fairplay {
+  font: 500 12px/1.5 "Public Sans", sans-serif;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--panel);
+}
+.play-note { font: 500 12px "JetBrains Mono", monospace; color: var(--accent); }
+.play-columns { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.play-board-col { display: flex; flex-direction: column; gap: 8px; }
+.play-side-col { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 300px; }
+.play-player {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font: 600 13px "Public Sans", sans-serif; color: var(--tx);
+  padding: 2px 4px; border-radius: 4px;
+}
+.play-player.to-move { background: var(--panel2); }
+.play-clock { font: 700 15px "JetBrains Mono", monospace; }
+.play-player.to-move .play-clock { color: var(--accent); }
+.play-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.play-result { font: 600 12.5px/1.5 "Public Sans", sans-serif; color: var(--good); }
+.play-moves { font: 500 11.5px/1.6 "JetBrains Mono", monospace; color: var(--dim); max-width: 560px; }
+.play-empty { font: 400 12.5px/1.55 "Public Sans", sans-serif; color: var(--dim);
+  border: 1px dashed var(--line); border-radius: 8px; padding: 32px 24px; min-width: 320px; }
+.play-seek-modes { display: flex; gap: 16px; font: 500 12px "Public Sans", sans-serif; color: var(--tx); }
+.play-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.play-presets .btn-ghost.active { border-color: var(--accent); color: var(--accent); }
+.play-preset-speed { display: block; font: 500 9px "JetBrains Mono", monospace; color: var(--dim); }
+.play-ongoing-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  font: 500 12px "Public Sans", sans-serif; color: var(--tx);
+  border-top: 1px solid var(--line); padding-top: 8px;
+}

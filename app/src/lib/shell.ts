@@ -21,6 +21,7 @@ export type ViewId =
   | "train"
   | "tactics"
   | "endgames"
+  | "play"
   | "import"
   | "twic"
   | "syncs"
@@ -65,6 +66,7 @@ export const RAIL_GROUPS: RailGroup[] = [
       { id: "train", label: "Openings SRS", icon: "Sr" },
       { id: "tactics", label: "Tactics", icon: "Tc" },
       { id: "endgames", label: "Endgames", icon: "Eg" },
+      { id: "play", label: "Play online", icon: "Py" },
     ],
   },
   {

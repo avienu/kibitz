@@ -29,6 +29,7 @@
     <a href="#study-views">STUDY views</a>
     <a href="#coach-views">COACH views</a>
     <a href="#train-views">TRAIN views</a>
+    <a href="#play-online">Play online</a>
     <a href="#data-in-out-views">DATA IN / OUT views</a>
     <a href="#status-strip">Status strip</a>
     <a href="#settings">Settings</a>
@@ -257,6 +258,23 @@
 <p>Tablebases: the Syzygy directory resolves from the <code>KIBITZ_SYZYGY</code> environment variable, else by walking up to <code>testdata/syzygy</code>. The repo script</p>
 <pre><code>scripts/fetch_syzygy_test_files.sh</code></pre>
 <p>downloads the complete 3-man set (under 100 KB) — enough for the test suite, but most drills have more pieces and then fall back to the heuristic defender; point <code>KIBITZ_SYZYGY</code> at a 3-4-5-man set for tablebase-verified play across the whole curriculum.</p>
+<hr>
+<h2 id="play-online">Play online</h2>
+<p>Play rated or casual games on lichess without leaving Kibitz (rail: TRAIN → <strong>Play online</strong>), over the official lichess Board API. The loop is: seek → play on the standard board → the finished game <strong>imports automatically</strong> with full provenance and shows up on Home under "New since", feeding the same profile and tactics machinery as any other personal/online game.</p>
+<h3 id="connecting-your-account">Connecting your account</h3>
+<ol>
+<li>On lichess: <strong>Preferences → API access tokens → New personal access token</strong>, with the <strong>board:play</strong> scope (that one scope is enough).</li>
+<li>In Kibitz: <strong>Settings → LICHESS PLAY</strong>, paste the token, <strong>Save token</strong>.</li>
+</ol>
+<p>The token is a secret and is treated like one: it is validated against your lichess account, then stored in its own file in the app config directory with owner-only (0600) permissions — never in the database, never logged, and never shown again in full (Settings displays only "configured · ends in …XXXX" and the username it signed in as). <strong>Clear token</strong> deletes the file and stops all play streams.</p>
+<h3 id="time-controls-rapid-classical-correspondence-only">Time controls — rapid, classical, correspondence only</h3>
+<p>Lichess restricts third-party clients to <strong>rapid, classical and correspondence</strong> — no bullet or blitz. The seek card offers exactly that: realtime presets (10+0 up to 30+20, each labeled with its honest speed class) and correspondence with 1–14 days per move. A realtime seek keeps a connection open until an opponent is found (Cancel withdraws it); a correspondence seek is parked on lichess until someone joins.</p>
+<h3 id="playing">Playing</h3>
+<p>The game runs on the standard Kibitz board — your color at the bottom, promotion picker included. Clocks tick locally from the last server state and resync on every move. Buttons: <strong>Abort</strong> (before move two), <strong>Offer draw</strong> / <strong>Accept draw</strong> / <strong>Decline draw</strong>, and <strong>Resign</strong> (with a confirm step). Closing the app mid-game is safe — especially for correspondence: on relaunch the <strong>Ongoing games</strong> list (from your lichess account) lets you rejoin any game in progress, with the full move list restored from the stream.</p>
+<h3 id="fair-play-assistance-is-off-period">Fair play — assistance is off. Period.</h3>
+<p>While a lichess game is in progress <strong>no engine, no coach explanation, no live analysis and no suggestions are reachable from the play screen</strong> — the screen simply has none of those surfaces, and a visible notice says so. This is the lichess Terms of Service, and it is enforced structurally in Kibitz the same way the engine-off principle is (a regression test fails the build if an analysis surface is ever wired in). When the game finishes it is imported <strong>without</strong> any engine jobs; open it from Home or the Database afterwards and Annotate / Re-analyze it explicitly, like any other game.</p>
+<h3 id="import-details">Import details</h3>
+<p>Finished games import through the same machinery as account syncs: source kind "online", name <code>lichess play: &lt;username&gt; &lt;gameId&gt;</code>, the exact export URL as origin, and a license note. Duplicates are detected, so a game that later arrives again via a full Lichess account sync is linked, not duplicated.</p>
 <hr>
 <h2 id="data-in-out-views">DATA IN / OUT views</h2>
 <h3 id="import-pgn-scid">Import PGN / SCID</h3>

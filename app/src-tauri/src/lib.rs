@@ -21,6 +21,7 @@ pub mod endgame;
 pub mod explain;
 pub mod home;
 mod identity;
+pub mod lichess_play;
 pub mod netops;
 pub mod prep;
 pub mod session;
@@ -191,6 +192,7 @@ pub fn run() {
         .manage(dbops::JobsWorker::default())
         .manage(endgame::EndgameState::default())
         .manage(netops::NetWorker::default())
+        .manage(lichess_play::PlayState::default())
         .invoke_handler(tauri::generate_handler![
             resolve_engine_path,
             analyze_position,
@@ -267,7 +269,19 @@ pub fn run() {
             netops::sync_run,
             netops::net_progress,
             netops::net_cancel,
-            netops::rail_net_badges
+            netops::rail_net_badges,
+            lichess_play::lichess_token_set,
+            lichess_play::lichess_token_clear,
+            lichess_play::lichess_token_status,
+            lichess_play::lichess_play_start,
+            lichess_play::lichess_play_join,
+            lichess_play::lichess_play_move,
+            lichess_play::lichess_play_resign,
+            lichess_play::lichess_play_abort,
+            lichess_play::lichess_play_draw,
+            lichess_play::lichess_play_seek,
+            lichess_play::lichess_seek_cancel,
+            lichess_play::lichess_now_playing
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

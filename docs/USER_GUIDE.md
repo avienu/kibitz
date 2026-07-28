@@ -595,6 +595,71 @@ tablebase-verified play across the whole curriculum.
 
 ---
 
+## Play online
+
+Play rated or casual games on lichess without leaving Kibitz (rail:
+TRAIN → **Play online**), over the official lichess Board API. The loop
+is: seek → play on the standard board → the finished game **imports
+automatically** with full provenance and shows up on Home under "New
+since", feeding the same profile and tactics machinery as any other
+personal/online game.
+
+### Connecting your account
+
+1. On lichess: **Preferences → API access tokens → New personal access
+   token**, with the **board:play** scope (that one scope is enough).
+2. In Kibitz: **Settings → LICHESS PLAY**, paste the token, **Save
+   token**.
+
+The token is a secret and is treated like one: it is validated against
+your lichess account, then stored in its own file in the app config
+directory with owner-only (0600) permissions — never in the database,
+never logged, and never shown again in full (Settings displays only
+"configured · ends in …XXXX" and the username it signed in as). **Clear
+token** deletes the file and stops all play streams.
+
+### Time controls — rapid, classical, correspondence only
+
+Lichess restricts third-party clients to **rapid, classical and
+correspondence** — no bullet or blitz. The seek card offers exactly
+that: realtime presets (10+0 up to 30+20, each labeled with its honest
+speed class) and correspondence with 1–14 days per move. A realtime seek
+keeps a connection open until an opponent is found (Cancel withdraws
+it); a correspondence seek is parked on lichess until someone joins.
+
+### Playing
+
+The game runs on the standard Kibitz board — your color at the bottom,
+promotion picker included. Clocks tick locally from the last server
+state and resync on every move. Buttons: **Abort** (before move two),
+**Offer draw** / **Accept draw** / **Decline draw**, and **Resign**
+(with a confirm step). Closing the app mid-game is safe — especially
+for correspondence: on relaunch the **Ongoing games** list (from your
+lichess account) lets you rejoin any game in progress, with the full
+move list restored from the stream.
+
+### Fair play — assistance is off. Period.
+
+While a lichess game is in progress **no engine, no coach explanation,
+no live analysis and no suggestions are reachable from the play
+screen** — the screen simply has none of those surfaces, and a visible
+notice says so. This is the lichess Terms of Service, and it is enforced
+structurally in Kibitz the same way the engine-off principle is (a
+regression test fails the build if an analysis surface is ever wired
+in). When the game finishes it is imported **without** any engine jobs;
+open it from Home or the Database afterwards and Annotate / Re-analyze
+it explicitly, like any other game.
+
+### Import details
+
+Finished games import through the same machinery as account syncs:
+source kind "online", name `lichess play: <username> <gameId>`, the
+exact export URL as origin, and a license note. Duplicates are detected,
+so a game that later arrives again via a full Lichess account sync is
+linked, not duplicated.
+
+---
+
 ## DATA IN / OUT views
 
 ### Import PGN / SCID
