@@ -28,6 +28,7 @@ import { usePromotionPicker } from "./PromotionPicker";
 import SettingsView from "./SettingsView";
 import TacticsView from "./TacticsView";
 import TrainView from "./TrainView";
+import TriageView from "./TriageView";
 import NavRail from "./shell/NavRail";
 import StatusStrip from "./shell/StatusStrip";
 import type { AnalysisRow } from "./lib/analyses";
@@ -149,6 +150,7 @@ const VIEW_TITLES: Record<ViewId, string> = {
   profile: "Player profile",
   prep: "Opponent prep",
   train: "Openings SRS",
+  triage: "Opening triage",
   tactics: "Tactics",
   endgames: "Endgames",
   import: "Import PGN / SCID",
@@ -530,6 +532,7 @@ export default function App() {
         prep: "prep",
         tactics: "tactics",
         srs: "train",
+        triage: "triage",
         endgames: "endgames",
         settings: "settings",
       };
@@ -879,6 +882,7 @@ export default function App() {
     view === "tree" ||
     view === "search" ||
     view === "train" ||
+    view === "triage" ||
     view === "endgames" ||
     view === "settings" ||
     view === "profile" ||
@@ -949,6 +953,14 @@ export default function App() {
         );
       case "train":
         return <TrainView onSummary={setTrainSum} treatment={gv.boardTreatment} />;
+      case "triage":
+        return (
+          <TriageView
+            treatment={gv.boardTreatment}
+            onOpenGameAt={(id, ply) => void loadDbGameAt(id, ply)}
+            onCountsChanged={refreshCounts}
+          />
+        );
       case "tactics":
         return (
           <TacticsView

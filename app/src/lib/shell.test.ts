@@ -32,6 +32,7 @@ describe("rail structure", () => {
       "profile",
       "prep",
       "train",
+      "triage",
       "tactics",
       "endgames",
       "import",

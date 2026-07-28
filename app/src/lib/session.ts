@@ -31,6 +31,7 @@ const VIEW_IDS: readonly ViewId[] = [
   "profile",
   "prep",
   "train",
+  "triage",
   "tactics",
   "endgames",
   "import",

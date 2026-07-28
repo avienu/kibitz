@@ -4535,3 +4535,181 @@ button.mv-var-line:hover {
 .mv-var.previewing {
   box-shadow: inset 0 0 0 1px var(--accent), inset 2px 0 0 var(--accent);
 }
+
+/* ---- Opening triage (triage2) --------------------------------------------- */
+
+.triage2 {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.triage-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.triage-main {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+.triage-aside {
+  flex: 0 0 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  overflow-y: auto;
+  min-height: 0;
+}
+.triage-search-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.triage-search-row input {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  color: var(--tx);
+  font: 400 12.5px var(--font-ui);
+}
+.triage-summary {
+  margin-bottom: 12px;
+  font: 500 12px var(--font-ui);
+  color: var(--dim);
+}
+.triage-strip-title {
+  font: 700 10.5px var(--font-mono);
+  letter-spacing: 0.18em;
+  color: var(--faint);
+  margin: 14px 0 8px;
+}
+.triage-none {
+  font: 400 12px var(--font-ui);
+  color: var(--faint);
+  padding: 2px 0 6px;
+}
+.triage-section {
+  margin-bottom: 6px;
+}
+.triage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+  color: var(--tx);
+}
+.triage-row:hover {
+  background: var(--panel2);
+}
+.triage-row.sel {
+  background: var(--panel2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.triage-rank {
+  font: 700 11px var(--font-mono);
+  color: var(--faint);
+}
+.triage-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.triage-line {
+  font: 600 12.5px var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.triage-caption {
+  font: 400 11.5px var(--font-ui);
+  color: var(--dim);
+}
+.triage-count {
+  font: 700 12px var(--font-mono);
+  color: var(--accent);
+}
+.triage-aside-caption {
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  color: var(--faint);
+}
+.triage-detail-line {
+  font: 600 12.5px var(--font-mono);
+  overflow-wrap: break-word;
+}
+.triage-detail-caption {
+  margin-top: 2px;
+  font: 400 12px var(--font-ui);
+  color: var(--dim);
+}
+.triage-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.triage-example {
+  border: none;
+  background: none;
+  padding: 2px 0;
+  text-align: left;
+  font: 500 11.5px var(--font-ui);
+  color: var(--accent);
+  cursor: pointer;
+}
+.triage-example:hover {
+  text-decoration: underline;
+}
+.triage-ext-meta {
+  font: 400 11.5px var(--font-ui);
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+.triage-ext-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.triage-ext-eval {
+  flex: 0 0 48px;
+  font: 700 12px var(--font-mono);
+}
+.triage-ext-sans {
+  flex: 1;
+  min-width: 0;
+  font: 400 11.5px/1.5 var(--font-mono);
+  overflow-wrap: break-word;
+}
+.triage-ext-progress {
+  font: 400 12px var(--font-ui);
+  color: var(--dim);
+}
+.triage-adopt-msg {
+  margin-top: 6px;
+  font: 500 12px var(--font-ui);
+  color: var(--accent);
+}
+.triage-footnote {
+  margin: 10px 2px 0;
+  font: 400 12.5px/1.6 var(--font-prose);
+  color: var(--dim);
+  text-wrap: pretty;
+}
