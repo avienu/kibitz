@@ -44,17 +44,56 @@ fn result_code(s: &str) -> Result<i64, String> {
     }
 }
 
+/// True when an error string is SQLite's transient contention signal
+/// (SQLITE_BUSY "database is locked" / SQLITE_LOCKED "database table is
+/// locked"). String-level detection because every command maps
+/// `rusqlite::Error` to `String` at the boundary; the real-contention
+/// test below pins the match against rusqlite's actual message text.
+pub(crate) fn is_busy_msg(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("database is locked") || m.contains("database table is locked")
+}
+
+/// Backoff schedule for [`retry_busy`] (milliseconds between attempts).
+const BUSY_RETRY_DELAYS_MS: [u64; 3] = [50, 100, 250];
+
+/// Retry `f` when it fails with a busy/locked error (audit #2/#7): while
+/// a background import worker (TWIC, account syncs, jobs) commits a write
+/// transaction on its own connection, a read or meta write on the shared
+/// UI connection can surface SQLITE_BUSY once its `busy_timeout` elapses.
+/// Those errors are transient — retry a few times with short sleeps
+/// instead of failing the command. Real errors pass through untouched on
+/// the first attempt. `sleep` is injectable so tests assert the schedule
+/// without waiting.
+pub(crate) fn retry_busy<T>(
+    mut f: impl FnMut() -> Result<T, String>,
+    sleep: &mut dyn FnMut(std::time::Duration),
+) -> Result<T, String> {
+    let mut attempt = 0usize;
+    loop {
+        match f() {
+            Err(e) if is_busy_msg(&e) && attempt < BUSY_RETRY_DELAYS_MS.len() => {
+                sleep(std::time::Duration::from_millis(BUSY_RETRY_DELAYS_MS[attempt]));
+                attempt += 1;
+            }
+            other => return other,
+        }
+    }
+}
+
 /// Run `f` against the open connection, or fail with a clean message.
+/// Busy/locked failures are retried per [`retry_busy`] — a bulk import on
+/// a worker connection must never surface as a spurious command error.
 pub(crate) fn with_conn<T>(
     state: &State<'_, DbState>,
-    f: impl FnOnce(&Connection) -> Result<T, String>,
+    mut f: impl FnMut(&Connection) -> Result<T, String>,
 ) -> Result<T, String> {
     let guard = state
         .0
         .lock()
         .map_err(|_| "db state poisoned".to_string())?;
     match guard.as_ref() {
-        Some(conn) => f(conn),
+        Some(conn) => retry_busy(|| f(conn), &mut std::thread::sleep),
         None => Err("no database open (use Open first)".to_string()),
     }
 }
@@ -102,23 +141,45 @@ pub struct DbSummary {
 pub async fn open_database(state: State<'_, DbState>, path: String) -> Result<DbSummary, String> {
     let resolved = resolve_db_path(&path)?;
     let conn = kibitz_db::db::open(&resolved).map_err(|e| e.to_string())?;
-    // Tolerate short write locks from the run_jobs worker connection.
+    // Wait out write locks held by worker connections (run_jobs, TWIC /
+    // account syncs) for up to 5 s per statement. Locks held longer than
+    // that still error — with_conn's retry_busy layer absorbs those.
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
-    let stats = kibitz_db::query::stats(&conn).map_err(|e| e.to_string())?;
-    let summary = DbSummary {
-        games: stats.games,
-        players: stats.players,
-        positions: stats.positions,
-        sources: stats.sources,
-        path: resolved.display().to_string(),
-    };
+    let summary = db_summary_impl(&conn)?;
     let mut guard = state
         .0
         .lock()
         .map_err(|_| "db state poisoned".to_string())?;
     *guard = Some(conn);
     Ok(summary)
+}
+
+pub(crate) fn db_summary_impl(conn: &Connection) -> Result<DbSummary, String> {
+    let stats = kibitz_db::query::stats(conn).map_err(|e| e.to_string())?;
+    let path: String = conn
+        .query_row(
+            "SELECT file FROM pragma_database_list WHERE name = 'main'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(DbSummary {
+        games: stats.games,
+        players: stats.players,
+        positions: stats.positions,
+        sources: stats.sources,
+        path,
+    })
+}
+
+/// Fresh summary counts for the open database — the SINGLE source every
+/// game-count display consumes (rail badge, Database header, list-total
+/// refetch trigger). The frontend re-polls this on one cadence during
+/// network syncs so all counts move together (audit #8).
+#[tauri::command]
+pub async fn db_summary(state: State<'_, DbState>) -> Result<DbSummary, String> {
+    with_conn(&state, db_summary_impl)
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -590,6 +651,112 @@ mod tests {
         let st = import_pgn(&conn, &source, Cursor::new(FIXTURE)).unwrap();
         assert_eq!(st.games_imported, 3, "failures: {:?}", st.failures);
         (dir, conn)
+    }
+
+    #[test]
+    fn busy_errors_retry_with_the_documented_backoff_then_succeed() {
+        let mut calls = 0u32;
+        let mut slept: Vec<u64> = Vec::new();
+        let out = retry_busy(
+            || {
+                calls += 1;
+                if calls < 3 {
+                    Err("database is locked".to_string())
+                } else {
+                    Ok(42)
+                }
+            },
+            &mut |d| slept.push(d.as_millis() as u64),
+        );
+        assert_eq!(out.unwrap(), 42);
+        assert_eq!(calls, 3);
+        assert_eq!(slept, vec![50, 100], "one sleep per failed attempt");
+    }
+
+    #[test]
+    fn busy_retries_are_bounded_and_real_errors_never_retry() {
+        // Permanently busy: bounded attempts, then the error surfaces.
+        let mut calls = 0u32;
+        let out: Result<(), String> = retry_busy(
+            || {
+                calls += 1;
+                Err("database is locked".to_string())
+            },
+            &mut |_| {},
+        );
+        assert!(is_busy_msg(&out.unwrap_err()));
+        assert_eq!(calls, 1 + super::BUSY_RETRY_DELAYS_MS.len() as u32);
+
+        // A real error passes through on the first attempt.
+        let mut calls = 0u32;
+        let out: Result<(), String> = retry_busy(
+            || {
+                calls += 1;
+                Err("no game with id 7".to_string())
+            },
+            &mut |_| {},
+        );
+        assert_eq!(out.unwrap_err(), "no game with id 7");
+        assert_eq!(calls, 1);
+    }
+
+    /// Pins two things against REAL SQLite: (a) rusqlite's message text for
+    /// SQLITE_BUSY matches `is_busy_msg`, and (b) a command racing a write
+    /// transaction on another connection (the TWIC/jobs worker pattern)
+    /// succeeds via retry instead of failing (audit #2/#7).
+    #[test]
+    fn contended_write_lock_is_retried_until_the_writer_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.sqlite");
+        let writer = kibitz_db::db::open(&path).unwrap();
+        let reader = kibitz_db::db::open(&path).unwrap();
+        // No busy_timeout on `reader`: the first attempts fail immediately.
+
+        writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+        // Sanity: without retry the write fails with the busy message.
+        let direct = reader
+            .execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('x', '1')", [])
+            .map_err(|e| e.to_string())
+            .unwrap_err();
+        assert!(is_busy_msg(&direct), "unexpected message: {direct}");
+
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            writer.execute_batch("COMMIT").unwrap();
+        });
+        let out = retry_busy(
+            || {
+                reader
+                    .execute(
+                        "INSERT OR REPLACE INTO meta (key, value) VALUES ('x', '2')",
+                        [],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            },
+            &mut std::thread::sleep,
+        );
+        handle.join().unwrap();
+        assert!(out.is_ok(), "retry should outlast the writer: {out:?}");
+    }
+
+    #[test]
+    fn db_summary_reports_fresh_counts_and_the_open_path() {
+        let (_dir, conn) = fixture_db();
+        let s = db_summary_impl(&conn).unwrap();
+        assert_eq!(s.games, 3);
+        assert_eq!(s.sources, 1);
+        assert!(s.positions > 0);
+        assert!(s.path.ends_with("test.sqlite"), "{}", s.path);
+        // The counts are live: another import moves them (the single
+        // count source all displays share must never be a stale snapshot).
+        conn.execute(
+            "INSERT INTO sources (name, origin, license, kind)
+             VALUES ('extra', 'unit test', 'pd', 'twic')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(db_summary_impl(&conn).unwrap().sources, 2);
     }
 
     #[test]

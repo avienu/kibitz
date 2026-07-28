@@ -174,6 +174,7 @@ pub fn run() {
             analyze_position,
             stop_analysis,
             browse::open_database,
+            browse::db_summary,
             browse::list_games,
             browse::get_game,
             browse::opening_tree,

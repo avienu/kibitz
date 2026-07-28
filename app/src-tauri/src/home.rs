@@ -93,7 +93,10 @@ pub async fn commitment_set(
     label: Option<String>,
     opponent: Option<String>,
 ) -> Result<Commitment, String> {
-    with_conn(&state, |conn| commitment_set_impl(conn, label, opponent))
+    // Clones because with_conn's closure may be re-called on busy retry.
+    with_conn(&state, |conn| {
+        commitment_set_impl(conn, label.clone(), opponent.clone())
+    })
 }
 
 // ---------------------------------------------------------------------------
