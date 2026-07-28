@@ -2334,6 +2334,30 @@ button.strip-nudge:hover:not(:disabled) {
 .dbscreen {
   padding: 18px 24px 26px;
 }
+/* Skeleton shown while the first game-list query is in flight (it can
+   queue behind a bulk sync for seconds — never a bare void). */
+.db-skeleton {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.db-skeleton-row {
+  height: 16px;
+  margin: 10px 0;
+  border-radius: 4px;
+  background: var(--line);
+  opacity: 0.55;
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+.db-skeleton-row:nth-child(2n) {
+  width: 92%;
+}
+.db-skeleton-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--dim);
+}
 .filter-bar {
   display: flex;
   align-items: center;

@@ -3,12 +3,14 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HomeContent, type HomeData } from "./HomeView";
 import type { HomeSummary } from "./lib/db";
+import { utcWeekdayLocal } from "./lib/time";
 
 /** All-empty fixture: fresh database, nothing due, nothing cached. */
 const EMPTY_SUMMARY: HomeSummary = {
   lastGame: null,
   newGames: [],
   newGamesTotal: 0,
+  newGamesPersonalTotal: 0,
   findingsAvailable: false,
   findings: [],
   profilePlayer: null,
@@ -25,6 +27,7 @@ function renderHome(data: HomeData) {
     <HomeContent
       data={data}
       batchFraction={null}
+      netProgress={null}
       onNavigate={vi.fn()}
       onOpenGame={vi.fn()}
       now={FIXED_NOW}
@@ -71,6 +74,7 @@ describe("Home — degraded state (maintainer ruling: short honest list)", () =>
       <HomeContent
         data={{ summary: EMPTY_SUMMARY, commitment: null, prepState: [] }}
         batchFraction={null}
+        netProgress={null}
         onNavigate={onNavigate}
         onOpenGame={vi.fn()}
         now={FIXED_NOW}
@@ -142,6 +146,7 @@ describe("Home — honest numerals and navigation", () => {
       },
     ],
     newGamesTotal: 8,
+    newGamesPersonalTotal: 3,
   };
 
   it("shows the SRS due numeral but NEVER a tactics number (endless queue)", () => {
@@ -157,6 +162,7 @@ describe("Home — honest numerals and navigation", () => {
       <HomeContent
         data={{ summary, commitment: null, prepState: [] }}
         batchFraction={null}
+        netProgress={null}
         onNavigate={onNavigate}
         onOpenGame={vi.fn()}
         now={FIXED_NOW}
@@ -169,9 +175,42 @@ describe("Home — honest numerals and navigation", () => {
   it("new-game rows carry the source tag tone and the week label", () => {
     const { container, getByText } = renderHome({ summary, commitment: null, prepState: [] });
     expect(getByText("lichess").classList.contains("violet")).toBe(true);
-    // 2026-07-24 was a Friday.
-    expect(container.textContent).toContain("NEW SINCE FRIDAY");
-    expect(container.textContent).toContain("8 games this week");
+    // The label names the MACHINE-LOCAL weekday of the oldest import
+    // (audit #10) — assert via the same helper the view model uses.
+    const weekday = utcWeekdayLocal("2026-07-24 06:00:00")!.toUpperCase();
+    expect(container.textContent).toContain(`NEW SINCE ${weekday}`);
+    // "This week" counts only personal/online games; bulk arrivals are
+    // named separately (audit #11).
+    expect(container.textContent).toContain(
+      "3 personal/online games this week · plus 5 from bulk imports · showing latest",
+    );
+  });
+
+  it("Running panel reports an active network sync instead of 'engine is cold' (audit #11)", () => {
+    const { container } = render(
+      <HomeContent
+        data={{ summary, commitment: null, prepState: [] }}
+        batchFraction={null}
+        netProgress={{
+          kind: "twic-auto",
+          label: "TWIC auto-sync",
+          done: 2,
+          total: 5,
+          detail: "TWIC 1601: 4,102 games",
+          active: true,
+          error: null,
+          queued: [],
+        }}
+        onNavigate={vi.fn()}
+        onOpenGame={vi.fn()}
+        now={FIXED_NOW}
+      />,
+    );
+    expect(container.textContent).toContain("NETWORK");
+    expect(container.textContent).toContain("TWIC auto-sync · 2 / 5");
+    expect(container.textContent).not.toContain("Nothing is running — the engine is cold.");
+    // Honest about the engine while only the network works.
+    expect(container.textContent).toContain("the engine stays cold");
   });
 
   it("prep Go navigates to Prep with the typed opponent", () => {
@@ -180,6 +219,7 @@ describe("Home — honest numerals and navigation", () => {
       <HomeContent
         data={{ summary, commitment: null, prepState: [] }}
         batchFraction={null}
+        netProgress={null}
         onNavigate={onNavigate}
         onOpenGame={vi.fn()}
         now={FIXED_NOW}

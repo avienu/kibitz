@@ -15,6 +15,7 @@ import DataTable, { type DataTableColumn } from "./components/DataTable";
 import ScreenHeader from "./shell/ScreenHeader";
 import { findGamesAt, openingTree, type GamesAt, type TreeRow } from "./lib/db";
 import { gameFromSans, lastMoveAt } from "./lib/game";
+import { reachingEmptyCopy, treeEmptyCopy, treePhase } from "./lib/treeView";
 import type { BoardTreatment } from "./lib/evidence";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -61,7 +62,10 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
   const [line, setLine] = useState<string[]>([]);
   const [rows, setRows] = useState<TreeRow[]>([]);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
   const [gamesAt, setGamesAt] = useState<GamesAt | null>(null);
+  const [gamesAtLoading, setGamesAtLoading] = useState(false);
+  const [gamesAtError, setGamesAtError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // The displayed position is derived from the clicked-through line.
@@ -79,23 +83,40 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
   useEffect(() => {
     if (!dbOpen) return;
     let cancelled = false;
+    // Loading is a real, named state (audit #2): a pending query must
+    // never render the true-empty "No database moves…" copy, and a real
+    // error must render as an error — the two were indistinguishable.
+    setLoading(true);
+    setGamesAtLoading(true);
     openingTree(derived.fen)
       .then((t) => {
         if (cancelled) return;
         setRows(t.rows);
         setElapsedMs(t.elapsedMs);
         setError(null);
+        setLoading(false);
       })
       .catch((e) => {
         if (!cancelled) {
           setRows([]);
           setElapsedMs(null);
           setError(String(e));
+          setLoading(false);
         }
       });
     findGamesAt(derived.fen)
-      .then((g) => !cancelled && setGamesAt(g))
-      .catch(() => !cancelled && setGamesAt(null));
+      .then((g) => {
+        if (cancelled) return;
+        setGamesAt(g);
+        setGamesAtError(null);
+        setGamesAtLoading(false);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setGamesAt(null);
+        setGamesAtError(String(e));
+        setGamesAtLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -154,14 +175,14 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
             )}
             <span className="tree-line-hint">follows the board</span>
           </div>
-          {error && <div className="error">{error}</div>}
+          {error && <div className="error">Opening tree failed: {error}</div>}
           <DataTable
             columns={columns}
             rows={rows}
             gridTemplate={GRID}
             rowKey={(r) => r.san}
             onRowClick={(r) => setLine([...line, r.san.replace(/[!?]+$/, "")])}
-            empty={dbOpen ? "No database moves from this position." : "Open a database first."}
+            empty={treeEmptyCopy(treePhase(dbOpen, loading, error))}
           />
           <p className="tree-prose">
             Transposition-aware: these counts merge every move order that reaches this
@@ -196,7 +217,9 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
                 </div>
               </>
             ) : (
-              <p className="tree-prose">No games reach this exact position.</p>
+              <p className="tree-prose">
+                {reachingEmptyCopy(treePhase(dbOpen, gamesAtLoading, gamesAtError))}
+              </p>
             )}
           </div>
         </aside>

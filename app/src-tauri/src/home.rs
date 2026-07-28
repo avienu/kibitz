@@ -93,7 +93,10 @@ pub async fn commitment_set(
     label: Option<String>,
     opponent: Option<String>,
 ) -> Result<Commitment, String> {
-    with_conn(&state, |conn| commitment_set_impl(conn, label, opponent))
+    // Clones because with_conn's closure may be re-called on busy retry.
+    with_conn(&state, |conn| {
+        commitment_set_impl(conn, label.clone(), opponent.clone())
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -295,10 +298,14 @@ pub struct RunningJobs {
 pub struct HomeSummary {
     /// Null until the user has opened a game (touch_last_game).
     pub last_game: Option<LastGame>,
-    /// Games from sources imported in the last 7 days, newest first
-    /// (capped; see `new_games_total`).
+    /// Games from sources imported in the last 7 days — personal/online
+    /// sources first, then bulk, newest first within each (capped; see
+    /// `new_games_total`).
     pub new_games: Vec<NewGameRow>,
     pub new_games_total: i64,
+    /// Of those, games from personal/online sources only — the honest
+    /// scope for "N games this week" (bulk imports are not "your week").
+    pub new_games_personal_total: i64,
     /// True only when a cached profile exists; Home degrades honestly.
     pub findings_available: bool,
     /// Top findings (≤ 4) from the CACHED profile only — empty when no
@@ -361,11 +368,23 @@ fn result_str(code: i64) -> &'static str {
     }
 }
 
-fn new_games(conn: &Connection) -> Result<(Vec<NewGameRow>, i64), String> {
+/// New-games data for Home: rows (personal/online sources FIRST — a bulk
+/// TWIC week must not drown the user's own games, audit #11), the total,
+/// and the personal/online-only total that scopes the "this week" claim.
+fn new_games(conn: &Connection) -> Result<(Vec<NewGameRow>, i64, i64), String> {
     let total: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM games g JOIN sources s ON s.id = g.source_id
              WHERE s.imported_at >= datetime('now', '-7 days')",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let personal_total: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM games g JOIN sources s ON s.id = g.source_id
+             WHERE s.imported_at >= datetime('now', '-7 days')
+               AND s.kind IN ('personal', 'online')",
             [],
             |r| r.get(0),
         )
@@ -379,7 +398,8 @@ fn new_games(conn: &Connection) -> Result<(Vec<NewGameRow>, i64), String> {
              LEFT JOIN players wp ON wp.id = g.white_id
              LEFT JOIN players bp ON bp.id = g.black_id
              WHERE s.imported_at >= datetime('now', '-7 days')
-             ORDER BY g.id DESC LIMIT ?1",
+             ORDER BY (s.kind IN ('personal', 'online')) DESC, g.id DESC
+             LIMIT ?1",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -396,7 +416,7 @@ fn new_games(conn: &Connection) -> Result<(Vec<NewGameRow>, i64), String> {
         })
         .and_then(|it| it.collect::<Result<Vec<_>, _>>())
         .map_err(|e| e.to_string())?;
-    Ok((rows, total))
+    Ok((rows, total, personal_total))
 }
 
 /// Top-4 findings from the cached profile JSON: the motif rows with the
@@ -463,7 +483,7 @@ pub(crate) fn home_summary_impl(
     conn: &Connection,
     worker_active: bool,
 ) -> Result<HomeSummary, String> {
-    let (new_games, new_games_total) = new_games(conn)?;
+    let (new_games, new_games_total, new_games_personal_total) = new_games(conn)?;
 
     // Findings come from the cache ONLY (absent → honest degradation).
     let (findings, profile_player, profile_built_at) = match meta_get(conn, "profile_cache_self")? {
@@ -495,6 +515,7 @@ pub(crate) fn home_summary_impl(
         last_game: last_game(conn)?,
         new_games,
         new_games_total,
+        new_games_personal_total,
         findings_available,
         findings,
         profile_player,
@@ -668,6 +689,44 @@ mod tests {
 
         // No engine anywhere on the Home path.
         assert_eq!(kibitz_db::engine::spawn_count(), 0);
+    }
+
+    #[test]
+    fn new_games_put_personal_sources_first_and_scope_the_personal_total() {
+        let (_dir, conn) = fixture_db();
+        // A bulk TWIC source lands AFTER the personal fixture (higher game
+        // ids) — without the kind ordering it would drown the list.
+        let twic = SourceInfo {
+            name: "TWIC 1600".into(),
+            origin: "unit test".into(),
+            license: "TWIC personal use — not redistributable".into(),
+            kind: SourceKind::Twic,
+        };
+        let bulk_pgn = r#"[Event "Bulk Open"]
+[White "Stranger, A."]
+[Black "Stranger, B."]
+[Result "1/2-1/2"]
+
+1. c4 c5 2. Nc3 Nc6 1/2-1/2
+"#;
+        let st = import_pgn(&conn, &twic, Cursor::new(bulk_pgn)).unwrap();
+        assert_eq!(st.games_imported, 1, "failures: {:?}", st.failures);
+
+        let s = home_summary_impl(&conn, false).unwrap();
+        assert_eq!(s.new_games_total, 3);
+        assert_eq!(
+            s.new_games_personal_total, 2,
+            "the 'this week' claim is scoped to personal/online sources"
+        );
+        // Personal rows first despite the bulk game's newer id.
+        let kinds: Vec<&str> = s.new_games.iter().map(|g| g.source_kind.as_str()).collect();
+        assert_eq!(kinds, vec!["personal", "personal", "twic"]);
+        assert_eq!(s.new_games[0].id, 2, "newest personal first");
+        assert_eq!(s.new_games[2].source, "TWIC 1600");
+
+        // Wire shape for the new field.
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains("\"newGamesPersonalTotal\":2"), "{json}");
     }
 
     #[test]

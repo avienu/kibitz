@@ -7,6 +7,8 @@ import {
   fmtDurationMs,
   greetingDate,
   isDegraded,
+  networkRunningLine,
+  newGamesFoot,
   newSinceLabel,
   rangeReadout,
   sourceTagTone,
@@ -76,14 +78,75 @@ describe("newSinceLabel", () => {
 
   it("names the weekday of the oldest import", () => {
     // 2026-07-24 is a Friday.
-    const label = newSinceLabel({
-      newGames: [g(2, "2026-07-26 06:00:00"), g(1, "2026-07-24 06:00:00")],
-    });
+    const label = newSinceLabel(
+      { newGames: [g(2, "2026-07-26 06:00:00"), g(1, "2026-07-24 06:00:00")] },
+      "UTC",
+    );
     expect(label).toBe("NEW SINCE FRIDAY");
+  });
+
+  it("labels the USER's weekday, not UTC's (audit #10)", () => {
+    // 01:30 UTC Saturday is still Friday evening in Los Angeles.
+    const games = { newGames: [g(1, "2026-07-25 01:30:00")] };
+    expect(newSinceLabel(games, "UTC")).toBe("NEW SINCE SATURDAY");
+    expect(newSinceLabel(games, "America/Los_Angeles")).toBe("NEW SINCE FRIDAY");
   });
 
   it("is null with no new games (panel absent, not faked)", () => {
     expect(newSinceLabel({ newGames: [] })).toBeNull();
+  });
+});
+
+describe("newGamesFoot (audit #11: bulk imports are not 'your week')", () => {
+  const g = (id: number): HomeNewGame => ({
+    id,
+    white: "a",
+    black: "b",
+    result: "1-0",
+    source: "s",
+    sourceKind: "personal",
+    importedAt: "2026-07-24 06:00:00",
+  });
+
+  it("scopes 'this week' to personal/online games and names bulk separately", () => {
+    expect(
+      newGamesFoot({ newGames: [g(1)], newGamesTotal: 193058, newGamesPersonalTotal: 12 }),
+    ).toBe("12 personal/online games this week · plus 193,046 from bulk imports · showing latest");
+  });
+
+  it("never claims bulk strangers as the user's week when nothing personal arrived", () => {
+    const foot = newGamesFoot({
+      newGames: [g(1)],
+      newGamesTotal: 4200,
+      newGamesPersonalTotal: 0,
+    });
+    expect(foot).toBe(
+      "4,200 games from bulk imports this week — none from your own play · showing latest",
+    );
+  });
+
+  it("keeps the simple wording when everything shown is personal", () => {
+    expect(newGamesFoot({ newGames: [g(1)], newGamesTotal: 1, newGamesPersonalTotal: 1 })).toBe(
+      "1 personal/online game this week",
+    );
+  });
+});
+
+describe("networkRunningLine (audit #11: Running must not claim idle)", () => {
+  it("names an active network job, with progress when it has a fraction", () => {
+    expect(
+      networkRunningLine({ active: true, label: "TWIC auto-sync", done: 2, total: 5 }),
+    ).toBe("TWIC auto-sync · 2 / 5");
+    expect(
+      networkRunningLine({ active: true, label: "Lichess: sounix", done: 0, total: 0 }),
+    ).toBe("Lichess: sounix");
+  });
+
+  it("is null when idle or absent", () => {
+    expect(networkRunningLine(null)).toBeNull();
+    expect(
+      networkRunningLine({ active: false, label: "TWIC auto-sync", done: 5, total: 5 }),
+    ).toBeNull();
   });
 });
 

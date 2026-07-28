@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   formatReport,
+  idleLine,
   syncAccounts,
   syncRun,
   syncSetUsername,
@@ -70,6 +71,9 @@ function ServiceCard({
       ? progress.label
       : null;
   const lastLine = formatReport(account?.lastReport ?? null);
+  // Always-visible idle state (audit #16/#21): last synced (local time)
+  // plus the live "N games imported total" from the provenance rows.
+  const summaryLine = idleLine(account);
   const args = runArgs ? runArgs() : {};
 
   return (
@@ -113,6 +117,7 @@ function ServiceCard({
       {!running && progress?.kind === service && progress?.error && (
         <div className="sync-error">Last run failed: {progress.error}</div>
       )}
+      {summaryLine && <div className="sync-report">{summaryLine}</div>}
       {lastLine && (
         <div className={account?.lastReport?.error ? "sync-error" : "sync-report"}>{lastLine}</div>
       )}

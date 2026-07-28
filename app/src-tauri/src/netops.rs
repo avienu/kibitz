@@ -59,6 +59,12 @@ pub struct NetWorker {
     pub active: Arc<AtomicBool>,
     pub stop: Arc<AtomicBool>,
     pub progress: Arc<Mutex<Option<NetProgress>>>,
+    /// Per-LAUNCH latch for TWIC auto-sync. The webview reloads freely
+    /// (deep links, dev HMR, StrictMode remounts) and every reload re-runs
+    /// the database-open hook; without this backend latch each reload
+    /// re-armed the "max 5 per launch" allowance and one session imported
+    /// 13+ issues (audit #3). Lives in the app process, not the webview.
+    pub auto_sync_ran: Arc<AtomicBool>,
     /// Waiting jobs (label + work), drained strictly serially by the one
     /// worker thread — pressing Sync during a TWIC download QUEUES it
     /// instead of rejecting the click (run-9 field report).
@@ -170,6 +176,15 @@ pub struct TwicCatalog {
     pub first_run_notice: String,
 }
 
+/// Days since the Unix epoch, for the weekly-arithmetic issue estimate.
+fn today_epoch_days() -> Result<i64, String> {
+    Ok((std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs()
+        / 86_400) as i64)
+}
+
 fn meta_u32(conn: &Connection, key: &str) -> Option<u32> {
     net::meta_get(conn, key)
         .ok()
@@ -242,12 +257,7 @@ pub async fn twic_refresh_catalog(state: State<'_, DbState>) -> Result<TwicRefre
         let probed = meta_u32(conn, META_LATEST_KNOWN);
         Ok(imported.max(probed))
     })?;
-    let today_days = (std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_secs()
-        / 86_400) as i64;
-    let guess = twic::estimated_issue(today_days);
+    let guess = twic::estimated_issue(today_epoch_days()?);
 
     // The probe runs without holding the db lock (429 waits can be long).
     let result = twic::probe_latest(&net::UreqFetcher, floor, guess, &mut |d| {
@@ -285,14 +295,13 @@ pub async fn twic_ack_notice(state: State<'_, DbState>) -> Result<(), String> {
 
 /// One TWIC-download worker pass: import `issues` strictly serially on a
 /// dedicated connection, updating `progress` per issue and honoring the
-/// cooperative `stop` flag between issues. `stop_at_404` selects the
-/// auto-sync behavior (a 404 means "caught up", stop) versus the explicit
-/// selection behavior (a 404 issue is reported and the rest continue).
+/// cooperative `stop` flag between issues. A 404 issue is reported and
+/// the rest continue (auto-sync runs newest first from a probe-confirmed
+/// frontier, so "caught up" is decided before this runs, not by a 404).
 fn twic_worker_impl(
     conn: &Connection,
     fetcher: &dyn Fetcher,
     issues: &[u32],
-    stop_at_404: bool,
     progress: &Mutex<Option<NetProgress>>,
     stop: &AtomicBool,
 ) -> Result<(), String> {
@@ -331,9 +340,6 @@ fn twic_worker_impl(
                     p.done = i as u32 + 1;
                     p.detail = format!("TWIC {issue}: not available (404)");
                 });
-                if stop_at_404 {
-                    break;
-                }
             }
         }
     }
@@ -481,56 +487,129 @@ pub async fn twic_download(
     };
     spawn_net_worker(&worker, initial, move |stop, progress| {
         let conn = worker_conn(&db_path)?;
-        twic_worker_impl(&conn, &net::UreqFetcher, &todo, false, progress, stop)
+        twic_worker_impl(&conn, &net::UreqFetcher, &todo, progress, stop)
     })?;
     Ok(count)
 }
 
-/// Issues an auto-sync run would attempt: the next `max_issues` after the
-/// newest import — only when auto-sync is on and something is imported
-/// (there must be a real resume point; we never guess a starting issue).
-pub(crate) fn auto_sync_issues(conn: &Connection) -> Result<Option<Vec<u32>>, String> {
-    if !meta_flag(conn, META_AUTO_SYNC) {
-        return Ok(None);
+/// Should the database-open hook start an auto-sync? Requires the toggle,
+/// a real resume point (we never guess a starting issue), and that this
+/// LAUNCH has not already run one (`already_ran` — the [`NetWorker`]
+/// latch), so a webview reload can never re-arm the per-launch cap.
+pub(crate) fn should_auto_sync(conn: &Connection, already_ran: bool) -> Result<bool, String> {
+    if already_ran || !meta_flag(conn, META_AUTO_SYNC) {
+        return Ok(false);
     }
-    let Some(latest) = twic::latest_imported(conn).map_err(|e| e.to_string())? else {
-        return Ok(None);
+    Ok(twic::latest_imported(conn)
+        .map_err(|e| e.to_string())?
+        .is_some())
+}
+
+/// The issues one auto-sync pass downloads: the newest missing issues
+/// FIRST (current weeks arrive immediately — audit #3 saw them last),
+/// capped at `cap`, and never older than the newest import — backfilling
+/// older gaps stays a manual action on the TWIC screen ("Download all
+/// missing" / checkbox selection).
+pub(crate) fn auto_sync_plan(
+    newest_published: u32,
+    latest_imported: u32,
+    imported: &std::collections::HashSet<u32>,
+    cap: usize,
+) -> Vec<u32> {
+    (latest_imported + 1..=newest_published)
+        .rev()
+        .filter(|i| !imported.contains(i))
+        .take(cap)
+        .collect()
+}
+
+/// One auto-sync pass on the worker thread: probe the newest published
+/// issue (weekly-arithmetic guess, floor = newest already known), record
+/// it in meta, then import per [`auto_sync_plan`] — newest first.
+fn twic_auto_worker_impl(
+    conn: &Connection,
+    fetcher: &dyn Fetcher,
+    guess: u32,
+    cap: usize,
+    progress: &Mutex<Option<NetProgress>>,
+    stop: &AtomicBool,
+) -> Result<(), String> {
+    let latest_imported = twic::latest_imported(conn)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "auto-sync needs at least one imported issue to resume from".to_string())?;
+    let floor = latest_imported.max(meta_u32(conn, META_LATEST_KNOWN).unwrap_or(0));
+    let probe = twic::probe_latest(fetcher, Some(floor), guess, &mut std::thread::sleep)
+        .map_err(|e| format!("{e:#}"))?;
+    let Some(newest) = probe.latest else {
+        update_progress(progress, |p| {
+            p.detail = "no published issue found".to_string();
+        });
+        return Ok(());
     };
-    let cap = twic::TwicOptions::default().max_issues;
-    Ok(Some((latest + 1..=latest + cap).collect()))
+    net::meta_set(conn, META_LATEST_KNOWN, &newest.to_string()).map_err(|e| e.to_string())?;
+
+    let imported: std::collections::HashSet<u32> = twic::imported_issues(conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(issue, _)| issue)
+        .collect();
+    let plan = auto_sync_plan(newest, latest_imported, &imported, cap);
+    if plan.is_empty() {
+        update_progress(progress, |p| {
+            p.detail = format!("up to date — TWIC {newest} is the newest published issue");
+        });
+        return Ok(());
+    }
+    update_progress(progress, |p| {
+        p.total = plan.len() as u32;
+        p.detail = format!(
+            "{} new issue{}, newest first…",
+            plan.len(),
+            if plan.len() == 1 { "" } else { "s" }
+        );
+    });
+    // Explicit-selection mode (stop_at_404 = false): the plan runs newest
+    // first, so a 404 on one issue must not abandon the older ones.
+    twic_worker_impl(conn, fetcher, &plan, progress, stop)
 }
 
 /// Database-open hook: when the auto-download toggle is on, quietly fetch
-/// NEW issues only (resuming after the newest import, per-run cap = the
-/// kibitz-db default of 5, strictly serial, stopping at the first 404).
-/// Returns true when a sync was started.
+/// the NEWEST missing issues (newest first, per-launch cap = the
+/// kibitz-db default of 5, strictly serial). The cap is enforced by a
+/// backend latch — at most one auto-sync pass per app launch, no matter
+/// how often the webview reloads and re-fires this hook. Returns true
+/// when a sync was started.
 #[tauri::command]
 pub async fn twic_auto_sync_check(
     state: State<'_, DbState>,
     worker: State<'_, NetWorker>,
 ) -> Result<bool, String> {
-    let issues = with_conn(&state, auto_sync_issues)?;
-    let Some(issues) = issues else {
+    let already_ran = worker.auto_sync_ran.load(Ordering::SeqCst);
+    if !with_conn(&state, |conn| should_auto_sync(conn, already_ran))? {
         return Ok(false);
-    };
+    }
     if worker.active.load(Ordering::SeqCst) {
         return Ok(false); // never queue behind another network job
     }
+    if worker.auto_sync_ran.swap(true, Ordering::SeqCst) {
+        return Ok(false); // another check won the race this launch
+    }
     let db_path = open_db_path(&state)?;
-    let total = issues.len() as u32;
+    let guess = twic::estimated_issue(today_epoch_days()?);
+    let cap = twic::TwicOptions::default().max_issues as usize;
     let initial = NetProgress {
         kind: "twic-auto".to_string(),
         label: "TWIC auto-sync".to_string(),
         done: 0,
-        total,
-        detail: "checking for new issues…".to_string(),
+        total: 0, // known after the probe
+        detail: "checking the newest published issue…".to_string(),
         active: true,
         queued: Vec::new(),
         error: None,
     };
     spawn_net_worker(&worker, initial, move |stop, progress| {
         let conn = worker_conn(&db_path)?;
-        twic_worker_impl(&conn, &net::UreqFetcher, &issues, true, progress, stop)
+        twic_auto_worker_impl(&conn, &net::UreqFetcher, guess, cap, progress, stop)
     })?;
     Ok(true)
 }
@@ -547,6 +626,32 @@ pub struct ServiceAccount {
     /// duplicatesSkipped, gamesFailed, and per-service extras — or
     /// {at, error} for a failed run). Null before the first sync.
     pub last_report: Option<serde_json::Value>,
+    /// Games in the database from this service, counted live from the
+    /// provenance rows (`sources`) — the idle card's "N games imported
+    /// total" (audit #16/#21). Survives report resets and counts imports
+    /// from every run, not just the last one.
+    pub games_total: i64,
+}
+
+/// The `sources.name` prefix each service's client stamps on its imports
+/// (see kibitz-db::net::{lichess,chesscom,fics}) — the provenance handle
+/// for per-service totals.
+fn service_source_prefix(service: &str) -> &'static str {
+    match service {
+        "lichess" => "Lichess: ",
+        "chesscom" => "chess.com: ",
+        _ => "FICS: ",
+    }
+}
+
+fn service_games_total(conn: &Connection, service: &str) -> Result<i64, String> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM games g JOIN sources s ON s.id = g.source_id
+         WHERE s.kind = 'online' AND s.name LIKE ?1 || '%'",
+        [service_source_prefix(service)],
+        |r| r.get(0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -557,7 +662,7 @@ pub struct SyncAccounts {
     pub fics: ServiceAccount,
 }
 
-fn service_account(conn: &Connection, service: &str) -> ServiceAccount {
+fn service_account(conn: &Connection, service: &str) -> Result<ServiceAccount, String> {
     let username = net::meta_get(conn, &user_key(service))
         .ok()
         .flatten()
@@ -566,17 +671,18 @@ fn service_account(conn: &Connection, service: &str) -> ServiceAccount {
         .ok()
         .flatten()
         .and_then(|s| serde_json::from_str(&s).ok());
-    ServiceAccount {
+    Ok(ServiceAccount {
         username,
         last_report,
-    }
+        games_total: service_games_total(conn, service)?,
+    })
 }
 
 pub(crate) fn sync_accounts_impl(conn: &Connection) -> Result<SyncAccounts, String> {
     Ok(SyncAccounts {
-        lichess: service_account(conn, "lichess"),
-        chesscom: service_account(conn, "chesscom"),
-        fics: service_account(conn, "fics"),
+        lichess: service_account(conn, "lichess")?,
+        chesscom: service_account(conn, "chesscom")?,
+        fics: service_account(conn, "fics")?,
     })
 }
 
@@ -970,15 +1076,7 @@ mod tests {
             error: None,
         }));
         let stop = AtomicBool::new(false);
-        twic_worker_impl(
-            &conn,
-            &fetcher,
-            &[1500, 1501, 1502],
-            false,
-            &progress,
-            &stop,
-        )
-        .unwrap();
+        twic_worker_impl(&conn, &fetcher, &[1500, 1501, 1502], &progress, &stop).unwrap();
 
         assert_eq!(
             fetcher.log.borrow().as_slice(),
@@ -987,7 +1085,7 @@ mod tests {
                 twic::zip_url(1501),
                 twic::zip_url(1502)
             ],
-            "strictly serial, ascending"
+            "strictly serial, in the given order"
         );
         // 1502's games are duplicates of 1500's -> 2 issues imported, 2 games.
         assert_eq!(
@@ -1005,37 +1103,6 @@ mod tests {
     }
 
     #[test]
-    fn twic_worker_auto_mode_stops_at_first_404() {
-        let (_dir, conn) = temp_db();
-        let fetcher = MapFetcher::default(); // everything 404s
-        let progress = Mutex::new(Some(NetProgress {
-            kind: "twic-auto".into(),
-            label: "TWIC auto-sync".into(),
-            done: 0,
-            total: 5,
-            detail: String::new(),
-            active: true,
-            queued: Vec::new(),
-            error: None,
-        }));
-        let stop = AtomicBool::new(false);
-        twic_worker_impl(
-            &conn,
-            &fetcher,
-            &[1501, 1502, 1503, 1504, 1505],
-            true,
-            &progress,
-            &stop,
-        )
-        .unwrap();
-        assert_eq!(
-            fetcher.log.borrow().len(),
-            1,
-            "auto mode stops at the first 404 (caught up)"
-        );
-    }
-
-    #[test]
     fn twic_worker_honors_the_cooperative_stop_flag() {
         let (_dir, conn) = temp_db();
         let fetcher = MapFetcher::default();
@@ -1050,26 +1117,119 @@ mod tests {
             error: None,
         }));
         let stop = AtomicBool::new(true); // cancelled before the first issue
-        twic_worker_impl(&conn, &fetcher, &[1500, 1501], false, &progress, &stop).unwrap();
+        twic_worker_impl(&conn, &fetcher, &[1500, 1501], &progress, &stop).unwrap();
         assert!(fetcher.log.borrow().is_empty(), "no request after cancel");
         let p = progress.lock().unwrap().clone().unwrap();
         assert!(p.detail.contains("cancelled"), "{}", p.detail);
     }
 
     #[test]
-    fn auto_sync_issues_requires_toggle_and_a_resume_point() {
+    fn auto_sync_gate_requires_toggle_resume_point_and_first_run_this_launch() {
         let (_dir, conn) = temp_db();
-        // Toggle off -> None.
-        assert_eq!(auto_sync_issues(&conn).unwrap(), None);
-        // Toggle on but nothing imported -> None (never guess a start).
+        // Toggle off -> no.
+        assert!(!should_auto_sync(&conn, false).unwrap());
+        // Toggle on but nothing imported -> no (never guess a start).
         net::meta_set(&conn, META_AUTO_SYNC, "1").unwrap();
-        assert_eq!(auto_sync_issues(&conn).unwrap(), None);
-        // Imported -> the next `max_issues` (kibitz-db default cap of 5).
+        assert!(!should_auto_sync(&conn, false).unwrap());
+        // Imported -> yes, but ONLY once per launch: the second database-
+        // open hook of the same app process (webview reload, StrictMode
+        // remount) must not re-arm the cap (audit #3).
         plant_issue(&conn, 1600, 10);
+        assert!(should_auto_sync(&conn, false).unwrap());
+        assert!(!should_auto_sync(&conn, true).unwrap());
+    }
+
+    #[test]
+    fn auto_sync_plan_is_newest_first_capped_and_never_backfills() {
+        use std::collections::HashSet;
+        let imported: HashSet<u32> = [1600].into_iter().collect();
+        // 10 unpublished-locally issues, cap 5: the NEWEST five, descending.
         assert_eq!(
-            auto_sync_issues(&conn).unwrap(),
-            Some(vec![1601, 1602, 1603, 1604, 1605])
+            auto_sync_plan(1610, 1600, &imported, 5),
+            vec![1610, 1609, 1608, 1607, 1606]
         );
+        // Issues at or below the newest import are backfill — manual only.
+        let imported: HashSet<u32> = [1595, 1600].into_iter().collect();
+        assert_eq!(auto_sync_plan(1602, 1600, &imported, 5), vec![1602, 1601]);
+        // Already-imported issues inside the window are skipped, cap holds.
+        let imported: HashSet<u32> = [1600, 1609].into_iter().collect();
+        assert_eq!(
+            auto_sync_plan(1610, 1600, &imported, 5),
+            vec![1610, 1608, 1607, 1606, 1605]
+        );
+        // Fully caught up -> empty plan.
+        let imported: HashSet<u32> = [1610].into_iter().collect();
+        assert_eq!(auto_sync_plan(1610, 1610, &imported, 5), Vec::<u32>::new());
+    }
+
+    #[test]
+    fn auto_sync_worker_probes_then_downloads_newest_first_within_the_cap() {
+        let (_dir, conn) = temp_db();
+        plant_issue(&conn, 1500, 10);
+        let mut fetcher = MapFetcher::default();
+        for issue in 1501..=1510 {
+            fetcher.bodies.insert(twic::zip_url(issue), ZIP_A.to_vec());
+        }
+        let progress = Mutex::new(Some(NetProgress {
+            kind: "twic-auto".into(),
+            label: "TWIC auto-sync".into(),
+            done: 0,
+            total: 0,
+            detail: String::new(),
+            active: true,
+            queued: Vec::new(),
+            error: None,
+        }));
+        let stop = AtomicBool::new(false);
+        twic_auto_worker_impl(&conn, &fetcher, 1505, 5, &progress, &stop).unwrap();
+
+        // Probe from the guess (1505): forward until 1511 404s, then the
+        // download plan runs NEWEST FIRST — 1510 down to 1506, cap 5.
+        let expected: Vec<String> = (1505..=1511)
+            .map(twic::zip_url)
+            .chain([1510, 1509, 1508, 1507, 1506].map(twic::zip_url))
+            .collect();
+        assert_eq!(fetcher.log.borrow().as_slice(), expected.as_slice());
+        assert_eq!(
+            twic::imported_issues(&conn)
+                .unwrap()
+                .iter()
+                .map(|(i, _)| *i)
+                .collect::<Vec<_>>(),
+            vec![1500, 1506, 1507, 1508, 1509, 1510],
+            "the five newest issues; 1501–1505 stay manual backfill"
+        );
+        assert_eq!(
+            net::meta_get(&conn, META_LATEST_KNOWN).unwrap().as_deref(),
+            Some("1510"),
+            "the probe result is recorded for the catalog"
+        );
+        let p = progress.lock().unwrap().clone().unwrap();
+        assert_eq!(p.total, 5, "total set once the plan is known");
+        assert_eq!(p.done, 5);
+    }
+
+    #[test]
+    fn auto_sync_worker_reports_up_to_date_without_downloading() {
+        let (_dir, conn) = temp_db();
+        plant_issue(&conn, 1500, 10);
+        net::meta_set(&conn, META_LATEST_KNOWN, "1500").unwrap();
+        let fetcher = MapFetcher::default(); // nothing newer published
+        let progress = Mutex::new(Some(NetProgress {
+            kind: "twic-auto".into(),
+            label: "TWIC auto-sync".into(),
+            done: 0,
+            total: 0,
+            detail: String::new(),
+            active: true,
+            queued: Vec::new(),
+            error: None,
+        }));
+        let stop = AtomicBool::new(false);
+        twic_auto_worker_impl(&conn, &fetcher, 1500, 5, &progress, &stop).unwrap();
+        assert_eq!(twic::imported_issues(&conn).unwrap().len(), 1);
+        let p = progress.lock().unwrap().clone().unwrap();
+        assert!(p.detail.contains("up to date"), "{}", p.detail);
     }
 
     #[test]
@@ -1100,6 +1260,33 @@ mod tests {
         sync_set_username_impl(&conn, "lichess", "").unwrap();
         let a = sync_accounts_impl(&conn).unwrap();
         assert_eq!(a.lichess.username, None);
+    }
+
+    #[test]
+    fn accounts_carry_per_service_totals_from_provenance_rows() {
+        use kibitz_db::import::{import_pgn, SourceInfo, SourceKind};
+        let (_dir, conn) = temp_db();
+        let a = sync_accounts_impl(&conn).unwrap();
+        assert_eq!(a.lichess.games_total, 0, "empty db: honest zero");
+
+        // One Lichess import (the client's exact source-name shape).
+        let source = SourceInfo {
+            name: "Lichess: SomeUser".into(),
+            origin: "https://lichess.org/api/games/user/SomeUser".into(),
+            license: "user's own games".into(),
+            kind: SourceKind::Online,
+        };
+        let pgn = "[White \"SomeUser\"]\n[Black \"Opp\"]\n[Result \"1-0\"]\n\n1. e4 e5 1-0\n";
+        let st = import_pgn(&conn, &source, std::io::Cursor::new(pgn)).unwrap();
+        assert_eq!(st.games_imported, 1, "failures: {:?}", st.failures);
+
+        let a = sync_accounts_impl(&conn).unwrap();
+        assert_eq!(a.lichess.games_total, 1);
+        assert_eq!(a.chesscom.games_total, 0, "prefixes do not cross-count");
+        assert_eq!(a.fics.games_total, 0);
+        // Wire shape: the idle card reads gamesTotal.
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(json.contains("\"gamesTotal\":1"), "{json}");
     }
 
     #[test]

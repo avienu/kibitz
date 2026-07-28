@@ -183,8 +183,9 @@ pub async fn tactics_next_puzzle(
                 .map_err(|e| e.to_string())?
                 .map(Into::into)),
             "motif" => {
-                let theme = theme.ok_or("motif mode requires a theme")?;
-                Ok(tactics::next_by_theme(conn, target, &theme, seed)
+                // as_deref, not move: with_conn may re-call on busy retry.
+                let theme = theme.as_deref().ok_or("motif mode requires a theme")?;
+                Ok(tactics::next_by_theme(conn, target, theme, seed)
                     .map_err(|e| e.to_string())?
                     .map(Into::into))
             }
@@ -192,7 +193,7 @@ pub async fn tactics_next_puzzle(
                 .map_err(|e| e.to_string())?
                 .map(Into::into)),
             "weakness" => {
-                let weights = weights.unwrap_or_default();
+                let weights = weights.clone().unwrap_or_default();
                 Ok(
                     tactics::next_weakness_weighted(conn, target, &weights, seed)
                         .map_err(|e| e.to_string())?

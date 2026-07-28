@@ -367,7 +367,7 @@ export default function SettingsView({
             />
             <Row
               label="TWIC auto-download"
-              help="When on, new issues download quietly when the database opens (max 5 per launch, strictly serial). Incremental, resumable, personal-use only — TWIC data is never redistributed. Mirrored on the TWIC ingest screen."
+              help="When on, the newest issues download quietly when the database opens (newest first, max 5 per app launch, strictly serial; older issues stay manual on the TWIC screen). Personal-use only — TWIC data is never redistributed. Mirrored on the TWIC ingest screen."
               value={
                 <div className="set-value mono">
                   {twicAuto === null

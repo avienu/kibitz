@@ -132,6 +132,14 @@ export function openDatabase(path: string): Promise<DbSummary> {
   return invoke<DbSummary>("open_database", { path });
 }
 
+/** Fresh summary counts for the open database — the SINGLE count source
+ * every display shares (rail badge, Database header, list refetch). App
+ * re-polls it on one cadence while a network sync runs so all counts
+ * move together instead of drifting (audit #8). */
+export function fetchDbSummary(): Promise<DbSummary> {
+  return invoke<DbSummary>("db_summary");
+}
+
 export function listGames(filter: GameFilter, offset: number, limit: number): Promise<GameList> {
   return invoke<GameList>("list_games", { filter, offset, limit });
 }
@@ -556,9 +564,13 @@ export interface HomeRunningJobs {
 
 export interface HomeSummary {
   lastGame: HomeLastGame | null;
-  /** ≤ 8 rows; the full count rides in newGamesTotal. */
+  /** ≤ 8 rows, personal/online sources first; the full count rides in
+   * newGamesTotal. */
   newGames: HomeNewGame[];
   newGamesTotal: number;
+  /** Of those, personal/online-source games only — the honest scope for
+   * "N games this week" (bulk imports are not "your week"). */
+  newGamesPersonalTotal: number;
   findingsAvailable: boolean;
   /** ≤ 4, from a CACHED profile only — never built on the fly. */
   findings: HomeFinding[];
