@@ -116,6 +116,15 @@ describe("evidence derivation (README §State Management)", () => {
     expect(unionEvidence([b0, b1]).imbalance).toEqual(["e8", "d7"]);
   });
 
+  it("audit #4: NO evidence renders while a variation preview is active", () => {
+    // The paused main-game overlays must never paint over the previewed
+    // position — not the union, and not a lingering hover either.
+    expect(deriveEvidence(expl, null, { previewing: true })).toBeNull();
+    expect(deriveEvidence(expl, 0, { previewing: true })).toBeNull();
+    // Preview off keeps the normal union.
+    expect(deriveEvidence(expl, null, { previewing: false })!.alerts).toEqual(["d7"]);
+  });
+
   it("intensity: 1.0 hovered, 0.44 baseline", () => {
     expect(deriveIntensity(0)).toBe(1);
     expect(deriveIntensity(null)).toBe(DEFAULT_INTENSITY);

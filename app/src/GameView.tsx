@@ -324,8 +324,11 @@ export default function GameView({
   }, [gv.boardTreatment]);
 
   const evidence = useMemo(
-    () => (explainOn ? deriveEvidence(explanation, gv.hoverSentence) : null),
-    [explainOn, explanation, gv.hoverSentence],
+    () =>
+      explainOn
+        ? deriveEvidence(explanation, gv.hoverSentence, { previewing: preview !== null })
+        : null,
+    [explainOn, explanation, gv.hoverSentence, preview],
   );
   const intensity = deriveIntensity(gv.hoverSentence);
 
@@ -553,7 +556,7 @@ export default function GameView({
                 }
                 aria-hidden
               >
-                {gv.selectedSquare && (
+                {gv.selectedSquare && !preview && (
                   <div
                     className="kibitz-mark kibitz-mark-selected"
                     style={squarePos(gv.selectedSquare, gv.flipped)}

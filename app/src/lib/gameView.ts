@@ -100,18 +100,29 @@ export function unionEvidence(blocks: ExplanationBlockJson[]): Evidence {
   return out;
 }
 
+/** Options for [`deriveEvidence`]. */
+export interface EvidenceOptions {
+  /** A variation preview is active: the explanation is PAUSED on the main
+   * game, so its rings/arrows must never paint over the previewed
+   * position (audit 2026-07 #4). */
+  previewing?: boolean;
+}
+
 /**
  * README §State Management: evidence = hovered sentence's evidence alone,
  * else the union of all blocks; null when there is no explanation.
  * Indices past the block list address the suggestion chips (run 10):
  * index blocks.length + j isolates suggestion j's key arrow. Suggestion
  * evidence is hover-only — it never joins the no-hover union.
+ * While a variation preview is active, NO evidence renders at all — the
+ * paused main-game overlays would point at squares whose pieces moved.
  */
 export function deriveEvidence(
   explanation: ExplanationJson | null,
   hoverSentence: number | null,
+  opts: EvidenceOptions = {},
 ): Evidence | null {
-  if (!explanation) return null;
+  if (!explanation || opts.previewing) return null;
   if (hoverSentence !== null) {
     const block = explanation.blocks[hoverSentence];
     if (block) return normalizeEvidence(block.evidence);
