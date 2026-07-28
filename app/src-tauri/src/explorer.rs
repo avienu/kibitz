@@ -30,9 +30,7 @@ pub(crate) fn explorer_url(fen: &str) -> String {
 /// Fetch via any [`Fetcher`] — injectable so tests stay fully offline.
 pub(crate) fn fetch_via(fetcher: &dyn Fetcher, fen: &str) -> Result<String, String> {
     // Sanity-parse before spending a network request on junk.
-    let _board: Board = fen
-        .parse()
-        .map_err(|e| format!("not a valid FEN: {e:?}"))?;
+    let _board: Board = fen.parse().map_err(|e| format!("not a valid FEN: {e:?}"))?;
     let url = explorer_url(fen);
     match fetcher.get(&url, &[("Accept", "application/json")]) {
         Ok(FetchOutcome::Body(body)) => {

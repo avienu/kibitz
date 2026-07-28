@@ -392,9 +392,8 @@ pub(crate) fn list_games_impl(
          LEFT JOIN events e ON e.id = g.event_id
          {LIST_WHERE}"
     );
-    let filter_params = rusqlite::params![
-        player, eco, result, event, date_min, date_max, source_kind
-    ];
+    let filter_params =
+        rusqlite::params![player, eco, result, event, date_min, date_max, source_kind];
     let total: i64 = conn
         .prepare_cached(&count_sql)
         .and_then(|mut stmt| stmt.query_row(filter_params, |r| r.get(0)))
@@ -429,7 +428,15 @@ pub(crate) fn list_games_impl(
     let rows = stmt
         .query_map(
             rusqlite::params![
-                player, eco, result, event, date_min, date_max, source_kind, limit, offset
+                player,
+                eco,
+                result,
+                event,
+                date_min,
+                date_max,
+                source_kind,
+                limit,
+                offset
             ],
             |row| {
                 let has_fresh: bool = row.get(13)?;
@@ -752,7 +759,11 @@ pub(crate) fn games_at_matches(hit: &kibitz_db::query::GameHit, b: &GamesAtBound
     }
     // find_fen COALESCEs a missing date to "?", which date_in_range
     // already treats as unknown-year (excluded under any date bound).
-    date_in_range(Some(&hit.date), b.date_min.as_deref(), b.date_max.as_deref())
+    date_in_range(
+        Some(&hit.date),
+        b.date_min.as_deref(),
+        b.date_max.as_deref(),
+    )
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1144,11 +1155,19 @@ mod tests {
     #[test]
     fn date_in_range_is_permissive_on_wildcards_and_excludes_unknown_years() {
         // Exact date inside/outside.
-        assert!(date_in_range(Some("1858.11.02"), Some("1858"), Some("1858.99.99")));
+        assert!(date_in_range(
+            Some("1858.11.02"),
+            Some("1858"),
+            Some("1858.99.99")
+        ));
         assert!(!date_in_range(Some("1858.11.02"), Some("1859"), None));
         assert!(!date_in_range(Some("1858.11.02"), None, Some("1857.99.99")));
         // Wildcard month/day: could fall inside any 1992 sub-range.
-        assert!(date_in_range(Some("1992.??.??"), Some("1992.06"), Some("1992.06.99")));
+        assert!(date_in_range(
+            Some("1992.??.??"),
+            Some("1992.06"),
+            Some("1992.06.99")
+        ));
         assert!(!date_in_range(Some("1992.??.??"), Some("1993"), None));
         // Unknown year (or no date at all) never confirms a bound.
         assert!(!date_in_range(Some("????.??.??"), Some("1000"), None));
@@ -1226,7 +1245,10 @@ mod tests {
             date_min: Some("1992-06-01".into()),
             ..Default::default()
         };
-        assert!(list_games_impl(&conn, &filter, 0, 50).is_err(), "bad format");
+        assert!(
+            list_games_impl(&conn, &filter, 0, 50).is_err(),
+            "bad format"
+        );
     }
 
     #[test]

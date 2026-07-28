@@ -506,7 +506,10 @@ mod tests {
 
     #[test]
     fn parses_id_name_lines_and_rejects_the_rest() {
-        assert_eq!(parse_id_name("id name Stockfish 17.1"), Some("Stockfish 17.1"));
+        assert_eq!(
+            parse_id_name("id name Stockfish 17.1"),
+            Some("Stockfish 17.1")
+        );
         assert_eq!(parse_id_name("  id name Lc0 v0.31  "), Some("Lc0 v0.31"));
         assert_eq!(parse_id_name("id name"), None, "bare tag carries no name");
         assert_eq!(parse_id_name("id author T. Romstad et al."), None);

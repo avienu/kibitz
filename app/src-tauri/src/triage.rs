@@ -79,8 +79,9 @@ pub async fn triage_extend(
     let depth = depth
         .unwrap_or(kibitz_db::triage::EXTENSION_DEPTH)
         .clamp(8, 60);
-    let (job_id, created) =
-        with_conn(&state, |conn| enqueue_extend_impl(conn, &fen, multipv, depth))?;
+    let (job_id, created) = with_conn(&state, |conn| {
+        enqueue_extend_impl(conn, &fen, multipv, depth)
+    })?;
     let db_path = crate::dbops::current_db_path(&state)?;
     crate::dbops::spawn_worker_if_idle(db_path, engine_path, &worker);
     Ok(ExtendStarted {
@@ -109,7 +110,8 @@ pub(crate) fn extension_status_impl(
     fen: &str,
     worker_active: bool,
 ) -> Result<ExtensionStatus, String> {
-    let extension = kibitz_db::triage::latest_book_extension(conn, fen).map_err(|e| e.to_string())?;
+    let extension =
+        kibitz_db::triage::latest_book_extension(conn, fen).map_err(|e| e.to_string())?;
     let job: Option<(i64, String)> = conn
         .query_row(
             "SELECT id, status FROM jobs

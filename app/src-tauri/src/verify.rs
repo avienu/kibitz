@@ -164,11 +164,11 @@ mod tests {
     #[test]
     fn static_gate_blocks_quiet_positions() {
         // Startpos: no screen, no engine.
-        assert!(static_gate(
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-        )
-        .unwrap()
-        .is_none());
+        assert!(
+            static_gate("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+                .unwrap()
+                .is_none()
+        );
         // French Winawer after 5.a3 (the field report): screen fired
         // (the b4-bishop hangs) and the static suggester proposes moves
         // — all statically marked, awaiting this review.
