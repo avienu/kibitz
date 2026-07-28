@@ -164,14 +164,18 @@ pub async fn identify(path: &Path) -> Result<EngineIdentity, String> {
         .stdout
         .take()
         .ok_or_else(|| "Engine stdout unavailable".to_owned())?;
+    // A process that exits before accepting "uci" (broken pipe) has
+    // already answered the question — platform timing decides whether
+    // that surfaces here or as closed stdout below, so both paths must
+    // carry the same verdict.
     stdin
         .write_all(b"uci\n")
         .await
-        .map_err(|e| format!("Failed to send 'uci': {e}"))?;
+        .map_err(|e| format!("Engine rejected the handshake ({e}) — not a UCI engine?"))?;
     stdin
         .flush()
         .await
-        .map_err(|e| format!("Failed to flush 'uci': {e}"))?;
+        .map_err(|e| format!("Engine rejected the handshake ({e}) — not a UCI engine?"))?;
 
     let mut lines = BufReader::new(stdout).lines();
     let handshake = async {
