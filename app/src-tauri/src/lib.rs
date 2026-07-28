@@ -19,6 +19,7 @@ pub mod browse;
 pub mod dbops;
 pub mod endgame;
 pub mod explain;
+pub mod explorer;
 pub mod home;
 mod identity;
 pub mod lichess_play;
@@ -80,6 +81,15 @@ struct DonePayload {
 #[tauri::command]
 fn resolve_engine_path(user_path: Option<String>) -> Result<String, String> {
     uci::resolve_engine_path(user_path.as_deref()).map(|p| p.display().to_string())
+}
+
+/// Validate an engine binary by running the `uci` handshake and return
+/// its `id name` (Settings' engine manager). No search is started — this
+/// is an explicit user action, so the engine-off default is untouched.
+#[tauri::command]
+async fn engine_identify(user_path: Option<String>) -> Result<uci::EngineIdentity, String> {
+    let path = uci::resolve_engine_path(user_path.as_deref())?;
+    uci::identify(&path).await
 }
 
 /// Start `go nodes <nodes>` on `fen`. Returns as soon as the search task is
@@ -196,6 +206,7 @@ pub fn run() {
         .manage(lichess_play::PlayState::default())
         .invoke_handler(tauri::generate_handler![
             resolve_engine_path,
+            engine_identify,
             analyze_position,
             stop_analysis,
             browse::open_database,
@@ -209,6 +220,8 @@ pub fn run() {
             browse::opening_tree,
             browse::find_games_at,
             browse::eco_names,
+            browse::crosstable_games,
+            explorer::explorer_fetch,
             prep::matching_players,
             prep::prep_view,
             prep::prep_fingerprint,
@@ -227,6 +240,8 @@ pub fn run() {
             tactics::tactics_finish_cycle,
             tactics::tactics_cycle_stats,
             endgame::endgame_overview,
+            endgame::tablebase_status,
+            endgame::set_tablebase_dir,
             endgame::endgame_start,
             endgame::endgame_move,
             endgame::endgame_give_up,

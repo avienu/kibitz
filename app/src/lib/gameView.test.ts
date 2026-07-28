@@ -4,6 +4,7 @@ import { DEFAULT_INTENSITY } from "./evidence";
 import {
   blockReferencesSquare,
   chooseResumePly,
+  COACH_HOVER_INDEX,
   collapsedAlertIndices,
   deriveEvidence,
   deriveIntensity,
@@ -71,6 +72,20 @@ describe("evidence derivation (README §State Management)", () => {
 
   it("hover out of range falls back to the union", () => {
     expect(deriveEvidence(expl, 99)!.alerts).toEqual(["d7"]);
+  });
+
+  it("run 10 unification: COACH_HOVER_INDEX is the union at hover intensity", () => {
+    // The COACH-row hover reuses the ONE evidence path: the sentinel
+    // addresses no block/suggestion, so the full visible union renders —
+    // identical to no-hover evidence — but at hover intensity.
+    const viaCoach = deriveEvidence(expl, COACH_HOVER_INDEX)!;
+    expect(viaCoach).toEqual(deriveEvidence(expl, null)!);
+    expect(deriveIntensity(COACH_HOVER_INDEX)).toBe(1);
+    expect(deriveIntensity(null)).toBe(DEFAULT_INTENSITY);
+    // It can never collide with suggestion indexing (blocks.length + j).
+    expect(COACH_HOVER_INDEX).toBeLessThan(0);
+    // Preview still suppresses everything (audit #4).
+    expect(deriveEvidence(expl, COACH_HOVER_INDEX, { previewing: true })).toBeNull();
   });
 
   it("run 10: indices past the blocks isolate suggestion chips", () => {

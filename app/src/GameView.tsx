@@ -29,6 +29,7 @@ import { liveInitial, liveReduce, type LiveEvent } from "./lib/liveAnalysis";
 import { numberSanLine, uciPvToSan, PV_DISPLAY_PLIES, PV_INSERT_PLIES } from "./lib/pv";
 import type { VariationPreview } from "./lib/preview";
 import {
+  COACH_HOVER_INDEX,
   deriveEvidence,
   deriveIntensity,
   fitBoardSize,
@@ -40,6 +41,7 @@ import {
 import type { LoadedGame } from "./lib/game";
 import { gameEngines, movesRows, movesRowsFromSans, type MovesRow } from "./lib/movesView";
 import { buildAnnView, insertVariation } from "./lib/tokens";
+import { crosstableEligible } from "./lib/crosstable";
 
 interface PendingVariation {
   ply: number;
@@ -79,6 +81,8 @@ interface GameViewProps {
   onPreviewVariation: (row: Extract<MovesRow, { kind: "variation" }>) => void;
   onPreviewStep: (delta: number) => void;
   onExitPreview: () => void;
+  /** Event-line click — the parent opens the crosstable modal (run 10). */
+  onCrosstable: (event: string) => void;
 }
 
 /** Percent position of a square in the grid for an orientation. */
@@ -130,6 +134,7 @@ export default function GameView({
   onPreviewVariation,
   onPreviewStep,
   onExitPreview,
+  onCrosstable,
 }: GameViewProps) {
   const colRef = useRef<HTMLDivElement | null>(null);
   const [boardSize, setBoardSize] = useState(656);
@@ -469,6 +474,15 @@ export default function GameView({
             {game && <span className="header-result">{headers["Result"] ?? ""}</span>}
           </div>
           <div className="header-meta">{meta}</div>
+          {game && crosstableEligible(headers["Event"]) && (
+            <button
+              className="header-event-link"
+              title="Open the crosstable for this event"
+              onClick={() => onCrosstable(headers["Event"]!)}
+            >
+              {headers["Event"]} · crosstable
+            </button>
+          )}
         </div>
         <div className="header-actions">
           <span className="seg" role="group" aria-label="Board treatment">
@@ -736,6 +750,19 @@ export default function GameView({
             repGlyphs={repGlyphs}
             onPreviewVariation={onPreviewVariation}
             previewVarIndex={preview?.varStartIndex ?? null}
+            onNarrationHover={
+              // COACH-row hover lights the current ply's evidence union
+              // through the ONE hover pipeline (COACH_HOVER_INDEX);
+              // meaningless while Explain is off or a preview repaints
+              // the board (audit #4 kept: no stale overlays).
+              explainOn && !preview
+                ? (h) =>
+                    dispatch({
+                      type: "hoverSentence",
+                      index: h ? COACH_HOVER_INDEX : null,
+                    })
+                : undefined
+            }
           />
           {game && game.sans.length > 0 && (
             <div className="rep-footer">

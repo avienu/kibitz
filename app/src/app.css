@@ -2360,6 +2360,7 @@ button.strip-nudge:hover:not(:disabled) {
 }
 .filter-bar {
   display: flex;
+  flex-wrap: wrap; /* run 10: six real filter chips need a second row on narrow windows */
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
@@ -2383,6 +2384,184 @@ button.strip-nudge:hover:not(:disabled) {
 }
 .filter-chip-input.eco {
   width: 56px;
+}
+.filter-chip-input.date {
+  width: 118px;
+}
+.filter-chip-input.elo {
+  width: 62px;
+}
+.filter-hint {
+  margin: -6px 0 12px;
+  font: 500 11px/1.4 var(--font-ui);
+  color: var(--warn, #c9a227);
+}
+
+/* ---- Opening tree: online explorer pane (run 10) ---- */
+.tree-tables.with-online {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.tree-tables.with-online > .tree-local,
+.tree-tables.with-online > .tree-online {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.tree-pane-tag {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font: 600 10.5px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  margin: 0 2px 7px;
+}
+.tree-pane-tag.online {
+  color: var(--info, var(--accent));
+}
+.online-total {
+  font: 500 10.5px/1 var(--font-mono);
+  color: var(--faint);
+  letter-spacing: 0;
+}
+.online-error {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 500 12px/1.5 var(--font-ui);
+  color: var(--dim);
+  background: var(--panel);
+}
+.online-foot {
+  margin: 8px 2px 0;
+  font: 400 10.5px/1.5 var(--font-ui);
+  color: var(--faint);
+}
+.btn-secondary.online-toggle-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Crosstable modal (run 10) ---- */
+.xt-modal {
+  max-width: min(1100px, 92vw);
+  width: auto;
+}
+.xt-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.xt-meta {
+  font: 500 11px/1 var(--font-mono);
+  color: var(--dim);
+}
+.xt-scroll {
+  overflow: auto;
+  max-height: 60vh;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.xt-table {
+  border-collapse: collapse;
+  width: 100%;
+  font: 500 12px/1.35 var(--font-ui);
+}
+.xt-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel2);
+  color: var(--dim);
+  font: 600 10.5px/1 var(--font-mono);
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.xt-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--tx);
+  vertical-align: top;
+  white-space: nowrap;
+}
+.xt-rank {
+  color: var(--faint);
+}
+.xt-player {
+  font-weight: 600;
+}
+.xt-pts {
+  font-family: var(--font-mono);
+}
+.xt-of {
+  color: var(--faint);
+  font-size: 10px;
+}
+.xt-round-cell {
+  min-width: 44px;
+}
+.xt-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 1px 2px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel2);
+  font: 600 11px/1.2 var(--font-mono);
+  color: var(--tx);
+  cursor: pointer;
+}
+.xt-cell:hover {
+  border-color: var(--line2);
+}
+.xt-win {
+  color: var(--accent);
+}
+.xt-loss {
+  color: var(--bad);
+}
+.xt-cell-opp {
+  font: 500 10px/1 var(--font-ui);
+  color: var(--dim);
+}
+.xt-note {
+  font: 500 12px/1.5 var(--font-ui);
+  color: var(--dim);
+  margin: 10px 2px;
+}
+.cell-event-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--dim);
+  cursor: pointer;
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 3px;
+}
+.cell-event-link:hover {
+  color: var(--tx);
+  text-decoration-color: var(--dim);
+}
+.header-event-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 2px;
+  font: 500 11.5px/1.4 var(--font-ui);
+  color: var(--dim);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline dotted var(--faint);
+  text-underline-offset: 3px;
+  width: fit-content;
+}
+.header-event-link:hover {
+  color: var(--tx);
 }
 .filter-chip-input:focus,
 .filter-chip-select:focus {
@@ -3230,6 +3409,32 @@ input.set-value.editing {
   padding: 8px 16px 12px;
   font: 400 11.5px/1.5 "Source Serif 4", serif;
   color: var(--dim);
+}
+/* Engine manager (run 10): stacked value cell with status sublines. */
+.set-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.set-subline {
+  font: 500 11px/1.4 "Public Sans", sans-serif;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-subline.mono {
+  font: 400 10.5px/1.4 "JetBrains Mono", monospace;
+}
+.set-subline.good {
+  color: var(--accent);
+}
+.set-subline.bad {
+  color: var(--bad);
+}
+input.set-value.editing.invalid {
+  border-color: var(--bad);
 }
 
 /* ---- Help & tour ---------------------------------------------------------- */
@@ -4420,6 +4625,25 @@ input.set-value.editing {
   padding: 2px 7px 8px;
   border-left: 2px solid var(--accent);
   margin: 2px 0 8px;
+}
+/* Run-10 unification: COACH rows are first-class — click navigates to
+ * the ply; on the current ply, hover lights the board evidence. The
+ * button reset keeps .mv-narration's serif look and accent left rule. */
+button.mv-narration-nav {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 2px solid var(--accent);
+  cursor: pointer;
+}
+button.mv-narration-nav:hover {
+  color: var(--tx);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+button.mv-narration-nav.evidence:hover {
+  border-left-width: 3px;
 }
 .mv-narration-tag {
   display: inline-block;

@@ -139,11 +139,23 @@ export interface EvidenceOptions {
 }
 
 /**
+ * Sentinel hover index for the moves panel's COACH narration rows
+ * (run 10 unification): it addresses neither a block nor a suggestion,
+ * so [`deriveEvidence`] falls through to the visible union while
+ * [`deriveIntensity`] goes to full — "light up everything this ply's
+ * explanation shows", through the ONE existing evidence path. -1 can
+ * never collide with a real block/suggestion index.
+ */
+export const COACH_HOVER_INDEX = -1;
+
+/**
  * README §State Management: evidence = hovered sentence's evidence alone,
  * else the union of all blocks; null when there is no explanation.
  * Indices past the block list address the suggestion chips (run 10):
  * index blocks.length + j isolates suggestion j's key arrow. Suggestion
  * evidence is hover-only — it never joins the no-hover union.
+ * [`COACH_HOVER_INDEX`] (or any index addressing nothing) keeps the
+ * union but at hover intensity — the COACH-row hover contract.
  * While a variation preview is active, NO evidence renders at all — the
  * paused main-game overlays would point at squares whose pieces moved.
  */

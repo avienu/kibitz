@@ -4,10 +4,12 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { TbInfo } from "./endgame";
 import type { EngineDone, EngineInfo } from "./engineView";
 
 const USER_PATH_KEY = "kibitz.enginePath";
 const NODES_KEY = "kibitz.engineNodes";
+const TB_DIR_KEY = "kibitz.tbDir";
 
 export const DEFAULT_NODES = 2_000_000;
 
@@ -34,6 +36,49 @@ export function saveNodes(nodes: number): void {
 export function resolveEnginePath(userPath: string): Promise<string> {
   return invoke<string>("resolve_engine_path", {
     userPath: userPath.trim() === "" ? null : userPath.trim(),
+  });
+}
+
+/* ---- engine manager (run 10, Settings) ---- */
+
+/** `id name` handshake result for the resolved binary. */
+export interface EngineIdentity {
+  path: string;
+  /** "Stockfish 17.1", or null when the binary spoke UCI without one. */
+  name: string | null;
+}
+
+/** Validate the resolved binary via the `uci` handshake (no search runs —
+ * an explicit Settings action). */
+export function engineIdentify(userPath: string): Promise<EngineIdentity> {
+  return invoke<EngineIdentity>("engine_identify", {
+    userPath: userPath.trim() === "" ? null : userPath.trim(),
+  });
+}
+
+/** User-configured Syzygy directory override ("" = resolve automatically:
+ * KIBITZ_SYZYGY, else the repo-local testdata/syzygy). Same localStorage
+ * pattern as the engine-path override. */
+export function getSavedTbDir(): string {
+  return localStorage.getItem(TB_DIR_KEY) ?? "";
+}
+
+export function saveTbDir(dir: string): void {
+  if (dir.trim() === "") localStorage.removeItem(TB_DIR_KEY);
+  else localStorage.setItem(TB_DIR_KEY, dir.trim());
+}
+
+/** Current tablebase status (no database needed). */
+export function tablebaseStatus(): Promise<TbInfo> {
+  return invoke<TbInfo>("tablebase_status");
+}
+
+/** Set ("" clears) the Syzygy directory override backend-side and
+ * re-resolve; returns the resulting status. Callers persist via
+ * saveTbDir on success. */
+export function setTablebaseDir(dir: string): Promise<TbInfo> {
+  return invoke<TbInfo>("set_tablebase_dir", {
+    dir: dir.trim() === "" ? null : dir.trim(),
   });
 }
 

@@ -10,6 +10,7 @@ import { parseFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
 import { parseSquare } from "chessops/util";
 import { type BoardMovable } from "./Board";
+import CrosstableView from "./CrosstableView";
 import DatabaseScreen from "./DatabaseScreen";
 import EndgameView from "./EndgameView";
 import HomeView from "./HomeView";
@@ -63,7 +64,7 @@ import {
   type PlayerProfile,
   type TrainSummary,
 } from "./lib/db";
-import { getSavedNodes } from "./lib/engine";
+import { getSavedNodes, getSavedTbDir, setTablebaseDir } from "./lib/engine";
 import { onEngineDone, onEngineInfo } from "./lib/engine";
 import {
   netProgress as fetchNetProgress,
@@ -206,6 +207,9 @@ export default function App() {
    * eval, annotations) stay on the main game. */
   const [preview, setPreview] = useState<VariationPreview | null>(null);
 
+  /** Crosstable modal (run 10): the event whose crosstable is open. */
+  const [crosstableEvent, setCrosstableEvent] = useState<string | null>(null);
+
   const plyCount = game?.sans.length ?? 0;
   // `fen` is the MAIN-game position — explain/annotation/eval stay keyed
   // to it; `shownFen` is what the board (and live analysis) displays.
@@ -260,6 +264,10 @@ export default function App() {
     // A #db=/#game=/#screen= deep link overrides restore (not persisted).
     const dbOverride = new URLSearchParams(window.location.hash.slice(1)).get("db");
     const deepLinked = hasDeepLinkOverride(window.location.hash);
+    // Engine manager (run 10): a user-configured Syzygy dir is stored
+    // frontend-side; push it so drills see it before Settings is opened.
+    const tbDir = getSavedTbDir();
+    if (tbDir !== "") setTablebaseDir(tbDir).catch(() => {});
     (async () => {
       const remembered = dbOverride || (await lastDatabase().catch(() => null));
       const s = await openDatabase(remembered || getSavedDbPath());
@@ -914,6 +922,7 @@ export default function App() {
             jobs={jobs}
             batch={batchProgress}
             onStatus={setStatus}
+            onCrosstable={setCrosstableEvent}
           />
         );
       case "tree":
@@ -1065,6 +1074,7 @@ export default function App() {
             onPreviewVariation={previewVariation}
             onPreviewStep={previewStepBy}
             onExitPreview={exitPreview}
+            onCrosstable={setCrosstableEvent}
           />
         ) : selfHeaded ? (
           pageView
@@ -1088,6 +1098,16 @@ export default function App() {
         />
       </div>
 
+      {crosstableEvent !== null && (
+        <CrosstableView
+          event={crosstableEvent}
+          onClose={() => setCrosstableEvent(null)}
+          onOpenGame={(id) => {
+            setCrosstableEvent(null);
+            void loadDbGameAt(id, 0);
+          }}
+        />
+      )}
       {showHelp && (
         <Help
           onClose={() => setShowHelp(false)}

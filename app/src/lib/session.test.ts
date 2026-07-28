@@ -5,6 +5,10 @@ const DB_SCREEN = {
   player: "O'Connor",
   eco: "B1",
   result: "1-0",
+  event: "Club Championship",
+  dateMin: "1992",
+  dateMax: "1999.12",
+  sourceKind: "personal",
   page: 2,
   scrollTop: 340,
   selectedGameId: 3759,
@@ -33,16 +37,41 @@ describe("session blob", () => {
       JSON.stringify({
         version: 1,
         view: "database",
-        dbScreen: { player: 7, page: -3, scrollTop: "x", selectedGameId: "y" },
+        dbScreen: { player: 7, page: -3, scrollTop: "x", selectedGameId: "y", event: 9 },
       }),
     );
     expect(parsed!.dbScreen).toEqual({
       player: "",
       eco: "",
       result: "",
+      event: "",
+      dateMin: "",
+      dateMax: "",
+      sourceKind: "",
       page: 0,
       scrollTop: 0,
       selectedGameId: null,
+    });
+  });
+
+  it("defaults the run-10 filter fields on pre-run-10 blobs (no version bump)", () => {
+    // A blob exactly as run 10's initial release wrote it — no event/
+    // date/source fields. It must parse, not be rejected.
+    const parsed = parseSession(
+      JSON.stringify({
+        version: 1,
+        view: "database",
+        dbScreen: { player: "Tal", eco: "", result: "", page: 1, scrollTop: 5, selectedGameId: 2 },
+      }),
+    );
+    expect(parsed).not.toBeNull();
+    expect(parsed!.dbScreen).toMatchObject({
+      player: "Tal",
+      page: 1,
+      event: "",
+      dateMin: "",
+      dateMax: "",
+      sourceKind: "",
     });
   });
 });

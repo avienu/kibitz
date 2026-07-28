@@ -8,18 +8,33 @@
  *
  * PERF shows the performance rating's signed delta against the movers'
  * average Elo (both values are real; the delta is their honest headline).
+ *
+ * Online explorer (run 10): an OPT-IN pane beside the local tree showing
+ * the lichess opening explorer for the same position. OFF by default and
+ * remembered (localStorage) — no network request ever fires until the
+ * user flips the toggle; requests are debounced 500 ms and cached per
+ * FEN (lib/explorer.ts), and failures render an inline message.
  */
 import { useEffect, useMemo, useState } from "react";
 import Board from "./Board";
 import DataTable, { type DataTableColumn } from "./components/DataTable";
 import ScreenHeader from "./shell/ScreenHeader";
 import { findGamesAt, openingTree, type GamesAt, type TreeRow } from "./lib/db";
+import {
+  explorerLoader,
+  explorerTotal,
+  getExplorerEnabled,
+  saveExplorerEnabled,
+  type ExplorerState,
+} from "./lib/explorer";
 import { gameFromSans, lastMoveAt } from "./lib/game";
 import { reachingEmptyCopy, treeEmptyCopy, treePhase } from "./lib/treeView";
 import type { BoardTreatment } from "./lib/evidence";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const GRID = "74px 84px 1fr 78px 74px";
+/** Online pane: same columns minus PERF (lichess carries none). */
+const ONLINE_GRID = "74px 84px 1fr 78px";
 
 interface OpeningTreeViewProps {
   dbOpen: boolean;
@@ -67,6 +82,10 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
   const [gamesAtLoading, setGamesAtLoading] = useState(false);
   const [gamesAtError, setGamesAtError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Online explorer: opt-in, remembered; nothing fetches while off.
+  const [online, setOnline] = useState(getExplorerEnabled);
+  const [onlineState, setOnlineState] = useState<ExplorerState | null>(null);
 
   // The displayed position is derived from the clicked-through line.
   const derived = useMemo(() => {
@@ -122,6 +141,25 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
     };
   }, [dbOpen, derived.fen]);
 
+  // Online pane: follow the displayed position while enabled. The loader
+  // owns the 500 ms debounce, the per-FEN cache and stale-drop; cleanup
+  // cancels any pending request when the position moves on, the toggle
+  // flips off, or the screen unmounts.
+  useEffect(() => {
+    if (!online) {
+      setOnlineState(null);
+      return;
+    }
+    explorerLoader.request(derived.fen, setOnlineState);
+    return () => explorerLoader.cancel();
+  }, [online, derived.fen]);
+
+  const toggleOnline = () => {
+    const next = !online;
+    setOnline(next);
+    saveExplorerEnabled(next);
+  };
+
   const columns: DataTableColumn<TreeRow>[] = [
     { key: "move", header: "MOVE", render: (r) => <span className="tree-move">{r.san}</span> },
     {
@@ -140,6 +178,23 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
     { key: "perf", header: "PERF", render: perfCell },
   ];
 
+  // The lichess reply mapped onto the local tree's row shape so both
+  // tables read identically (PERF stays local-only — the explorer's
+  // aggregate carries no per-move performance).
+  const onlineRows: TreeRow[] =
+    onlineState?.kind === "data"
+      ? onlineState.reply.moves.map((m) => ({
+          san: m.san,
+          count: explorerTotal(m),
+          whiteWins: m.white,
+          draws: m.draws,
+          blackWins: m.black,
+          avgElo: m.averageRating ?? null,
+          perf: null,
+        }))
+      : [];
+  const onlineColumns = columns.filter((c) => c.key !== "perf");
+
   const crumbs = numbered(line);
   const timing = elapsedMs !== null ? ` · ${elapsedMs < 1 ? "<1" : Math.round(elapsedMs)} ms` : "";
 
@@ -149,11 +204,24 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
         title="Opening tree"
         subtitle={`Transposition-aware · follows the displayed position${timing}`}
         actions={
-          line.length > 0 && (
-            <button className="btn-secondary" onClick={() => setLine([])}>
-              Back to start
+          <>
+            <button
+              className={`btn-secondary${online ? " online-toggle-on" : ""}`}
+              onClick={toggleOnline}
+              title={
+                online
+                  ? "Stop fetching lichess data (remembered)"
+                  : "Show the lichess opening explorer beside your database — fetches from explorer.lichess.ovh only while on"
+              }
+            >
+              {online ? "Online explorer: on" : "Online explorer: off"}
             </button>
-          )
+            {line.length > 0 && (
+              <button className="btn-secondary" onClick={() => setLine([])}>
+                Back to start
+              </button>
+            )}
+          </>
         }
       />
       <div className="tree-layout">
@@ -176,14 +244,54 @@ export default function OpeningTreeView({ dbOpen, treatment, onOpenGameAt }: Ope
             <span className="tree-line-hint">follows the board</span>
           </div>
           {error && <div className="error">Opening tree failed: {error}</div>}
-          <DataTable
-            columns={columns}
-            rows={rows}
-            gridTemplate={GRID}
-            rowKey={(r) => r.san}
-            onRowClick={(r) => setLine([...line, r.san.replace(/[!?]+$/, "")])}
-            empty={treeEmptyCopy(treePhase(dbOpen, loading, error))}
-          />
+          <div className={`tree-tables${online ? " with-online" : ""}`}>
+            <div className="tree-local">
+              {online && <div className="tree-pane-tag">YOUR DATABASE</div>}
+              <DataTable
+                columns={columns}
+                rows={rows}
+                gridTemplate={GRID}
+                rowKey={(r) => r.san}
+                onRowClick={(r) => setLine([...line, r.san.replace(/[!?]+$/, "")])}
+                empty={treeEmptyCopy(treePhase(dbOpen, loading, error))}
+              />
+            </div>
+            {online && (
+              <div className="tree-online">
+                <div className="tree-pane-tag online">
+                  LICHESS · ONLINE DATA
+                  {onlineState?.kind === "data" && (
+                    <span className="online-total">
+                      {explorerTotal(onlineState.reply).toLocaleString("en-US")} games
+                    </span>
+                  )}
+                </div>
+                {onlineState?.kind === "error" ? (
+                  <div className="online-error">
+                    Lichess explorer unavailable: {onlineState.message}. Your local tree is
+                    unaffected.
+                  </div>
+                ) : (
+                  <DataTable
+                    columns={onlineColumns}
+                    rows={onlineRows}
+                    gridTemplate={ONLINE_GRID}
+                    rowKey={(r) => r.san}
+                    onRowClick={(r) => setLine([...line, r.san])}
+                    empty={
+                      onlineState?.kind === "loading" || onlineState === null
+                        ? "Fetching from lichess…"
+                        : "No lichess games from this position."
+                    }
+                  />
+                )}
+                <div className="online-foot">
+                  explorer.lichess.ovh — community games, not your database. Fetched only
+                  while this pane is on; one request per position, cached.
+                </div>
+              </div>
+            )}
+          </div>
           <p className="tree-prose">
             Transposition-aware: these counts merge every move order that reaches this
             position, so a move here includes games that arrived by a different sequence.

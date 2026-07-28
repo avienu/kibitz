@@ -6,17 +6,20 @@
  * a product claim, never estimated) and the Database table minus the
  * analysis column.
  *
- * Honest limits, stated in the UI: results filters have no backend field
- * yet (disabled "soon" chips), and the hits list shows the games' white/
- * black/event/date/ply — the position index carries no source or dup data.
+ * Result filters (run 10): Elo (bounds the game's HIGHER rating — unrated
+ * games drop out when a bound is set), date range (permissive on PGN "?"
+ * wildcards) and result, applied backend-side so the "N GAMES" pill counts
+ * the filtered set. The hits list shows white/black/event/date/ply — the
+ * position index carries no source or dup data (stated honestly).
  */
 import { useCallback, useEffect, useState } from "react";
 import { parseFen } from "chessops/fen";
 import Board from "./Board";
 import DataTable, { type DataTableColumn } from "./components/DataTable";
 import ScreenHeader from "./shell/ScreenHeader";
-import { findGamesAt, type GameAtRow, type GamesAt } from "./lib/db";
+import { findGamesAt, type GameAtRow, type GamesAt, type GamesAtFilter } from "./lib/db";
 import type { BoardTreatment } from "./lib/evidence";
+import { dateBoundParam, dateRangeHint, eloParam } from "./lib/filters";
 import { fenFromPlacement, placementOf, turnOf } from "./lib/search";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -41,14 +44,29 @@ export default function PositionSearchView({
   const [results, setResults] = useState<GamesAt | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Result filters (run 10) — plain input strings; invalid values are
+  // held back from the backend rather than erroring per keystroke.
+  const [minElo, setMinElo] = useState("");
+  const [maxElo, setMaxElo] = useState("");
+  const [dateMin, setDateMin] = useState("");
+  const [dateMax, setDateMax] = useState("");
+  const [resultFilter, setResultFilter] = useState("");
+
   const turn = turnOf(fen);
 
-  // Search on every position change (debounced — dragging fires often).
+  // Search on every position/filter change (debounced — dragging fires often).
   useEffect(() => {
     if (!dbOpen) return;
     let cancelled = false;
+    const filter: GamesAtFilter = {
+      minElo: eloParam(minElo),
+      maxElo: eloParam(maxElo),
+      dateMin: dateBoundParam(dateMin),
+      dateMax: dateBoundParam(dateMax),
+      result: resultFilter || undefined,
+    };
     const t = setTimeout(() => {
-      findGamesAt(fen)
+      findGamesAt(fen, filter)
         .then((r) => {
           if (cancelled) return;
           setResults(r);
@@ -60,7 +78,7 @@ export default function PositionSearchView({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [dbOpen, fen]);
+  }, [dbOpen, fen, minElo, maxElo, dateMin, dateMax, resultFilter]);
 
   const applyFen = useCallback((next: string) => {
     setFen(next);
@@ -188,16 +206,59 @@ export default function PositionSearchView({
             <span className="aside-title">RESULTS</span>
             {pill && <span className="home-pill">{pill}</span>}
             <div className="filter-spacer" />
-            <span className="filter-chip disabled" title="No backend field yet">
-              Elo · soon
-            </span>
-            <span className="filter-chip disabled" title="No backend field yet">
-              Date · soon
-            </span>
-            <span className="filter-chip disabled" title="No backend field yet">
-              Result · soon
-            </span>
+            <input
+              className="filter-chip-input elo"
+              type="text"
+              inputMode="numeric"
+              value={minElo}
+              onChange={(e) => setMinElo(e.target.value)}
+              placeholder="Elo ≥"
+              title="Bounds the game's higher rating; unrated games drop out when set"
+              spellCheck={false}
+            />
+            <input
+              className="filter-chip-input elo"
+              type="text"
+              inputMode="numeric"
+              value={maxElo}
+              onChange={(e) => setMaxElo(e.target.value)}
+              placeholder="Elo ≤"
+              title="Bounds the game's higher rating; unrated games drop out when set"
+              spellCheck={false}
+            />
+            <input
+              className="filter-chip-input date"
+              type="text"
+              value={dateMin}
+              onChange={(e) => setDateMin(e.target.value)}
+              placeholder="From YYYY[.MM[.DD]]"
+              title="Inclusive lower date bound (wildcard dates match permissively)"
+              spellCheck={false}
+            />
+            <input
+              className="filter-chip-input date"
+              type="text"
+              value={dateMax}
+              onChange={(e) => setDateMax(e.target.value)}
+              placeholder="To YYYY[.MM[.DD]]"
+              title="Inclusive upper date bound"
+              spellCheck={false}
+            />
+            <select
+              className="filter-chip-select"
+              value={resultFilter}
+              onChange={(e) => setResultFilter(e.target.value)}
+            >
+              <option value="">Result</option>
+              <option value="1-0">1-0</option>
+              <option value="0-1">0-1</option>
+              <option value="1/2-1/2">½-½</option>
+              <option value="*">*</option>
+            </select>
           </div>
+          {dateRangeHint(dateMin, dateMax) && (
+            <div className="filter-hint">{dateRangeHint(dateMin, dateMax)}</div>
+          )}
           {error && <div className="error">{error}</div>}
           {results && (
             <>

@@ -16,6 +16,10 @@ describe("dbScreenState store", () => {
       player: "",
       eco: "",
       result: "",
+      event: "",
+      dateMin: "",
+      dateMax: "",
+      sourceKind: "",
       page: 0,
       scrollTop: 0,
       selectedGameId: null,
@@ -55,5 +59,18 @@ describe("dbScreenState store", () => {
   it("page alone counts as an active filter (Clear resets pagination too)", () => {
     updateDbScreenState({ page: 1 });
     expect(hasActiveFilters(dbScreenState())).toBe(true);
+  });
+
+  it("each run-10 filter counts as active on its own", () => {
+    for (const patch of [
+      { event: "Tata Steel" },
+      { dateMin: "1992" },
+      { dateMax: "1999.12" },
+      { sourceKind: "twic" },
+    ]) {
+      clearDbScreenState();
+      updateDbScreenState(patch);
+      expect(hasActiveFilters(dbScreenState()), JSON.stringify(patch)).toBe(true);
+    }
   });
 });

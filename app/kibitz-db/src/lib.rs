@@ -7,6 +7,7 @@
 
 pub mod annotate;
 pub mod bookeval;
+pub mod crosstable;
 pub mod db;
 pub mod eco;
 pub mod edit;
