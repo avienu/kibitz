@@ -128,6 +128,8 @@ the voice toggle is instant and provably never changes the evidence.
       "san": "Nd5", "uci": "c3d5", "score": 4,
       "serving": ["ManeuverKnightToOutpost", "PressureBackwardPawn"],
       "prophylactic": false,         // true = denies the opponent's plan
+      "static_risk": 230,            // run 11; omitted when statically clean —
+                                     // marked chips render only engine-cleared
       "evidence": { "key": ["d5"], "arrows": [ { "from": "c3", "to": "d5", "kind": "key" } ] }
   } ]
 }
@@ -156,6 +158,56 @@ line gates positional talk, and the app additionally strips it on capture
 plies (mid-exchange the only honest advice is to finish the exchange).
 Adding this optional field did not change existing fields; the schema
 stays v3.
+
+### Suggestion verification (run 11): static veto + cursory engine review
+
+The destination-only SEE gate misses candidates that abandon ANOTHER
+piece (field report: French Winawer after 5.a3 — `f5??`/`f6??` shipped as
+chips while the b4-bishop hung to axb4). Two layers fix this:
+
+**Static whole-board veto (kibitz-core, no engine).** After each
+surviving candidate, the opponent's best SEE capture anywhere on the
+board is computed; when it nets `PIECE_LOSS_CP` (220 cp — the cheapest
+piece-for-pawn loss) beyond what the move itself captured, the candidate
+is MARKED, not dropped: `SuggestionOut` gains an optional `static_risk`
+field (the net swing, cp; absent when clean — additive, schema stays v3).
+When a piece is already en prise before the move, only candidates that
+bring the swing back under the threshold stay clean; the rest are marked.
+Statics one exchange deep cannot tell the Winawer theory move `...cxd4`
+(axb4 is met by dxc3, regaining the piece) from the losers — it is marked
+too, deliberately. Consumers with NO engine must drop marked candidates:
+the narration closing does (`suggestion_closing_verified` with no cleared
+list), the book-eval harness does, and the UI never renders a marked chip
+unverified. Bad advice is worse than no advice.
+
+**Cursory engine review (app layer, sanctioned trigger only).** The
+maintainer's ruling: "at least a cursory engine review, at least if
+tactics screen is present (WSUI)". When `wsui.screen_fired` — and only
+then — the app runs one baseline bounded search of the position plus one
+`go nodes` search per candidate (≤3 candidates + baseline = ≤4 searches
+at 150k nodes each, `kibitz_db::verify::VERIFY_NODES`). The decision is
+pure (`kibitz_db::verify::decide`): a candidate is REFUTED when its
+mover-POV eval falls more than 150 cp (`REFUTE_MARGIN_CP`) below the
+baseline (mate folds into a ±10000 sentinel); marked candidates need an
+eval to CLEAR, clean candidates survive unless refuted. Two paths:
+
+- Live explain: the `explain_position` IPC stays instant and static; the
+  frontend then calls `verify_suggestions(fen)` (only when the screen
+  fired and chips exist — the backend re-checks the gate and returns
+  `{ ran: false }` for quiet positions without touching the engine).
+  Response: `{ fen, ran, verdicts: [{ uci, san,
+  verdict: "cleared"|"refuted" }], nodesPerSearch }` — FEN-stamped like
+  `engine-info` events so ply-stepping drops stale results. Chip rules:
+  clean chips render immediately (subtle pending state while the
+  round-trip runs), refuted chips disappear, marked chips appear only
+  when cleared; engine unavailable leaves marked chips hidden.
+- Batch annotate: the wsui-confirm job's search doubles as the baseline
+  and the same engine reviews the candidates; the cleared uci list is
+  stored in the job result (`cleared_suggestions`) and the narration
+  closing renders only cleared moves at reviewed plies.
+
+A quiet position never triggers any engine work from this feature
+(CLAUDE.md #6).
 
 ## kibitz-profile — corpus profiling
 
