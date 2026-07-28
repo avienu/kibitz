@@ -83,11 +83,12 @@ export interface DrillProgress {
 
 /**
  * Grading of one move in the feedback aside. User moves are graded ONLY
- * against tablebase truth — never an engine score; `engine` labels the
- * scripted defender's reply row; `unverified` means no tablebase coverage
- * (graded on terminals only).
+ * against tablebase truth — never an engine score; the defender's reply
+ * rows are labeled by their TRUE source (`tablebase` / `heuristic` —
+ * never "engine": no engine runs in this flow, audit 2026-07 #9);
+ * `unverified` means no tablebase coverage (graded on terminals only).
  */
-export type Verdict = "winning" | "slower" | "throws" | "unverified" | "engine";
+export type Verdict = "winning" | "slower" | "throws" | "unverified" | "tablebase" | "heuristic";
 
 /** One feedback-aside row: `no | SAN | verdict | note`. */
 export interface VerdictRow {
@@ -106,7 +107,7 @@ export interface MoveResponse {
   opponent: OpponentMove | null;
   fenAfterOpponent: string | null;
   /** Feedback rows ADDED by this step (user row, then the reply's
-   * `engine` row when there was one); the client accumulates them. */
+   * source-labeled row when there was one); the client accumulates them. */
   rows: VerdictRow[];
   outcome: Outcome | null;
   /** Set when this move ended the drill (attempt recorded server-side). */

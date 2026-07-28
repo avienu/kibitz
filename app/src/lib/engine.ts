@@ -62,8 +62,17 @@ export function stopAnalysis(): Promise<void> {
   return invoke<void>("stop_analysis");
 }
 
-export function onEngineInfo(cb: (info: EngineInfo) => void): Promise<UnlistenFn> {
-  return listen<EngineInfo>("engine-info", (e) => cb(e.payload));
+/** `engine-info` event payload: the parsed info line stamped with the FEN
+ * of the position the search was started on (src-tauri/src/lib.rs
+ * InfoPayload). Consumers MUST attribute the score/PV to `fen` — infos
+ * from a just-stopped search keep streaming briefly after a restart, and
+ * attributing them to the newly shown position flips the score's sign. */
+export interface EngineInfoEvent extends EngineInfo {
+  fen: string;
+}
+
+export function onEngineInfo(cb: (info: EngineInfoEvent) => void): Promise<UnlistenFn> {
+  return listen<EngineInfoEvent>("engine-info", (e) => cb(e.payload));
 }
 
 export function onEngineDone(cb: (done: EngineDone) => void): Promise<UnlistenFn> {

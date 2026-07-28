@@ -136,6 +136,19 @@ export function srsKeyAction(
   return GRADE_KEYS[key] ?? null;
 }
 
+/**
+ * Which colour toggle the Openings SRS screen should open on (audit
+ * 2026-07 #6): the colour that actually has due cards. Prefer a colour
+ * with due > 0; when both (or neither) have due cards, White. Applied on
+ * screen entry only — an explicit user toggle is never overridden.
+ */
+export function defaultTrainColor(counts: {
+  white: { due: number };
+  black: { due: number };
+}): "white" | "black" {
+  return counts.black.due > 0 && counts.white.due === 0 ? "black" : "white";
+}
+
 /** Outcome tallies for the end-of-session summary. */
 export interface SessionSummary {
   reviewed: number;

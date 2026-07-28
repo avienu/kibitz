@@ -54,13 +54,17 @@ const VERDICT_LABEL: Record<VerdictRow["verdict"], string> = {
   slower: "SLOWER",
   throws: "THROWS",
   unverified: "UNVERIFIED",
-  engine: "ENGINE",
+  // The defender's reply, labeled by its TRUE source — never "ENGINE":
+  // no engine runs anywhere in this flow (audit 2026-07 #9).
+  tablebase: "TABLEBASE",
+  heuristic: "HEURISTIC",
 };
 
 /**
  * Feedback rows (exported for tests): `no | SAN | verdict | note`.
  * WINNING --good · SLOWER --accent (note states the DTZ cost) ·
- * THROWS --bad · ENGINE --faint · UNVERIFIED --faint italic.
+ * THROWS --bad · TABLEBASE/HEURISTIC (reply rows) --faint ·
+ * UNVERIFIED --faint italic.
  */
 export function FeedbackRows({ rows }: { rows: VerdictRow[] }) {
   return (
@@ -386,6 +390,11 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
               {showIdea && !isTerminal(play) && (
                 <p className="eg-idea">{play.started.instruction}</p>
               )}
+              {/* No tablebase files: say so visibly, with where to set
+               * them — the reply rows then honestly read HEURISTIC. */}
+              {!isTerminal(play) && ov && !ov.tablebase.available && (
+                <p className="eg-tb-missing">{ov.tablebase.note}</p>
+              )}
             </>
           ) : (
             <div className="srs-start">
@@ -397,6 +406,9 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                 replies where the piece count is covered, a deterministic heuristic otherwise. No
                 engine anywhere in this flow.
               </p>
+              {ov && !ov.tablebase.available && (
+                <p className="eg-tb-missing">{ov.tablebase.note}</p>
+              )}
             </div>
           )}
         </div>

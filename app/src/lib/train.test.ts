@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultTrainColor,
   emptySummary,
   expectedArrow,
   formatInterval,
@@ -109,5 +110,27 @@ describe("srsKeyAction (round-2 keyboard map: 1–4 grade, ⏎ submit)", () => {
     expect(srsKeyAction("1", { editable: false, revealed: true, modifier: true })).toBeNull();
     expect(srsKeyAction("5", { editable: false, revealed: true })).toBeNull();
     expect(srsKeyAction("g", { editable: false, revealed: true })).toBeNull();
+  });
+});
+
+describe("defaultTrainColor (audit #6: land on the colour with due cards)", () => {
+  const counts = (whiteDue: number, blackDue: number) => ({
+    white: { due: whiteDue },
+    black: { due: blackDue },
+  });
+
+  it("defaults to Black when ONLY Black has due cards (the audit case)", () => {
+    // 0 due as White, 45 due as Black must not land on a "0 due as
+    // white · No cards yet" dead end.
+    expect(defaultTrainColor(counts(0, 45))).toBe("black");
+  });
+
+  it("defaults to White when only White has due cards", () => {
+    expect(defaultTrainColor(counts(3, 0))).toBe("white");
+  });
+
+  it("ties break to White (both due, neither due)", () => {
+    expect(defaultTrainColor(counts(2, 5))).toBe("white");
+    expect(defaultTrainColor(counts(0, 0))).toBe("white");
   });
 });

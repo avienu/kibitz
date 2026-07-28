@@ -80,13 +80,21 @@ export default function MovesPanel({
   previewVarIndex,
 }: MovesPanelProps) {
   // Follow the game: keep the current move visible while stepping
-  // (run-8 user report — the panel lost you mid-game).
+  // (run-8 user report — the panel lost you mid-game). Audit 2026-07
+  // #14: the effect must also run when the rows first arrive (a game
+  // LOADED at a mid-game ply, e.g. resume) and after the annotation
+  // display mode changes (full/hover/hidden reflows the list, which
+  // used to strand the scroll position).
   const bodyRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const body = bodyRef.current;
     if (!body) return;
     const cur = body.querySelector<HTMLElement>(".mv-cell.cur");
-    if (!cur) return;
+    if (!cur) {
+      // Ply 0 has no current cell; a fresh load there starts at the top.
+      if (currentPly === 0) body.scrollTop = 0;
+      return;
+    }
     const b = body.getBoundingClientRect();
     const c = cur.getBoundingClientRect();
     if (c.top < b.top + 8 || c.bottom > b.bottom - 8) {
@@ -94,7 +102,7 @@ export default function MovesPanel({
       // the current move stay readable while stepping (run-9 report).
       cur.scrollIntoView({ block: "center" });
     }
-  }, [currentPly]);
+  }, [currentPly, annotationMode, rows.length]);
 
   const [draft, setDraft] = useState<CommentDraft | null>(null);
   /** Move token index the NAG popover is open for. */

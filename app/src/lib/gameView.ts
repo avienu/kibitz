@@ -100,25 +100,69 @@ export function unionEvidence(blocks: ExplanationBlockJson[]): Evidence {
   return out;
 }
 
+/** How many alert sentences show before the rest collapse (audit #13). */
+export const MAX_VISIBLE_ALERTS = 3;
+
+/**
+ * Block indices hidden by the alert collapse: alert blocks beyond the
+ * first [`MAX_VISIBLE_ALERTS`], in block order. The verbalizer already
+ * emits alert blocks most-severe first (kibitz-verbalize::explain sorts
+ * by severity before rendering), so the leading alerts ARE the top ones;
+ * the wire contract carries no per-block severity/side to re-rank by,
+ * and re-ranking here would diverge from the narration order. Imbalance
+ * and plan blocks never collapse. Empty when expanded.
+ */
+export function collapsedAlertIndices(
+  blocks: ExplanationBlockJson[],
+  expanded: boolean,
+): number[] {
+  if (expanded) return [];
+  const out: number[] = [];
+  let alerts = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].kind !== "alert") continue;
+    alerts += 1;
+    if (alerts > MAX_VISIBLE_ALERTS) out.push(i);
+  }
+  return out;
+}
+
+/** Options for [`deriveEvidence`]. */
+export interface EvidenceOptions {
+  /** A variation preview is active: the explanation is PAUSED on the main
+   * game, so its rings/arrows must never paint over the previewed
+   * position (audit 2026-07 #4). */
+  previewing?: boolean;
+  /** The "show N more" alert toggle is open: collapsed alerts rejoin the
+   * no-hover union (audit #13 — the default union stays uncluttered). */
+  expandedAlerts?: boolean;
+}
+
 /**
  * README §State Management: evidence = hovered sentence's evidence alone,
  * else the union of all blocks; null when there is no explanation.
  * Indices past the block list address the suggestion chips (run 10):
  * index blocks.length + j isolates suggestion j's key arrow. Suggestion
  * evidence is hover-only — it never joins the no-hover union.
+ * While a variation preview is active, NO evidence renders at all — the
+ * paused main-game overlays would point at squares whose pieces moved.
  */
 export function deriveEvidence(
   explanation: ExplanationJson | null,
   hoverSentence: number | null,
+  opts: EvidenceOptions = {},
 ): Evidence | null {
-  if (!explanation) return null;
+  if (!explanation || opts.previewing) return null;
   if (hoverSentence !== null) {
     const block = explanation.blocks[hoverSentence];
     if (block) return normalizeEvidence(block.evidence);
     const suggestion = explanation.suggestions?.[hoverSentence - explanation.blocks.length];
     if (suggestion) return normalizeEvidence(suggestion.evidence);
   }
-  return unionEvidence(explanation.blocks);
+  // The no-hover union covers the VISIBLE blocks only: alerts collapsed
+  // behind "show N more" keep their rings/arrows off the board too.
+  const hidden = new Set(collapsedAlertIndices(explanation.blocks, opts.expandedAlerts ?? false));
+  return unionEvidence(explanation.blocks.filter((_, i) => !hidden.has(i)));
 }
 
 /** "PressureBackwardPawn" -> "pressure backward pawn", for chip tooltips. */
@@ -250,6 +294,18 @@ export function reduceGameView(state: GameViewState, action: GameViewAction): Ga
     case "toggleFlip":
       return { ...state, flipped: !state.flipped };
   }
+}
+
+/**
+ * Ply to open a RESUMED game at (audit 2026-07 #12). Finished games are
+ * annotated to the end, so "last touched" equals the final ply for every
+ * reviewed game — resuming there shows only the last position. When the
+ * saved ply is the game's final ply (or past it), open at the start
+ * instead; any genuinely mid-game bookmark is honored as-is.
+ */
+export function chooseResumePly(savedPly: number, plyCount: number): number {
+  if (plyCount > 0 && savedPly >= plyCount) return 0;
+  return Math.max(0, savedPly);
 }
 
 /* ------------------------------------------------------------------ */

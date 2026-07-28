@@ -3,6 +3,8 @@ import type { AnalysisRow } from "./analyses";
 import { DEFAULT_INTENSITY } from "./evidence";
 import {
   blockReferencesSquare,
+  chooseResumePly,
+  collapsedAlertIndices,
   deriveEvidence,
   deriveIntensity,
   evalBarView,
@@ -114,6 +116,59 @@ describe("evidence derivation (README §State Management)", () => {
   it("null explanation derives null; unionEvidence flattens", () => {
     expect(deriveEvidence(null, null)).toBeNull();
     expect(unionEvidence([b0, b1]).imbalance).toEqual(["e8", "d7"]);
+  });
+
+  it("audit #12: resuming at the final ply reopens at the start", () => {
+    // Reviewed games are annotated to the end, so last-touched == end.
+    expect(chooseResumePly(84, 84)).toBe(0);
+    expect(chooseResumePly(90, 84)).toBe(0); // stale bookmark past the end
+    // A genuine mid-game bookmark is honored.
+    expect(chooseResumePly(24, 84)).toBe(24);
+    expect(chooseResumePly(0, 84)).toBe(0);
+    // Degenerate inputs: an empty game passes through (clampPly guards
+    // downstream); a negative saved ply never goes below 0.
+    expect(chooseResumePly(3, 0)).toBe(3);
+    expect(chooseResumePly(-2, 84)).toBe(0);
+  });
+
+  it("audit #13: alerts beyond the top 3 collapse; expanding restores them", () => {
+    // Alert blocks arrive most-severe first from the verbalizer; blocks
+    // 0..3 are alerts, 4 is an imbalance, 5 a plan.
+    const blocks = [
+      block({ evidence: { alerts: ["a1"] } }),
+      block({ evidence: { alerts: ["b2"] } }),
+      block({ evidence: { alerts: ["c3"] } }),
+      block({ evidence: { alerts: ["d4"], arrows: [{ from: "a1", to: "d4", kind: "attacker" }] } }),
+      block({ kind: "imbalance", evidence: { imbalance: ["e5"] } }),
+      block({ kind: "plan", evidence: { key: ["f6"] } }),
+    ];
+    // Only the 4th alert (index 3) collapses; imbalance/plan never do.
+    expect(collapsedAlertIndices(blocks, false)).toEqual([3]);
+    expect(collapsedAlertIndices(blocks, true)).toEqual([]);
+    // Exactly 3 alerts: nothing collapses.
+    expect(collapsedAlertIndices(blocks.slice(0, 3), false)).toEqual([]);
+
+    // The default no-hover union excludes the collapsed alert's evidence…
+    const e = deriveEvidence(explanation(blocks), null)!;
+    expect(e.alerts).toEqual(["a1", "b2", "c3"]);
+    expect(e.arrows).toEqual([]);
+    expect(e.imbalance).toEqual(["e5"]);
+    expect(e.key).toEqual(["f6"]);
+    // …and the expanded union restores it.
+    const all = deriveEvidence(explanation(blocks), null, { expandedAlerts: true })!;
+    expect(all.alerts).toEqual(["a1", "b2", "c3", "d4"]);
+    expect(all.arrows).toHaveLength(1);
+    // Hovering still isolates a single block regardless of the collapse.
+    expect(deriveEvidence(explanation(blocks), 2)!.alerts).toEqual(["c3"]);
+  });
+
+  it("audit #4: NO evidence renders while a variation preview is active", () => {
+    // The paused main-game overlays must never paint over the previewed
+    // position — not the union, and not a lingering hover either.
+    expect(deriveEvidence(expl, null, { previewing: true })).toBeNull();
+    expect(deriveEvidence(expl, 0, { previewing: true })).toBeNull();
+    // Preview off keeps the normal union.
+    expect(deriveEvidence(expl, null, { previewing: false })!.alerts).toEqual(["d7"]);
   });
 
   it("intensity: 1.0 hovered, 0.44 baseline", () => {

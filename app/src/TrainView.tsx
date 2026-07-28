@@ -29,6 +29,7 @@ import {
   type TrainSummary,
 } from "./lib/db";
 import {
+  defaultTrainColor,
   emptySummary,
   expectedArrow,
   fenAfterSan,
@@ -105,12 +106,25 @@ export default function TrainView({ onSummary, treatment }: TrainViewProps) {
   const [typedNote, setTypedNote] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
   const grading = useRef(false);
+  /** Screen entry (incl. deep links) defaults the colour toggle to the
+   * colour that actually has due cards (audit 2026-07 #6) — once, so an
+   * explicit user toggle is never overridden. */
+  const colorAutoPicked = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       const s = await trainSummary();
       setSummary(s);
       onSummary(s);
+      if (!colorAutoPicked.current) {
+        colorAutoPicked.current = true;
+        const def = defaultTrainColor(s);
+        if (def !== color) {
+          // The colour change re-runs refresh with the right queue.
+          setColor(def);
+          return;
+        }
+      }
       setQueue(await trainQueue(color, 100));
       setError(null);
     } catch (e) {

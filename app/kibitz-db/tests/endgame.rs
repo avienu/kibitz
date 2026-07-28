@@ -243,6 +243,15 @@ const KP_WIN_SCRIPT: &[&str] = &[
     "d6c6", "b3b7",
 ];
 
+/// Audit 2026-07 #9: the reply-row label is the reply's TRUE source —
+/// `tablebase` or `heuristic`, never `engine` (no engine runs here).
+#[test]
+fn reply_rows_are_labeled_by_their_true_source() {
+    use kibitz_db::endgame::{reply_verdict, OpponentSource};
+    assert_eq!(reply_verdict(OpponentSource::Tablebase), Verdict::Tablebase);
+    assert_eq!(reply_verdict(OpponentSource::Heuristic), Verdict::Heuristic);
+}
+
 #[test]
 fn scripted_kp_win_reaches_mate_without_tablebase() {
     let drill = endgame::drill("kp-king-in-front").expect("drill exists");
@@ -265,12 +274,13 @@ fn scripted_kp_win_reaches_mate_without_tablebase() {
     assert_eq!(s.verification_kind(), "terminal");
 
     // Feedback rows without tablebase files: user moves are honestly
-    // `unverified`, opponent replies carry the `engine` label.
+    // `unverified`, opponent replies carry the honest `heuristic` label
+    // (audit 2026-07 #9: never `engine` — no engine runs here).
     let first = first_rows.expect("first step captured");
     assert_eq!(first.len(), 2);
     assert_eq!(first[0].verdict, Verdict::Unverified);
     assert_eq!(first[0].san, "e4", "SAN of the user's pawn push e3e4");
-    assert_eq!(first[1].verdict, Verdict::Engine);
+    assert_eq!(first[1].verdict, Verdict::Heuristic);
     assert!(!first[1].san.is_empty());
     // Terminals are ground truth even without tables: the mating move is
     // graded `winning`. 13 user moves, 12 opponent replies.
@@ -449,13 +459,20 @@ fn verdict_rows_grade_against_tablebase_truth() {
     let (slow, slow_cost) = slow.expect("a slower-but-winning move exists");
     let throwing = throwing.expect("a throwing move exists (Qd5+??)");
 
-    // Best move → winning, and the opponent's reply is an `engine` row.
+    // Best move → winning; the 3-man reply really comes from the
+    // tablebase, and its row says so (audit 2026-07 #9: the old `engine`
+    // label was a mislabel of a tablebase reply).
     let mut s = DrillSession::new(&fixture).unwrap();
     let report = s.user_move(&fastest, Some(&mut tb)).unwrap();
     assert_eq!(report.rows.len(), 2);
     assert_eq!(report.rows[0].verdict, Verdict::Winning);
     assert_eq!(report.rows[0].dtz_cost, None);
-    assert_eq!(report.rows[1].verdict, Verdict::Engine);
+    assert_eq!(report.rows[1].verdict, Verdict::Tablebase);
+    assert_eq!(
+        report.opponent.as_ref().map(|o| o.source),
+        Some(kibitz_db::endgame::OpponentSource::Tablebase),
+        "row label matches the reported reply source"
+    );
     assert_eq!(s.verdict_rows(), &report.rows[..], "session accumulates");
 
     // Worse-but-winning → slower, with the DTZ cost stated.

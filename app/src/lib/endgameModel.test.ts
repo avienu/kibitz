@@ -44,7 +44,7 @@ const STEP_CONTINUES: MoveResponse = {
   fenAfterUser: "3k4/8/3K4/8/8/8/8/2Q5 w - - 1 1",
   opponent: { uci: "d8e8", source: "tablebase" },
   fenAfterOpponent: "4k3/8/3K4/2Q5/8/8/8/8 w - - 2 2",
-  rows: [row(1, "Qc5+", "winning"), row(2, "Ke8", "engine")],
+  rows: [row(1, "Qc5+", "winning"), row(2, "Ke8", "tablebase")],
   outcome: null,
   progress: null,
 };
@@ -65,7 +65,7 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
     expect(m1.phase).toBe("replying");
     expect(canMove(m1)).toBe(false);
     expect(m1.fen).toBe(STEP_CONTINUES.fenAfterUser);
-    expect(m1.rows.map((r) => r.verdict)).toEqual(["winning", "engine"]);
+    expect(m1.rows.map((r) => r.verdict)).toEqual(["winning", "tablebase"]);
     expect(statusLine(m1)).toEqual({ tone: "wait", text: "Defender is thinking…" });
     // The beat lands: defender's move on the board, USER CAN MOVE AGAIN.
     const m2 = commitReply(m1);
@@ -118,7 +118,7 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
   it("a reply that ends the drill terminates on commit, not before", () => {
     const stalemated: MoveResponse = {
       ...STEP_CONTINUES,
-      rows: [row(1, "Qb6", "throws", "Stalemate."), row(2, "Kd8", "engine")],
+      rows: [row(1, "Qb6", "throws", "Stalemate."), row(2, "Kd8", "tablebase")],
       outcome: { solved: false, detail: "Only a draw (stalemate) — the position was winning." },
       progress: { ...PROGRESS, cleanStreak: 0 },
     };

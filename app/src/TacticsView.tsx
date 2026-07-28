@@ -51,6 +51,7 @@ import {
 } from "./lib/tactics";
 import {
   MODE_DEFS,
+  WEAKNESS_LOCKED_REASON,
   isTimedMode,
   modeBadge,
   motifFact,
@@ -58,6 +59,7 @@ import {
   solvePrompt,
   sourceFact,
   tacticsKeyAction,
+  weaknessLocked,
   weaknessWeights,
   whyText,
 } from "./lib/tacticsView";
@@ -76,6 +78,9 @@ interface TacticsViewProps {
   voice: NarrationVoice;
   onVoice: (v: NarrationVoice) => void;
   treatment?: BoardTreatment;
+  /** Deep link to the Profile screen ("Build profile" when weakness mode
+   * has no profile to target — audit 2026-07 #15). */
+  onNavigate?: (view: "profile") => void;
 }
 
 export default function TacticsView({
@@ -84,6 +89,7 @@ export default function TacticsView({
   voice,
   onVoice,
   treatment = "walnut",
+  onNavigate,
 }: TacticsViewProps) {
   const initialSeed = seedMotifFromClaim(seedClaim);
   const [st, setSt] = useState<TacticsState | null>(null);
@@ -484,23 +490,30 @@ export default function TacticsView({
             </div>
           )}
           <div className="tx2-mode-list">
-            {MODE_DEFS.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                className={`tx2-mode${mode === m.id ? " cur" : ""}`}
-                disabled={phase === "solving"}
-                onClick={() => setMode(m.id)}
-              >
-                <span className="tx2-mode-row">
-                  <span className="tx2-mode-name">{m.name}</span>
-                  <span className="tx2-mode-badge">
-                    {modeBadge(m.id, st, profile, sets.length)}
+            {MODE_DEFS.map((m) => {
+              // Weakness mode without a profile: the card itself states
+              // the reason (audit #15) instead of a quiet Start failure.
+              const locked = m.id === "weakness" && weaknessLocked(profile, seededMotif);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`tx2-mode${mode === m.id ? " cur" : ""}${locked ? " locked" : ""}`}
+                  aria-disabled={locked || undefined}
+                  disabled={phase === "solving"}
+                  onClick={() => setMode(m.id)}
+                >
+                  <span className="tx2-mode-row">
+                    <span className="tx2-mode-name">{m.name}</span>
+                    <span className="tx2-mode-badge">
+                      {modeBadge(m.id, st, profile, sets.length)}
+                    </span>
                   </span>
-                </span>
-                <span className="tx2-mode-note">{m.note}</span>
-              </button>
-            ))}
+                  <span className="tx2-mode-note">{m.note}</span>
+                  {locked && <span className="tx2-mode-reason">{WEAKNESS_LOCKED_REASON}</span>}
+                </button>
+              );
+            })}
           </div>
           {mode === "motif" && (
             <label className="tx2-theme-pick">
@@ -730,9 +743,20 @@ export default function TacticsView({
               </div>
             </div>
             <div className="tx2-aside-footnote">
-              {mode === "weakness"
-                ? "Queue order comes from your motif matrix, not a generic ladder. Solve or fail, the result feeds straight back into your rating."
-                : "Solve or fail, the result feeds straight back into your rating."}
+              {mode === "weakness" && weaknessLocked(profile, seededMotif) ? (
+                <>
+                  {WEAKNESS_LOCKED_REASON}{" "}
+                  {onNavigate && (
+                    <button className="tx2-footnote-link" onClick={() => onNavigate("profile")}>
+                      Build your profile →
+                    </button>
+                  )}
+                </>
+              ) : mode === "weakness" ? (
+                "Queue order comes from your motif matrix, not a generic ladder. Solve or fail, the result feeds straight back into your rating."
+              ) : (
+                "Solve or fail, the result feeds straight back into your rating."
+              )}
             </div>
           </div>
           <div className="tx2-aside-footer">
