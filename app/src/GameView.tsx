@@ -326,12 +326,22 @@ export default function GameView({
     return () => ro.disconnect();
   }, [gv.boardTreatment]);
 
+  // Alert collapse (audit #13): the panel shows the top 3 alert
+  // sentences by default; "show N more" reveals the rest. Owned here so
+  // the board's no-hover union tracks what is actually visible. Resets
+  // whenever the explanation (i.e. the ply) changes.
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
+  useEffect(() => setAlertsExpanded(false), [explanation]);
+
   const evidence = useMemo(
     () =>
       explainOn
-        ? deriveEvidence(explanation, gv.hoverSentence, { previewing: preview !== null })
+        ? deriveEvidence(explanation, gv.hoverSentence, {
+            previewing: preview !== null,
+            expandedAlerts: alertsExpanded,
+          })
         : null,
-    [explainOn, explanation, gv.hoverSentence, preview],
+    [explainOn, explanation, gv.hoverSentence, preview, alertsExpanded],
   );
   const intensity = deriveIntensity(gv.hoverSentence);
 
@@ -711,6 +721,8 @@ export default function GameView({
               selectedSquare={gv.selectedSquare}
               onExplain={onExplain}
               explainedPlies={explainedPlies}
+              alertsExpanded={alertsExpanded}
+              onToggleAlerts={() => setAlertsExpanded((v) => !v)}
             />
           )}
           <MovesPanel
