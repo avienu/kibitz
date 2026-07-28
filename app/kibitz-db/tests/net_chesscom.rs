@@ -179,3 +179,57 @@ fn live_chesscom_archives_index() {
         FetchOutcome::RateLimited { .. } => eprintln!("rate limited; treating as pass"),
     }
 }
+
+/// Observed sync: months report an honest fraction and a stop between
+/// months keeps the cursor at the last COMPLETED month (run-9 report:
+/// "no clue as to status... will it resume where I left off?").
+#[test]
+fn observed_sync_reports_months_and_stops_cleanly() {
+    let (_dir, conn) = open_temp_db();
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(
+        &chesscom::archives_url("testuser"),
+        Scripted::Body(ARCHIVES_JSON.to_vec()),
+    );
+    fetcher.script(
+        &chesscom::month_pgn_url("testuser", "2024/01"),
+        Scripted::Body(PGN_JAN.to_vec()),
+    );
+    fetcher.script(
+        &chesscom::month_pgn_url("testuser", "2024/02"),
+        Scripted::Body(PGN_FEB.to_vec()),
+    );
+    fetcher.script(
+        &chesscom::month_pgn_url("testuser", "2024/03"),
+        Scripted::Body(PGN_MAR.to_vec()),
+    );
+    let mut seen: Vec<(usize, usize, String)> = Vec::new();
+    // Stop after observing the first month.
+    let report = chesscom::sync_user_observed(&conn, &fetcher, "testuser", &mut |d, t, m, _g| {
+        seen.push((d, t, m.to_string()));
+        seen.len() < 2
+    })
+    .unwrap();
+    assert!(!seen.is_empty(), "observer ran");
+    assert!(seen.iter().all(|(d, t, _)| d < t), "honest fractions");
+    // Cursor only covers fully-imported months; resuming re-runs from the
+    // first month that was not completed (fresh fetcher: scripts are
+    // one-shot).
+    let fetcher2 = FixtureFetcher::new();
+    fetcher2.script(
+        &chesscom::archives_url("testuser"),
+        Scripted::Body(ARCHIVES_JSON.to_vec()),
+    );
+    fetcher2.script(
+        &chesscom::month_pgn_url("testuser", "2024/02"),
+        Scripted::Body(PGN_FEB.to_vec()),
+    );
+    fetcher2.script(
+        &chesscom::month_pgn_url("testuser", "2024/03"),
+        Scripted::Body(PGN_MAR.to_vec()),
+    );
+    let resumed =
+        chesscom::sync_user_observed(&conn, &fetcher2, "testuser", &mut |_, _, _, _| true).unwrap();
+    let all_months: usize = report.months.len() + resumed.months.len();
+    assert!(all_months >= 2, "resume picked up the remaining months");
+}

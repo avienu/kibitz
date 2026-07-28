@@ -670,10 +670,12 @@ pub async fn sync_run(
         queued: Vec::new(),
         error: None,
     };
-    spawn_net_worker(&worker, initial, move |_stop, progress| {
+    spawn_net_worker(&worker, initial, move |stop, progress| {
         let conn = worker_conn(&db_path)?;
         let fetcher = net::UreqFetcher;
-        let outcome = run_service_sync(&conn, &fetcher, &service, &username, year, month);
+        let outcome = run_service_sync(
+            &conn, &fetcher, &service, &username, year, month, stop, progress,
+        );
         let at = now_utc(&conn);
         let report = match &outcome {
             Ok(report) => {
@@ -696,6 +698,7 @@ pub async fn sync_run(
 
 /// Run the actual kibitz-db client and reduce its report to the JSON
 /// stored as the service's last report.
+#[allow(clippy::too_many_arguments)] // one call site; a params struct adds noise
 fn run_service_sync(
     conn: &Connection,
     fetcher: &dyn Fetcher,
@@ -703,6 +706,8 @@ fn run_service_sync(
     username: &str,
     year: Option<u16>,
     month: Option<u8>,
+    stop: &AtomicBool,
+    progress: &Mutex<Option<NetProgress>>,
 ) -> Result<serde_json::Value, String> {
     match service {
         "lichess" => {
@@ -715,8 +720,25 @@ fn run_service_sync(
             }))
         }
         "chesscom" => {
-            let r = kibitz_db::net::chesscom::sync_user(conn, fetcher, username)
-                .map_err(|e| format!("{e:#}"))?;
+            // Month-by-month sync HAS an honest fraction — show it, and
+            // honor Cancel between months (the cursor stays correct, the
+            // next run resumes at the first unfinished month).
+            let r = kibitz_db::net::chesscom::sync_user_observed(
+                conn,
+                fetcher,
+                username,
+                &mut |done, total, current, games| {
+                    update_progress(progress, |p| {
+                        p.done = done as u32;
+                        p.total = total as u32;
+                        p.detail = format!(
+                            "{current} · {games} games imported so far · resumes automatically                              if interrupted"
+                        );
+                    });
+                    !stop.load(Ordering::SeqCst)
+                },
+            )
+            .map_err(|e| format!("{e:#}"))?;
             let (mut imported, mut dups, mut failed) = (0u64, 0u64, 0u64);
             for m in &r.months {
                 imported += m.games_imported;

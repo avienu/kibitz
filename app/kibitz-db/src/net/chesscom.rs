@@ -104,6 +104,19 @@ pub fn sync_user(
     fetcher: &dyn Fetcher,
     username: &str,
 ) -> anyhow::Result<ChesscomSyncReport> {
+    sync_user_observed(conn, fetcher, username, &mut |_, _, _, _| true)
+}
+
+/// [`sync_user`] with observation: `observe(done_months, total_months,
+/// current_month, games_so_far)` runs before each month and must return
+/// `true` to continue — returning `false` stops cleanly BETWEEN months
+/// (completed months stay recorded; the next run resumes there).
+pub fn sync_user_observed(
+    conn: &Connection,
+    fetcher: &dyn Fetcher,
+    username: &str,
+    observe: &mut dyn FnMut(usize, usize, &str, u64) -> bool,
+) -> anyhow::Result<ChesscomSyncReport> {
     let index_url = archives_url(username);
     let body = fetch_with_retry(
         fetcher,
@@ -129,9 +142,17 @@ pub fn sync_user(
     };
 
     let total = months.len();
+    let already: usize = months
+        .iter()
+        .filter(|m| last.as_deref().is_some_and(|l| m.as_str() <= l))
+        .count();
+    let mut games_so_far: u64 = 0;
     for (i, month) in months.iter().enumerate() {
         if last.as_deref().is_some_and(|l| month.as_str() <= l) {
             continue; // already fully imported
+        }
+        if !observe(i.max(already), total, month, games_so_far) {
+            break; // cooperative stop between months; cursor already correct
         }
         let url = month_pgn_url(username, month);
         let body = fetch_with_retry(
@@ -153,6 +174,7 @@ pub fn sync_user(
         };
         let stats = import_pgn(conn, &source, BufReader::new(body))
             .with_context(|| format!("importing chess.com {username} {month}"))?;
+        games_so_far += stats.games_imported;
         report.months.push(ChesscomMonthReport {
             month: month.clone(),
             games_imported: stats.games_imported,
