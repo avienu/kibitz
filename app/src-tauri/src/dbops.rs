@@ -143,28 +143,28 @@ fn run_jobs_worker(db_path: &Path, engine_path: &Path, stop: &AtomicBool) -> Res
     Ok(())
 }
 
-/// Start a background worker draining the job queue (user-initiated, the
-/// only engine entry point here), then fold completed verdicts back into
-/// the stored annotations. Progress is polled via `jobs_status`.
-#[tauri::command]
-pub async fn run_jobs(
-    state: State<'_, DbState>,
-    worker: State<'_, JobsWorker>,
-) -> Result<(), String> {
-    let db_path: String = with_conn(&state, |conn| {
+/// Path of the open database's main file (for worker connections).
+pub(crate) fn current_db_path(state: &State<'_, DbState>) -> Result<String, String> {
+    with_conn(state, |conn| {
         conn.query_row(
             "SELECT file FROM pragma_database_list WHERE name = 'main'",
             [],
             |r| r.get(0),
         )
         .map_err(|e| e.to_string())
-    })?;
-    let engine_path = kibitz_db::engine::resolve_engine_path().ok_or_else(|| {
-        "no engine found (set KIBITZ_STOCKFISH, add tools/stockfish, or put stockfish on PATH)"
-            .to_string()
-    })?;
+    })
+}
+
+/// Spawn the background job worker unless one is already running.
+/// Returns true when a new worker thread was spawned (false = one was
+/// already active; the queue it is draining will pick new jobs up).
+pub(crate) fn spawn_worker_if_idle(
+    db_path: String,
+    engine_path: std::path::PathBuf,
+    worker: &JobsWorker,
+) -> bool {
     if worker.active.swap(true, Ordering::SeqCst) {
-        return Err("a job run is already in progress".to_string());
+        return false;
     }
     worker.stop.store(false, Ordering::SeqCst);
     let active = Arc::clone(&worker.active);
@@ -175,6 +175,25 @@ pub async fn run_jobs(
         }
         active.store(false, Ordering::SeqCst);
     });
+    true
+}
+
+/// Start a background worker draining the job queue (user-initiated, the
+/// only engine entry point here), then fold completed verdicts back into
+/// the stored annotations. Progress is polled via `jobs_status`.
+#[tauri::command]
+pub async fn run_jobs(
+    state: State<'_, DbState>,
+    worker: State<'_, JobsWorker>,
+) -> Result<(), String> {
+    let db_path = current_db_path(&state)?;
+    let engine_path = kibitz_db::engine::resolve_engine_path().ok_or_else(|| {
+        "no engine found (set KIBITZ_STOCKFISH, add tools/stockfish, or put stockfish on PATH)"
+            .to_string()
+    })?;
+    if !spawn_worker_if_idle(db_path, engine_path, &worker) {
+        return Err("a job run is already in progress".to_string());
+    }
     Ok(())
 }
 
