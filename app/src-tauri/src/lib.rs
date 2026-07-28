@@ -206,6 +206,7 @@ pub fn run() {
             browse::opening_tree,
             browse::find_games_at,
             browse::eco_names,
+            browse::crosstable_games,
             prep::matching_players,
             prep::prep_view,
             prep::prep_fingerprint,

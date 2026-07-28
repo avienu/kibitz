@@ -38,6 +38,7 @@ import {
   type JobsStatus,
 } from "./lib/db";
 import { fmtDurationMs, rangeReadout, sourceTagTone } from "./lib/home";
+import { crosstableEligible } from "./lib/crosstable";
 import { dateBoundParam, dateRangeHint, SOURCE_KINDS } from "./lib/filters";
 
 const PAGE_SIZE = 50;
@@ -73,6 +74,8 @@ interface DatabaseScreenProps {
   jobs: JobsStatus | null;
   batch: BatchModel | null;
   onStatus: (msg: string) => void;
+  /** Event-cell click — the parent opens the crosstable modal (run 10). */
+  onCrosstable: (event: string) => void;
 }
 
 function analysisCell(g: GameRow) {
@@ -90,6 +93,7 @@ export default function DatabaseScreen({
   jobs,
   batch,
   onStatus,
+  onCrosstable,
 }: DatabaseScreenProps) {
   const [path, setPath] = useState(getSavedDbPath);
   const [opening, setOpening] = useState(false);
@@ -338,7 +342,25 @@ export default function DatabaseScreen({
     { key: "white", header: "WHITE", render: (g) => g.white, sort: (a, b) => a.white.localeCompare(b.white) },
     { key: "black", header: "BLACK", render: (g) => g.black, sort: (a, b) => a.black.localeCompare(b.black) },
     { key: "result", header: "RES", render: (g) => <span className="cell-result">{g.result}</span> },
-    { key: "event", header: "EVENT", render: (g) => <span className="cell-dim">{g.event}</span> },
+    {
+      key: "event",
+      header: "EVENT",
+      render: (g) =>
+        crosstableEligible(g.event) ? (
+          <button
+            className="cell-dim cell-event-link"
+            title="Open the crosstable for this event"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCrosstable(g.event);
+            }}
+          >
+            {g.event}
+          </button>
+        ) : (
+          <span className="cell-dim">{g.event}</span>
+        ),
+    },
     {
       key: "date",
       header: "DATE",

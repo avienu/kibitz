@@ -808,6 +808,58 @@ pub async fn find_games_at(
     })
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstableGameRow {
+    pub id: i64,
+    pub white: String,
+    pub black: String,
+    pub white_elo: Option<i64>,
+    pub black_elo: Option<i64>,
+    /// Raw PGN Round tag ("1", "1.2", "?", or null) — the frontend's
+    /// tolerant parser owns interpretation.
+    pub round: Option<String>,
+    pub result: &'static str,
+    pub date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstableGames {
+    /// True number of games under this event name (rows are capped at
+    /// kibitz_db::crosstable::EVENT_GAMES_MAX).
+    pub total: i64,
+    pub rows: Vec<CrosstableGameRow>,
+}
+
+/// Every game of the named event, for the crosstable view (run 10).
+#[tauri::command]
+pub async fn crosstable_games(
+    state: State<'_, DbState>,
+    event: String,
+) -> Result<CrosstableGames, String> {
+    with_conn(&state, |conn| {
+        let (games, total) =
+            kibitz_db::crosstable::event_games(conn, &event).map_err(|e| e.to_string())?;
+        Ok(CrosstableGames {
+            total,
+            rows: games
+                .into_iter()
+                .map(|g| CrosstableGameRow {
+                    id: g.game_id,
+                    white: g.white,
+                    black: g.black,
+                    white_elo: g.white_elo,
+                    black_elo: g.black_elo,
+                    round: g.round,
+                    result: g.result,
+                    date: g.date,
+                })
+                .collect(),
+        })
+    })
+}
+
 /// Resolve ECO codes to canonical opening names for UI-side display (SRS
 /// browser, weak-line cards, ...). Unknown codes map to null.
 pub(crate) fn eco_names_impl(

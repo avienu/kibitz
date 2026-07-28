@@ -40,6 +40,7 @@ import {
 import type { LoadedGame } from "./lib/game";
 import { gameEngines, movesRows, movesRowsFromSans, type MovesRow } from "./lib/movesView";
 import { buildAnnView, insertVariation } from "./lib/tokens";
+import { crosstableEligible } from "./lib/crosstable";
 
 interface PendingVariation {
   ply: number;
@@ -79,6 +80,8 @@ interface GameViewProps {
   onPreviewVariation: (row: Extract<MovesRow, { kind: "variation" }>) => void;
   onPreviewStep: (delta: number) => void;
   onExitPreview: () => void;
+  /** Event-line click — the parent opens the crosstable modal (run 10). */
+  onCrosstable: (event: string) => void;
 }
 
 /** Percent position of a square in the grid for an orientation. */
@@ -130,6 +133,7 @@ export default function GameView({
   onPreviewVariation,
   onPreviewStep,
   onExitPreview,
+  onCrosstable,
 }: GameViewProps) {
   const colRef = useRef<HTMLDivElement | null>(null);
   const [boardSize, setBoardSize] = useState(656);
@@ -469,6 +473,15 @@ export default function GameView({
             {game && <span className="header-result">{headers["Result"] ?? ""}</span>}
           </div>
           <div className="header-meta">{meta}</div>
+          {game && crosstableEligible(headers["Event"]) && (
+            <button
+              className="header-event-link"
+              title="Open the crosstable for this event"
+              onClick={() => onCrosstable(headers["Event"]!)}
+            >
+              {headers["Event"]} · crosstable
+            </button>
+          )}
         </div>
         <div className="header-actions">
           <span className="seg" role="group" aria-label="Board treatment">

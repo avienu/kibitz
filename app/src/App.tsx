@@ -10,6 +10,7 @@ import { parseFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
 import { parseSquare } from "chessops/util";
 import { type BoardMovable } from "./Board";
+import CrosstableView from "./CrosstableView";
 import DatabaseScreen from "./DatabaseScreen";
 import EndgameView from "./EndgameView";
 import HomeView from "./HomeView";
@@ -201,6 +202,9 @@ export default function App() {
    * the previewed line; gv.ply and everything keyed to it (explain,
    * eval, annotations) stay on the main game. */
   const [preview, setPreview] = useState<VariationPreview | null>(null);
+
+  /** Crosstable modal (run 10): the event whose crosstable is open. */
+  const [crosstableEvent, setCrosstableEvent] = useState<string | null>(null);
 
   const plyCount = game?.sans.length ?? 0;
   // `fen` is the MAIN-game position — explain/annotation/eval stay keyed
@@ -907,6 +911,7 @@ export default function App() {
             jobs={jobs}
             batch={batchProgress}
             onStatus={setStatus}
+            onCrosstable={setCrosstableEvent}
           />
         );
       case "tree":
@@ -1048,6 +1053,7 @@ export default function App() {
             onPreviewVariation={previewVariation}
             onPreviewStep={previewStepBy}
             onExitPreview={exitPreview}
+            onCrosstable={setCrosstableEvent}
           />
         ) : selfHeaded ? (
           pageView
@@ -1071,6 +1077,16 @@ export default function App() {
         />
       </div>
 
+      {crosstableEvent !== null && (
+        <CrosstableView
+          event={crosstableEvent}
+          onClose={() => setCrosstableEvent(null)}
+          onOpenGame={(id) => {
+            setCrosstableEvent(null);
+            void loadDbGameAt(id, 0);
+          }}
+        />
+      )}
       {showHelp && (
         <Help
           onClose={() => setShowHelp(false)}
