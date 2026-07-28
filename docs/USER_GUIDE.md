@@ -572,7 +572,9 @@ feedback aside.
     plies");
   - **THROWS** — the move forfeits the theoretical result (fails the
     drill);
-  - **ENGINE** — the defender's reply row;
+  - **TABLEBASE** / **HEURISTIC** — the defender's reply row, labeled by
+    where that reply actually came from (no engine runs anywhere in this
+    flow);
   - **UNVERIFIED** — outside tablebase coverage; graded only at terminal
     positions (checkmate / stalemate / draw).
 - A drill is **mastered** after 2 clean completions ("Clean streak 1/2" →

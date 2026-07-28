@@ -140,8 +140,11 @@ pub struct OpponentMove {
 }
 
 /// Grading of one move in the feedback aside. User moves are graded ONLY
-/// from tablebase probes — never engine scores; opponent replies carry the
-/// `engine` label (the design's name for the scripted defender), ungraded.
+/// from tablebase probes — never engine scores; opponent replies are
+/// labeled by where the reply ACTUALLY came from (`tablebase` /
+/// `heuristic`), ungraded. There is deliberately no `engine` label: no
+/// engine exists anywhere in this flow, and the UI must never claim one
+/// does (audit 2026-07 #9).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Verdict {
@@ -153,8 +156,18 @@ pub enum Verdict {
     Throws,
     /// No tablebase coverage for this move (graded on terminals only).
     Unverified,
-    /// The scripted defender's reply.
-    Engine,
+    /// The defender's reply, probed from the tablebase.
+    Tablebase,
+    /// The defender's reply from the deterministic heuristic.
+    Heuristic,
+}
+
+/// The reply-row label for one opponent reply — always its true source.
+pub fn reply_verdict(source: OpponentSource) -> Verdict {
+    match source {
+        OpponentSource::Tablebase => Verdict::Tablebase,
+        OpponentSource::Heuristic => Verdict::Heuristic,
+    }
 }
 
 /// One row of the endgame feedback aside: `no | SAN | verdict | note`.
@@ -184,8 +197,9 @@ pub struct StepReport {
     /// Position after the opponent's reply (when there was one).
     pub fen_after_opponent: Option<String>,
     /// Feedback rows ADDED by this step, in order: the user move's graded
-    /// row, then the opponent reply's `engine` row when there was one.
-    /// (The whole session's list is on [`DrillSession::verdict_rows`].)
+    /// row, then the opponent reply's source-labeled (`tablebase` /
+    /// `heuristic`) row when there was one. (The whole session's list is
+    /// on [`DrillSession::verdict_rows`].)
     pub rows: Vec<VerdictRow>,
     /// Set when the drill ended on this step.
     pub outcome: Option<Outcome>,
@@ -243,7 +257,7 @@ impl DrillSession {
     }
 
     /// All feedback rows so far (user moves graded by tablebase truth,
-    /// opponent replies labeled `engine`).
+    /// opponent replies labeled by their true source).
     pub fn verdict_rows(&self) -> &[VerdictRow] {
         &self.rows
     }
@@ -493,7 +507,7 @@ impl DrillSession {
         }
         *self.reps.entry(position_hash(&self.board)).or_insert(0) += 1;
         let fen_after_opponent = self.fen();
-        let reply_row = self.push_row(reply_san, Verdict::Engine, None, String::new());
+        let reply_row = self.push_row(reply_san, reply_verdict(source), None, String::new());
 
         // Terminal after the opponent's reply (the user is now to move).
         if let Some(t) = self.terminal() {

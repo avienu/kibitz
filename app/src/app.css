@@ -3066,12 +3066,23 @@ button.strip-nudge:hover:not(:disabled) {
 .eg-verdict.v-throws {
   color: var(--bad);
 }
-.eg-verdict.v-engine {
+.eg-verdict.v-tablebase,
+.eg-verdict.v-heuristic {
   color: var(--faint);
 }
 .eg-verdict.v-unverified {
   color: var(--faint);
   font-style: italic;
+}
+.eg-tb-missing {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font: 400 12.5px/1.55 "Source Serif 4", serif;
+  color: var(--dim);
+  text-wrap: pretty;
 }
 .eg-note {
   flex: 1;
