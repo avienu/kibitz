@@ -10,6 +10,7 @@ import {
   solvePrompt,
   sourceFact,
   tacticsKeyAction,
+  weaknessLocked,
   weaknessWeights,
   whyText,
 } from "./tacticsView";
@@ -57,6 +58,14 @@ describe("seed contract (Train this weakness)", () => {
     expect(weaknessWeights(PROFILE_FIXTURE, null)).toHaveLength(2);
     expect(weaknessWeights(null, null)).toBeUndefined();
     expect(weaknessWeights(PROFILE_FIXTURE, "WeakKing")).toHaveLength(1);
+  });
+
+  it("audit #15: weakness mode is locked only without BOTH profile and seed", () => {
+    expect(weaknessLocked(null, null)).toBe(true);
+    // A profile unlocks it; so does a "Train this weakness" seed alone.
+    expect(weaknessLocked(PROFILE_FIXTURE, null)).toBe(false);
+    expect(weaknessLocked(null, "WeakKing")).toBe(false);
+    expect(weaknessLocked(PROFILE_FIXTURE, "WeakKing")).toBe(false);
   });
 });
 

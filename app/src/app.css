@@ -3907,6 +3907,19 @@ input.set-value.editing {
   font: 400 11.5px/1.45 var(--font-prose);
   color: var(--dim);
 }
+/* Weakness mode without a profile (audit #15): the card itself carries
+ * the disabled look and the reason — no dead-end Start. */
+.tx2-mode.locked .tx2-mode-name,
+.tx2-mode.locked .tx2-mode-note {
+  opacity: 0.55;
+}
+.tx2-mode-reason {
+  display: block;
+  margin-top: 5px;
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
 .tx2-theme-pick {
   display: flex;
   align-items: center;
@@ -4172,6 +4185,16 @@ input.set-value.editing {
   border-top: 1px solid var(--line);
   font: 400 10.5px/1.5 var(--font-ui);
   color: var(--faint);
+}
+.tx2-footnote-link {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: 600 10.5px/1.5 var(--font-ui);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .tx2-aside-footer {
   padding: 12px 16px;

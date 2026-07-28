@@ -890,6 +890,7 @@ export default function App() {
             voice={gv.voice}
             onVoice={(v) => dispatch({ type: "setVoice", voice: v })}
             treatment={gv.boardTreatment}
+            onNavigate={navigate}
           />
         );
       case "endgames":

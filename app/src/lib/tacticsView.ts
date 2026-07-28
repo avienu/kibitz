@@ -55,6 +55,24 @@ export function isTimedMode(mode: DrillMode): boolean {
   return mode === "speed" || mode === "woodpecker";
 }
 
+/**
+ * Weakness-targeted mode has nothing to target without a profile (or a
+ * "Train this weakness" seed): the mode card shows this state inline
+ * (disabled style + reason) instead of failing quietly on Start (audit
+ * 2026-07 #15). The mode stays selectable — Start then explains and the
+ * footnote deep-links to the Profile screen.
+ */
+export function weaknessLocked(
+  profile: PlayerProfile | null,
+  seededMotif: string | null,
+): boolean {
+  return profile === null && seededMotif === null;
+}
+
+/** Inline reason on the locked weakness mode card. */
+export const WEAKNESS_LOCKED_REASON =
+  "No profile yet — the queue is seeded from your motif matrix.";
+
 /* ---- seed contract -------------------------------------------------------- */
 
 /** Parse a "Train this weakness" claim into the motif kind it seeds. */
