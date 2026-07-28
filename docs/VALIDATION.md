@@ -290,3 +290,28 @@ right idea picks a neighboring move (book h4 vs our g4 in the same storm;
 book Rd5 rejected by SEE where the corpus diagram differs from our static
 reading). Detection axes are unchanged from run 8.5 (identical numbers),
 confirming suggest is purely downstream of analyze.
+
+## Whole-board static veto (run 11 baseline)
+
+Run 11 added the whole-board static veto (maintainer field report: the
+Winawer ...f5?? chip — a candidate that leaves ANOTHER piece en prise is
+marked, and the harness, which runs no engine, drops marked candidates
+exactly as any no-engine consumer must). Re-measured on the same corpus:
+
+| axis | run 10 | run 11 (veto applied) |
+|---|---|---|
+| suggest@1 | 2/25 = 8.0% | 2/25 = 8.0% |
+| suggest@3 | 8/25 = 32.0% | 8/25 = 32.0% |
+
+The hit rates happen to be unchanged: on this corpus none of the vetoed
+candidates were the ones matching a book move — the veto only removed
+wrong answers. It DOES change what users see (several tactical Amateur's
+Mind positions now show fewer or zero static chips: e.g. am-321-2 and
+am-323-2 drop from three chips to none, because every static candidate
+there sheds material the suggester cannot statically justify). We
+expected these numbers could go DOWN — a book move that wins material
+through a marked-looking sequence would be vetoed statically and only
+resurface with engine verification — and will accept that trade if
+future corpus entries hit it: bad advice is worse than no advice. All
+other axes are byte-identical to run 10 (the veto touches only
+suggestions).

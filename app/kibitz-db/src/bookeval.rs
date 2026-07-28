@@ -204,8 +204,17 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
         }
 
         // Suggestion hit-rate (run 10) against transcribed book moves.
+        // The harness runs NO engine, so the whole-board static veto
+        // governs (run 11): marked candidates are dropped exactly as a
+        // no-engine consumer would drop them. This is the honest number
+        // for what users see without verification — tactical book moves
+        // that statics must veto now count as misses (see
+        // docs/VALIDATION.md).
         if !e.expected.best_moves.is_empty() {
-            let suggestions = kibitz_core::suggest::suggest(&record, &board);
+            let suggestions: Vec<_> = kibitz_core::suggest::suggest(&record, &board)
+                .into_iter()
+                .filter(|s| s.static_risk.is_none())
+                .collect();
             let hit = |s: &kibitz_core::suggest::Suggestion| {
                 e.expected
                     .best_moves
