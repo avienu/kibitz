@@ -16,7 +16,8 @@ use std::collections::BTreeSet;
 
 use kibitz_core::record::{
     ArrowKind, BlockKind, CompositePlan, EvalReadout, Evidence, EvidenceArrow, Explanation,
-    ExplanationBlock, FeatureRecord, Imbalance, PlanHint, TacticAlert, VoiceText, SCHEMA_VERSION,
+    ExplanationBlock, FeatureRecord, Imbalance, PlanHint, SuggestionOut, TacticAlert, VoiceText,
+    SCHEMA_VERSION,
 };
 
 use crate::board::Board;
@@ -148,7 +149,59 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
         eval: eval_readout(record),
         headline,
         blocks,
+        suggestions: suggestions_for(record, swing),
     }
+}
+
+/// Candidate moves for the contract (run 10): tactics outrank plans, so a
+/// CONFIRMED tactic of any size — and any known mate or decisive engine
+/// line — suppresses the suggestion block entirely, mirroring the plan
+/// blocks above.
+fn suggestions_for(record: &FeatureRecord, swing: i32) -> Vec<SuggestionOut> {
+    if swing > 0 {
+        return Vec::new();
+    }
+    let mate_known = record.engine.as_ref().is_some_and(|e| e.mate_in.is_some())
+        || record
+            .wsui
+            .alerts
+            .iter()
+            .any(|a| a.engine_check.as_ref().is_some_and(|c| c.mate_in.is_some()));
+    let decisive = record
+        .engine
+        .as_ref()
+        .is_some_and(|e| e.eval_cp.abs() >= crate::DECISIVE_CP);
+    if mate_known || decisive {
+        return Vec::new();
+    }
+    let Ok(board) = record.fen.parse::<kibitz_core::cozy_chess::Board>() else {
+        return Vec::new();
+    };
+    kibitz_core::suggest::suggest(record, &board)
+        .into_iter()
+        .map(|s| {
+            let (from, to) = (s.mv.get(0..2), s.mv.get(2..4));
+            let mut evidence = Evidence::default();
+            if let (Some(from), Some(to)) = (from, to) {
+                if is_square(from) && is_square(to) {
+                    evidence.key.push(to.to_string());
+                    evidence.arrows.push(EvidenceArrow {
+                        from: from.to_string(),
+                        to: to.to_string(),
+                        kind: ArrowKind::Key,
+                    });
+                }
+            }
+            SuggestionOut {
+                san: s.san,
+                uci: s.mv,
+                score: s.score,
+                serving: s.serving,
+                prophylactic: s.prophylactic,
+                evidence,
+            }
+        })
+        .collect()
 }
 
 fn tag_for(record: &FeatureRecord) -> &'static str {

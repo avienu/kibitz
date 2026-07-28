@@ -4,7 +4,14 @@
  * state with an explicit `Explain position (E)` action — the engine (and
  * even the static screen) runs only when asked.
  */
-import { selectionNote, sentenceOpacity, type ExplainBlockKind, type ExplanationJson, type Voice } from "./lib/gameView";
+import {
+  selectionNote,
+  sentenceOpacity,
+  suggestionTitle,
+  type ExplainBlockKind,
+  type ExplanationJson,
+  type Voice,
+} from "./lib/gameView";
 
 const KIND_LABEL: Record<ExplainBlockKind, string> = {
   alert: "TACTICAL ALERT",
@@ -77,6 +84,29 @@ export default function ExplainPanel({
               </span>
             </div>
           ))}
+          {(explanation.suggestions?.length ?? 0) > 0 && (
+            <div className="consider-block">
+              <span className="consider-label">CONSIDER</span>
+              <div className="consider-chips">
+                {explanation.suggestions!.map((s, j) => {
+                  const idx = explanation.blocks.length + j;
+                  return (
+                    <span
+                      key={s.uci}
+                      className={`consider-chip${j === 0 ? " top" : ""}${
+                        s.prophylactic ? " prophylactic" : ""
+                      }${hoverSentence === idx ? " hovered" : ""}`}
+                      title={suggestionTitle(s)}
+                      onMouseEnter={() => onHoverSentence(idx)}
+                      onMouseLeave={() => onHoverSentence(null)}
+                    >
+                      {s.san}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <footer className="explain-footer">
             <span>Static screen · no engine spawned</span>
             <span>·</span>

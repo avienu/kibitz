@@ -60,6 +60,10 @@ pub struct Expected {
     pub alerts: Vec<String>,
     #[serde(default)]
     pub theme: String,
+    /// Book-given best move(s) in SAN, when the transcription carried
+    /// them — scored against kibitz-core::suggest (run 10).
+    #[serde(default)]
+    pub best_moves: Vec<String>,
 }
 
 /// Known PlanHint tokens the engine can emit today. Expected plan tags
@@ -113,6 +117,11 @@ pub struct Report {
     pub plans: AxisScore,
     pub alerts: AxisScore,
     pub favors: AxisScore,
+    /// Suggestion hit-rate (run 10): the TOP suggestion matches one of
+    /// the book's best moves / ANY of the top three does. One check per
+    /// entry that carries best_moves.
+    pub suggest_top1: AxisScore,
+    pub suggest_top3: AxisScore,
     /// expectation tag -> occurrences, for tags the engine cannot emit.
     pub vocabulary_gaps: BTreeMap<String, u32>,
     /// (entry id, axis, expected item) for every miss.
@@ -194,6 +203,38 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
             }
         }
 
+        // Suggestion hit-rate (run 10) against transcribed book moves.
+        if !e.expected.best_moves.is_empty() {
+            let suggestions = kibitz_core::suggest::suggest(&record, &board);
+            let hit = |s: &kibitz_core::suggest::Suggestion| {
+                e.expected
+                    .best_moves
+                    .iter()
+                    .any(|bm| san_matches(&s.san, bm))
+            };
+            r.suggest_top1.total += 1;
+            if suggestions.first().is_some_and(hit) {
+                r.suggest_top1.hits += 1;
+            }
+            r.suggest_top3.total += 1;
+            if suggestions.iter().any(hit) {
+                r.suggest_top3.hits += 1;
+            } else {
+                r.misses.push((
+                    e.id.clone(),
+                    "suggest",
+                    format!(
+                        "{:?} (we said {:?})",
+                        e.expected.best_moves,
+                        suggestions
+                            .iter()
+                            .map(|s| s.san.clone())
+                            .collect::<Vec<_>>()
+                    ),
+                ));
+            }
+        }
+
         if let Some(want) = e.expected.favors.as_deref() {
             if want != "balanced" {
                 r.favors.total += 1;
@@ -228,6 +269,15 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
         }
     }
     r
+}
+
+/// SAN comparison tolerant of decoration: check/mate/annotation marks are
+/// stripped from both sides before comparing.
+fn san_matches(ours: &str, book: &str) -> bool {
+    fn strip(s: &str) -> &str {
+        s.trim_end_matches(['+', '#', '!', '?'])
+    }
+    strip(ours) == strip(book)
 }
 
 /// Load every *.json corpus under `path` (file or directory).
@@ -273,6 +323,8 @@ pub fn print_report(book: &str, r: &Report, verbose: bool) {
     line("plans", &r.plans);
     line("alerts", &r.alerts);
     line("favors", &r.favors);
+    line("suggest@1", &r.suggest_top1);
+    line("suggest@3", &r.suggest_top3);
     if !r.vocabulary_gaps.is_empty() {
         println!("  vocabulary gaps (no matching hint yet):");
         for (tag, n) in &r.vocabulary_gaps {
@@ -325,6 +377,7 @@ mod tests {
                         ],
                         alerts: vec![],
                         theme: String::new(),
+                        best_moves: vec!["Nd5".into()],
                     },
                 },
                 Entry {
@@ -347,5 +400,8 @@ mod tests {
         assert_eq!(r.plans.hits, 1);
         assert_eq!(r.vocabulary_gaps.get("minority-attack"), Some(&1));
         assert_eq!(r.favors.hits, 1);
+        // Run 10: the Sveshnikov bind's book move Nd5 is our suggestion.
+        assert_eq!(r.suggest_top3.total, 1);
+        assert_eq!(r.suggest_top3.hits, 1, "misses: {:?}", r.misses);
     }
 }

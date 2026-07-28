@@ -265,6 +265,25 @@ pub struct EvalReadout {
     pub display: String,
 }
 
+/// One suggested candidate move as the game view consumes it (run 10):
+/// suggestions are DERIVED data (kibitz-core::suggest over the record), so
+/// they live in the Explanation contract, not in the FeatureRecord — the
+/// record schema stays at v3.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SuggestionOut {
+    pub san: String,
+    pub uci: String,
+    pub score: u32,
+    /// Hint tokens this move serves; for a prophylactic suggestion the
+    /// denied opponent tokens lead.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub serving: Vec<String>,
+    pub prophylactic: bool,
+    /// Board overlay while the suggestion chip is hovered (the move as a
+    /// key arrow), in the shared evidence language.
+    pub evidence: Evidence,
+}
+
 /// The per-position explanation object consumed by the game view
 /// (schema v3; produced by kibitz-verbalize::explain — the UI must not
 /// synthesize explanations).
@@ -278,6 +297,10 @@ pub struct Explanation {
     pub eval: Option<EvalReadout>,
     pub headline: VoiceText,
     pub blocks: Vec<ExplanationBlock>,
+    /// Candidate moves (run 10), best first; empty when a confirmed
+    /// tactic or decisive line gates positional talk.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<SuggestionOut>,
 }
 
 /// The universal contract: everything kibitz knows about one position.

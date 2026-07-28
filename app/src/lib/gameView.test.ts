@@ -8,6 +8,7 @@ import {
   evalBarView,
   evalSourceLabel,
   fitBoardSize,
+  humanizeHintToken,
   isEditableTarget,
   keyboardAction,
   MIN_BOARD_SIZE,
@@ -17,6 +18,7 @@ import {
   selectionNote,
   selectPlyAnalysis,
   sentenceOpacity,
+  suggestionTitle,
   unionEvidence,
   type ExplanationBlockJson,
   type ExplanationJson,
@@ -67,6 +69,46 @@ describe("evidence derivation (README §State Management)", () => {
 
   it("hover out of range falls back to the union", () => {
     expect(deriveEvidence(expl, 99)!.alerts).toEqual(["d7"]);
+  });
+
+  it("run 10: indices past the blocks isolate suggestion chips", () => {
+    const withSuggestions: ExplanationJson = {
+      ...expl,
+      suggestions: [
+        {
+          san: "Nd4",
+          uci: "f3d4",
+          score: 3,
+          serving: ["BlockadeThenPressure"],
+          prophylactic: false,
+          evidence: { key: ["d4"], arrows: [{ from: "f3", to: "d4", kind: "key" }] },
+        },
+      ],
+    };
+    // Chip index = blocks.length + j.
+    const e = deriveEvidence(withSuggestions, 2)!;
+    expect(e.key).toEqual(["d4"]);
+    expect(e.arrows).toEqual([{ from: "f3", to: "d4", kind: "key" }]);
+    expect(e.alerts).toEqual([]);
+    // Suggestion evidence never joins the no-hover union.
+    expect(deriveEvidence(withSuggestions, null)!.key).toEqual([]);
+    // Tooltip helper: served plans humanized, denial flagged.
+    expect(suggestionTitle(withSuggestions.suggestions![0])).toBe(
+      "serves: blockade then pressure",
+    );
+    expect(
+      suggestionTitle({
+        san: "e4",
+        uci: "e3e4",
+        score: 6,
+        serving: ["ManeuverKnight"],
+        prophylactic: true,
+        evidence: {},
+      }),
+    ).toBe("denies the opponent's plan — serves: maneuver knight");
+    expect(humanizeHintToken("OpenLinesTowardWeakKing")).toBe(
+      "open lines toward weak king",
+    );
   });
 
   it("null explanation derives null; unionEvidence flattens", () => {

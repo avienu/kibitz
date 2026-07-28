@@ -502,6 +502,48 @@ fn quiet_positional_prose_neutral() {
     insta::assert_snapshot!(out);
 }
 
+/// Run 10: the candidate-move closing sentence — rendered on demand (the
+/// narrator appends it at plans-narrated, non-capture plies), in both
+/// voices, lint-clean, prophylactic when the top pick denies the
+/// opponent's plan. Gated off by mate/decisive engine lines.
+#[test]
+fn suggestion_closing_sentence() {
+    use kibitz_core::record::EngineEval;
+    use kibitz_verbalize::suggestion_closing;
+    let record = quiet_record();
+    // On the quiet record's own board the top pick (e4) DENIES Black's
+    // knight-to-e4 plan: the coach says so, in both voices.
+    let coach = suggestion_closing(&record, Voice::Coach).expect("closing");
+    let neutral = suggestion_closing(&record, Voice::Neutral).expect("closing");
+    lint_prose(&coach);
+    lint_prose(&neutral);
+    assert!(coach.contains("deny the opponent"), "{coach}");
+    assert!(coach.contains("e4"), "{coach}");
+    assert!(neutral.contains("deny the opponent"), "{neutral}");
+    assert_ne!(coach, neutral);
+
+    // A decisive or mate engine line silences the closing.
+    let mut decided = quiet_record();
+    decided.engine = Some(EngineEval {
+        eval_cp: 910,
+        mate_in: None,
+        best: "g4".into(),
+        multipv: vec![],
+    });
+    assert_eq!(suggestion_closing(&decided, Voice::Coach), None);
+    let mut mate = quiet_record();
+    mate.engine = Some(EngineEval {
+        eval_cp: 31_900,
+        mate_in: Some(5),
+        best: "Qh7#".into(),
+        multipv: vec![],
+    });
+    assert_eq!(suggestion_closing(&mate, Voice::Coach), None);
+
+    // A record with no mapped plans yields no closing at all.
+    assert_eq!(suggestion_closing(&empty_record(), Voice::Coach), None);
+}
+
 #[test]
 fn endgame_prose() {
     let out = verbalize(&endgame_record());
@@ -635,7 +677,9 @@ fn squares_in(text: &str) -> BTreeSet<String> {
 /// voices: no square is ever mentioned in the prose unless it appears in
 /// the record's own data (alert squares, PVs, evidence, plan squares,
 /// engine moves). The FEN is blanked before extracting the allowed set so
-/// it cannot mask inventions.
+/// it cannot mask inventions. (The run-10 suggestion closing is rendered
+/// on demand, outside these sections; its moves are legal moves computed
+/// from the record's own FEN — record facts by construction.)
 #[test]
 fn output_squares_all_come_from_the_record() {
     for voice in Voice::ALL {
@@ -856,6 +900,39 @@ fn explanation_quiet_position_and_mate_tag() {
     let EvalReadout { mate, display, .. } = ex.eval.unwrap();
     assert_eq!(mate, Some(-4));
     assert_eq!(display, "#4");
+}
+
+/// Run 10: candidate-move suggestions ride the Explanation contract,
+/// carry the move as a key arrow, and are gated by confirmed tactics,
+/// mates and decisive engine lines (tactics outrank plans).
+#[test]
+fn explanation_carries_gated_suggestions() {
+    use kibitz_core::record::{ArrowKind, EngineEval};
+    let q = quiet_record();
+    let ex = kibitz_verbalize::explain(&q);
+    assert!(!ex.suggestions.is_empty(), "quiet record must suggest");
+    let top = &ex.suggestions[0];
+    assert!(!top.san.is_empty() && top.uci.len() >= 4);
+    assert_eq!(top.evidence.arrows.len(), 1);
+    assert_eq!(top.evidence.arrows[0].kind, ArrowKind::Key);
+    // Here the top pick denies Black's knight plan (e4).
+    assert!(top.prophylactic, "{top:?}");
+    let js = serde_json::to_value(&ex).unwrap();
+    assert!(js["suggestions"][0]["prophylactic"].is_boolean());
+
+    // A confirmed tactic (any size) gates suggestions entirely.
+    let ex = kibitz_verbalize::explain(&tactical_record());
+    assert!(ex.suggestions.is_empty(), "{:?}", ex.suggestions);
+
+    // A known mate gates them too.
+    let mut m = quiet_record();
+    m.engine = Some(EngineEval {
+        eval_cp: 31_900,
+        mate_in: Some(4),
+        best: "Qh7#".into(),
+        multipv: vec![],
+    });
+    assert!(kibitz_verbalize::explain(&m).suggestions.is_empty());
 }
 
 /// Run-6 residual: at DECISIVE_CP the prose stops counting pawns.

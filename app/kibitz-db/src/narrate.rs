@@ -285,7 +285,22 @@ pub fn narrate_game(
                     || !record.imbalances.is_empty()
                     || !record.composite_plans.is_empty();
                 if has_content && rows.len() < max_comments as usize {
-                    let sections = kibitz_verbalize::verbalize_sections_voiced(&record, voice);
+                    let mut sections = kibitz_verbalize::verbalize_sections_voiced(&record, voice);
+                    // Candidate-move closing (run 10): one "what to play"
+                    // sentence at plies where plans are narrated — but
+                    // never on a capture ply, where the only honest
+                    // advice is to finish the exchange in progress.
+                    let capture_ply = board_before.colors(!board_before.side_to_move()).has(mv.to)
+                        || (board_before.piece_on(mv.from) == Some(cozy_chess::Piece::Pawn)
+                            && mv.from.file() != mv.to.file()
+                            && board_before.piece_on(mv.to).is_none());
+                    if !sections.plans.is_empty() && !capture_ply {
+                        if let Some(closing) = kibitz_verbalize::suggestion_closing(&record, voice)
+                        {
+                            sections.plans.push(' ');
+                            sections.plans.push_str(&closing);
+                        }
+                    }
                     let text = [sections.tactics, sections.imbalances, sections.plans]
                         .into_iter()
                         .filter(|s| !s.is_empty())

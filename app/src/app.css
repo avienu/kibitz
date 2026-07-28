@@ -627,6 +627,51 @@ textarea {
   color: var(--faint);
 }
 
+/* ---- run-10: candidate-move suggestions (CONSIDER block) ---- */
+/* Compact chip row under the plan blocks: mono chips, accent for the top
+   pick, violet for prophylactic (deny-the-opponent) picks. Hovering a
+   chip isolates its move as a key arrow on the board, exactly like
+   sentence hover. */
+.consider-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.consider-label {
+  font: 700 9.5px var(--font-ui);
+  letter-spacing: 0.12em;
+  color: var(--faint);
+}
+.consider-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.consider-chip {
+  font: 500 12px var(--font-mono);
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: default;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.consider-chip.top {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.consider-chip.prophylactic {
+  color: var(--violet);
+  border-color: var(--violet);
+}
+.consider-chip.hovered {
+  color: var(--tx);
+}
+/* ---- end run-10 CONSIDER block ---- */
+
 /* Moves panel. */
 .moves-panel {
   flex: 1;

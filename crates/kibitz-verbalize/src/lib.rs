@@ -1167,6 +1167,78 @@ pub(crate) fn select_imbalances(imbalances: &[Imbalance]) -> Vec<&Imbalance> {
     }
 }
 
+/// The "what to play" closing sentence for a narrated position (run 10),
+/// or `None` when there is nothing sound to suggest or a mate/decisive
+/// engine line owns the position (tactics outrank plans — callers already
+/// suppress plan prose, and therefore this closing, while a confirmed
+/// tactic stands). Callers decide WHEN a closing is appropriate — the
+/// narrator, for instance, skips capture plies, where the only honest
+/// advice is to finish the exchange.
+pub fn suggestion_closing(record: &FeatureRecord, voice: Voice) -> Option<String> {
+    let decisive = record
+        .engine
+        .as_ref()
+        .is_some_and(|engine| engine.mate_in.is_some() || engine.eval_cp.abs() >= DECISIVE_CP);
+    if decisive {
+        return None;
+    }
+    let board = record.fen.parse::<kibitz_core::cozy_chess::Board>().ok()?;
+    let suggestions = kibitz_core::suggest::suggest(record, &board);
+    let closing = render_suggestions(&suggestions, voice);
+    (!closing.is_empty()).then_some(closing)
+}
+
+/// The rendered sentence for a suggestion list: empty when the list is.
+/// A prophylactic top pick names the opponent plan being denied (base
+/// verb phrase, truncated at any semicolon so it reads inside the
+/// sentence); otherwise the sentence states how many plans the top move
+/// serves — counts are spelled out, never digits.
+pub(crate) fn render_suggestions(
+    suggestions: &[kibitz_core::suggest::Suggestion],
+    voice: Voice,
+) -> String {
+    let Some(top) = suggestions.first() else {
+        return String::new();
+    };
+    if top.prophylactic {
+        if let Some(token) = top.serving.first() {
+            let key = format!("plan.{token}");
+            let known = lookup(&[key.as_str()]);
+            let phrase = if known.is_empty() {
+                humanize(token)
+            } else {
+                known.split(';').next().unwrap_or(known).trim().to_string()
+            };
+            return fill(
+                lookup_voiced(voice, &["suggest.prophylactic"]),
+                &[("first", &top.san), ("their_plan", &phrase)],
+            );
+        }
+    }
+    let second = suggestions.get(1).map(|s| s.san.as_str());
+    let many = top.serving.len() >= 2;
+    let key = match (many, second.is_some()) {
+        (true, true) => "suggest.close",
+        (true, false) => "suggest.close.solo",
+        (false, true) => "suggest.close.one",
+        (false, false) => "suggest.close.one.solo",
+    };
+    let count_key = match top.serving.len() {
+        2 => "suggest.count.two",
+        3 => "suggest.count.three",
+        4 => "suggest.count.four",
+        _ => "suggest.count.many",
+    };
+    fill(
+        lookup_voiced(voice, &[key]),
+        &[
+            ("first", &top.san),
+            ("second", second.unwrap_or("")),
+            ("n", lookup(&[count_key])),
+        ],
+    )
+}
+
 /// Render one composite plan: index 0 is the unified lead, later indices
 /// the brief runner-up.
 pub(crate) fn render_composite(

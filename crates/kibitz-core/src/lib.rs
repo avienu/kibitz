@@ -9,6 +9,7 @@ pub mod plans;
 pub mod prose_gate;
 pub mod record;
 pub mod see;
+pub mod suggest;
 pub mod wsui;
 
 pub use cozy_chess;

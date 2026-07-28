@@ -45,6 +45,20 @@ export interface EvalReadoutJson {
   display: string;
 }
 
+/** One candidate move (run 10): computed statically by kibitz-core::suggest,
+ * delivered inside the contract — the UI never synthesizes suggestions. */
+export interface SuggestionJson {
+  san: string;
+  uci: string;
+  score: number;
+  /** Hint tokens the move serves; denied opponent tokens lead when
+   * prophylactic. May be absent (serde skips empty vecs). */
+  serving?: string[];
+  prophylactic: boolean;
+  /** The move as a key arrow, for chip-hover isolation. */
+  evidence: EvidenceJson;
+}
+
 /** The per-ply explanation object (schema v3). The UI never synthesizes
  * explanations — this arrives whole from `explain_position`. */
 export interface ExplanationJson {
@@ -54,6 +68,9 @@ export interface ExplanationJson {
   eval?: EvalReadoutJson | null;
   headline: VoiceText;
   blocks: ExplanationBlockJson[];
+  /** Candidate moves, best first; absent when a confirmed tactic or
+   * decisive line gates positional talk. */
+  suggestions?: SuggestionJson[];
 }
 
 /** Fill the omitted-when-empty arrays so downstream code never branches. */
@@ -86,6 +103,9 @@ export function unionEvidence(blocks: ExplanationBlockJson[]): Evidence {
 /**
  * README §State Management: evidence = hovered sentence's evidence alone,
  * else the union of all blocks; null when there is no explanation.
+ * Indices past the block list address the suggestion chips (run 10):
+ * index blocks.length + j isolates suggestion j's key arrow. Suggestion
+ * evidence is hover-only — it never joins the no-hover union.
  */
 export function deriveEvidence(
   explanation: ExplanationJson | null,
@@ -95,8 +115,24 @@ export function deriveEvidence(
   if (hoverSentence !== null) {
     const block = explanation.blocks[hoverSentence];
     if (block) return normalizeEvidence(block.evidence);
+    const suggestion = explanation.suggestions?.[hoverSentence - explanation.blocks.length];
+    if (suggestion) return normalizeEvidence(suggestion.evidence);
   }
   return unionEvidence(explanation.blocks);
+}
+
+/** "PressureBackwardPawn" -> "pressure backward pawn", for chip tooltips. */
+export function humanizeHintToken(token: string): string {
+  return token
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+}
+
+/** Tooltip text for a suggestion chip: served plans, denial flagged. */
+export function suggestionTitle(s: SuggestionJson): string {
+  const serving = (s.serving ?? []).map(humanizeHintToken).join(", ");
+  const base = serving.length > 0 ? `serves: ${serving}` : "candidate move";
+  return s.prophylactic ? `denies the opponent's plan — ${base}` : base;
 }
 
 /** Intensity: 1.0 while a sentence is hovered, else the 0.44 baseline. */

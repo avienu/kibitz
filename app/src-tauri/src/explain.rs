@@ -26,6 +26,7 @@ pub(crate) fn explain_position_ctx(
 ) -> Result<Explanation, String> {
     let board: cozy_chess::Board = fen.parse().map_err(|e| format!("bad FEN {fen:?}: {e:?}"))?;
     let mut record = kibitz_core::analyze(&board);
+    let mut capture_ply = false;
     if let Some((prev_fen, san)) = last {
         if let Ok(before) = prev_fen.parse::<cozy_chess::Board>() {
             if let Ok(mv) = kibitz_db::san::parse_san(&before, san) {
@@ -33,6 +34,11 @@ pub(crate) fn explain_position_ctx(
                 check.play(mv);
                 if check == board {
                     kibitz_core::prose_gate::suppress_exchange_noise(&mut record, &before, mv);
+                    let mover = before.side_to_move();
+                    capture_ply = before.colors(!mover).has(mv.to)
+                        || (before.piece_on(mv.from) == Some(cozy_chess::Piece::Pawn)
+                            && mv.from.file() != mv.to.file()
+                            && before.piece_on(mv.to).is_none());
                 }
             }
         }
@@ -40,8 +46,13 @@ pub(crate) fn explain_position_ctx(
     kibitz_core::prose_gate::suppress_escapable_attack_noise(&mut record, &board);
     let record = record;
     let prose = kibitz_verbalize::verbalize_voiced(&record, voice);
-    let explanation =
-        serde_json::to_value(kibitz_verbalize::explain(&record)).map_err(|e| e.to_string())?;
+    let mut explanation = kibitz_verbalize::explain(&record);
+    // Run 10, same rule as narration: mid-exchange the only honest advice
+    // is to finish the exchange — no candidate-move chips on a capture ply.
+    if capture_ply {
+        explanation.suggestions.clear();
+    }
+    let explanation = serde_json::to_value(explanation).map_err(|e| e.to_string())?;
     let record = serde_json::to_value(&record).map_err(|e| e.to_string())?;
     Ok(Explanation {
         record,
@@ -111,5 +122,50 @@ mod tests {
         assert!(coach.explanation["headline"]["coach"].is_string());
         assert!(coach.explanation["headline"]["neutral"].is_string());
         assert_eq!(coach.explanation, neutral.explanation);
+    }
+
+    /// Run 10: a capture ply strips the suggestion chips — mid-exchange
+    /// the only honest advice is to finish the exchange.
+    #[test]
+    fn capture_ply_strips_suggestions() {
+        use kibitz_verbalize::Voice;
+        // Sveshnikov bind, White to move: quiet position, suggestions on.
+        const QUIET: &str = "r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7";
+        let e = explain_position_ctx(QUIET, Voice::default(), None).unwrap();
+        assert!(
+            e.explanation["suggestions"].is_array(),
+            "quiet position carries suggestions: {}",
+            e.explanation
+        );
+
+        // Opera game through 13.Rxd7 (a capture, recapture due): the same
+        // machinery must yield NO suggestions.
+        let mut board = cozy_chess::Board::default();
+        let mut before = board.clone();
+        for uci in [
+            "e2e4", "e7e5", "g1f3", "d7d6", "d2d4", "c8g4", "d4e5", "g4f3", "d1f3", "d6e5", "f1c4",
+            "g8f6", "f3b3", "d8e7", "b1c3", "c7c6", "c1g5", "b7b5", "c3b5", "c6b5", "c4b5", "b8d7",
+            "e1a1", "a8d8", "d1d7",
+        ] {
+            before = board.clone();
+            board.play(uci.parse().unwrap());
+        }
+        let before_fen = format!("{before}");
+        let after_fen = format!("{board}");
+        // Without last-move context the position DOES carry suggestions...
+        let bare = explain_position_ctx(&after_fen, Voice::default(), None).unwrap();
+        assert!(
+            bare.explanation["suggestions"].is_array(),
+            "sanity: {}",
+            bare.explanation
+        );
+        // ...and the capture context strips them.
+        let e = explain_position_ctx(&after_fen, Voice::default(), Some((&before_fen, "Rxd7")))
+            .unwrap();
+        assert!(
+            e.explanation["suggestions"].is_null(),
+            "capture ply must strip suggestions: {}",
+            e.explanation["suggestions"]
+        );
     }
 }

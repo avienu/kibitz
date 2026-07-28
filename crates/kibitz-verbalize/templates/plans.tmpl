@@ -34,6 +34,7 @@ plan.OpenPositionBeforeOpponentCompletes = open the position before the opponent
 plan.WingPawnStormClosedCenter = storm the wing with the pawns; the locked center rules out a counterblow there
 plan.RookToSeventh = plant a rook on the seventh rank
 plan.RookBehindPasser = put the rook behind the passed pawn
+plan.PressureBackwardPawn = pile up on the backward pawn down its half-open file
 plan.PressureDoubledPawn = pile up on the front doubled pawn
 plan.TradeOrActivateBadBishop = trade off the bad bishop, or reroute it outside the pawn chain
 plan.ActivateKingInEndgame = bring the king toward the center; it is a fighting piece now
@@ -64,3 +65,15 @@ plan.composite.clause.RestrictKnight = keep the knight there from ever settling
 plan.composite.clause.AdvanceCentralMajority = roll the central majority through it
 plan.composite.clause.OpenLinesTowardWeakKing = pry open lines toward the king there
 plan.composite.clause.MinorityAttack = throw the minority pawns at it
+
+# Candidate-move closing (run 10): {first}/{second} are SAN moves, {n} a
+# spelled-out count, {their_plan} a plan verb phrase (base plan.* keys).
+suggest.close = Concretely: {first} serves {n} plans at once; {second} is the alternative.
+suggest.close.solo = Concretely: {first} serves {n} plans at once.
+suggest.close.one = Concretely: {first} advances the main plan; {second} is the alternative.
+suggest.close.one.solo = Concretely: {first} advances the main plan.
+suggest.prophylactic = Before anything else, deny the opponent: they intend to {their_plan}, and {first} takes that idea off the table.
+suggest.count.two = two
+suggest.count.three = three
+suggest.count.four = four
+suggest.count.many = several

@@ -108,6 +108,7 @@ coach.plan.WingPawnStormClosedCenter = the center is bolted shut, so send the wi
 coach.plan.MinorityAttack = send the two pawns against their three — the minority attack wants to leave a lasting weakness behind
 coach.plan.RookToSeventh = the rook dreams of the seventh rank, where every enemy pawn lives at its mercy
 coach.plan.RookBehindPasser = tuck the rook behind the passed pawn — from there it pushes as the pawn walks
+coach.plan.PressureBackwardPawn = lean on the backward pawn — it can never advance, and its friends can never defend it
 coach.plan.PressureDoubledPawn = lean on the front doubled pawn; no friendly pawn can ever come to its rescue
 coach.plan.TradeOrActivateBadBishop = the bad bishop wants a new life — trade it off, or walk it outside the chain before the door shuts
 coach.plan.ActivateKingInEndgame = wake the king — in the endgame it is a fighting piece, and it belongs in the middle of the story
@@ -118,3 +119,10 @@ coach.plan.OpenLinesTowardWeakKing = the enemy king is feeling the draft — ope
 # --- Composite plans (plans.tmpl; slots {target}, {clauses}, {side}) ---
 coach.plan.composite.lead = The whole position is pointing at {target} — every signpost reads the same: {clauses}.
 coach.plan.composite.runner_up = {side} has a second dream worth keeping alive around {target}.
+
+# --- Candidate-move closing (run 10; plans.tmpl slots) ---
+coach.suggest.close = If I had the move: {first} — one move, {n} promises kept. {second} is the backup.
+coach.suggest.close.solo = If I had the move: {first} — one move, {n} promises kept.
+coach.suggest.close.one = If I had the move: {first} — it gets the main plan moving. {second} is the backup.
+coach.suggest.close.one.solo = If I had the move: {first} — it gets the main plan moving.
+coach.suggest.prophylactic = First, deny the opponent: they dream of nothing more than to {their_plan} — {first} takes that dream away before it starts.

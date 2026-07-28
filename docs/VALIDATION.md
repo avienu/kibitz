@@ -269,3 +269,24 @@ FEN + citation + tag assertions only.
   storm-first attacks on a still-sheltered king), and the endgame-course
   technique vocabulary (opposition, Lucena/Philidor) which belongs to the
   drill curriculum rather than the static analyzer.
+
+## Candidate-move suggestions (run 10 baseline)
+
+`kibitz-core::suggest` turns PlanHints into concrete legal moves
+(convergence-scored, SEE-gated, with prophylactic denial of the
+opponent's leading plan — see docs/KIBITZ_ENGINE_SPEC.md). The book-eval
+harness scores it against corpus entries that carry transcribed
+`expected.best_moves` (currently only The Amateur's Mind, 25 entries):
+
+| axis | baseline (run 10) |
+|---|---|
+| suggest@1 (top pick matches a book move) | 2/25 = 8.0% |
+| suggest@3 (any of top three matches) | 8/25 = 32.0% |
+
+No target yet — this is the baseline for future tuning. The misses split
+into: tactical shots a static suggester cannot rank (Bxf7+, Bxh6, Nxg4),
+multi-step piece reroutes (Bh2, Bd6, Bf4), and near-misses where the
+right idea picks a neighboring move (book h4 vs our g4 in the same storm;
+book Rd5 rejected by SEE where the corpus diagram differs from our static
+reading). Detection axes are unchanged from run 8.5 (identical numbers),
+confirming suggest is purely downstream of analyze.

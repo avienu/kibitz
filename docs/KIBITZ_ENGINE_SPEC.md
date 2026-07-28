@@ -123,7 +123,13 @@ the voice toggle is instant and provably never changes the evidence.
         "imbalance": [],             // green wash squares
         "key": [],                   // violet wedge squares (plan targets)
         "arrows": [ { "from": "e5", "to": "c6", "kind": "attacker" } ]  // kind: attacker|key
-      } } ]
+      } } ],
+  "suggestions": [ {                 // run 10; omitted when empty
+      "san": "Nd5", "uci": "c3d5", "score": 4,
+      "serving": ["ManeuverKnightToOutpost", "PressureBackwardPawn"],
+      "prophylactic": false,         // true = denies the opponent's plan
+      "evidence": { "key": ["d5"], "arrows": [ { "from": "c3", "to": "d5", "kind": "key" } ] }
+  } ]
 }
 ```
 
@@ -136,6 +142,20 @@ draw route arrows (first→last hint square, and composite route pairs ending
 on the target). Prose bands: at ±5.00 pawns (`DECISIVE_CP`) engine prose
 states a verdict ("simply winning") and the number stays in `eval`; mate
 wording always outranks any band.
+
+Suggestions (run 10, `kibitz-core::suggest`): up to three legal moves for
+the side to move, synthesized statically from the record's plan hints —
+each PlanHint token has a move-mapper (execute 3 / prepare 2 / enable 1);
+a move serving several plans scores the sum of its weights plus one point
+per extra plan served (convergence). When the opponent's leading plan
+rivals ours (within one point), blocking candidates compete on equal terms
+and are flagged `prophylactic`; their `serving` list leads with the denied
+opponent tokens. A SEE safety gate (−60 cp) drops hanging candidates. The
+field is empty whenever a confirmed tactic, known mate, or decisive engine
+line gates positional talk, and the app additionally strips it on capture
+plies (mid-exchange the only honest advice is to finish the exchange).
+Adding this optional field did not change existing fields; the schema
+stays v3.
 
 ## kibitz-profile — corpus profiling
 

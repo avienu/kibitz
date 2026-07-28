@@ -579,6 +579,10 @@ fn main() -> anyhow::Result<()> {
                 totals.alerts.total += r.alerts.total;
                 totals.favors.hits += r.favors.hits;
                 totals.favors.total += r.favors.total;
+                totals.suggest_top1.hits += r.suggest_top1.hits;
+                totals.suggest_top1.total += r.suggest_top1.total;
+                totals.suggest_top3.hits += r.suggest_top3.hits;
+                totals.suggest_top3.total += r.suggest_top3.total;
                 for (t, n) in r.vocabulary_gaps {
                     *totals.vocabulary_gaps.entry(t).or_default() += n;
                 }
