@@ -55,6 +55,11 @@ export interface SuggestionJson {
    * prophylactic. May be absent (serde skips empty vecs). */
   serving?: string[];
   prophylactic: boolean;
+  /** Whole-board static veto mark (run 11): present when the static
+   * screen found the move leaves a piece en prise (net SEE swing, cp).
+   * Marked chips are NEVER rendered until engine verification clears
+   * them (lib/verifyChips.ts). Absent when statically clean. */
+  static_risk?: number | null;
   /** The move as a key arrow, for chip-hover isolation. */
   evidence: EvidenceJson;
 }

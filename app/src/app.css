@@ -687,6 +687,23 @@ textarea {
 .consider-chip.hovered {
   color: var(--tx);
 }
+/* Run 11: a chip awaiting its engine verdict breathes softly; the
+   "verifying…" note sits beside the label while the round-trip runs. */
+.consider-chip.pending {
+  opacity: 0.55;
+  border-style: dashed;
+  animation: consider-pending 1.4s ease-in-out infinite;
+}
+@keyframes consider-pending {
+  50% {
+    opacity: 0.85;
+  }
+}
+.consider-verifying {
+  font: 400 10px var(--font-ui);
+  font-style: italic;
+  color: var(--faint);
+}
 /* ---- end run-10 CONSIDER block ---- */
 
 /* Moves panel. */

@@ -14,6 +14,7 @@ import {
   type ExplanationJson,
   type Voice,
 } from "./lib/gameView";
+import { visibleChips, type VerificationState } from "./lib/verifyChips";
 
 const KIND_LABEL: Record<ExplainBlockKind, string> = {
   alert: "TACTICAL ALERT",
@@ -24,6 +25,9 @@ const KIND_LABEL: Record<ExplainBlockKind, string> = {
 interface ExplainPanelProps {
   explanation: ExplanationJson | null;
   explaining: boolean;
+  /** CONSIDER-chip verification (run 11): drives the pending affordance
+   * and which chips render at all (lib/verifyChips.ts). */
+  verification: VerificationState | null;
   voice: Voice;
   onVoice: (v: Voice) => void;
   hoverSentence: number | null;
@@ -42,6 +46,7 @@ interface ExplainPanelProps {
 export default function ExplainPanel({
   explanation,
   explaining,
+  verification,
   voice,
   onVoice,
   hoverSentence,
@@ -67,6 +72,12 @@ export default function ExplainPanel({
     hiddenCount > 0
       ? alertIndices[alertsExpanded ? alertIndices.length - 1 : MAX_VISIBLE_ALERTS - 1]
       : null;
+
+  // CONSIDER chips (run 11): statically-marked chips stay hidden until
+  // the engine clears them; refuted chips disappear; the pending
+  // affordance shows only while a verification round-trip runs.
+  const chips = visibleChips(explanation, verification);
+  const verifying = verification?.kind === "running";
 
   return (
     <section className="explain-panel">
@@ -114,18 +125,19 @@ export default function ExplainPanel({
               </div>
             ),
           )}
-          {(explanation.suggestions?.length ?? 0) > 0 && (
+          {chips.length > 0 && (
             <div className="consider-block">
               <span className="consider-label">CONSIDER</span>
+              {verifying && <span className="consider-verifying">verifying…</span>}
               <div className="consider-chips">
-                {explanation.suggestions!.map((s, j) => {
+                {chips.map(({ s, index: j, pending }, pos) => {
                   const idx = explanation.blocks.length + j;
                   return (
                     <span
                       key={s.uci}
-                      className={`consider-chip${j === 0 ? " top" : ""}${
+                      className={`consider-chip${pos === 0 ? " top" : ""}${
                         s.prophylactic ? " prophylactic" : ""
-                      }${hoverSentence === idx ? " hovered" : ""}`}
+                      }${pending ? " pending" : ""}${hoverSentence === idx ? " hovered" : ""}`}
                       title={suggestionTitle(s)}
                       onMouseEnter={() => onHoverSentence(idx)}
                       onMouseLeave={() => onHoverSentence(null)}
@@ -138,7 +150,13 @@ export default function ExplainPanel({
             </div>
           )}
           <footer className="explain-footer">
-            <span>Static screen · no engine spawned</span>
+            <span>
+              {verification?.kind === "done"
+                ? "Static screen · candidates engine-checked"
+                : verifying
+                  ? "Static screen · checking candidates…"
+                  : "Static screen · no engine spawned"}
+            </span>
             <span>·</span>
             <span>{voice === "coach" ? "Coach" : "Neutral"} voice · templates</span>
             <span>·</span>
