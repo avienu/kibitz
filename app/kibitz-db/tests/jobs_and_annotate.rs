@@ -159,6 +159,43 @@ fn batch_annotate_runs_statically_and_pauses_between_jobs() {
     assert_eq!(v["jobs_enqueued"].as_u64(), Some(0), "quiet games: {v}");
 }
 
+/// Live (skipped when no engine binary is available): the Winawer field
+/// report end to end. After 5.a3 the WSUI screen fires (the b4-bishop
+/// hangs), every static suggestion is marked, and the confirm job's
+/// cursory suggestion review must refute the piece-droppers f5/f6 while
+/// clearing the theory move cxd4 (axb4 is met by dxc3).
+#[test]
+fn live_verification_clears_theory_and_refutes_droppers() {
+    let Some(engine) = resolve_engine_path() else {
+        eprintln!("skipping live_verification_clears_theory_and_refutes_droppers: no engine");
+        return;
+    };
+    const WINAWER: &str = "[White \"A\"]\n[Black \"B\"]\n[Result \"*\"]\n\n\
+        1. e4 e6 2. d4 d5 3. Nc3 Bb4 4. e5 c5 5. a3 *\n";
+    let (_dir, conn) = setup(WINAWER);
+    kibitz_db::annotate::annotate_game(&conn, 1, 100_000, 12).unwrap();
+    {
+        let _g = SPAWN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let run = jobs::run_pending(&conn, &engine, 100).unwrap();
+        assert!(run.done > 0, "{run:?}");
+        assert_eq!(run.failed, 0);
+    }
+    let verdicts = kibitz_db::narrate::load_verdicts(&conn, 1).unwrap();
+    let v = verdicts.get(&9).expect("5.a3 is mainline ply 9");
+    let cleared = v
+        .cleared_suggestions
+        .as_ref()
+        .expect("the fired screen carries a suggestion review");
+    assert!(
+        !cleared.iter().any(|u| u == "f7f5" || u == "f7f6"),
+        "the piece-droppers must be refuted: {cleared:?}"
+    );
+    assert!(
+        cleared.iter().any(|u| u == "c5d4"),
+        "the theory move cxd4 must be engine-cleared: {cleared:?}"
+    );
+}
+
 /// Live (skipped when no engine binary is available, e.g. Linux CI):
 /// running the queue spawns exactly ONE engine for N jobs and grades the
 /// fired alert.

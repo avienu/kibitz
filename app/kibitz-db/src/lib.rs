@@ -33,6 +33,7 @@ pub mod san;
 pub mod tactics;
 pub mod triage;
 pub mod twic;
+pub mod verify;
 
 #[cfg(test)]
 mod tests {
