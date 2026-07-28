@@ -104,6 +104,7 @@ describe("honesty", () => {
           detail: "downloading & importing — strictly serial; rate limits are respected",
           active: true,
           error: null,
+        queued: [],
         }}
       />,
     );

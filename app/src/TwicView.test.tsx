@@ -175,6 +175,7 @@ describe("refresh + auto-download + progress", () => {
           detail: "downloading TWIC 1651…",
           active: true,
           error: null,
+        queued: [],
         }}
       />,
     );

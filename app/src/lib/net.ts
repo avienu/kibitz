@@ -123,6 +123,8 @@ export interface NetProgress {
   detail: string;
   active: boolean;
   error: string | null;
+  /** Labels of jobs waiting behind the current one. */
+  queued: string[];
 }
 
 export function netProgress(): Promise<NetProgress | null> {

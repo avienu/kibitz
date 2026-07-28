@@ -65,6 +65,10 @@ function ServiceCard({
   }, [account]);
 
   const running = progress?.active && progress.kind === service;
+  const queuedBehind =
+    progress?.active && !running && (progress.queued ?? []).some((l) => l.endsWith(username.trim()))
+      ? progress.label
+      : null;
   const lastLine = formatReport(account?.lastReport ?? null);
   const args = runArgs ? runArgs() : {};
 
@@ -96,6 +100,11 @@ function ServiceCard({
           {running ? "Syncing…" : "Sync now"}
         </button>
       </div>
+      {queuedBehind && (
+        <div className="sync-running">
+          Queued — starts automatically after {queuedBehind} finishes.
+        </div>
+      )}
       {running && (
         <div className="sync-running">
           <span className="strip-dot on" /> {progress?.detail}
@@ -169,7 +178,10 @@ export default function SyncsView({ progress }: SyncsViewProps) {
   return (
     <div className="page syncs-page">
       {error && (
-        <div className="error">{error} — open a database on the Database screen first.</div>
+        <div className="error">
+          {error}
+          {error.includes("no database") && " — open a database on the Database screen first."}
+        </div>
       )}
       {note && <div className="twic-note">{note}</div>}
       {busy && progress && (

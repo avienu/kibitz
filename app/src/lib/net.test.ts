@@ -67,6 +67,7 @@ describe("netStripProgress (status-strip cell)", () => {
     detail: "",
     active: true,
     error: null,
+        queued: [],
   };
 
   it("shows a fraction only for an active TWIC job", () => {

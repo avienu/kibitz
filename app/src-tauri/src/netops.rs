@@ -59,6 +59,18 @@ pub struct NetWorker {
     pub active: Arc<AtomicBool>,
     pub stop: Arc<AtomicBool>,
     pub progress: Arc<Mutex<Option<NetProgress>>>,
+    /// Waiting jobs (label + work), drained strictly serially by the one
+    /// worker thread — pressing Sync during a TWIC download QUEUES it
+    /// instead of rejecting the click (run-9 field report).
+    #[allow(clippy::type_complexity)]
+    pub queue: Arc<Mutex<std::collections::VecDeque<QueuedNetJob>>>,
+}
+
+/// One queued network job: its initial progress snapshot and the work.
+pub struct QueuedNetJob {
+    pub initial: NetProgress,
+    #[allow(clippy::type_complexity)]
+    pub job: Box<dyn FnOnce(&AtomicBool, &Mutex<Option<NetProgress>>) -> Result<(), String> + Send>,
 }
 
 /// Progress snapshot polled by the frontend (`net_progress`).
@@ -77,6 +89,9 @@ pub struct NetProgress {
     /// True while the worker thread is still running this job.
     pub active: bool,
     pub error: Option<String>,
+    /// Labels of jobs waiting behind the current one, in order.
+    #[serde(default)]
+    pub queued: Vec<String>,
 }
 
 fn set_progress(slot: &Mutex<Option<NetProgress>>, p: NetProgress) {
@@ -342,30 +357,70 @@ fn twic_worker_impl(
     Ok(())
 }
 
+/// Enqueue a network job. Strictly serial: if the worker is idle the job
+/// starts immediately; otherwise it waits its turn (the click is never
+/// discarded). The current progress snapshot advertises the waiting
+/// labels so every surface can say "queued behind …".
 fn spawn_net_worker(
     worker: &State<'_, NetWorker>,
     initial: NetProgress,
     job: impl FnOnce(&AtomicBool, &Mutex<Option<NetProgress>>) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
+    {
+        let mut queue = worker.queue.lock().expect("net queue poisoned");
+        queue.push_back(QueuedNetJob {
+            initial,
+            job: Box::new(job),
+        });
+    }
+    sync_queued_labels(worker);
     if worker.active.swap(true, Ordering::SeqCst) {
-        return Err(
-            "a download or sync is already running (network jobs are strictly serial)".to_string(),
-        );
+        return Ok(()); // the running drain loop will pick it up
     }
     worker.stop.store(false, Ordering::SeqCst);
-    set_progress(&worker.progress, initial);
     let active = Arc::clone(&worker.active);
     let stop = Arc::clone(&worker.stop);
     let progress = Arc::clone(&worker.progress);
+    let queue = Arc::clone(&worker.queue);
     std::thread::spawn(move || {
-        let result = job(&stop, &progress);
-        if let Err(e) = &result {
-            update_progress(&progress, |p| p.error = Some(e.clone()));
+        loop {
+            let next = queue.lock().expect("net queue poisoned").pop_front();
+            let Some(QueuedNetJob { mut initial, job }) = next else {
+                break;
+            };
+            // A cancel applies to the job it was pressed on, not the queue.
+            stop.store(false, Ordering::SeqCst);
+            initial.queued = queue
+                .lock()
+                .expect("net queue poisoned")
+                .iter()
+                .map(|q| q.initial.label.clone())
+                .collect();
+            set_progress(&progress, initial);
+            let result = job(&stop, &progress);
+            if let Err(e) = &result {
+                update_progress(&progress, |p| p.error = Some(e.clone()));
+            }
         }
-        update_progress(&progress, |p| p.active = false);
+        update_progress(&progress, |p| {
+            p.active = false;
+            p.queued.clear();
+        });
         active.store(false, Ordering::SeqCst);
     });
     Ok(())
+}
+
+/// Refresh the advertised queue labels on the current progress snapshot.
+fn sync_queued_labels(worker: &State<'_, NetWorker>) {
+    let labels: Vec<String> = worker
+        .queue
+        .lock()
+        .expect("net queue poisoned")
+        .iter()
+        .map(|q| q.initial.label.clone())
+        .collect();
+    update_progress(&worker.progress, |p| p.queued = labels);
 }
 
 /// Download the given TWIC issues (an explicit selection or "all missing",
@@ -421,6 +476,7 @@ pub async fn twic_download(
         total: count,
         detail: format!("{count} issue{} queued", if count == 1 { "" } else { "s" }),
         active: true,
+        queued: Vec::new(),
         error: None,
     };
     spawn_net_worker(&worker, initial, move |stop, progress| {
@@ -469,6 +525,7 @@ pub async fn twic_auto_sync_check(
         total,
         detail: "checking for new issues…".to_string(),
         active: true,
+        queued: Vec::new(),
         error: None,
     };
     spawn_net_worker(&worker, initial, move |stop, progress| {
@@ -610,6 +667,7 @@ pub async fn sync_run(
                  (a 429 can pause the sync for a minute or more)"
             .to_string(),
         active: true,
+        queued: Vec::new(),
         error: None,
     };
     spawn_net_worker(&worker, initial, move |_stop, progress| {
@@ -886,6 +944,7 @@ mod tests {
             total: 3,
             detail: String::new(),
             active: true,
+            queued: Vec::new(),
             error: None,
         }));
         let stop = AtomicBool::new(false);
@@ -934,6 +993,7 @@ mod tests {
             total: 5,
             detail: String::new(),
             active: true,
+            queued: Vec::new(),
             error: None,
         }));
         let stop = AtomicBool::new(false);
@@ -964,6 +1024,7 @@ mod tests {
             total: 2,
             detail: String::new(),
             active: true,
+            queued: Vec::new(),
             error: None,
         }));
         let stop = AtomicBool::new(true); // cancelled before the first issue
