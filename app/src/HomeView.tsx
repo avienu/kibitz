@@ -31,6 +31,7 @@ import {
   newSinceLabel,
   sourceTagTone,
 } from "./lib/home";
+import { utcDateLocal } from "./lib/time";
 import type { ViewId, ViewParams } from "./lib/shell";
 
 export interface HomeData {
@@ -69,7 +70,8 @@ export function HomeContent({ data, batchFraction, onNavigate, onOpenGame, now }
         {summary.lastGame.white} — {summary.lastGame.black}
       </div>
       <div className="home-card-prose">
-        Stopped at ply {summary.lastGame.ply} · opened {summary.lastGame.openedAt.slice(0, 10)}.
+        {/* Stored UTC → the user's local date (audit #10). */}
+        Stopped at ply {summary.lastGame.ply} · opened {utcDateLocal(summary.lastGame.openedAt)}.
       </div>
       <button
         className="btn-primary"
@@ -175,7 +177,7 @@ export function HomeContent({ data, batchFraction, onNavigate, onOpenGame, now }
               {summary.profilePlayer ? `YOUR CHESS · ${summary.profilePlayer.toUpperCase()}` : "YOUR CHESS"}
             </span>
             {summary.profileBuiltAt && (
-              <span className="home-pill">BUILT {summary.profileBuiltAt.slice(0, 10)}</span>
+              <span className="home-pill">BUILT {utcDateLocal(summary.profileBuiltAt)}</span>
             )}
             <div className="home-panel-spacer" />
             <button className="btn-ghost" onClick={() => onNavigate("profile")}>

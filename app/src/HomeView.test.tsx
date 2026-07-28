@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HomeContent, type HomeData } from "./HomeView";
 import type { HomeSummary } from "./lib/db";
+import { utcWeekdayLocal } from "./lib/time";
 
 /** All-empty fixture: fresh database, nothing due, nothing cached. */
 const EMPTY_SUMMARY: HomeSummary = {
@@ -169,8 +170,10 @@ describe("Home — honest numerals and navigation", () => {
   it("new-game rows carry the source tag tone and the week label", () => {
     const { container, getByText } = renderHome({ summary, commitment: null, prepState: [] });
     expect(getByText("lichess").classList.contains("violet")).toBe(true);
-    // 2026-07-24 was a Friday.
-    expect(container.textContent).toContain("NEW SINCE FRIDAY");
+    // The label names the MACHINE-LOCAL weekday of the oldest import
+    // (audit #10) — assert via the same helper the view model uses.
+    const weekday = utcWeekdayLocal("2026-07-24 06:00:00")!.toUpperCase();
+    expect(container.textContent).toContain(`NEW SINCE ${weekday}`);
     expect(container.textContent).toContain("8 games this week");
   });
 

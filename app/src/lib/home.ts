@@ -11,6 +11,7 @@
  */
 
 import type { Commitment, HomeFinding, HomeSummary, PrepEntry } from "./db";
+import { utcWeekdayLocal } from "./time";
 
 /** "Sunday, 26 July" — the serif greeting date (assembled by hand: ICU's
  * en-GB long format drops the comma the design shows). */
@@ -58,15 +59,19 @@ export function sourceTagTone(sourceKind: string, sourceName: string): string {
 }
 
 /** "NEW SINCE FRIDAY" — weekday of the oldest new-game import in the list;
- * null when there are no new games (the panel is then absent). */
-export function newSinceLabel(summary: Pick<HomeSummary, "newGames">): string | null {
+ * null when there are no new games (the panel is then absent). The stored
+ * timestamp is UTC; the weekday is the USER's (audit #10 — a late-evening
+ * local import must not be labelled with tomorrow's name). `zone` is
+ * test injection only. */
+export function newSinceLabel(
+  summary: Pick<HomeSummary, "newGames">,
+  zone?: string,
+): string | null {
   if (summary.newGames.length === 0) return null;
   const oldest = summary.newGames.reduce((a, b) => (a.importedAt <= b.importedAt ? a : b));
-  // SQLite UTC "YYYY-MM-DD HH:MM:SS": label the import DATE's weekday in
-  // UTC — deterministic across machine timezones.
-  const d = new Date(oldest.importedAt.slice(0, 10) + "T00:00:00Z");
-  if (Number.isNaN(d.getTime())) return "NEW THIS WEEK";
-  return `NEW SINCE ${d.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" }).toUpperCase()}`;
+  const weekday = utcWeekdayLocal(oldest.importedAt, zone);
+  if (!weekday) return "NEW THIS WEEK";
+  return `NEW SINCE ${weekday.toUpperCase()}`;
 }
 
 /** Serif paragraph naming the top two findings in plain language. */

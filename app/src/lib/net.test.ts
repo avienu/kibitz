@@ -30,15 +30,20 @@ describe("formatReport", () => {
     expect(formatReport(null)).toBeNull();
   });
 
-  it("renders a success report with counts", () => {
-    expect(
-      formatReport({
-        at: "2026-07-27 12:00:00",
-        gamesImported: 128,
-        duplicatesSkipped: 40,
-        gamesFailed: 1,
-      }),
-    ).toBe("Last sync 2026-07-27 12:00:00 UTC: 128 imported · 40 duplicates · 1 failed");
+  it("renders a success report with counts, timestamp in LOCAL time", () => {
+    const report = {
+      at: "2026-07-27 12:00:00",
+      gamesImported: 128,
+      duplicatesSkipped: 40,
+      gamesFailed: 1,
+    };
+    expect(formatReport(report, "UTC")).toBe(
+      "Last sync 2026-07-27 12:00: 128 imported · 40 duplicates · 1 failed",
+    );
+    // Audit #10: the stored UTC timestamp renders in the viewer's zone.
+    expect(formatReport(report, "America/Los_Angeles")).toBe(
+      "Last sync 2026-07-27 05:00: 128 imported · 40 duplicates · 1 failed",
+    );
   });
 
   it("appends chess.com months and FICS year/month when present", () => {
@@ -53,8 +58,8 @@ describe("formatReport", () => {
     ).toContain("2025");
   });
 
-  it("surfaces a stored error honestly", () => {
-    expect(formatReport({ at: "t", error: "HTTP 500 for …" })).toBe("Failed (t UTC): HTTP 500 for …");
+  it("surfaces a stored error honestly (malformed timestamps unmangled)", () => {
+    expect(formatReport({ at: "t", error: "HTTP 500 for …" })).toBe("Failed (t): HTTP 500 for …");
   });
 });
 

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SyncsView from "./SyncsView";
 import { syncAccounts, syncRun, type SyncAccounts } from "./lib/net";
+import { utcDateTimeLocal } from "./lib/time";
 
 vi.mock("./lib/net", async () => {
   const actual = await vi.importActual<typeof import("./lib/net")>("./lib/net");
@@ -45,8 +46,10 @@ describe("account cards", () => {
     const { container } = render(<SyncsView progress={null} />);
     const input = container.querySelector<HTMLInputElement>('input[aria-label="Lichess username"]')!;
     await waitFor(() => expect(input.value).toBe("SomeUser"));
+    // The stored UTC timestamp renders in the machine's LOCAL time
+    // (audit #10) — assert via the same helper the component uses.
     expect(container.textContent).toContain(
-      "Last sync 2026-07-26 21:00:00 UTC: 128 imported · 40 duplicates · 0 failed",
+      `Last sync ${utcDateTimeLocal("2026-07-26 21:00:00")}: 128 imported · 40 duplicates · 0 failed`,
     );
   });
 
@@ -126,7 +129,7 @@ describe("honesty", () => {
     const { container } = render(<SyncsView progress={null} />);
     await waitFor(() => expect(syncAccounts).toHaveBeenCalled());
     expect(container.textContent).toContain(
-      "Failed (2026-07-25 10:00:00 UTC): aborting after 4 rate-limit (429) responses",
+      `Failed (${utcDateTimeLocal("2026-07-25 10:00:00")}): aborting after 4 rate-limit (429) responses`,
     );
   });
 

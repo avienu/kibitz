@@ -76,10 +76,18 @@ describe("newSinceLabel", () => {
 
   it("names the weekday of the oldest import", () => {
     // 2026-07-24 is a Friday.
-    const label = newSinceLabel({
-      newGames: [g(2, "2026-07-26 06:00:00"), g(1, "2026-07-24 06:00:00")],
-    });
+    const label = newSinceLabel(
+      { newGames: [g(2, "2026-07-26 06:00:00"), g(1, "2026-07-24 06:00:00")] },
+      "UTC",
+    );
     expect(label).toBe("NEW SINCE FRIDAY");
+  });
+
+  it("labels the USER's weekday, not UTC's (audit #10)", () => {
+    // 01:30 UTC Saturday is still Friday evening in Los Angeles.
+    const games = { newGames: [g(1, "2026-07-25 01:30:00")] };
+    expect(newSinceLabel(games, "UTC")).toBe("NEW SINCE SATURDAY");
+    expect(newSinceLabel(games, "America/Los_Angeles")).toBe("NEW SINCE FRIDAY");
   });
 
   it("is null with no new games (panel absent, not faked)", () => {

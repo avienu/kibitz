@@ -6,6 +6,7 @@
  * without a Tauri runtime.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { utcDateTimeLocal } from "./time";
 
 /* ---- TWIC catalog ---- */
 
@@ -152,10 +153,12 @@ export function missingIssues(rows: readonly TwicCatalogRow[]): number[] {
   return rows.filter((r) => !r.imported).map((r) => r.issue);
 }
 
-/** One-line rendering of a stored last-sync report; null when none. */
-export function formatReport(report: SyncReport | null): string | null {
+/** One-line rendering of a stored last-sync report; null when none. The
+ * stored `at` is UTC; it renders in the user's local time (audit #10).
+ * `zone` is test injection only. */
+export function formatReport(report: SyncReport | null, zone?: string): string | null {
   if (!report) return null;
-  const at = report.at ? `${report.at} UTC` : "unknown time";
+  const at = report.at ? utcDateTimeLocal(report.at, zone) : "unknown time";
   if (report.error) return `Failed (${at}): ${report.error}`;
   let s =
     `Last sync ${at}: ${report.gamesImported ?? 0} imported · ` +
