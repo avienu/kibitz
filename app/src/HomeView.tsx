@@ -28,10 +28,13 @@ import {
   findingsProse,
   greetingDate,
   isDegraded,
+  networkRunningLine,
+  newGamesFoot,
   newSinceLabel,
   sourceTagTone,
 } from "./lib/home";
 import { utcDateLocal } from "./lib/time";
+import type { NetProgress } from "./lib/net";
 import type { ViewId, ViewParams } from "./lib/shell";
 
 export interface HomeData {
@@ -45,6 +48,10 @@ export interface HomeContentProps {
   /** Batch progress 0..1 while the job worker runs (App's model); null
    * when unknown — the Running panel then shows counts only. */
   batchFraction: number | null;
+  /** Shared network-worker progress (App's poll): the Running panel must
+   * report an active TWIC/account sync, not claim the machine is idle
+   * (audit #11). Null when idle/unknown. */
+  netProgress: NetProgress | null;
   onNavigate: (view: ViewId, params?: ViewParams) => void;
   /** Open a database game at a ply (Continue card, new-game rows). */
   onOpenGame: (gameId: number, ply: number, flipped?: boolean) => void;
@@ -53,7 +60,14 @@ export interface HomeContentProps {
 }
 
 /** Pure Home renderer — all data via props, no fetching. */
-export function HomeContent({ data, batchFraction, onNavigate, onOpenGame, now }: HomeContentProps) {
+export function HomeContent({
+  data,
+  batchFraction,
+  netProgress,
+  onNavigate,
+  onOpenGame,
+  now,
+}: HomeContentProps) {
   const { summary, commitment, prepState } = data;
   const clause = commitmentClause(commitment, prepState);
   const degraded = isDegraded(summary, commitment);
@@ -113,7 +127,9 @@ export function HomeContent({ data, batchFraction, onNavigate, onOpenGame, now }
   const prose = findingsProse(summary.findings);
   const since = newSinceLabel(summary);
   const jobs = summary.runningJobs;
-  const working = jobs.workerActive || jobs.pending > 0 || jobs.running > 0;
+  const engineWorking = jobs.workerActive || jobs.pending > 0 || jobs.running > 0;
+  const netLine = networkRunningLine(netProgress);
+  const working = engineWorking || netLine !== null;
 
   return (
     <div className="home">
@@ -236,10 +252,7 @@ export function HomeContent({ data, batchFraction, onNavigate, onOpenGame, now }
                     </button>
                   ))}
                 </div>
-                <div className="home-new-foot">
-                  {summary.newGamesTotal} game{summary.newGamesTotal === 1 ? "" : "s"} this week
-                  {summary.newGamesTotal > summary.newGames.length ? " · showing latest" : ""}
-                </div>
+                <div className="home-new-foot">{newGamesFoot(summary)}</div>
               </>
             )}
           </div>
@@ -249,26 +262,36 @@ export function HomeContent({ data, batchFraction, onNavigate, onOpenGame, now }
             </div>
             {working ? (
               <>
-                <div className="home-progress">
-                  <span className="home-progress-label">ENGINE JOBS</span>
-                  {batchFraction !== null && (
-                    <span className="home-progress-track">
-                      <span
-                        className="home-progress-fill"
-                        style={{ width: `${Math.round(batchFraction * 100)}%` }}
-                      />
+                {netLine && (
+                  <div className="home-progress">
+                    <span className="home-progress-label">NETWORK</span>
+                    <span className="home-progress-detail">{netLine}</span>
+                  </div>
+                )}
+                {engineWorking && (
+                  <div className="home-progress">
+                    <span className="home-progress-label">ENGINE JOBS</span>
+                    {batchFraction !== null && (
+                      <span className="home-progress-track">
+                        <span
+                          className="home-progress-fill"
+                          style={{ width: `${Math.round(batchFraction * 100)}%` }}
+                        />
+                      </span>
+                    )}
+                    <span className="home-progress-detail">
+                      {batchFraction !== null
+                        ? `${Math.round(batchFraction * 100)}%`
+                        : `${jobs.pending} pending · ${jobs.running} running`}
                     </span>
-                  )}
-                  <span className="home-progress-detail">
-                    {batchFraction !== null
-                      ? `${Math.round(batchFraction * 100)}%`
-                      : `${jobs.pending} pending · ${jobs.running} running`}
-                  </span>
-                </div>
+                  </div>
+                )}
                 <p className="home-prose dim">
-                  {jobs.workerActive
-                    ? "The job worker is running the queue you started."
-                    : "Jobs are queued but the worker is not running — the engine is cold."}
+                  {engineWorking
+                    ? jobs.workerActive
+                      ? "The job worker is running the queue you started."
+                      : "Jobs are queued but the worker is not running — the engine is cold."
+                    : "A network sync is running — the engine stays cold."}
                 </p>
               </>
             ) : (
@@ -285,12 +308,20 @@ export interface HomeViewProps {
   /** Bumps when the database (re)opens — triggers a refetch. */
   dbOpen: boolean;
   batchFraction: number | null;
+  /** App's shared network-worker poll (see HomeContentProps). */
+  netProgress: NetProgress | null;
   onNavigate: (view: ViewId, params?: ViewParams) => void;
   onOpenGame: (gameId: number, ply: number, flipped?: boolean) => void;
 }
 
 /** Live Home: fetches home_summary + commitment + prep state. */
-export default function HomeView({ dbOpen, batchFraction, onNavigate, onOpenGame }: HomeViewProps) {
+export default function HomeView({
+  dbOpen,
+  batchFraction,
+  netProgress,
+  onNavigate,
+  onOpenGame,
+}: HomeViewProps) {
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -316,6 +347,7 @@ export default function HomeView({ dbOpen, batchFraction, onNavigate, onOpenGame
     <HomeContent
       data={data!}
       batchFraction={batchFraction}
+      netProgress={netProgress}
       onNavigate={onNavigate}
       onOpenGame={onOpenGame}
     />

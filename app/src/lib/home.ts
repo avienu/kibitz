@@ -74,6 +74,39 @@ export function newSinceLabel(
   return `NEW SINCE ${weekday.toUpperCase()}`;
 }
 
+/**
+ * The new-games panel footer (audit #11): "N games this week" may only
+ * count personal/online-source games — a bulk TWIC import is not "your
+ * week". Bulk arrivals are still named, honestly and separately.
+ */
+export function newGamesFoot(
+  summary: Pick<HomeSummary, "newGames" | "newGamesTotal" | "newGamesPersonalTotal">,
+): string {
+  const personal = summary.newGamesPersonalTotal;
+  const bulk = summary.newGamesTotal - personal;
+  const n = (v: number) => v.toLocaleString("en-US");
+  const showingLatest = summary.newGamesTotal > summary.newGames.length ? " · showing latest" : "";
+  if (personal > 0) {
+    const yours = `${n(personal)} personal/online game${personal === 1 ? "" : "s"} this week`;
+    const extra = bulk > 0 ? ` · plus ${n(bulk)} from bulk imports` : "";
+    return `${yours}${extra}${showingLatest}`;
+  }
+  return `${n(bulk)} game${bulk === 1 ? "" : "s"} from bulk imports this week — none from your own play${showingLatest}`;
+}
+
+/** One line for the Running panel's network row (audit #11: the panel
+ * said "the engine is cold" while a TWIC sync was actively running);
+ * null when no network job is active. */
+export function networkRunningLine(p: {
+  active: boolean;
+  label: string;
+  done: number;
+  total: number;
+} | null): string | null {
+  if (!p?.active) return null;
+  return p.total > 0 ? `${p.label} · ${p.done} / ${p.total}` : p.label;
+}
+
 /** Serif paragraph naming the top two findings in plain language. */
 export function findingsProse(findings: readonly HomeFinding[]): string | null {
   if (findings.length === 0) return null;

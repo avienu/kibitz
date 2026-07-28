@@ -843,6 +843,7 @@ export default function App() {
           <HomeView
             dbOpen={dbSummary !== null}
             batchFraction={batchProgress?.fraction ?? null}
+            netProgress={netProg}
             onNavigate={navigate}
             onOpenGame={(id, ply, flipped) => void loadDbGameAt(id, ply, flipped)}
           />

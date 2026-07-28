@@ -564,9 +564,13 @@ export interface HomeRunningJobs {
 
 export interface HomeSummary {
   lastGame: HomeLastGame | null;
-  /** ≤ 8 rows; the full count rides in newGamesTotal. */
+  /** ≤ 8 rows, personal/online sources first; the full count rides in
+   * newGamesTotal. */
   newGames: HomeNewGame[];
   newGamesTotal: number;
+  /** Of those, personal/online-source games only — the honest scope for
+   * "N games this week" (bulk imports are not "your week"). */
+  newGamesPersonalTotal: number;
   findingsAvailable: boolean;
   /** ≤ 4, from a CACHED profile only — never built on the fly. */
   findings: HomeFinding[];
