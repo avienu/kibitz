@@ -74,6 +74,7 @@ import {
   type LoadedGame,
 } from "./lib/game";
 import {
+  chooseResumePly,
   isEditableTarget,
   keyboardAction,
   railCollapsed,
@@ -416,9 +417,13 @@ export default function App() {
   );
 
   const loadDbGameAt = useCallback(
-    async (gameId: number, atPly: number, flipped?: boolean) => {
+    async (gameId: number, atPly: number, flipped?: boolean, resume = false) => {
       try {
-        loadDbGame(await getGame(gameId), atPly);
+        const detail = await getGame(gameId);
+        // Resuming a game whose last-touched ply IS the end (every
+        // reviewed game) opens at the start instead (audit #12); the
+        // flipped orientation is still restored below.
+        loadDbGame(detail, resume ? chooseResumePly(atPly, detail.sans.length) : atPly);
         // Resume restores the board orientation you left the game in.
         if (flipped !== undefined) dispatch({ type: "setFlipped", flipped });
       } catch (e) {
@@ -823,7 +828,7 @@ export default function App() {
             dbOpen={dbSummary !== null}
             batchFraction={batchProgress?.fraction ?? null}
             onNavigate={navigate}
-            onOpenGame={(id, ply, flipped) => void loadDbGameAt(id, ply, flipped)}
+            onOpenGame={(id, ply, flipped) => void loadDbGameAt(id, ply, flipped, true)}
           />
         );
       case "database":

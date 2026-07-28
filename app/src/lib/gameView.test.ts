@@ -3,6 +3,7 @@ import type { AnalysisRow } from "./analyses";
 import { DEFAULT_INTENSITY } from "./evidence";
 import {
   blockReferencesSquare,
+  chooseResumePly,
   deriveEvidence,
   deriveIntensity,
   evalBarView,
@@ -114,6 +115,19 @@ describe("evidence derivation (README §State Management)", () => {
   it("null explanation derives null; unionEvidence flattens", () => {
     expect(deriveEvidence(null, null)).toBeNull();
     expect(unionEvidence([b0, b1]).imbalance).toEqual(["e8", "d7"]);
+  });
+
+  it("audit #12: resuming at the final ply reopens at the start", () => {
+    // Reviewed games are annotated to the end, so last-touched == end.
+    expect(chooseResumePly(84, 84)).toBe(0);
+    expect(chooseResumePly(90, 84)).toBe(0); // stale bookmark past the end
+    // A genuine mid-game bookmark is honored.
+    expect(chooseResumePly(24, 84)).toBe(24);
+    expect(chooseResumePly(0, 84)).toBe(0);
+    // Degenerate inputs: an empty game passes through (clampPly guards
+    // downstream); a negative saved ply never goes below 0.
+    expect(chooseResumePly(3, 0)).toBe(3);
+    expect(chooseResumePly(-2, 84)).toBe(0);
   });
 
   it("audit #4: NO evidence renders while a variation preview is active", () => {

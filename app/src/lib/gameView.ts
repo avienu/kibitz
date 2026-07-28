@@ -263,6 +263,18 @@ export function reduceGameView(state: GameViewState, action: GameViewAction): Ga
   }
 }
 
+/**
+ * Ply to open a RESUMED game at (audit 2026-07 #12). Finished games are
+ * annotated to the end, so "last touched" equals the final ply for every
+ * reviewed game — resuming there shows only the last position. When the
+ * saved ply is the game's final ply (or past it), open at the start
+ * instead; any genuinely mid-game bookmark is honored as-is.
+ */
+export function chooseResumePly(savedPly: number, plyCount: number): number {
+  if (plyCount > 0 && savedPly >= plyCount) return 0;
+  return Math.max(0, savedPly);
+}
+
 /* ------------------------------------------------------------------ */
 /* Keyboard map (README §Interactions & Behavior)                      */
 /* ------------------------------------------------------------------ */
