@@ -3364,6 +3364,32 @@ input.set-value.editing {
   font: 400 11.5px/1.5 "Source Serif 4", serif;
   color: var(--dim);
 }
+/* Engine manager (run 10): stacked value cell with status sublines. */
+.set-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.set-subline {
+  font: 500 11px/1.4 "Public Sans", sans-serif;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-subline.mono {
+  font: 400 10.5px/1.4 "JetBrains Mono", monospace;
+}
+.set-subline.good {
+  color: var(--accent);
+}
+.set-subline.bad {
+  color: var(--bad);
+}
+input.set-value.editing.invalid {
+  border-color: var(--bad);
+}
 
 /* ---- Help & tour ---------------------------------------------------------- */
 

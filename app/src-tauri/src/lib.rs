@@ -80,6 +80,15 @@ fn resolve_engine_path(user_path: Option<String>) -> Result<String, String> {
     uci::resolve_engine_path(user_path.as_deref()).map(|p| p.display().to_string())
 }
 
+/// Validate an engine binary by running the `uci` handshake and return
+/// its `id name` (Settings' engine manager). No search is started — this
+/// is an explicit user action, so the engine-off default is untouched.
+#[tauri::command]
+async fn engine_identify(user_path: Option<String>) -> Result<uci::EngineIdentity, String> {
+    let path = uci::resolve_engine_path(user_path.as_deref())?;
+    uci::identify(&path).await
+}
+
 /// Start `go nodes <nodes>` on `fen`. Returns as soon as the search task is
 /// launched; progress arrives via `engine-info` / `engine-done` events.
 #[tauri::command]
@@ -193,6 +202,7 @@ pub fn run() {
         .manage(netops::NetWorker::default())
         .invoke_handler(tauri::generate_handler![
             resolve_engine_path,
+            engine_identify,
             analyze_position,
             stop_analysis,
             browse::open_database,
@@ -225,6 +235,8 @@ pub fn run() {
             tactics::tactics_finish_cycle,
             tactics::tactics_cycle_stats,
             endgame::endgame_overview,
+            endgame::tablebase_status,
+            endgame::set_tablebase_dir,
             endgame::endgame_start,
             endgame::endgame_move,
             endgame::endgame_give_up,

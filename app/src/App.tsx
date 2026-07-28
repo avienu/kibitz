@@ -62,7 +62,7 @@ import {
   type PlayerProfile,
   type TrainSummary,
 } from "./lib/db";
-import { getSavedNodes } from "./lib/engine";
+import { getSavedNodes, getSavedTbDir, setTablebaseDir } from "./lib/engine";
 import { onEngineDone, onEngineInfo } from "./lib/engine";
 import {
   netProgress as fetchNetProgress,
@@ -260,6 +260,10 @@ export default function App() {
     // A #db=/#game=/#screen= deep link overrides restore (not persisted).
     const dbOverride = new URLSearchParams(window.location.hash.slice(1)).get("db");
     const deepLinked = hasDeepLinkOverride(window.location.hash);
+    // Engine manager (run 10): a user-configured Syzygy dir is stored
+    // frontend-side; push it so drills see it before Settings is opened.
+    const tbDir = getSavedTbDir();
+    if (tbDir !== "") setTablebaseDir(tbDir).catch(() => {});
     (async () => {
       const remembered = dbOverride || (await lastDatabase().catch(() => null));
       const s = await openDatabase(remembered || getSavedDbPath());

@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import ScreenHeader from "./shell/ScreenHeader";
+import EngineSection from "./settings/EngineSection";
 import UpdatesSettings from "./UpdatesSettings";
 import {
   batchEstimate,
@@ -32,13 +33,6 @@ import {
   type JobsStatus,
 } from "./lib/db";
 import { endgameOverview, type TbInfo } from "./lib/endgame";
-import {
-  getSavedEnginePath,
-  getSavedNodes,
-  resolveEnginePath,
-  saveEnginePath,
-  saveNodes,
-} from "./lib/engine";
 import { fmtDurationMs } from "./lib/home";
 import { railNetBadges, twicCatalog, twicSetAutoSync } from "./lib/net";
 import type { AnnotationMode, BoardTreatmentChoice, Theme, Voice } from "./lib/gameView";
@@ -99,12 +93,6 @@ export default function SettingsView({
   theme,
   onTheme,
 }: SettingsViewProps) {
-  const [enginePath, setEnginePath] = useState(getSavedEnginePath);
-  const [nodes, setNodes] = useState(getSavedNodes);
-  const [resolved, setResolved] = useState("");
-  const [editEngine, setEditEngine] = useState(false);
-  const [editNodes, setEditNodes] = useState(false);
-
   const [jobs, setJobs] = useState<JobsStatus | null>(null);
   const [tb, setTb] = useState<TbInfo | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -121,16 +109,6 @@ export default function SettingsView({
   const [syncCount, setSyncCount] = useState<number | null>(null);
   const [twicAuto, setTwicAuto] = useState<boolean | null>(null);
   const [twicWeek, setTwicWeek] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    resolveEnginePath(enginePath)
-      .then((p) => !cancelled && setResolved(p))
-      .catch((e) => !cancelled && setResolved(`unresolved: ${e}`));
-    return () => {
-      cancelled = true;
-    };
-  }, [enginePath]);
 
   useEffect(() => {
     jobsStatus()
@@ -243,61 +221,12 @@ export default function SettingsView({
       <ScreenHeader title="Settings" subtitle="Engine, coach, data and appearance" />
       <div className="page-scroll">
         <div className="settings-page">
+          {/* ---- ENGINE MANAGER (own file: settings/EngineSection.tsx, run 10) ---- */}
+          <EngineSection />
+
           {/* ---- ENGINE & ANALYSIS ---- */}
           <div className="set-group">
             <div className="set-group-head">ENGINE &amp; ANALYSIS</div>
-            <Row
-              label="Engine path"
-              help="Resolved automatically when the override is empty."
-              value={
-                editEngine ? (
-                  <input
-                    className="set-value mono editing"
-                    type="text"
-                    value={enginePath}
-                    placeholder="resolved automatically if empty"
-                    spellCheck={false}
-                    autoFocus
-                    onChange={(e) => {
-                      setEnginePath(e.target.value);
-                      saveEnginePath(e.target.value);
-                    }}
-                    onKeyDown={(e) => e.key === "Enter" && setEditEngine(false)}
-                  />
-                ) : (
-                  <div className="set-value mono" title={resolved}>
-                    {enginePath || resolved || "resolving…"}
-                  </div>
-                )
-              }
-              action={ghost(editEngine ? "Done" : "Edit", () => setEditEngine((v) => !v))}
-            />
-            <Row
-              label="Node budget"
-              help="Per analysis request; every engine job is bounded by it."
-              value={
-                editNodes ? (
-                  <input
-                    className="set-value mono editing"
-                    type="number"
-                    min={1}
-                    value={nodes}
-                    autoFocus
-                    onChange={(e) => {
-                      const n = parseInt(e.target.value, 10);
-                      if (Number.isFinite(n) && n > 0) {
-                        setNodes(n);
-                        saveNodes(n);
-                      }
-                    }}
-                    onKeyDown={(e) => e.key === "Enter" && setEditNodes(false)}
-                  />
-                ) : (
-                  <div className="set-value mono">{nodes.toLocaleString("en-US")} nodes</div>
-                )
-              }
-              action={ghost(editNodes ? "Done" : "Edit", () => setEditNodes((v) => !v))}
-            />
             <Row
               label="Spawn policy"
               help="The engine is off by default and never runs behind your back: it starts only when a tactical screen fires, when you explicitly ask for analysis, or when you start a batch job."

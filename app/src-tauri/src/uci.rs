@@ -125,6 +125,82 @@ pub fn parse_info_line(line: &str) -> Option<UciInfo> {
     }
 }
 
+/// Parse a UCI `id name <name>` handshake line. Returns `None` for
+/// anything else (including a bare "id name" with no value).
+pub fn parse_id_name(line: &str) -> Option<&str> {
+    line.trim()
+        .strip_prefix("id name")
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
+
+/// Engine identity from a `uci` handshake (Settings' engine manager).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineIdentity {
+    /// The binary actually spoken to (after resolution).
+    pub path: String,
+    /// The engine's `id name` line ("Stockfish 17.1"); None when the
+    /// binary completed the handshake without sending one.
+    pub name: Option<String>,
+}
+
+/// Spawn `path`, run the `uci` → `uciok` handshake capturing the `id name`
+/// line, then quit. This validates a user-picked binary WITHOUT starting
+/// any search — an explicit Settings action, not a background engine run.
+pub async fn identify(path: &Path) -> Result<EngineIdentity, String> {
+    let mut child = Command::new(path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn engine {}: {e}", path.display()))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "Engine stdin unavailable".to_owned())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Engine stdout unavailable".to_owned())?;
+    stdin
+        .write_all(b"uci\n")
+        .await
+        .map_err(|e| format!("Failed to send 'uci': {e}"))?;
+    stdin
+        .flush()
+        .await
+        .map_err(|e| format!("Failed to flush 'uci': {e}"))?;
+
+    let mut lines = BufReader::new(stdout).lines();
+    let handshake = async {
+        let mut name: Option<String> = None;
+        while let Some(line) = lines
+            .next_line()
+            .await
+            .map_err(|e| format!("Engine read error: {e}"))?
+        {
+            if let Some(n) = parse_id_name(&line) {
+                name = Some(n.to_owned());
+            }
+            if line.trim() == "uciok" {
+                return Ok(name);
+            }
+        }
+        Err("Engine closed stdout before 'uciok' — not a UCI engine?".to_owned())
+    };
+    let name = tokio::time::timeout(Duration::from_secs(10), handshake)
+        .await
+        .map_err(|_| "Timed out waiting for 'uciok' — not a UCI engine?".to_owned())??;
+    let _ = stdin.write_all(b"quit\n").await;
+    let _ = stdin.flush().await;
+    Ok(EngineIdentity {
+        path: path.display().to_string(),
+        name,
+    })
+}
+
 /// Parse a `bestmove <move> [ponder <move>]` line. Returns `None` otherwise.
 pub fn parse_bestmove_line(line: &str) -> Option<BestMove> {
     let mut tokens = line.split_whitespace();
@@ -426,5 +502,45 @@ mod tests {
     fn explicit_user_path_must_exist() {
         let err = resolve_engine_path(Some("/definitely/not/a/real/engine")).unwrap_err();
         assert!(err.contains("does not exist"));
+    }
+
+    #[test]
+    fn parses_id_name_lines_and_rejects_the_rest() {
+        assert_eq!(parse_id_name("id name Stockfish 17.1"), Some("Stockfish 17.1"));
+        assert_eq!(parse_id_name("  id name Lc0 v0.31  "), Some("Lc0 v0.31"));
+        assert_eq!(parse_id_name("id name"), None, "bare tag carries no name");
+        assert_eq!(parse_id_name("id author T. Romstad et al."), None);
+        assert_eq!(parse_id_name("uciok"), None);
+        assert_eq!(parse_id_name(""), None);
+    }
+
+    /// `identify` against a fake shell "engine": the handshake captures
+    /// `id name` and completes without ever starting a search.
+    #[tokio::test]
+    async fn identify_reads_the_handshake_of_a_scripted_engine() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("fake-engine.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nread _\necho 'id name FakeFish 1.0'\necho 'id author nobody'\necho uciok\nread _\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let id = identify(&script).await.unwrap();
+        assert_eq!(id.name.as_deref(), Some("FakeFish 1.0"));
+        assert!(id.path.ends_with("fake-engine.sh"));
+    }
+
+    /// A binary that is not a UCI engine fails the handshake with an
+    /// honest message instead of hanging (bounded by the timeout; `true`
+    /// exits immediately, so this returns fast).
+    #[tokio::test]
+    async fn identify_rejects_a_non_engine_binary() {
+        let err = identify(Path::new("/usr/bin/true")).await.unwrap_err();
+        assert!(err.contains("not a UCI engine"), "{err}");
     }
 }

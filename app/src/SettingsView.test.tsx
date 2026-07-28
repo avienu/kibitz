@@ -26,9 +26,14 @@ vi.mock("./lib/net", () => ({
 vi.mock("./lib/engine", () => ({
   getSavedEnginePath: () => "",
   getSavedNodes: () => 2_000_000,
+  getSavedTbDir: () => "",
   resolveEnginePath: vi.fn(() => Promise.resolve("/usr/local/bin/stockfish")),
   saveEnginePath: vi.fn(),
   saveNodes: vi.fn(),
+  saveTbDir: vi.fn(),
+  engineIdentify: vi.fn(() => Promise.reject(new Error("no engine in tests"))),
+  tablebaseStatus: vi.fn(() => Promise.reject(new Error("no tb in tests"))),
+  setTablebaseDir: vi.fn(() => Promise.reject(new Error("no tb in tests"))),
 }));
 
 function renderSettings() {

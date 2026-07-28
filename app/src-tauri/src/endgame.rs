@@ -43,6 +43,9 @@ struct RunningDrill {
 
 struct Inner {
     tb: TbSlot,
+    /// User-configured Syzygy directory (Settings' engine manager, run
+    /// 10); takes priority over KIBITZ_SYZYGY and the dev-layout walk.
+    dir_override: Option<PathBuf>,
     running: Option<RunningDrill>,
 }
 
@@ -54,12 +57,19 @@ impl Default for EndgameState {
     fn default() -> Self {
         EndgameState(Mutex::new(Inner {
             tb: TbSlot::Untried,
+            dir_override: None,
             running: None,
         }))
     }
 }
 
-fn resolve_tb_dir() -> Option<PathBuf> {
+fn resolve_tb_dir(dir_override: Option<&PathBuf>) -> Option<PathBuf> {
+    if let Some(p) = dir_override {
+        // An explicit choice is never silently substituted: if it is
+        // gone, resolution fails (with the honest note) rather than
+        // falling back behind the user's back.
+        return p.is_dir().then(|| p.clone());
+    }
     if let Ok(p) = std::env::var("KIBITZ_SYZYGY") {
         let p = PathBuf::from(p);
         if p.is_dir() {
@@ -83,11 +93,13 @@ impl Inner {
     /// resolution runs once, not per move.
     fn ensure_tb(&mut self) {
         if matches!(self.tb, TbSlot::Untried) {
-            self.tb = match resolve_tb_dir() {
-                None => TbSlot::Unavailable(
-                    "no Syzygy directory found (set KIBITZ_SYZYGY or fetch testdata/syzygy)"
+            self.tb = match resolve_tb_dir(self.dir_override.as_ref()) {
+                None => TbSlot::Unavailable(match &self.dir_override {
+                    Some(p) => format!("configured directory does not exist: {}", p.display()),
+                    None => "no Syzygy directory found (set KIBITZ_SYZYGY or fetch \
+                             testdata/syzygy)"
                         .to_string(),
-                ),
+                }),
                 Some(dir) => match Tablebase::init(&dir) {
                     Ok(tb) => TbSlot::Ready(Box::new(tb)),
                     Err(e) => TbSlot::Unavailable(format!("{}: {e}", dir.display())),
@@ -100,6 +112,31 @@ impl Inner {
         match &mut self.tb {
             TbSlot::Ready(tb) => Some(tb.as_mut()),
             _ => None,
+        }
+    }
+
+    /// TbInfo snapshot of the (ensured) slot — the single source for the
+    /// endgame screen, Settings and the engine manager.
+    fn tb_info(&self) -> TbInfo {
+        match &self.tb {
+            TbSlot::Ready(tb) => TbInfo {
+                available: true,
+                largest: Some(tb.largest()),
+                note: format!(
+                    "Syzygy tables loaded (up to {} men): optimal replies and instant \
+                     blunder detection where the piece count is covered.",
+                    tb.largest()
+                ),
+            },
+            TbSlot::Unavailable(why) => TbInfo {
+                available: false,
+                largest: None,
+                note: format!(
+                    "No tablebase ({why}); the opponent is a simple heuristic and only \
+                     checkmate/stalemate/draw endings are detected."
+                ),
+            },
+            TbSlot::Untried => unreachable!("ensure_tb ran"),
         }
     }
 }
@@ -155,26 +192,7 @@ pub async fn endgame_overview(
     })?;
     let mut inner = eg.0.lock().map_err(|e| e.to_string())?;
     inner.ensure_tb();
-    let tablebase = match &inner.tb {
-        TbSlot::Ready(tb) => TbInfo {
-            available: true,
-            largest: Some(tb.largest()),
-            note: format!(
-                "Syzygy tables loaded (up to {} men): optimal replies and instant \
-                 blunder detection where the piece count is covered.",
-                tb.largest()
-            ),
-        },
-        TbSlot::Unavailable(why) => TbInfo {
-            available: false,
-            largest: None,
-            note: format!(
-                "No tablebase ({why}); the opponent is a simple heuristic and only \
-                 checkmate/stalemate/draw endings are detected."
-            ),
-        },
-        TbSlot::Untried => unreachable!("ensure_tb ran"),
-    };
+    let tablebase = inner.tb_info();
     let c = endgame::curriculum();
     let drills = c
         .drills
@@ -203,6 +221,32 @@ pub async fn endgame_overview(
         mastery_streak: endgame::MASTERY_STREAK,
         tablebase,
     })
+}
+
+/// Tablebase status alone (no database required) — the engine manager's
+/// Syzygy row.
+#[tauri::command]
+pub async fn tablebase_status(eg: State<'_, EndgameState>) -> Result<TbInfo, String> {
+    let mut inner = eg.0.lock().map_err(|e| e.to_string())?;
+    inner.ensure_tb();
+    Ok(inner.tb_info())
+}
+
+/// Set (or with `None` clear) the user-configured Syzygy directory and
+/// re-resolve immediately; returns the resulting status. The frontend
+/// persists the choice (localStorage) and pushes it at launch. Fathom
+/// keeps process-global state, so re-init replaces the loaded set.
+#[tauri::command]
+pub async fn set_tablebase_dir(
+    eg: State<'_, EndgameState>,
+    dir: Option<String>,
+) -> Result<TbInfo, String> {
+    let dir = dir.map(|d| d.trim().to_string()).filter(|d| !d.is_empty());
+    let mut inner = eg.0.lock().map_err(|e| e.to_string())?;
+    inner.dir_override = dir.map(PathBuf::from);
+    inner.tb = TbSlot::Untried;
+    inner.ensure_tb();
+    Ok(inner.tb_info())
 }
 
 // ---------------------------------------------------------------------------
