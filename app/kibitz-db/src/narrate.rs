@@ -60,6 +60,12 @@ pub struct Verdict {
     pub score_delta_cp: Option<i32>,
     pub mate_in: Option<i32>,
     pub nodes: u64,
+    /// Engine-cleared static candidate moves for this position (run 11):
+    /// the wsui-confirm job's cursory suggestion review. `Some` even when
+    /// empty (the engine ran and refuted everything); `None` when the job
+    /// predates the review or had nothing to verify — then the static
+    /// veto governs.
+    pub cleared_suggestions: Option<Vec<String>>,
 }
 
 /// Load every completed verdict for a game, keyed by mainline ply.
@@ -102,6 +108,11 @@ pub fn load_verdicts(conn: &Connection, game_id: i64) -> anyhow::Result<HashMap<
                 },
                 mate_in,
                 nodes: v["nodes"].as_u64().unwrap_or(0),
+                cleared_suggestions: v["cleared_suggestions"].as_array().map(|list| {
+                    list.iter()
+                        .filter_map(|u| u.as_str().map(str::to_string))
+                        .collect()
+                }),
             },
         );
     }
@@ -295,7 +306,15 @@ pub fn narrate_game(
                             && mv.from.file() != mv.to.file()
                             && board_before.piece_on(mv.to).is_none());
                     if !sections.plans.is_empty() && !capture_ply {
-                        if let Some(closing) = kibitz_verbalize::suggestion_closing(&record, voice)
+                        // Engine-verification context (run 11): at plies
+                        // where the wsui-confirm job reviewed the static
+                        // candidates, only cleared moves render; with no
+                        // engine review the static veto drops marked ones.
+                        let cleared = verdicts
+                            .get(&ply)
+                            .and_then(|v| v.cleared_suggestions.as_deref());
+                        if let Some(closing) =
+                            kibitz_verbalize::suggestion_closing_verified(&record, voice, cleared)
                         {
                             sections.plans.push(' ');
                             sections.plans.push_str(&closing);

@@ -32,6 +32,7 @@ pub mod train;
 pub mod triage;
 pub mod uci;
 pub mod updates;
+pub mod verify;
 
 use std::sync::Arc;
 
@@ -46,8 +47,31 @@ use uci::{Engine, StopHandle, UciPosition};
 /// interrupt a search that currently holds the engine lock.
 #[derive(Default)]
 pub struct EngineState {
-    engine: Arc<Mutex<Option<Engine>>>,
-    stop: std::sync::Mutex<Option<StopHandle>>,
+    pub(crate) engine: Arc<Mutex<Option<Engine>>>,
+    pub(crate) stop: std::sync::Mutex<Option<StopHandle>>,
+}
+
+/// Ensure `slot` holds a live engine spawned from `path` (respawning if
+/// the path changed), registering its stop handle in `stop_slot`. Shared
+/// by `analyze_position` and `verify_suggestions`.
+pub(crate) async fn ensure_engine(
+    slot: &mut Option<Engine>,
+    stop_slot: &std::sync::Mutex<Option<StopHandle>>,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let needs_spawn = match slot.as_ref() {
+        Some(engine) => engine.path() != path,
+        None => true,
+    };
+    if needs_spawn {
+        if let Some(old) = slot.take() {
+            old.quit().await;
+        }
+        let engine = Engine::spawn(path).await?;
+        *stop_slot.lock().expect("stop mutex poisoned") = Some(engine.stop_handle());
+        *slot = Some(engine);
+    }
+    Ok(())
 }
 
 /// Streamed `engine-info` payload: the parsed UCI info line PLUS the FEN
@@ -156,18 +180,9 @@ async fn run_search(
     nodes: Option<u64>,
 ) -> Result<uci::BestMove, String> {
     let mut slot = engine_slot.lock().await;
-    let needs_spawn = match slot.as_ref() {
-        Some(engine) => engine.path() != path,
-        None => true,
-    };
-    if needs_spawn {
-        if let Some(old) = slot.take() {
-            old.quit().await;
-        }
-        let engine = Engine::spawn(&path).await?;
+    {
         let state: State<'_, EngineState> = app.state();
-        *state.stop.lock().expect("stop mutex poisoned") = Some(engine.stop_handle());
-        *slot = Some(engine);
+        ensure_engine(&mut slot, &state.stop, &path).await?;
     }
     let engine = slot.as_mut().expect("engine just ensured");
     let searched_fen = fen.clone();
@@ -228,6 +243,7 @@ pub fn run() {
             tokens::get_game_tokens,
             tokens::update_game_tokens,
             explain::explain_position,
+            verify::verify_suggestions,
             tactics::tactics_state,
             tactics::tactics_import_puzzles,
             tactics::tactics_next_puzzle,

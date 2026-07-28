@@ -58,14 +58,21 @@ import {
   uiSessionGet,
   uiSessionSet,
   updateGameTokens,
+  verifySuggestions,
   type DbSummary,
   type GameDetail,
   type JobsStatus,
   type PlayerProfile,
   type TrainSummary,
 } from "./lib/db";
-import { getSavedNodes, getSavedTbDir, setTablebaseDir } from "./lib/engine";
+import { getSavedEnginePath, getSavedNodes, getSavedTbDir, setTablebaseDir } from "./lib/engine";
 import { onEngineDone, onEngineInfo } from "./lib/engine";
+import {
+  failVerification,
+  needsVerification,
+  resolveVerification,
+  type VerificationState,
+} from "./lib/verifyChips";
 import {
   netProgress as fetchNetProgress,
   netStripProgress,
@@ -188,6 +195,9 @@ export default function App() {
   const [explainOn, setExplainOn] = useState(() => localStorage.getItem(EXPLAIN_KEY) !== "off");
   const [explanations, setExplanations] = useState<Map<number, ExplanationJson>>(new Map());
   const [explaining, setExplaining] = useState(false);
+  /** Chip-verification state per ply (run 11): entries are FEN-stamped
+   * so stale round-trips from ply-stepping or game switches drop. */
+  const [verifications, setVerifications] = useState<Map<number, VerificationState>>(new Map());
 
   const [dbSummary, setDbSummary] = useState<DbSummary | null>(null);
   const [trainSum, setTrainSum] = useState<TrainSummary | null>(null);
@@ -405,6 +415,7 @@ export default function App() {
     dispatch({ type: "gameLoaded", ply: clampPly(atPly, g), plyCount: g.sans.length });
     setStatus(label + (warning ? ` ${warning}` : ""));
     setExplanations(new Map());
+    setVerifications(new Map());
     setRevealedQuiet(new Set());
     setPendingVar(null);
     setPreview(null);
@@ -677,6 +688,40 @@ export default function App() {
   }, [explainOn, game, explanations, gv.ply, fen, gv.voice]);
 
   const toggleExplain = useCallback(() => setExplainOn((v) => !v), []);
+
+  // Chip verification (run 11, maintainer ruling): when the current
+  // ply's explanation says the WSUI screen fired AND suggestions exist,
+  // run one cursory engine round-trip. Chips already render statically
+  // (marked ones hidden); refuted chips then disappear and cleared
+  // marked ones appear. Quiet positions never reach here — no engine.
+  useEffect(() => {
+    if (!explainOn || preview !== null) return;
+    const explanation = explanations.get(gv.ply) ?? null;
+    if (!needsVerification(explanation) || verifications.has(gv.ply)) return;
+    const ply = gv.ply;
+    const requestFen = fen;
+    setVerifications((m) => new Map(m).set(ply, { kind: "running", fen: requestFen }));
+    verifySuggestions(requestFen, getSavedEnginePath() || undefined)
+      .then((res) => {
+        // The response's own FEN stamp guards against staleness — a
+        // result for a position we no longer track is dropped.
+        setVerifications((m) => {
+          const cur = m.get(ply);
+          if (!cur) return m;
+          const next = resolveVerification(cur, res);
+          return next === cur ? m : new Map(m).set(ply, next);
+        });
+      })
+      .catch(() => {
+        // Engine unavailable: marked chips stay hidden, pending clears.
+        setVerifications((m) => {
+          const cur = m.get(ply);
+          if (!cur) return m;
+          const next = failVerification(cur, requestFen);
+          return next === cur ? m : new Map(m).set(ply, next);
+        });
+      });
+  }, [explainOn, explanations, verifications, gv.ply, fen, preview]);
 
   /* ---- board move input (annotatable db games → variations) ---- */
   const boardMoveRef = useRef<(orig: string, dest: string, promoRole?: PromoRole) => void>(
@@ -1063,6 +1108,7 @@ export default function App() {
             explanation={currentExplanation}
             explaining={explaining}
             explainedPlies={explainedPlies}
+            verification={verifications.get(gv.ply) ?? null}
             onExplain={() => void doExplain()}
             pendingVar={pendingVar}
             onAcceptVar={acceptPendingVar}

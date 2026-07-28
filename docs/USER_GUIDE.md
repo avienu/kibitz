@@ -170,8 +170,19 @@ Panel anatomy:
   sentences that reference that square (the rest fade); the footer shows
   "filtered to d7". Click the same square again to clear. Stepping to
   another ply clears both hover and selection.
-- **Footer** — "Static screen · no engine spawned", the active voice, and
-  the selection state.
+- **CONSIDER chips** — up to three candidate moves synthesized from the
+  position's plans (hover a chip to see its move as a board arrow). On
+  quiet positions these are purely static and the engine stays cold. When
+  the **tactical screen has fired**, the chips get a brief engine
+  check: chips pulse subtly while it runs, moves the engine refutes
+  disappear, and a candidate the static screen distrusted (it looks like
+  it drops material, but may be a real tactic — think a French Winawer
+  ...cxd4) appears only once the engine clears it. If no engine is
+  available, distrusted candidates simply stay hidden — the coach would
+  rather say nothing than something wrong.
+- **Footer** — "Static screen · no engine spawned" (or "candidates
+  engine-checked" after a chip verification), the active voice, and the
+  selection state.
 
 ### Evidence overlay language
 

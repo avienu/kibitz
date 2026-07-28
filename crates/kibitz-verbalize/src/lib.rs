@@ -1175,6 +1175,23 @@ pub(crate) fn select_imbalances(imbalances: &[Imbalance]) -> Vec<&Imbalance> {
 /// narrator, for instance, skips capture plies, where the only honest
 /// advice is to finish the exchange.
 pub fn suggestion_closing(record: &FeatureRecord, voice: Voice) -> Option<String> {
+    suggestion_closing_verified(record, voice, None)
+}
+
+/// [`suggestion_closing`] with engine-verification context (run 11).
+///
+/// `cleared` carries the uci moves a bounded engine review cleared for
+/// this position (the wsui-confirm job's cursory candidate searches):
+/// only those render — refuted candidates vanish even when statically
+/// clean. `None` means no engine ran; then the static whole-board veto
+/// governs and marked candidates (`static_risk`) are dropped — bad
+/// advice is worse than no advice, even though this conservatively
+/// drops engine-clearable moves too.
+pub fn suggestion_closing_verified(
+    record: &FeatureRecord,
+    voice: Voice,
+    cleared: Option<&[String]>,
+) -> Option<String> {
     let decisive = record
         .engine
         .as_ref()
@@ -1183,7 +1200,11 @@ pub fn suggestion_closing(record: &FeatureRecord, voice: Voice) -> Option<String
         return None;
     }
     let board = record.fen.parse::<kibitz_core::cozy_chess::Board>().ok()?;
-    let suggestions = kibitz_core::suggest::suggest(record, &board);
+    let mut suggestions = kibitz_core::suggest::suggest(record, &board);
+    match cleared {
+        Some(list) => suggestions.retain(|s| list.contains(&s.mv)),
+        None => suggestions.retain(|s| s.static_risk.is_none()),
+    }
     let closing = render_suggestions(&suggestions, voice);
     (!closing.is_empty()).then_some(closing)
 }

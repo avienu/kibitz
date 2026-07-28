@@ -361,6 +361,17 @@ export function explainPosition(
   return invoke<Explanation>("explain_position", { fen, voice, prevFen, lastSan });
 }
 
+/** Cursory engine review of the CONSIDER chips (run 11). Call ONLY when
+ * the explanation's WSUI screen fired and suggestions exist — the
+ * backend re-checks that gate and returns `ran: false` (no engine) for
+ * quiet positions. The response is FEN-stamped for staleness checks. */
+export function verifySuggestions(
+  fen: string,
+  userPath?: string,
+): Promise<import("./verifyChips").VerifyOut> {
+  return invoke("verify_suggestions", { fen, userPath });
+}
+
 /* ---- Run 4: analyses, annotate/re-analyze/jobs, export, profile ---- */
 
 /** All stored evals for one game (fresh rows first per ply). */

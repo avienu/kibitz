@@ -39,6 +39,7 @@ import {
   type GameViewState,
 } from "./lib/gameView";
 import type { LoadedGame } from "./lib/game";
+import type { VerificationState } from "./lib/verifyChips";
 import { gameEngines, movesRows, movesRowsFromSans, type MovesRow } from "./lib/movesView";
 import { buildAnnView, insertVariation } from "./lib/tokens";
 import { crosstableEligible } from "./lib/crosstable";
@@ -69,6 +70,8 @@ interface GameViewProps {
   explanation: ExplanationJson | null;
   explaining: boolean;
   explainedPlies: number[];
+  /** CONSIDER-chip verification state for the current ply (run 11). */
+  verification: VerificationState | null;
   onExplain: () => void;
   pendingVar: PendingVariation | null;
   onAcceptVar: () => void;
@@ -123,6 +126,7 @@ export default function GameView({
   explanation,
   explaining,
   explainedPlies,
+  verification,
   onExplain,
   pendingVar,
   onAcceptVar,
@@ -728,6 +732,7 @@ export default function GameView({
             <ExplainPanel
               explanation={explanation}
               explaining={explaining}
+              verification={verification}
               voice={gv.voice}
               onVoice={(v) => dispatch({ type: "setVoice", voice: v })}
               hoverSentence={gv.hoverSentence}

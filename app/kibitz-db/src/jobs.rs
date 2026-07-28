@@ -280,6 +280,48 @@ pub fn run_pending_until(
                 result["status"] = serde_json::json!(status);
                 result["score_delta_cp"] = serde_json::json!(benef_cp);
                 result["mate_for_beneficiary"] = serde_json::json!(benef_mate);
+
+                // Suggestion verification (run 11, maintainer ruling:
+                // "at least a cursory engine review, at least if tactics
+                // screen is present"). The fired screen already
+                // sanctioned this engine run; the confirm search above
+                // doubles as the baseline, and each static candidate
+                // gets one cursory bounded search of the position after
+                // it (≤3 candidates + shared baseline ≤ 4 searches).
+                // Narration then renders only cleared moves at this ply.
+                if let Ok(board) = p.fen.parse::<cozy_chess::Board>() {
+                    let record = kibitz_core::analyze(&board);
+                    let suggestions = kibitz_core::suggest::suggest(&record, &board);
+                    if record.wsui.screen_fired && !suggestions.is_empty() {
+                        let baseline =
+                            crate::verify::fold_score(Some(line.score_cp), line.mate).unwrap_or(0);
+                        let mut cands = Vec::with_capacity(suggestions.len());
+                        for s in &suggestions {
+                            let score = s
+                                .mv
+                                .parse::<cozy_chess::Move>()
+                                .ok()
+                                .filter(|mv| board.is_legal(*mv))
+                                .and_then(|mv| {
+                                    let mut b2 = board.clone();
+                                    b2.play(mv);
+                                    e.eval_nodes(&b2.to_string(), crate::verify::VERIFY_NODES)
+                                        .ok()
+                                })
+                                // The child search is the OPPONENT's POV.
+                                .and_then(|l| crate::verify::fold_score(Some(l.score_cp), l.mate))
+                                .map(|cp| -cp);
+                            cands.push(crate::verify::CandidateEval {
+                                uci: s.mv.clone(),
+                                static_risk: s.static_risk,
+                                score,
+                            });
+                        }
+                        result["cleared_suggestions"] =
+                            serde_json::json!(crate::verify::cleared_moves(baseline, &cands));
+                        result["verify_nodes"] = serde_json::json!(crate::verify::VERIFY_NODES);
+                    }
+                }
             }
             Ok(result)
         })();

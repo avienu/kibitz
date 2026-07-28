@@ -20,6 +20,15 @@
 //! Purely static: legality + SEE only, the engine is never consulted
 //! (CLAUDE.md #6). Suggestions therefore live in the Explanation contract
 //! and the narration, never in the FeatureRecord itself.
+//!
+//! WHOLE-BOARD VETO (run 11): beyond the destination-square SEE gate,
+//! every surviving candidate is checked for pieces left en prise anywhere
+//! on the board. Candidates whose whole-board static cost reaches
+//! [`PIECE_LOSS_CP`] are MARKED (`static_risk`), not dropped: an engine
+//! layer in the app may clear the false positives (e.g. the Winawer's
+//! theory move ...cxd4, where ...dxc3 regains the piece one exchange
+//! deeper than statics can see). Consumers with no engine must drop
+//! marked candidates — bad advice is worse than no advice.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -42,6 +51,14 @@ pub const ENABLE: u32 = 1;
 /// one exchange are beyond a static suggester — documented limitation.)
 pub const SAFETY_CP: i32 = 60;
 
+/// Whole-board veto threshold (run 11, maintainer field report): a
+/// candidate that leaves the opponent's best static capture ANYWHERE on
+/// the board netting at least this much is statically UNSAFE. Derived
+/// from the cheapest piece-for-pawn loss — knight minus pawn, per
+/// [`piece_value`] — so a bishop shed for a pawn (~230cp) clearly
+/// qualifies while an even exchange never does.
+pub const PIECE_LOSS_CP: i32 = 220;
+
 /// One suggested move: what to play, which plans it serves, and whether it
 /// is primarily a denial of the opponent's plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,6 +72,15 @@ pub struct Suggestion {
     /// DENIED opponent tokens lead the list.
     pub serving: Vec<String>,
     pub prophylactic: bool,
+    /// Whole-board static risk (run 11): `Some(net)` when, after this
+    /// move, the opponent's best SEE capture sequence anywhere on the
+    /// board nets at least [`PIECE_LOSS_CP`] beyond what the move itself
+    /// captured. A marked candidate is NOT sound advice on its own —
+    /// consumers must drop it unless a bounded engine review clears it
+    /// (statics one exchange deep cannot tell a piece-regaining line
+    /// like the Winawer's ...cxd4 from a plain piece-dropper like
+    /// ...f5??; that distinction is the engine layer's job).
+    pub static_risk: Option<i32>,
 }
 
 /// One active plan pulled out of the record, with its EFFECTIVE owner (a
@@ -173,6 +199,37 @@ fn is_safe(board: &Board, mv: Move) -> bool {
     let b2 = after(board, mv);
     let loss = see(&b2, mv.to, !stm).max(0);
     gained - loss >= -SAFETY_CP
+}
+
+/// The best static capture the ENEMY of `side` has anywhere on the board:
+/// the maximum SEE over every square holding a `side` piece, clamped at
+/// zero (a capture the opponent would decline is no threat). Like all
+/// SEE, this ignores pins and en passant — documented limitations.
+fn best_enemy_capture(board: &Board, side: Color) -> i32 {
+    let mut best = 0;
+    for sq in board.colors(side) {
+        best = best.max(see(board, sq, !side));
+    }
+    best
+}
+
+/// Whole-board static risk of `mv` (run 11, maintainer field report: the
+/// Winawer ...f5?? chips — the destination-only gate above never notices
+/// the mover left ANOTHER piece en prise). After playing `mv`, the
+/// opponent's best SEE capture anywhere, net of what the move itself
+/// captured: `Some(net)` when it reaches [`PIECE_LOSS_CP`].
+///
+/// The already-en-prise subtlety is handled by construction: when a piece
+/// hangs BEFORE the move, every candidate that fails to address it still
+/// shows the full net and is marked, while candidates that resolve the
+/// hang (move, defend, trade or out-capture it) bring the net below the
+/// threshold and pass statically.
+fn static_risk(board: &Board, mv: Move) -> Option<i32> {
+    let stm = board.side_to_move();
+    let gained = board.piece_on(mv.to).map(piece_value).unwrap_or(0);
+    let b2 = after(board, mv);
+    let net = best_enemy_capture(&b2, stm) - gained;
+    (net >= PIECE_LOSS_CP).then_some(net)
 }
 
 /// Knight-move distance between two squares on an empty board (capped).
@@ -894,6 +951,7 @@ pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
                 score,
                 serving,
                 prophylactic,
+                static_risk: static_risk(board, mv),
             }
         })
         .collect();
@@ -1378,6 +1436,74 @@ mod tests {
         assert!(mapped.iter().any(|(mv, _)| mv.to == Square::D5));
         // ...but the safety filter must reject it.
         assert!(!is_safe(&b, "e3d5".parse().unwrap()));
+    }
+
+    /// French Winawer after 5.a3 (maintainer field report, run 11): the
+    /// b4-bishop hangs to axb4 (cxb4 recaptures only a pawn — net bishop
+    /// for pawn, ~230cp). The destination-only gate never noticed, so
+    /// f5??/f6?? shipped as chips. The whole-board veto must mark them.
+    const WINAWER: &str = "rnbqk1nr/pp3ppp/4p3/2ppP3/1b1P4/P1N5/1PP2PPP/R1BQKBNR b KQkq - 0 5";
+
+    #[test]
+    fn winawer_whole_board_veto_marks_piece_droppers() {
+        let b = board(WINAWER);
+        let risk = |uci: &str| static_risk(&b, uci.parse().unwrap());
+        // f5/f6 ignore the hanging bishop: marked with the full swing.
+        assert!(risk("f7f5").is_some_and(|r| r >= PIECE_LOSS_CP));
+        assert!(risk("f7f6").is_some_and(|r| r >= PIECE_LOSS_CP));
+        // cxd4 is the THEORY move (axb4 is met by dxc3, regaining the
+        // piece) — but statics one exchange deep cannot distinguish it
+        // from the losers, so it is marked too. Documented limitation:
+        // resurrecting it is the engine verification layer's job.
+        assert!(risk("c5d4").is_some_and(|r| r >= PIECE_LOSS_CP));
+        // Candidates that ADDRESS the hang pass statically — this is the
+        // already-en-prise subtlety: with the bishop hanging, only moves
+        // that bring the swing back under the threshold stay clean.
+        assert_eq!(risk("b4c3"), None, "Bxc3+ trades the hanging bishop");
+        assert_eq!(risk("b4a5"), None, "Ba5 steps out of the capture");
+    }
+
+    /// Winawer, end to end: whatever the mappers propose here, every
+    /// surviving suggestion carries the static mark — so a consumer with
+    /// no engine verification available shows NOTHING (which
+    /// conservatively kills cxd4 too; the engine layer resurrects it).
+    #[test]
+    fn winawer_suggestions_are_all_statically_marked() {
+        let s = suggest_for(WINAWER);
+        assert!(!s.is_empty(), "the mappers do propose moves here: {s:?}");
+        for x in &s {
+            assert!(
+                x.static_risk.is_some_and(|r| r >= PIECE_LOSS_CP),
+                "{} must be statically marked: {s:?}",
+                x.san
+            );
+        }
+    }
+
+    /// Control: with nothing en prise the veto never fires — the
+    /// Sveshnikov bind's suggestions flow unchanged and unmarked.
+    #[test]
+    fn whole_board_veto_leaves_clean_positions_alone() {
+        let s = suggest_for("r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7");
+        assert!(
+            s.iter().any(|x| x.san == "Nd5" && x.static_risk.is_none()),
+            "{s:?}"
+        );
+        assert!(
+            s.iter().all(|x| x.static_risk.is_none()),
+            "nothing hangs in the bind: {s:?}"
+        );
+    }
+
+    /// The opera-game 8...c6 closing (narration snapshot): 9.f4 is an
+    /// even lever (exf4 Bxf4) and nothing else hangs — it must stay
+    /// statically clean, as must the Bd2 backup.
+    #[test]
+    fn opera_c6_lever_f4_stays_statically_clean() {
+        let fen = "r1b1kb1r/pp2qppp/2p2n2/4p3/2B1P3/1QN5/PPP2PPP/R1B1K2R w KQkq - 0 9";
+        let b = board(fen);
+        assert_eq!(static_risk(&b, "f2f4".parse().unwrap()), None);
+        assert_eq!(static_risk(&b, "c1d2".parse().unwrap()), None);
     }
 
     /// SAN formatting: disambiguation, captures, castling, promotion.
