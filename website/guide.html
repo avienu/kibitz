@@ -126,6 +126,9 @@
 <ul>
 <li><strong>full | hover | hidden</strong> — how comments and variations display (hover dims them until pointed at; hidden removes them). Also in Settings.</li>
 <li>Click a move to jump the board there.</li>
+</ul>
+<p><strong>Previewing variations:</strong> click a variation row's move text to load that line onto the board. The board jumps to the variation's first move (the position where it branches off the mainline), and an accent <strong>PREVIEWING VARIATION</strong> pill appears under the board with the line's name, its own <strong>◀ / ▶</strong> controls and a <strong>← Back to game</strong> button. <strong>← / →</strong> step within the variation while the preview is active; <strong>Esc</strong>, the pill's back button, or any main-game navigation (clicking a mainline move, the main Prev/Next controls, ↑/↓/Home/End) exits and the board returns exactly where you were. While previewing, the eval bar and Explain panel pause — they describe the *main* game, so instead of pretending, they sit out until you're back. (Live analysis, if on, does follow the previewed positions.)</p>
+<ul>
 <li><strong>Repertoire marks</strong> — when you have trained repertoires, moves that match a repertoire card get a small <strong>✓</strong> (hover: "in your White/Black repertoire"), and the first move where the game *deviates* from your repertoire gets a <strong>≠</strong> whose tooltip names the move you train there ("your White repertoire plays Bb5 here") — per color, both colors when both repertoires apply. No toggle: the marks only exist when a repertoire has cards.</li>
 </ul>
 <p><strong>Editing</strong> (database games only):</p>
@@ -144,8 +147,9 @@
 <ol>
 <li>Stepping through games, the Explain panel and Annotate's static comments never involve the engine.</li>
 <li><strong>Re-analyze</strong> and <strong>Annotate</strong> (game view) run their jobs immediately on click — enqueue *and* start the worker — with an inline progress row in the game view. So does confirming a database-wide batch (Database header / Settings), and <strong>Run pending jobs</strong> in the Jobs view (or the CLI <code>run-jobs</code>) resumes anything left pending. The status strip's engine dot and batch progress show it happening.</li>
-<li><strong>Live analysis</strong> (game view, next to Flip): an explicit toggle that runs infinite analysis on the position you're looking at, streaming depth, evaluation and the engine's line below the move controls. It follows you as you step through the game and stops the moment you switch it off, load another game, or leave the game view. It always starts off — the setting is deliberately not remembered between sessions.</li>
+<li><strong>Live analysis</strong> (game view, next to Flip): an explicit toggle that runs infinite analysis on the position you're looking at. The strip below the move controls streams the evaluation (White's point of view), the search depth, and the engine's <strong>best line in SAN</strong> with move numbers ("14.Qg3 dxe5 15.fxe5 Nh5 …") — the first 8 half-moves inline, the full line and node counts in the tooltip. It follows you as you step through the game and stops the moment you switch it off, load another game, or leave the game view. It always starts off — the setting is deliberately not remembered between sessions.</li>
 </ol>
+<p><strong>+ Add as variation</strong> (on the strip, database games): inserts the first 10 half-moves of the current engine line as a variation of the mainline move at your current position, tagged with a comment like <code>ENGINE d24 +0.53</code> — so it renders as a FRESH engine variation in the Moves panel. The insert is a normal annotation edit: it is local until you <strong>Save</strong> (and <strong>Revert</strong> discards it). The button is disabled at the end of the mainline (there is no move to vary), for pasted PGNs (no database identity to save to), and while previewing a variation.</p>
 <hr>
 <h2 id="study-views">STUDY views</h2>
 <h3 id="database">Database</h3>
