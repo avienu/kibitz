@@ -52,7 +52,7 @@
 <ul>
 <li><strong>STUDY</strong> — <strong>Database</strong> (badge: game count), <strong>Game</strong>, <strong>Opening tree</strong>, <strong>Position search</strong>.</li>
 <li><strong>COACH</strong> — <strong>Home</strong> (the startup screen), <strong>Explain</strong> (a toggle, not a page — switches the Game view's Explain panel on/off; badge shows "on"/"off"), <strong>Profile</strong> (badge: "N findings" once a profile is built), <strong>Opponent prep</strong>.</li>
-<li><strong>TRAIN</strong> — <strong>Openings SRS</strong> (badge: "N due"), <strong>Tactics</strong> (badge: attempts, or puzzle count before any attempt), <strong>Endgames</strong>.</li>
+<li><strong>TRAIN</strong> — <strong>Openings SRS</strong> (badge: "N due"), <strong>Opening triage</strong> (where your games left your book, and where to grow it), <strong>Tactics</strong> (badge: attempts, or puzzle count before any attempt), <strong>Endgames</strong>.</li>
 <li><strong>DATA IN / OUT</strong> — <strong>Import PGN / SCID</strong>, <strong>TWIC ingest</strong> (badge: "wk NNNN", the newest imported week), <strong>Account syncs</strong> (badge: "N linked" configured accounts), <strong>Jobs</strong> (badge: "N running" / "N pending" / done count).</li>
 <li>Footer — <strong>Settings</strong>, <strong>Help &amp; tour</strong> (this guide + the replayable tour).</li>
 </ul>
@@ -223,6 +223,19 @@
 <li>The card's <strong>LAPSE ×N</strong> pill and the session aside's prose call out cards you keep missing ("You keep lapsing on … It stays in the queue until you answer it cleanly.").</li>
 <li>The session aside tracks DUE / DONE / LAPSES / NEW; the session ends with "N reviewed — X correct, Y to relearn".</li>
 </ul>
+<h3 id="opening-triage">Opening triage</h3>
+<p>After your games sync in, the triage tells you exactly where your opening play needs work — measured against your own repertoire cards, both colors. Layout: ranked lists | board + detail aside.</p>
+<p>Type your name as it appears in your games (suggestions come from the local database; all your name forms and declared aliases count as you — see Profile's identity panel) and <strong>Run triage</strong>. The walk is static database work: the engine stays off.</p>
+<p>Each recent game is classified at the FIRST moment it left your book:</p>
+<ul>
+<li><strong>DEVIATIONS — you left your own book.</strong> You had a card for the position but played a different move. The row shows the book move vs what you played; source games open <strong>at the deviation ply</strong> so you can see what happened next.</li>
+<li><strong>GAPS — opponent moves your book doesn't answer.</strong> While you were still in book, the opponent played a move whose resulting position has no card, although another reply from the same position is covered (e.g. you know 1.e4 e5 but they played 1...c5).</li>
+<li><strong>FRONTIERS — where your book ends.</strong> Both sides followed the book until it simply ran out: after your last carded move, no opponent reply leads to a covered position.</li>
+</ul>
+<p>Rows are ranked by how many games hit the same point (the <strong>N×</strong> badge — transpositions collapse onto one row), then by earliest ply. Selecting a row shows the position on the board, the line that reached it, the ECO name when it is a book position, and every source game as a link.</p>
+<p><strong>Extending the book</strong> (gaps and frontiers): <strong>Extend with engine (4 lines)</strong> asks Stockfish for a deep MultiPV analysis (4 candidate lines, depth 30) of the position. The click is the explicit engine request — the job is queued through the shared job queue <strong>and the worker starts immediately</strong>; the aside shows honest progress ("Queued — N jobs ahead of it", "Engine analysing…", or a retryable failure). Requests are idempotent: asking again for the same position reuses the existing job or result.</p>
+<p>The finished result is stored durably (it survives restarts; rows with one show "engine lines ready"). Each candidate line renders with its white-POV eval and an <strong>Adopt</strong> button: adopting adds the line to that color's repertoire from this exact position — your moves in it become SRS cards (confirmed with the real cards-added count) and show up in Openings SRS on their normal schedule. A gap you adopt a line for stops being a gap on the next triage run; its frontier moves outward instead.</p>
+<p>If a color has no repertoire cards yet, the triage says so instead of inventing findings — add lines from the Game view ("→ repertoire") or import a study first.</p>
 <h3 id="tactics">Tactics</h3>
 <p>Puzzle drills over the Lichess puzzle database. Layout: mode column | board | <strong>WHY THIS PUZZLE</strong> reasoning aside. No engine is involved — solving is checked against the stored solution line. The header shows puzzle count, your tactics rating and attempt count.</p>
 <p><strong>The five modes</strong> (mode column; badges are real numbers or absent):</p>
@@ -339,7 +352,7 @@
 <ul>
 <li><code>game=</code> / <code>ply=</code> — open a database game at a ply (wins over <code>screen=</code>).</li>
 <li><code>theme=</code> / <code>treatment=</code> / <code>voice=</code> — apply appearance and voice.</li>
-<li><code>screen=</code> — home | database | tree | search | profile | prep | tactics | srs (Openings SRS) | endgames | settings | help.</li>
+<li><code>screen=</code> — home | database | tree | search | profile | prep | tactics | srs (Openings SRS) | triage | endgames | settings | help.</li>
 <li><code>player=</code> — Profile: auto-build this player as the self subject.</li>
 <li><code>opponent=</code> — Prep: prefill and search step 1; Profile: opponent subject.</li>
 <li><code>claim=</code> — Profile: pre-select this claim's evidence ("motif:&lt;Kind&gt;:missed|allowed" / "structure:&lt;flag&gt;"); Tactics: seed the weakness queue with the motif.</li>

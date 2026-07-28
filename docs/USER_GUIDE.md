@@ -32,8 +32,9 @@ is currently CLI-only. It is also available inside the app: press
   page — switches the Game view's Explain panel on/off; badge shows
   "on"/"off"), **Profile** (badge: "N findings" once a profile is built),
   **Opponent prep**.
-- **TRAIN** — **Openings SRS** (badge: "N due"), **Tactics** (badge:
-  attempts, or puzzle count before any attempt), **Endgames**.
+- **TRAIN** — **Openings SRS** (badge: "N due"), **Opening triage**
+  (where your games left your book, and where to grow it), **Tactics**
+  (badge: attempts, or puzzle count before any attempt), **Endgames**.
 - **DATA IN / OUT** — **Import PGN / SCID**, **TWIC ingest** (badge:
   "wk NNNN", the newest imported week), **Account syncs** (badge: "N
   linked" configured accounts), **Jobs** (badge: "N running" /
@@ -482,6 +483,57 @@ Reviewing:
 - The session aside tracks DUE / DONE / LAPSES / NEW; the session ends
   with "N reviewed — X correct, Y to relearn".
 
+### Opening triage
+
+After your games sync in, the triage tells you exactly where your
+opening play needs work — measured against your own repertoire cards,
+both colors. Layout: ranked lists | board + detail aside.
+
+Type your name as it appears in your games (suggestions come from the
+local database; all your name forms and declared aliases count as you —
+see Profile's identity panel) and **Run triage**. The walk is static
+database work: the engine stays off.
+
+Each recent game is classified at the FIRST moment it left your book:
+
+- **DEVIATIONS — you left your own book.** You had a card for the
+  position but played a different move. The row shows the book move vs
+  what you played; source games open **at the deviation ply** so you can
+  see what happened next.
+- **GAPS — opponent moves your book doesn't answer.** While you were
+  still in book, the opponent played a move whose resulting position has
+  no card, although another reply from the same position is covered
+  (e.g. you know 1.e4 e5 but they played 1...c5).
+- **FRONTIERS — where your book ends.** Both sides followed the book
+  until it simply ran out: after your last carded move, no opponent
+  reply leads to a covered position.
+
+Rows are ranked by how many games hit the same point (the **N×** badge —
+transpositions collapse onto one row), then by earliest ply. Selecting a
+row shows the position on the board, the line that reached it, the ECO
+name when it is a book position, and every source game as a link.
+
+**Extending the book** (gaps and frontiers): **Extend with engine
+(4 lines)** asks Stockfish for a deep MultiPV analysis (4 candidate
+lines, depth 30) of the position. The click is the explicit engine
+request — the job is queued through the shared job queue **and the
+worker starts immediately**; the aside shows honest progress ("Queued —
+N jobs ahead of it", "Engine analysing…", or a retryable failure).
+Requests are idempotent: asking again for the same position reuses the
+existing job or result.
+
+The finished result is stored durably (it survives restarts; rows with
+one show "engine lines ready"). Each candidate line renders with its
+white-POV eval and an **Adopt** button: adopting adds the line to that
+color's repertoire from this exact position — your moves in it become
+SRS cards (confirmed with the real cards-added count) and show up in
+Openings SRS on their normal schedule. A gap you adopt a line for stops
+being a gap on the next triage run; its frontier moves outward instead.
+
+If a color has no repertoire cards yet, the triage says so instead of
+inventing findings — add lines from the Game view ("→ repertoire") or
+import a study first.
+
 ### Tactics
 
 Puzzle drills over the Lichess puzzle database. Layout: mode column |
@@ -819,7 +871,7 @@ A URL hash applies once at startup, after the database opens:
 - `game=` / `ply=` — open a database game at a ply (wins over `screen=`).
 - `theme=` / `treatment=` / `voice=` — apply appearance and voice.
 - `screen=` — home | database | tree | search | profile | prep | tactics |
-  srs (Openings SRS) | endgames | settings | help.
+  srs (Openings SRS) | triage | endgames | settings | help.
 - `player=` — Profile: auto-build this player as the self subject.
 - `opponent=` — Prep: prefill and search step 1; Profile: opponent
   subject.

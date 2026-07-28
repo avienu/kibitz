@@ -30,6 +30,7 @@ pub mod query;
 pub mod repertoire;
 pub mod san;
 pub mod tactics;
+pub mod triage;
 pub mod twic;
 
 #[cfg(test)]
