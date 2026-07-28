@@ -73,7 +73,9 @@ pub(crate) fn retry_busy<T>(
     loop {
         match f() {
             Err(e) if is_busy_msg(&e) && attempt < BUSY_RETRY_DELAYS_MS.len() => {
-                sleep(std::time::Duration::from_millis(BUSY_RETRY_DELAYS_MS[attempt]));
+                sleep(std::time::Duration::from_millis(
+                    BUSY_RETRY_DELAYS_MS[attempt],
+                ));
                 attempt += 1;
             }
             other => return other,
@@ -715,7 +717,10 @@ mod tests {
         writer.execute_batch("BEGIN IMMEDIATE").unwrap();
         // Sanity: without retry the write fails with the busy message.
         let direct = reader
-            .execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('x', '1')", [])
+            .execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('x', '1')",
+                [],
+            )
             .map_err(|e| e.to_string())
             .unwrap_err();
         assert!(is_busy_msg(&direct), "unexpected message: {direct}");
