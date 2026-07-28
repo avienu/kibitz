@@ -63,7 +63,34 @@ describe("movesRows (annotated stream → pair grid)", () => {
     expect(v.line).toBe("1. d4 d5");
     expect(v.style).toBe("plain");
     expect(v.tag).toBe("VARIATION");
+    // Preview payload: the variation replaces mainline ply 1 (1. e4),
+    // carries its own SANs and a numbered first-move label.
+    expect(v.branchPly).toBe(1);
+    expect(v.sans).toEqual(["d4", "d5"]);
+    expect(v.label).toBe("1.d4");
     expect(rows[2]).toMatchObject({ kind: "pair", whiteEllipsis: true, black: { san: "e5" } });
+  });
+
+  it("variation preview payload: black branch ply and nested moves excluded", () => {
+    // 1. e4 e5 (1... c5 2. Nf3 (2. c3) d6): variation replaces ply 2;
+    // its own line is c5 Nf3 d6 — the nested (2. c3) is not part of it.
+    const tokens: JsonToken[] = [
+      mv("e4"),
+      mv("e5"),
+      { t: "varStart" },
+      mv("c5"),
+      mv("Nf3"),
+      { t: "varStart" },
+      mv("c3"),
+      { t: "varEnd" },
+      mv("d6"),
+      { t: "varEnd" },
+    ];
+    const rows = movesRows(buildAnnView(START, tokens), START, NO_ENGINES);
+    const v = rows.find((r) => r.kind === "variation") as Extract<MovesRow, { kind: "variation" }>;
+    expect(v.branchPly).toBe(2);
+    expect(v.sans).toEqual(["c5", "Nf3", "d6"]);
+    expect(v.label).toBe("1...c5");
   });
 
   it("fresh variations list before legacy at the same move", () => {
@@ -113,6 +140,20 @@ describe("classifyVariation", () => {
 
   it("bare pre-2020 year → legacy", () => {
     expect(classifyVariation(["+0.2, 2011 import"], NO_ENGINES).style).toBe("legacy");
+  });
+
+  it("explicit ENGINE tag (Add as variation) → fresh, before any heuristic", () => {
+    // No fresh engines registered — the explicit marker alone decides.
+    expect(classifyVariation(["ENGINE d24 +0.53"], NO_ENGINES)).toEqual({
+      style: "fresh",
+      tag: "ENGINE d24",
+    });
+    expect(classifyVariation(["ENGINE #5"], NO_ENGINES)).toEqual({
+      style: "fresh",
+      tag: "ENGINE",
+    });
+    // A 2011-era legacy comment elsewhere does not demote the marker.
+    expect(classifyVariation(["ENGINE d18 -0.20", "checked 2011"], engines).style).toBe("fresh");
   });
 
   it("fresh engine mention → ENGINE with depth when parseable", () => {

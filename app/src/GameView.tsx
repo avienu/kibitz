@@ -23,9 +23,11 @@ import {
 } from "./lib/db";
 import { repGlyphsByPly, type RepertoireMark } from "./lib/repMarks";
 import { analyzeLive, getSavedEnginePath, onEngineInfo, stopAnalysis } from "./lib/engine";
-import { summarizeInfo, type EngineInfo } from "./lib/engineView";
+import { formatScore, summarizeInfo, type EngineInfo } from "./lib/engineView";
 import { boardGeometry } from "./lib/evidence";
 import { liveInitial, liveReduce, type LiveEvent } from "./lib/liveAnalysis";
+import { numberSanLine, uciPvToSan, PV_DISPLAY_PLIES, PV_INSERT_PLIES } from "./lib/pv";
+import type { VariationPreview } from "./lib/preview";
 import {
   deriveEvidence,
   deriveIntensity,
@@ -37,7 +39,7 @@ import {
 } from "./lib/gameView";
 import type { LoadedGame } from "./lib/game";
 import { gameEngines, movesRows, movesRowsFromSans, type MovesRow } from "./lib/movesView";
-import { buildAnnView } from "./lib/tokens";
+import { buildAnnView, insertVariation } from "./lib/tokens";
 
 interface PendingVariation {
   ply: number;
@@ -72,6 +74,11 @@ interface GameViewProps {
   onAddToRepertoire: (color: "white" | "black") => void;
   onReload: () => void;
   onStatus: (s: string) => void;
+  /** Variation preview (run-9 round 2): non-null while previewing. */
+  preview: VariationPreview | null;
+  onPreviewVariation: (row: Extract<MovesRow, { kind: "variation" }>) => void;
+  onPreviewStep: (delta: number) => void;
+  onExitPreview: () => void;
 }
 
 /** Percent position of a square in the grid for an orientation. */
@@ -119,13 +126,21 @@ export default function GameView({
   onAddToRepertoire,
   onReload,
   onStatus,
+  preview,
+  onPreviewVariation,
+  onPreviewStep,
+  onExitPreview,
 }: GameViewProps) {
   const colRef = useRef<HTMLDivElement | null>(null);
   const [boardSize, setBoardSize] = useState(656);
 
   /* ---- live analysis (run-8): explicit toggle, go-infinite, hard stop ---- */
   const [live, setLive] = useState(liveInitial);
-  const [liveInfo, setLiveInfo] = useState<EngineInfo | null>(null);
+  // Each info payload is stamped with the FEN being searched when it
+  // arrived, so a stale PV/eval from the previous position is never
+  // rendered against the new one (it would flip the score's sign and
+  // produce an illegal SAN line).
+  const [liveInfo, setLiveInfo] = useState<{ info: EngineInfo; fen: string } | null>(null);
   const liveRef = useRef(live);
   liveRef.current = live;
   const liveDispatch = useCallback((event: LiveEvent) => {
@@ -146,7 +161,9 @@ export default function GameView({
     // Streamed PV/eval while live only.
     let un: (() => void) | undefined;
     onEngineInfo((info) => {
-      if (liveRef.current.on) setLiveInfo(info);
+      if (liveRef.current.on && liveRef.current.searching) {
+        setLiveInfo({ info, fen: liveRef.current.searching });
+      }
     }).then((u) => {
       un = u;
     });
@@ -159,6 +176,35 @@ export default function GameView({
     },
     [liveDispatch],
   );
+
+  // Info for the SHOWN position only (see the stamped-fen note above).
+  const liveCur = liveInfo && liveInfo.fen === fen ? liveInfo.info : null;
+  const pvSans = useMemo(() => (liveCur?.pv ? uciPvToSan(fen, liveCur.pv) : []), [liveCur, fen]);
+  const pvLineShort = useMemo(
+    () => (pvSans.length > 0 ? numberSanLine(fen, pvSans, PV_DISPLAY_PLIES) : ""),
+    [fen, pvSans],
+  );
+  const pvLineFull = useMemo(
+    () => (pvSans.length > 0 ? numberSanLine(fen, pvSans) : ""),
+    [fen, pvSans],
+  );
+  // "Add as variation": a db game is loaded (editing exists), the PV is
+  // non-empty, and there is a mainline move at the current ply to vary.
+  // Disabled while previewing a variation (the PV belongs to the preview
+  // position, not to any mainline ply).
+  const canAddPv =
+    editing !== null && pvSans.length > 0 && gv.ply < plyCount && preview === null;
+  const addPvAsVariation = () => {
+    if (!editing || !liveCur || !canAddPv) return;
+    const tag = `ENGINE${liveCur.depth !== undefined ? ` d${liveCur.depth}` : ""} ${formatScore(liveCur, fen)}`;
+    editing.onChange(
+      insertVariation(editing.tokens, gv.ply + 1, pvSans.slice(0, PV_INSERT_PLIES), tag),
+    );
+    onStatus(
+      `Engine line added as a variation of ${game?.sans[gv.ply] ?? "the next move"} — Save to keep it.`,
+    );
+  };
+
   const [exportText, setExportText] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
 
@@ -476,7 +522,11 @@ export default function GameView({
       <div className="game-main">
         <div className="board-column" ref={colRef}>
           <div className="board-row">
-            <EvalBar row={evalRow} mate={mate} height={boardSize} />
+            <EvalBar
+              row={preview ? null : evalRow}
+              mate={preview ? null : mate}
+              height={boardSize}
+            />
             <div className="board-wrap" onClick={onBoardClick}>
               <Board
                 fen={fen}
@@ -513,6 +563,35 @@ export default function GameView({
               {promoElement}
             </div>
           </div>
+
+          {preview && (
+            <div className="preview-pill" role="status">
+              <span className="preview-tag">PREVIEWING VARIATION</span>
+              <span className="preview-label">{preview.label}</span>
+              <span className="btn-group preview-nav">
+                <button
+                  onClick={() => onPreviewStep(-1)}
+                  disabled={preview.at === 0}
+                  title="Back within the variation (←)"
+                >
+                  ◀
+                </button>
+                <button
+                  onClick={() => onPreviewStep(1)}
+                  disabled={preview.at >= preview.sans.length}
+                  title="Forward within the variation (→)"
+                >
+                  ▶
+                </button>
+              </span>
+              <span className="ply-pill">
+                move {preview.at} / {preview.sans.length}
+              </span>
+              <button className="btn preview-exit" onClick={onExitPreview} title="Esc also exits">
+                ← Back to game
+              </button>
+            </div>
+          )}
 
           <div className="move-controls">
             <span className="btn-group">
@@ -552,9 +631,44 @@ export default function GameView({
           {live.on && (
             <div className="live-strip" role="status">
               <span className="live-dot" aria-hidden />
-              <span className="live-text">
-                {liveInfo ? summarizeInfo(liveInfo, fen) : "engine starting…"}
-              </span>
+              {liveCur ? (
+                <>
+                  <span className="live-score">{formatScore(liveCur, fen)}</span>
+                  {liveCur.depth !== undefined && (
+                    <span className="live-depth">d{liveCur.depth}</span>
+                  )}
+                  <span
+                    className="live-line"
+                    title={
+                      pvLineFull
+                        ? `${pvLineFull}\n${summarizeInfo(liveCur, fen)}`
+                        : summarizeInfo(liveCur, fen)
+                    }
+                  >
+                    {pvLineShort || "…"}
+                  </span>
+                  <button
+                    className="btn live-add"
+                    onClick={addPvAsVariation}
+                    disabled={!canAddPv}
+                    title={
+                      canAddPv
+                        ? `Insert the first ${Math.min(pvSans.length, PV_INSERT_PLIES)} moves of this line as a variation at the current move`
+                        : editing === null
+                          ? "Open a database game to add engine lines as variations"
+                          : preview !== null
+                            ? "Exit the variation preview first"
+                            : gv.ply >= plyCount
+                              ? "End of the mainline — nothing to vary here"
+                              : "Waiting for an engine line"
+                    }
+                  >
+                    + Add as variation
+                  </button>
+                </>
+              ) : (
+                <span className="live-text">engine thinking…</span>
+              )}
             </div>
           )}
 
@@ -574,7 +688,13 @@ export default function GameView({
         </div>
 
         <div className="right-pane">
-          {explainOn && (
+          {explainOn && preview && (
+            <div className="preview-note">
+              Variation preview — the explanation and eval bar track the main game and are
+              paused. <button onClick={onExitPreview}>Back to game</button>
+            </div>
+          )}
+          {explainOn && !preview && (
             <ExplainPanel
               explanation={explanation}
               explaining={explaining}
@@ -596,6 +716,8 @@ export default function GameView({
             onSelectPly={setPly}
             editing={editing}
             repGlyphs={repGlyphs}
+            onPreviewVariation={onPreviewVariation}
+            previewVarIndex={preview?.varStartIndex ?? null}
           />
           {game && game.sans.length > 0 && (
             <div className="rep-footer">

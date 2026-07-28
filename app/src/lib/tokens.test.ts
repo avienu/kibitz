@@ -130,6 +130,21 @@ describe("insertVariation", () => {
     ]);
   });
 
+  it("stores an optional tag comment inside the variation (engine lines)", () => {
+    const next = insertVariation(plain, 2, ["c5", "Nf3"], "ENGINE d24 +0.53");
+    expect(next).toEqual([
+      m("e4"),
+      m("e5"),
+      vs,
+      m("c5"),
+      m("Nf3"),
+      c("ENGINE d24 +0.53"),
+      ve,
+      m("Nf3"),
+    ]);
+    expect(buildAnnView(START, next).error).toBeNull();
+  });
+
   it("counts only mainline moves when locating the ply", () => {
     const tokens = [m("e4"), m("e5"), vs, m("c5"), m("Nf3"), ve, m("Nf3")];
     // Mainline ply 3 is the LAST Nf3 (token 6), not the variation's.

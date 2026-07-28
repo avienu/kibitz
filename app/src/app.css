@@ -4309,3 +4309,109 @@ input.set-value.editing {
   color: var(--accent);
   transform: translateY(-1px);
 }
+
+/* ==================================================================
+   run 9 — field reports round 2 (append-only section):
+   1. Live-analysis strip: engine line in SAN + "Add as variation"
+   2. Variation preview: clickable variation rows, board preview pill
+   ================================================================== */
+
+/* 1 — Live strip: score | depth | ellipsized SAN line | add button */
+.live-score {
+  font: 700 12px var(--font-mono);
+  color: var(--tx);
+  flex: none;
+}
+.live-depth {
+  font: 500 10.5px var(--font-mono);
+  color: var(--faint);
+  flex: none;
+}
+.live-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11.5px/1.5 var(--font-mono);
+  color: var(--dim);
+}
+.live-strip .btn.live-add {
+  flex: none;
+  padding: 4px 9px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+/* 2 — Preview pill row (board column, above the move controls) */
+.preview-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 656px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  background: var(--panel2);
+  box-shadow: inset 0 0 0 1px var(--accent), inset 3px 0 0 var(--accent);
+}
+.preview-tag {
+  font: 700 9.5px var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.preview-label {
+  font: 600 12px var(--font-mono);
+  color: var(--tx);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-pill .btn-group.preview-nav button {
+  padding: 5px 11px;
+}
+.preview-pill .ply-pill {
+  padding: 5px 10px;
+  font-size: 10.5px;
+}
+.preview-pill .btn.preview-exit {
+  margin-left: auto;
+  padding: 5px 11px;
+  font-size: 11.5px;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 2 — Right pane note while previewing (explain/eval are paused) */
+.preview-note {
+  margin: 0 0 10px;
+  padding: 10px 14px;
+  border-radius: 7px;
+  background: var(--panel2);
+  box-shadow: inset 0 0 0 1px var(--line2), inset 3px 0 0 var(--accent);
+  font: 400 12px/1.55 var(--font-ui);
+  color: var(--dim);
+}
+.preview-note button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: 600 12px var(--font-ui);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+/* 2 — Variation rows are clickable (preview) + previewing highlight */
+button.mv-var-line {
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+button.mv-var-line:hover {
+  color: var(--tx);
+}
+.mv-var.previewing {
+  box-shadow: inset 0 0 0 1px var(--accent), inset 2px 0 0 var(--accent);
+}

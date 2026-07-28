@@ -80,8 +80,17 @@ import {
   reduceGameView,
   type EditableTargetLike,
   type ExplanationJson,
+  type GameViewAction,
   type GameViewState,
 } from "./lib/gameView";
+import type { MovesRow } from "./lib/movesView";
+import {
+  enterPreview,
+  previewFen,
+  previewLastMove,
+  stepPreview,
+  type VariationPreview,
+} from "./lib/preview";
 import type { PromoRole } from "./lib/promotion";
 import type { RepertoireMark } from "./lib/repMarks";
 import { viewKeyHints, type ViewId, type ViewParams } from "./lib/shell";
@@ -180,9 +189,18 @@ export default function App() {
   /** pending+running when the jobs worker went active (progress base). */
   const batchTotalRef = useRef<number | null>(null);
 
+  /** Variation preview (run-9 round 2): while non-null, the BOARD shows
+   * the previewed line; gv.ply and everything keyed to it (explain,
+   * eval, annotations) stay on the main game. */
+  const [preview, setPreview] = useState<VariationPreview | null>(null);
+
   const plyCount = game?.sans.length ?? 0;
+  // `fen` is the MAIN-game position — explain/annotation/eval stay keyed
+  // to it; `shownFen` is what the board (and live analysis) displays.
   const fen = game ? game.fens[gv.ply] : START_FEN;
   const lastMove = game ? lastMoveAt(game, gv.ply) : undefined;
+  const shownFen = preview ? previewFen(preview) : fen;
+  const shownLastMove = preview ? previewLastMove(preview) : lastMove;
 
   /* ---- persisted view preferences ---- */
   useEffect(() => {
@@ -314,6 +332,7 @@ export default function App() {
     setExplanations(new Map());
     setRevealedQuiet(new Set());
     setPendingVar(null);
+    setPreview(null);
   }, []);
 
   const doLoad = useCallback(
@@ -493,6 +512,30 @@ export default function App() {
     [game],
   );
 
+  /* ---- variation preview (exit rules: any MAIN-game navigation, the
+   * pill, Esc, or loading a game exits; ←/→ step within it) ---- */
+  const previewVariation = useCallback(
+    (row: Extract<MovesRow, { kind: "variation" }>) => {
+      if (!game) return;
+      const branchFen = game.fens[row.branchPly - 1];
+      if (branchFen === undefined) return;
+      const p = enterPreview(branchFen, row);
+      if (p) setPreview(p);
+      else setStatus("This variation has no playable moves to preview.");
+    },
+    [game],
+  );
+  const previewStepBy = useCallback(
+    (delta: number) => setPreview((p) => (p ? stepPreview(p, delta) : p)),
+    [],
+  );
+  const exitPreview = useCallback(() => setPreview(null), []);
+  /** GameView's dispatch: main-game navigation also exits the preview. */
+  const gvDispatch = useCallback((a: GameViewAction) => {
+    if (a.type === "step" || a.type === "setPly" || a.type === "gameLoaded") setPreview(null);
+    dispatch(a);
+  }, []);
+
   /* ---- explain (cache per ply; both voices arrive at once) ---- */
   // Quiet positions keep the empty state until the user explicitly asks;
   // fired screens show their explanation as soon as the (static, free)
@@ -650,12 +693,27 @@ export default function App() {
     if (view !== "game") return;
     const onKey = (e: KeyboardEvent) => {
       if (showHelp || showTour || promo.active) return;
+      if (preview && e.key === "Escape") {
+        e.preventDefault();
+        setPreview(null);
+        return;
+      }
       const act = keyboardAction(e.key, {
         editable: isEditableTarget(e.target as EditableTargetLike | null),
         modifier: e.metaKey || e.ctrlKey || e.altKey,
       });
       if (!act) return;
       e.preventDefault();
+      if (preview) {
+        // ←/→ step WITHIN the preview; explain stays paused; any other
+        // main-game navigation exits the preview and then performs.
+        if (act === "next" || act === "prev") {
+          previewStepBy(act === "next" ? 1 : -1);
+          return;
+        }
+        if (act === "explain") return;
+        if (act !== "flip") setPreview(null);
+      }
       switch (act) {
         case "next":
           step(1);
@@ -686,7 +744,19 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [view, showHelp, showTour, promo.active, step, setPlyTo, plyCount, explainOn, doExplain]);
+  }, [
+    view,
+    showHelp,
+    showTour,
+    promo.active,
+    step,
+    setPlyTo,
+    plyCount,
+    explainOn,
+    doExplain,
+    preview,
+    previewStepBy,
+  ]);
 
   /* ---- jobs (view + strip) ---- */
   const doRunJobs = useCallback(async () => {
@@ -867,12 +937,12 @@ export default function App() {
         {view === "game" ? (
           <GameView
             game={game}
-            fen={fen}
-            lastMove={lastMove}
-            movable={movable}
+            fen={shownFen}
+            lastMove={shownLastMove}
+            movable={preview ? undefined : movable}
             promoElement={promo.element}
             gv={gv}
-            dispatch={dispatch}
+            dispatch={gvDispatch}
             plyCount={plyCount}
             gameId={annot?.gameId ?? null}
             editing={
@@ -901,6 +971,10 @@ export default function App() {
             onAddToRepertoire={(c) => void addLineToRepertoire(c)}
             onReload={reloadCurrent}
             onStatus={setStatus}
+            preview={preview}
+            onPreviewVariation={previewVariation}
+            onPreviewStep={previewStepBy}
+            onExitPreview={exitPreview}
           />
         ) : selfHeaded ? (
           pageView

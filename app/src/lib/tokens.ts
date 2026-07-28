@@ -232,11 +232,15 @@ function attachEnd(tokens: JsonToken[], moveIndex: number): number {
 /**
  * Insert `sans` as a variation replacing mainline move #`mainlinePly`
  * (1-based): VarStart + moves + VarEnd after that move's attachments.
+ * An optional trailing `comment` is stored inside the variation (used by
+ * "Add as variation" to tag engine lines: "ENGINE d24 +0.53", which
+ * lib/movesView.ts classifies as a FRESH engine variation).
  */
 export function insertVariation(
   tokens: JsonToken[],
   mainlinePly: number,
   sans: string[],
+  comment?: string,
 ): JsonToken[] {
   const i = mainlineMoveTokenIndex(tokens, mainlinePly);
   if (i < 0 || sans.length === 0) return tokens;
@@ -244,6 +248,7 @@ export function insertVariation(
   const variation: JsonToken[] = [
     { t: "varStart" },
     ...sans.map((san): JsonToken => ({ t: "move", san })),
+    ...(comment ? [{ t: "comment", text: comment } satisfies JsonToken] : []),
     { t: "varEnd" },
   ];
   return [...tokens.slice(0, j), ...variation, ...tokens.slice(j)];

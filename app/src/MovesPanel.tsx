@@ -53,6 +53,10 @@ interface MovesPanelProps {
   /** Repertoire marks per mainline ply (run-9); null/empty renders
    * nothing — marks only exist when a repertoire has cards. */
   repGlyphs?: Map<number, RepGlyph> | null;
+  /** Click a variation row → preview that line on the board. */
+  onPreviewVariation?: (row: Extract<MovesRow, { kind: "variation" }>) => void;
+  /** varStart token index of the variation being previewed (highlight). */
+  previewVarIndex?: number | null;
 }
 
 interface CommentDraft {
@@ -72,6 +76,8 @@ export default function MovesPanel({
   onSelectPly,
   editing,
   repGlyphs,
+  onPreviewVariation,
+  previewVarIndex,
 }: MovesPanelProps) {
   // Follow the game: keep the current move visible while stepping
   // (run-8 user report — the panel lost you mid-game).
@@ -279,12 +285,24 @@ export default function MovesPanel({
       }
       case "variation": {
         if (annotationMode === "hidden") return null;
+        const previewable = onPreviewVariation !== undefined && row.sans.length > 0;
+        const previewing = previewVarIndex != null && previewVarIndex === row.varStartIndex;
         return (
           <div key={i} className={`mv-row mode-${annotationMode}`}>
             <span className="mv-num" />
-            <div className={`mv-var mv-var-${row.style}`}>
+            <div className={`mv-var mv-var-${row.style}${previewing ? " previewing" : ""}`}>
               <span className="mv-var-tag">{row.tag}</span>
-              <span className="mv-var-line">{row.line}</span>
+              {previewable ? (
+                <button
+                  className="mv-var-line mv-var-clickable"
+                  title="Preview this line on the board"
+                  onClick={() => onPreviewVariation(row)}
+                >
+                  {row.line}
+                </button>
+              ) : (
+                <span className="mv-var-line">{row.line}</span>
+              )}
               {editing && (
                 <button
                   className="mv-x"

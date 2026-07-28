@@ -198,6 +198,19 @@ pre-2020 years), or plain human lines.
 - **full | hover | hidden** — how comments and variations display (hover
   dims them until pointed at; hidden removes them). Also in Settings.
 - Click a move to jump the board there.
+
+**Previewing variations:** click a variation row's move text to load that
+line onto the board. The board jumps to the variation's first move (the
+position where it branches off the mainline), and an accent
+**PREVIEWING VARIATION** pill appears under the board with the line's
+name, its own **◀ / ▶** controls and a **← Back to game** button.
+**← / →** step within the variation while the preview is active; **Esc**,
+the pill's back button, or any main-game navigation (clicking a mainline
+move, the main Prev/Next controls, ↑/↓/Home/End) exits and the board
+returns exactly where you were. While previewing, the eval bar and
+Explain panel pause — they describe the *main* game, so instead of
+pretending, they sit out until you're back. (Live analysis, if on, does
+follow the previewed positions.)
 - **Repertoire marks** — when you have trained repertoires, moves that
   match a repertoire card get a small **✓** (hover: "in your White/Black
   repertoire"), and the first move where the game *deviates* from your
@@ -249,12 +262,24 @@ explicit click *is* an explicit engine request:
    pending. The status strip's engine dot and batch progress show it
    happening.
 4. **Live analysis** (game view, next to Flip): an explicit toggle that
-   runs infinite analysis on the position you're looking at, streaming
-   depth, evaluation and the engine's line below the move controls. It
-   follows you as you step through the game and stops the moment you
-   switch it off, load another game, or leave the game view. It always
-   starts off — the setting is deliberately not remembered between
-   sessions.
+   runs infinite analysis on the position you're looking at. The strip
+   below the move controls streams the evaluation (White's point of
+   view), the search depth, and the engine's **best line in SAN** with
+   move numbers ("14.Qg3 dxe5 15.fxe5 Nh5 …") — the first 8 half-moves
+   inline, the full line and node counts in the tooltip. It follows you
+   as you step through the game and stops the moment you switch it off,
+   load another game, or leave the game view. It always starts off — the
+   setting is deliberately not remembered between sessions.
+
+   **+ Add as variation** (on the strip, database games): inserts the
+   first 10 half-moves of the current engine line as a variation of the
+   mainline move at your current position, tagged with a comment like
+   `ENGINE d24 +0.53` — so it renders as a FRESH engine variation in the
+   Moves panel. The insert is a normal annotation edit: it is local
+   until you **Save** (and **Revert** discards it). The button is
+   disabled at the end of the mainline (there is no move to vary), for
+   pasted PGNs (no database identity to save to), and while previewing a
+   variation.
 
 ---
 

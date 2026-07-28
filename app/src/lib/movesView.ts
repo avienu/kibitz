@@ -38,6 +38,13 @@ export type MovesRow =
       style: VariationStyle;
       tag: string;
       line: string;
+      /** 1-based mainline ply of the move this variation replaces —
+       * the preview branches from mainline fens[branchPly - 1]. */
+      branchPly: number;
+      /** The variation's own (top-level) moves, for board preview. */
+      sans: string[];
+      /** First move with its number ("14.Qg3") — the preview pill label. */
+      label: string;
     };
 
 export type VariationStyle = "fresh" | "legacy" | "plain";
@@ -84,6 +91,13 @@ export function classifyVariation(
   const text = comments.join(" ");
   const lower = text.toLowerCase();
 
+  // Explicit marker written by the live strip's "Add as variation"
+  // ("ENGINE d24 +0.53") — not a heuristic, so it is checked first.
+  for (const c of comments) {
+    const m = c.match(/^ENGINE\b(?:\s+d(\d+))?/);
+    if (m) return { style: "fresh", tag: m[1] ? `ENGINE d${m[1]}` : "ENGINE" };
+  }
+
   for (const e of engines.legacy) {
     const stem = engineStem(e);
     if (stem && lower.includes(stem)) {
@@ -119,19 +133,32 @@ function numbering(startFen: string): { startNum: number; whiteFirst: boolean } 
   };
 }
 
-/** Flatten one variation group (varStart..matching varEnd) to a line. */
-function variationLine(items: AnnItem[]): { line: string; comments: string[] } {
+/** Flatten one variation group (varStart..matching varEnd) to a line,
+ * also collecting the group's OWN moves (depth 1 — nested sub-variation
+ * moves are excluded) for the board preview. */
+function variationLine(items: AnnItem[]): {
+  line: string;
+  comments: string[];
+  sans: string[];
+  label: string;
+} {
   const parts: string[] = [];
   const comments: string[] = [];
+  const sans: string[] = [];
+  let label = "";
   for (const it of items) {
     if (it.kind === "move") {
       parts.push(`${it.num ? `${it.num} ` : ""}${it.san}${nagSuffix(it.nag)}`);
+      if (it.depth === 1) {
+        sans.push(it.san);
+        if (!label) label = `${it.num}${it.san}`;
+      }
     } else if (it.kind === "comment") {
       comments.push(it.text);
       parts.push(`{${it.text}}`);
     }
   }
-  return { line: parts.join(" "), comments };
+  return { line: parts.join(" "), comments, sans, label };
 }
 
 /**
@@ -167,6 +194,10 @@ export function movesRows(
   };
 
   const items = view.items;
+  // Mainline ply of the most recent mainline move — a top-level variation
+  // group replaces that move (movebin branch semantics), so this is the
+  // group's branch ply for the board preview.
+  let lastMainlinePly = 0;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
 
@@ -182,9 +213,18 @@ export function movesRows(
         if (depth > 0) group.push(it);
         j++;
       }
-      const { line, comments } = variationLine(group);
+      const { line, comments, sans, label } = variationLine(group);
       const { style, tag } = classifyVariation(comments, engines);
-      varBuffer.push({ kind: "variation", varStartIndex: item.index, style, tag, line });
+      varBuffer.push({
+        kind: "variation",
+        varStartIndex: item.index,
+        style,
+        tag,
+        line,
+        branchPly: lastMainlinePly,
+        sans,
+        label,
+      });
       i = j - 1;
       continue;
     }
@@ -200,6 +240,7 @@ export function movesRows(
     // outside variation groups, which were swallowed above).
     if (item.mainlinePly === null) continue;
     const ply = item.mainlinePly;
+    lastMainlinePly = ply;
     const cell: PairCell = { ply, san: item.san, nag: item.nag, tokenIndex: item.index };
     const plyOffset = whiteFirst ? ply - 1 : ply; // black-first start shifts parity
     const isWhite = whiteFirst ? ply % 2 === 1 : ply % 2 === 0;
