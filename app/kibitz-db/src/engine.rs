@@ -108,6 +108,68 @@ impl Engine {
         Ok(())
     }
 
+    /// `go depth D` on `fen` with `MultiPV = multipv`, returning up to
+    /// `multipv` candidate lines, best first (evals from the side to
+    /// move's point of view). MultiPV is reset to 1 afterwards so the
+    /// single-line searches other job kinds run stay unaffected.
+    pub fn eval_depth_multipv(
+        &mut self,
+        fen: &str,
+        multipv: u32,
+        depth: u32,
+    ) -> anyhow::Result<Vec<EngineLine>> {
+        let multipv = multipv.max(1);
+        self.send("ucinewgame")?;
+        self.send(&format!("setoption name MultiPV value {multipv}"))?;
+        self.send(&format!("position fen {fen}"))?;
+        self.send(&format!("go depth {depth}"))?;
+        // Slot per MultiPV index; each deeper iteration overwrites the
+        // shallower one, so what remains is the deepest line per slot.
+        let mut lines: Vec<Option<EngineLine>> = vec![None; multipv as usize];
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if self.stdout.read_line(&mut line)? == 0 {
+                anyhow::bail!("engine closed stdout during search");
+            }
+            let l = line.trim();
+            if l.starts_with("info ") && l.contains(" pv ") {
+                let mut idx: usize = 1;
+                let mut score_cp = None;
+                let mut mate = None;
+                let mut pv = vec![];
+                let mut it = l.split_whitespace().peekable();
+                while let Some(tok) = it.next() {
+                    match tok {
+                        "multipv" => {
+                            idx = it.next().and_then(|v| v.parse().ok()).unwrap_or(1);
+                        }
+                        "cp" => score_cp = it.next().and_then(|v| v.parse().ok()),
+                        "mate" => mate = it.next().and_then(|v| v.parse().ok()),
+                        "pv" => {
+                            pv = it.by_ref().map(str::to_string).collect();
+                        }
+                        _ => {}
+                    }
+                }
+                if !pv.is_empty() && (1..=multipv as usize).contains(&idx) {
+                    lines[idx - 1] = Some(EngineLine {
+                        score_cp: score_cp.unwrap_or_else(|| {
+                            mate.map(|m: i32| if m > 0 { 10_000 } else { -10_000 })
+                                .unwrap_or(0)
+                        }),
+                        mate,
+                        pv,
+                    });
+                }
+            } else if l.starts_with("bestmove") {
+                break;
+            }
+        }
+        self.send("setoption name MultiPV value 1")?;
+        Ok(lines.into_iter().flatten().collect())
+    }
+
     /// `go nodes N` on `fen`, returning the best line (from the side to
     /// move's point of view).
     pub fn eval_nodes(&mut self, fen: &str, nodes: u64) -> anyhow::Result<EngineLine> {

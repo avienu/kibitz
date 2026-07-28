@@ -8,7 +8,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::engine::Engine;
@@ -20,6 +20,9 @@ pub enum Purpose {
     BatchAnnotate,
     BatchProfile,
     Reanalyze,
+    /// Deep MultiPV analysis of a triage GAP/FRONTIER position, producing
+    /// candidate lines to adopt into the repertoire (run 10).
+    BookExtension,
 }
 
 impl Purpose {
@@ -30,6 +33,7 @@ impl Purpose {
             Purpose::BatchAnnotate => "batch-annotate",
             Purpose::BatchProfile => "batch-profile",
             Purpose::Reanalyze => "reanalyze",
+            Purpose::BookExtension => "book-extension",
         }
     }
 }
@@ -61,6 +65,56 @@ pub struct AnnotatePayload {
     pub nodes: u64,
     /// Inline-comment cap for the game's narration pass.
     pub max_comments: u32,
+}
+
+/// Payload of a `book-extension` job: one deep MultiPV search of a
+/// position where the user's book ends. Defaults come from
+/// `triage::EXTENSION_MULTIPV` / `EXTENSION_DEPTH` (4 lines, depth 30);
+/// both are caller-configurable.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BookExtensionPayload {
+    pub fen: String,
+    pub multipv: u32,
+    pub depth: u32,
+}
+
+/// Enqueue a book-extension job for `fen`, idempotently: an existing
+/// pending/running/done job for the same FEN is reused (the json_extract
+/// dedup pattern); failed jobs do NOT count, so a retry re-enqueues.
+/// Returns `(job_id, created)`. Enqueue-only — nothing runs until a
+/// worker is started.
+pub fn enqueue_book_extension(
+    conn: &Connection,
+    fen: &str,
+    multipv: u32,
+    depth: u32,
+) -> anyhow::Result<(i64, bool)> {
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM jobs
+             WHERE purpose = 'book-extension'
+               AND status IN ('pending', 'running', 'done')
+               AND json_extract(payload, '$.fen') = ?1
+             ORDER BY id DESC LIMIT 1",
+            [fen],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(id) = existing {
+        return Ok((id, false));
+    }
+    conn.execute(
+        "INSERT INTO jobs (purpose, payload) VALUES (?1, ?2)",
+        params![
+            Purpose::BookExtension.as_str(),
+            serde_json::to_string(&BookExtensionPayload {
+                fen: fen.to_string(),
+                multipv,
+                depth,
+            })?
+        ],
+    )?;
+    Ok((conn.last_insert_rowid(), true))
 }
 
 pub fn enqueue(
@@ -144,6 +198,29 @@ pub fn run_pending_until(
                     "screens_fired": r.screens_fired,
                     "jobs_enqueued": r.jobs_enqueued,
                     "comments_added": r.comments_added,
+                }));
+            }
+            // Book-extension jobs run a deep MultiPV search and persist
+            // the candidate lines durably (book_extensions, run 10).
+            if purpose == "book-extension" {
+                let p: BookExtensionPayload = serde_json::from_str(&payload)?;
+                if engine.is_none() {
+                    engine = Some(Engine::spawn(engine_path)?);
+                }
+                let e = engine.as_mut().expect("just spawned");
+                let identity = e.identity.clone();
+                let raw = e.eval_depth_multipv(&p.fen, p.multipv, p.depth)?;
+                let lines = crate::triage::candidate_lines(&p.fen, &raw)?;
+                let extension_id = crate::triage::store_book_extension(
+                    conn, &p.fen, &identity, p.depth, p.multipv, &lines,
+                )?;
+                return Ok(serde_json::json!({
+                    "extension_id": extension_id,
+                    "fen": p.fen,
+                    "lines": lines.len(),
+                    "depth": p.depth,
+                    "multipv": p.multipv,
+                    "engine": identity,
                 }));
             }
             let p: EnginePayload = serde_json::from_str(&payload)?;
@@ -337,4 +414,63 @@ pub fn counts(conn: &Connection) -> anyhow::Result<(i64, i64, i64, i64)> {
         one("done")?,
         one("failed")?,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn open_db() -> (tempfile::TempDir, Connection) {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(&dir.path().join("t.sqlite")).unwrap();
+        (dir, conn)
+    }
+
+    #[test]
+    fn book_extension_payload_round_trips() {
+        let p = BookExtensionPayload {
+            fen: "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2".into(),
+            multipv: 4,
+            depth: 30,
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        let back: BookExtensionPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.fen, p.fen);
+        assert_eq!((back.multipv, back.depth), (4, 30));
+        // The dedup key the enqueue query extracts must be present.
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["fen"], p.fen.as_str());
+    }
+
+    #[test]
+    fn enqueue_book_extension_is_idempotent_by_fen_and_retries_failures() {
+        let (_dir, conn) = open_db();
+        let fen = "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
+
+        let (id, created) = enqueue_book_extension(&conn, fen, 4, 30).unwrap();
+        assert!(created);
+        // Same FEN again: reused, no duplicate row (json_extract dedup).
+        let (id2, created2) = enqueue_book_extension(&conn, fen, 4, 30).unwrap();
+        assert_eq!((id2, created2), (id, false));
+        let (pending, ..) = counts(&conn).unwrap();
+        assert_eq!(pending, 1);
+
+        // A DIFFERENT position enqueues normally.
+        let other = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
+        let (id3, created3) = enqueue_book_extension(&conn, other, 4, 30).unwrap();
+        assert!(created3 && id3 != id);
+
+        // done still counts as covered; failed does not (retry allowed).
+        conn.execute("UPDATE jobs SET status = 'done' WHERE id = ?1", [id])
+            .unwrap();
+        let (id4, created4) = enqueue_book_extension(&conn, fen, 4, 30).unwrap();
+        assert_eq!((id4, created4), (id, false));
+        conn.execute("UPDATE jobs SET status = 'failed' WHERE id = ?1", [id])
+            .unwrap();
+        let (id5, created5) = enqueue_book_extension(&conn, fen, 4, 30).unwrap();
+        assert!(created5 && id5 != id, "failed jobs are retried");
+
+        // Enqueue-only: nothing ran, no engine was spawned (CLAUDE.md #6).
+        assert_eq!(crate::engine::spawn_count(), 0);
+    }
 }

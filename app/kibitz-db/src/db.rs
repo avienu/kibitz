@@ -29,6 +29,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     // MAX), so 0010 can land after 0011 without being skipped.
     (11, include_str!("../migrations/0011_endgames.sql")),
     (12, include_str!("../migrations/0012_aliases.sql")),
+    (13, include_str!("../migrations/0013_book_extensions.sql")),
 ];
 
 #[derive(Debug, thiserror::Error)]
