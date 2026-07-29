@@ -33,6 +33,10 @@ const META_AUTO_SYNC: &str = "twic_auto_sync";
 const META_NOTICE_ACK: &str = "twic_notice_ack";
 /// Meta key: newest TWIC issue confirmed published by a catalog probe.
 const META_LATEST_KNOWN: &str = "twic_latest_known";
+/// Persisted outcome of the last auto-sync pass (JSON {at, text}) — the
+/// TWIC screen's idle trace. Silence is indistinguishable from broken
+/// (field report 2026-07-28), so every pass leaves a visible record.
+const META_AUTO_LAST: &str = "twic_auto_last";
 
 const SERVICES: [&str; 3] = ["lichess", "chesscom", "fics"];
 
@@ -174,6 +178,31 @@ pub struct TwicCatalog {
     /// The exact kibitz-db FIRST_RUN_NOTICE text, for the acknowledge
     /// dialog (single source of truth — never restated in the frontend).
     pub first_run_notice: String,
+    /// Outcome of the last auto-sync pass, if one has ever run.
+    pub auto_last: Option<AutoSyncOutcome>,
+}
+
+/// What the last auto-sync pass did, persisted in meta so the screen can
+/// say so while idle ("up to date", "imported TWIC 1654–1655", an error).
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoSyncOutcome {
+    /// UTC "YYYY-MM-DD HH:MM:SS" (rendered local by the frontend).
+    pub at: String,
+    pub text: String,
+}
+
+fn auto_last_set(conn: &Connection, text: &str) {
+    // Best-effort trace: a failed write must never fail the sync itself.
+    let outcome = AutoSyncOutcome {
+        at: conn
+            .query_row("SELECT datetime('now')", [], |r| r.get::<_, String>(0))
+            .unwrap_or_default(),
+        text: text.to_string(),
+    };
+    if let Ok(json) = serde_json::to_string(&outcome) {
+        let _ = net::meta_set(conn, META_AUTO_LAST, &json);
+    }
 }
 
 /// Days since the Unix epoch, for the weekly-arithmetic issue estimate.
@@ -227,6 +256,10 @@ pub(crate) fn twic_catalog_impl(conn: &Connection) -> Result<TwicCatalog, String
         auto_sync: meta_flag(conn, META_AUTO_SYNC),
         notice_acknowledged: meta_flag(conn, META_NOTICE_ACK),
         first_run_notice: twic::FIRST_RUN_NOTICE.to_string(),
+        auto_last: net::meta_get(conn, META_AUTO_LAST)
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str(&json).ok()),
     })
 }
 
@@ -546,6 +579,7 @@ fn twic_auto_worker_impl(
         update_progress(progress, |p| {
             p.detail = "no published issue found".to_string();
         });
+        auto_last_set(conn, "checked — no published issue found");
         return Ok(());
     };
     net::meta_set(conn, META_LATEST_KNOWN, &newest.to_string()).map_err(|e| e.to_string())?;
@@ -560,6 +594,10 @@ fn twic_auto_worker_impl(
         update_progress(progress, |p| {
             p.detail = format!("up to date — TWIC {newest} is the newest published issue");
         });
+        auto_last_set(
+            conn,
+            &format!("up to date — TWIC {newest} is the newest published issue"),
+        );
         return Ok(());
     }
     update_progress(progress, |p| {
@@ -572,7 +610,19 @@ fn twic_auto_worker_impl(
     });
     // Explicit-selection mode (stop_at_404 = false): the plan runs newest
     // first, so a 404 on one issue must not abandon the older ones.
-    twic_worker_impl(conn, fetcher, &plan, progress, stop)
+    let result = twic_worker_impl(conn, fetcher, &plan, progress, stop);
+    let lo = plan.iter().min().copied().unwrap_or(newest);
+    let hi = plan.iter().max().copied().unwrap_or(newest);
+    let span = if lo == hi {
+        format!("TWIC {hi}")
+    } else {
+        format!("TWIC {lo}–{hi}")
+    };
+    match &result {
+        Ok(()) => auto_last_set(conn, &format!("imported {span} (newest first)")),
+        Err(e) => auto_last_set(conn, &format!("failed on {span}: {e}")),
+    }
+    result
 }
 
 /// Database-open hook: when the auto-download toggle is on, quietly fetch
@@ -1209,6 +1259,13 @@ mod tests {
         let p = progress.lock().unwrap().clone().unwrap();
         assert_eq!(p.total, 5, "total set once the plan is known");
         assert_eq!(p.done, 5);
+
+        // The pass leaves a persisted idle trace (field report 2026-07-28:
+        // a silent auto-sync reads as broken).
+        let last: AutoSyncOutcome =
+            serde_json::from_str(&net::meta_get(&conn, META_AUTO_LAST).unwrap().unwrap()).unwrap();
+        assert_eq!(last.text, "imported TWIC 1506–1510 (newest first)");
+        assert!(!last.at.is_empty());
     }
 
     #[test]
@@ -1232,6 +1289,10 @@ mod tests {
         assert_eq!(twic::imported_issues(&conn).unwrap().len(), 1);
         let p = progress.lock().unwrap().clone().unwrap();
         assert!(p.detail.contains("up to date"), "{}", p.detail);
+        // Idle trace persisted, and the catalog serves it to the screen.
+        let cat = twic_catalog_impl(&conn).unwrap();
+        let last = cat.auto_last.expect("outcome recorded");
+        assert!(last.text.contains("up to date"), "{}", last.text);
     }
 
     #[test]

@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TwicView from "./TwicView";
+import { utcDateTimeLocal } from "./lib/time";
 import {
   twicAckNotice,
   twicCatalog,
@@ -43,6 +44,7 @@ function catalogFixture(overrides: Partial<TwicCatalog> = {}): TwicCatalog {
     autoSync: false,
     noticeAcknowledged: true,
     firstRunNotice: NOTICE,
+    autoLast: null,
     ...overrides,
   };
 }
@@ -184,5 +186,32 @@ describe("refresh + auto-download + progress", () => {
     expect(container.textContent).toContain("1 / 3");
     expect(container.textContent).toContain("downloading TWIC 1651…");
     expect(getByText("Cancel")).toBeTruthy();
+  });
+});
+
+describe("auto-sync idle trace (field report 2026-07-28)", () => {
+  it("states what the last auto-check did and when, while idle", async () => {
+    vi.mocked(twicCatalog).mockResolvedValue(
+      catalogFixture({
+        autoSync: true,
+        autoLast: {
+          at: "2026-07-28 16:12:21",
+          text: "imported TWIC 1654–1655 (newest first)",
+        },
+      }),
+    );
+    const { container } = render(<TwicView progress={null} />);
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        `Last auto-check ${utcDateTimeLocal("2026-07-28 16:12:21")} — imported TWIC 1654–1655 (newest first).`,
+      ),
+    );
+  });
+
+  it("shows no trace when the toggle is off or nothing has run", async () => {
+    vi.mocked(twicCatalog).mockResolvedValue(catalogFixture({ autoSync: true, autoLast: null }));
+    const { container } = render(<TwicView progress={null} />);
+    await waitFor(() => expect(container.textContent).toContain("Automatically download"));
+    expect(container.textContent).not.toContain("Last auto-check");
   });
 });

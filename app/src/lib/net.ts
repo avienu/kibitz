@@ -31,6 +31,9 @@ export interface TwicCatalog {
   noticeAcknowledged: boolean;
   /** The exact kibitz-db FIRST_RUN_NOTICE text for the acknowledge dialog. */
   firstRunNotice: string;
+  /** Outcome of the last auto-sync pass — the idle trace ("up to date",
+   * "imported TWIC 1654–1655", an error). Null until one has run. */
+  autoLast: { at: string; text: string } | null;
 }
 
 export interface TwicRefresh {

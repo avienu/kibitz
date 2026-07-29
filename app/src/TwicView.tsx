@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import DataTable, { type DataTableColumn } from "./components/DataTable";
 import ScreenHeader from "./shell/ScreenHeader";
+import { utcDateTimeLocal } from "./lib/time";
 import {
   missingIssues,
   netCancel,
@@ -269,6 +270,14 @@ export default function TwicView({ progress }: TwicViewProps) {
               max 5 per app launch (enforced even if the window reloads); older issues stay
               manual via Download all missing. Strictly serial; also in Settings → Data.
             </label>
+          )}
+          {/* Idle trace: a silent auto-sync is indistinguishable from a
+            * broken one (field report 2026-07-28) — always say what the
+            * last pass did and when. */}
+          {catalog?.autoSync && catalog.autoLast && (
+            <div className="twic-note">
+              Last auto-check {utcDateTimeLocal(catalog.autoLast.at)} — {catalog.autoLast.text}.
+            </div>
           )}
 
           {twicJob && (twicJob.active || twicJob.error) && (
