@@ -5023,3 +5023,21 @@ button.mv-var-line:hover {
   color: var(--dim);
   text-wrap: pretty;
 }
+
+/* ---- Database storage (Settings, 2026-07-29) ---------------------------- */
+.storage-warning {
+  font: 400 12px/1.55 var(--font-ui);
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--bad);
+  border-radius: 6px;
+  padding: 9px 11px;
+  max-width: 560px;
+}
+.storage-warning strong {
+  color: var(--tx);
+}
+.storage-move {
+  display: block;
+  margin-top: 8px;
+}

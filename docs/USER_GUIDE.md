@@ -934,9 +934,15 @@ current value, and an action.
   rewrite detector output, never add claims, and falls back to template
   prose on any failure; no key is stored by the app — set
   `ANTHROPIC_API_KEY` for the CLI `explain-llm`).
-- **DATA** — Database path (read-only; change it from the Database
-  screen); Account syncs (configured-account count; manage them on the
-  Account syncs screen); **TWIC auto-download** (the same toggle as the
+- **DATA** — Database location, with a warning when the file lives in a
+  cloud-synced folder (Dropbox, iCloud, Drive, OneDrive): the sync
+  client re-uploads the whole database on every write — at gigabyte
+  size that can saturate the machine — and cloud sync interfering with
+  a live database risks corruption. **Move to app storage** snapshots
+  it into the app's own data folder (refusing while a sync or analysis
+  batch is writing) and switches over; the old file is left as a backup
+  to delete once you're satisfied. Account syncs (configured-account
+  count; manage them on the Account syncs screen); **TWIC auto-download** (the same toggle as the
   TWIC ingest screen: the newest issues download quietly at database
   open, newest first, max 5 per app launch); Tablebase status (Syzygy
   loaded / not found, with the

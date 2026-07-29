@@ -227,6 +227,7 @@ pub fn run() {
             browse::open_database,
             browse::db_summary,
             session::last_database,
+            session::migrate_database_to_app_storage,
             session::ui_session_get,
             session::ui_session_set,
             home::last_game_get,

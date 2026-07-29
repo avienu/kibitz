@@ -12,6 +12,8 @@ vi.mock("./lib/db", () => ({
   commitmentGet: vi.fn(),
   commitmentSet: vi.fn(),
   getSavedDbPath: () => "testdata/corpus/scid.sqlite",
+  fetchDbSummary: vi.fn(() => Promise.reject(new Error("no db"))),
+  saveDbPath: vi.fn(),
   jobsStatus: vi.fn(() => Promise.reject(new Error("no db"))),
   runJobs: vi.fn(),
 }));

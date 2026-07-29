@@ -71,6 +71,109 @@ pub async fn last_database(app: tauri::AppHandle) -> Result<Option<String>, Stri
     Ok(config_dir(&app).ok().and_then(|d| recall_db_path(&d)))
 }
 
+// ---------------------------------------------------------------------------
+// Database relocation (maintainer request, 2026-07-29): the dev-era
+// default lives inside a Dropbox-synced folder; at 1.2 GB+ the cloud
+// client re-hashes every write, saturating the machine, and cloud sync
+// interfering with a live SQLite file risks corruption. One click moves
+// the database to the app's own storage.
+// ---------------------------------------------------------------------------
+
+/// Copy the open database to `dest` as a single consistent snapshot.
+/// `VACUUM INTO` takes a read transaction, so it needs no exclusive lock
+/// — but the CALLER must ensure no background writer (sync, jobs) is
+/// active, or writes landing after the snapshot would be silently left
+/// behind in the old file.
+pub(crate) fn snapshot_db_to(conn: &rusqlite::Connection, dest: &Path) -> Result<(), String> {
+    if dest.exists() {
+        return Err(format!(
+            "{} already exists — remove or rename it first (refusing to overwrite a database)",
+            dest.display()
+        ));
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("create {}: {e}", parent.display()))?;
+    }
+    conn.execute("VACUUM INTO ?1", [dest.to_string_lossy().as_ref()])
+        .map_err(|e| format!("snapshot failed: {e}"))?;
+    Ok(())
+}
+
+/// True when either background worker could be writing the database.
+pub(crate) fn workers_busy(net_active: bool, jobs_active: bool) -> bool {
+    net_active || jobs_active
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrateReport {
+    /// Where the database now lives (the app opened it already).
+    pub new_path: String,
+    /// The old file, left untouched as a backup.
+    pub old_path: String,
+}
+
+/// Move the open database into the app's data dir: snapshot via
+/// `VACUUM INTO` (also shedding WAL bloat), reopen from the new
+/// location, remember it for the next launch. The old file stays as a
+/// backup for the user to delete once satisfied.
+#[tauri::command]
+pub async fn migrate_database_to_app_storage(
+    app: tauri::AppHandle,
+    state: State<'_, DbState>,
+    net: State<'_, crate::netops::NetWorker>,
+    jobs: State<'_, crate::dbops::JobsWorker>,
+) -> Result<MigrateReport, String> {
+    use std::sync::atomic::Ordering;
+    if workers_busy(
+        net.active.load(Ordering::SeqCst),
+        jobs.active.load(Ordering::SeqCst),
+    ) {
+        return Err(
+            "a sync or analysis batch is running — wait for it to finish so the copy \
+             cannot miss late writes"
+                .to_string(),
+        );
+    }
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("no app data dir: {e}"))?;
+    let dest = data_dir.join("kibitz.sqlite");
+
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "db state poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or("no database open")?;
+    let old_path: String = conn
+        .query_row(
+            "SELECT file FROM pragma_database_list WHERE name = 'main'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if Path::new(&old_path).starts_with(&data_dir) {
+        return Err("the database already lives in app storage".to_string());
+    }
+    snapshot_db_to(conn, &dest)?;
+
+    // Swap the live connection to the new file (holding the lock so no
+    // command can slip through against the old one mid-swap).
+    let new_conn = kibitz_db::db::open(&dest).map_err(|e| e.to_string())?;
+    new_conn
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
+    *guard = Some(new_conn);
+    drop(guard);
+
+    remember_db(&app, &dest.to_string_lossy());
+    Ok(MigrateReport {
+        new_path: dest.to_string_lossy().into_owned(),
+        old_path,
+    })
+}
+
 /// Opaque UI-session blob (frontend-owned schema: active screen +
 /// database-screen filter state). Stored in the meta table of the OPEN
 /// database so it travels with the file.
@@ -122,6 +225,34 @@ mod tests {
         assert_eq!(recall_db_path(dir.path()), None);
         std::fs::write(session_file(dir.path()), b"not json").unwrap();
         assert_eq!(recall_db_path(dir.path()), None);
+    }
+
+    #[test]
+    fn snapshot_copies_a_consistent_database_and_refuses_to_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.sqlite");
+        let conn = kibitz_db::db::open(&src).unwrap();
+        conn.execute_batch(
+            "INSERT INTO players (name) VALUES ('A'); INSERT INTO players (name) VALUES ('B');",
+        )
+        .unwrap();
+        let dest = dir.path().join("nested/dir/kibitz.sqlite");
+        snapshot_db_to(&conn, &dest).unwrap();
+        let copy = kibitz_db::db::open(&dest).unwrap();
+        let n: i64 = copy
+            .query_row("SELECT COUNT(*) FROM players", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 2);
+        // Never overwrite an existing database.
+        let err = snapshot_db_to(&conn, &dest).unwrap_err();
+        assert!(err.contains("already exists"), "{err}");
+    }
+
+    #[test]
+    fn busy_workers_block_migration() {
+        assert!(workers_busy(true, false));
+        assert!(workers_busy(false, true));
+        assert!(!workers_busy(false, false));
     }
 
     #[test]

@@ -20,13 +20,13 @@ import type { ReactNode } from "react";
 import ScreenHeader from "./shell/ScreenHeader";
 import EngineSection from "./settings/EngineSection";
 import LichessSection from "./settings/LichessSection";
+import StorageSection from "./settings/StorageSection";
 import UpdatesSettings from "./UpdatesSettings";
 import {
   batchEstimate,
   batchStart,
   commitmentGet,
   commitmentSet,
-  getSavedDbPath,
   jobsStatus,
   runJobs,
   type BatchEstimate,
@@ -277,11 +277,8 @@ export default function SettingsView({
           {/* ---- DATA ---- */}
           <div className="set-group">
             <div className="set-group-head">DATA</div>
-            <Row
-              label="Database"
-              help="Opened automatically at launch; duplicates are linked, never deleted. Change it from the Database screen."
-              value={<div className="set-value mono">{getSavedDbPath()}</div>}
-            />
+            {/* ---- DATABASE STORAGE (own file: settings/StorageSection.tsx) ---- */}
+            <StorageSection />
             <Row
               label="Account syncs"
               help="Lichess, chess.com and FICS sync live on the Account syncs screen (rail: DATA IN / OUT). CLI equivalents: lichess-sync · chesscom-sync · fics-sync."
