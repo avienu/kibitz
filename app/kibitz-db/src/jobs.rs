@@ -23,6 +23,12 @@ pub enum Purpose {
     /// Deep MultiPV analysis of a triage GAP/FRONTIER position, producing
     /// candidate lines to adopt into the repertoire (run 10).
     BookExtension,
+    /// Annotate-time suggestion review of a quiet closing-eligible ply
+    /// (2026-07-29 field report): the same cursory baseline + per-candidate
+    /// bounded searches the wsui-confirm job runs, at plies where no screen
+    /// fired but a narration closing would render. Enqueued only by the
+    /// explicit Annotate pass (run-9 ruling).
+    SuggestVerify,
 }
 
 impl Purpose {
@@ -34,6 +40,7 @@ impl Purpose {
             Purpose::BatchProfile => "batch-profile",
             Purpose::Reanalyze => "reanalyze",
             Purpose::BookExtension => "book-extension",
+            Purpose::SuggestVerify => "suggest-verify",
         }
     }
 }
@@ -76,6 +83,57 @@ pub struct BookExtensionPayload {
     pub fen: String,
     pub multipv: u32,
     pub depth: u32,
+}
+
+/// Payload of a `suggest-verify` job: one quiet closing-eligible mainline
+/// ply whose static suggestions get the cursory engine review at worker
+/// time (baseline + ≤3 candidate searches at
+/// [`crate::verify::VERIFY_NODES`] each).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestVerifyPayload {
+    pub game_id: i64,
+    pub ply: u32,
+    pub fen: String,
+}
+
+/// Enqueue a suggest-verify job for one (game, ply), idempotently: an
+/// existing pending/running/done job for the same game AND ply is reused
+/// (the json_extract dedup pattern); failed jobs do NOT count, so a retry
+/// re-enqueues. Returns `(job_id, created)`. Enqueue-only — nothing runs
+/// until a worker is started.
+pub fn enqueue_suggest_verify(
+    conn: &Connection,
+    game_id: i64,
+    ply: u32,
+    fen: &str,
+) -> anyhow::Result<(i64, bool)> {
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM jobs
+             WHERE purpose = 'suggest-verify'
+               AND status IN ('pending', 'running', 'done')
+               AND json_extract(payload, '$.game_id') = ?1
+               AND json_extract(payload, '$.ply') = ?2
+             ORDER BY id DESC LIMIT 1",
+            params![game_id, ply],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(id) = existing {
+        return Ok((id, false));
+    }
+    conn.execute(
+        "INSERT INTO jobs (purpose, payload) VALUES (?1, ?2)",
+        params![
+            Purpose::SuggestVerify.as_str(),
+            serde_json::to_string(&SuggestVerifyPayload {
+                game_id,
+                ply,
+                fen: fen.to_string(),
+            })?
+        ],
+    )?;
+    Ok((conn.last_insert_rowid(), true))
 }
 
 /// Enqueue a book-extension job for `fen`, idempotently: an existing
@@ -197,6 +255,7 @@ pub fn run_pending_until(
                     "positions_analyzed": r.positions_analyzed,
                     "screens_fired": r.screens_fired,
                     "jobs_enqueued": r.jobs_enqueued,
+                    "suggest_jobs_enqueued": r.suggest_jobs_enqueued,
                     "comments_added": r.comments_added,
                 }));
             }
@@ -222,6 +281,67 @@ pub fn run_pending_until(
                     "multipv": p.multipv,
                     "engine": identity,
                 }));
+            }
+            // Suggest-verify jobs (2026-07-29 field report): the cursory
+            // suggestion review at a quiet closing-eligible ply. Exactly
+            // the wsui-confirm branch's review — one baseline search plus
+            // one bounded search per candidate, everything folded to the
+            // side-to-move POV — minus the alert grading (no screen fired
+            // here, so there is no alert to grade).
+            if purpose == "suggest-verify" {
+                let p: SuggestVerifyPayload = serde_json::from_str(&payload)?;
+                let board = p
+                    .fen
+                    .parse::<cozy_chess::Board>()
+                    .map_err(|e| anyhow::anyhow!("invalid fen in suggest-verify payload: {e:?}"))?;
+                let record = kibitz_core::analyze(&board);
+                let suggestions = kibitz_core::suggest::suggest(&record, &board);
+                let mut result = serde_json::json!({
+                    "game_id": p.game_id,
+                    "ply": p.ply,
+                    "cleared_suggestions": [],
+                });
+                if suggestions.is_empty() {
+                    // Nothing to verify: an empty cleared list, honestly
+                    // stored, and the engine never spawns for this job.
+                    return Ok(result);
+                }
+                if engine.is_none() {
+                    engine = Some(Engine::spawn(engine_path)?);
+                }
+                let e = engine.as_mut().expect("just spawned");
+                let identity = e.identity.clone();
+                // Baseline: the position's best-play eval, side-to-move
+                // POV (the mover of every candidate below).
+                let base = e.eval_nodes(&p.fen, crate::verify::VERIFY_NODES)?;
+                let baseline =
+                    crate::verify::fold_score(Some(base.score_cp), base.mate).unwrap_or(0);
+                let mut cands = Vec::with_capacity(suggestions.len());
+                for s in &suggestions {
+                    let score =
+                        s.mv.parse::<cozy_chess::Move>()
+                            .ok()
+                            .filter(|mv| board.is_legal(*mv))
+                            .and_then(|mv| {
+                                let mut b2 = board.clone();
+                                b2.play(mv);
+                                e.eval_nodes(&b2.to_string(), crate::verify::VERIFY_NODES)
+                                    .ok()
+                            })
+                            // The child search is the OPPONENT's POV.
+                            .and_then(|l| crate::verify::fold_score(Some(l.score_cp), l.mate))
+                            .map(|cp| -cp);
+                    cands.push(crate::verify::CandidateEval {
+                        uci: s.mv.clone(),
+                        static_risk: s.static_risk,
+                        score,
+                    });
+                }
+                result["cleared_suggestions"] =
+                    serde_json::json!(crate::verify::cleared_moves(baseline, &cands));
+                result["verify_nodes"] = serde_json::json!(crate::verify::VERIFY_NODES);
+                result["engine"] = serde_json::json!(identity);
+                return Ok(result);
             }
             let p: EnginePayload = serde_json::from_str(&payload)?;
             if engine.is_none() {

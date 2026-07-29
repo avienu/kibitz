@@ -384,8 +384,13 @@ fn main() -> anyhow::Result<()> {
             let r =
                 kibitz_db::annotate::annotate_game(&conn, game_id, confirm_nodes, max_comments)?;
             println!(
-                "analyzed {} positions: {} screens fired, {} confirm jobs queued, {} comments added",
-                r.positions_analyzed, r.screens_fired, r.jobs_enqueued, r.comments_added
+                "analyzed {} positions: {} screens fired, {} confirm jobs queued, \
+                 {} suggest-verify jobs queued, {} comments added",
+                r.positions_analyzed,
+                r.screens_fired,
+                r.jobs_enqueued,
+                r.suggest_jobs_enqueued,
+                r.comments_added
             );
         }
         Command::RunJobs { max_jobs } => {

@@ -103,7 +103,8 @@ pub struct AnnotateSummary {
 }
 
 /// Statically annotate one game (no engine) and enqueue bounded
-/// confirmation jobs for fired WSUI screens.
+/// engine jobs: wsui-confirm for fired screens, suggest-verify at quiet
+/// closing-eligible plies (2026-07-29 field report).
 #[tauri::command]
 pub async fn annotate_game(
     state: State<'_, DbState>,
@@ -115,7 +116,12 @@ pub async fn annotate_game(
         Ok(AnnotateSummary {
             positions_analyzed: r.positions_analyzed,
             screens_fired: r.screens_fired,
-            jobs_enqueued: r.jobs_enqueued,
+            // Both bounded job kinds: the UI starts the annotate worker
+            // whenever this is nonzero, which must include quiet games
+            // whose only engine work is the suggestion review — otherwise
+            // suggest-verify jobs would sit pending and closings would
+            // never appear.
+            jobs_enqueued: r.jobs_enqueued + r.suggest_jobs_enqueued,
             comments_added: r.comments_added,
         })
     })

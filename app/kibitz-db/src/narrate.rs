@@ -52,71 +52,125 @@ pub fn set_narration_voice(conn: &Connection, voice: Voice) -> anyhow::Result<()
     Ok(())
 }
 
-/// A completed wsui-confirm verdict for one mainline ply.
+/// A completed engine verdict for one mainline ply: a wsui-confirm
+/// alert grading, a suggest-verify suggestion review, or (merged) both.
 #[derive(Debug, Clone)]
 pub struct Verdict {
-    pub status: EngineCheckStatus,
+    /// The wsui-confirm grading of the fired alert. `None` for a ply
+    /// covered only by a suggest-verify row — a suggestion review carries
+    /// no confirm status, and must never masquerade as one.
+    pub status: Option<EngineCheckStatus>,
     pub pv_uci: Vec<String>,
     pub score_delta_cp: Option<i32>,
     pub mate_in: Option<i32>,
     pub nodes: u64,
     /// Engine-cleared static candidate moves for this position (run 11):
-    /// the wsui-confirm job's cursory suggestion review. `Some` even when
-    /// empty (the engine ran and refuted everything); `None` when the job
-    /// predates the review or had nothing to verify — then the static
-    /// veto governs.
+    /// the wsui-confirm or suggest-verify job's cursory suggestion
+    /// review. `Some` even when empty (the engine ran and refuted
+    /// everything); `None` when the job predates the review or had
+    /// nothing to verify — then the static veto governs.
     pub cleared_suggestions: Option<Vec<String>>,
 }
 
-/// Load every completed verdict for a game, keyed by mainline ply.
+/// Load every completed verdict for a game, keyed by mainline ply:
+/// wsui-confirm rows carry the alert grading (and, since run 11, a
+/// suggestion review at fired plies); suggest-verify rows carry only the
+/// suggestion review at quiet closing-eligible plies. The two purposes
+/// target disjoint plies by construction; if both ever land on one ply
+/// the confirm verdict wins and the first available cleared list is kept.
 pub fn load_verdicts(conn: &Connection, game_id: i64) -> anyhow::Result<HashMap<u32, Verdict>> {
-    let mut out = HashMap::new();
+    let mut out: HashMap<u32, Verdict> = HashMap::new();
     let mut stmt = conn.prepare(
-        "SELECT payload, result FROM jobs
-         WHERE purpose = 'wsui-confirm' AND status = 'done' ORDER BY id",
+        "SELECT purpose, payload, result FROM jobs
+         WHERE purpose IN ('wsui-confirm', 'suggest-verify')
+           AND status = 'done' ORDER BY id",
     )?;
-    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
     for row in rows {
-        let (payload, result) = row?;
-        let p: crate::jobs::EnginePayload = serde_json::from_str(&payload)?;
-        if p.game_id != Some(game_id) {
+        let (purpose, payload, result) = row?;
+        let (row_game, row_ply) = if purpose == "suggest-verify" {
+            let p: crate::jobs::SuggestVerifyPayload = serde_json::from_str(&payload)?;
+            (Some(p.game_id), Some(p.ply))
+        } else {
+            let p: crate::jobs::EnginePayload = serde_json::from_str(&payload)?;
+            (p.game_id, p.ply)
+        };
+        if row_game != Some(game_id) {
             continue;
         }
-        let Some(ply) = p.ply else { continue };
+        let Some(ply) = row_ply else { continue };
         let v: serde_json::Value = serde_json::from_str(&result)?;
+        let cleared_suggestions = v["cleared_suggestions"].as_array().map(|list| {
+            list.iter()
+                .filter_map(|u| u.as_str().map(str::to_string))
+                .collect()
+        });
+        if purpose == "suggest-verify" {
+            // No confirm status to contribute: merge only the cleared
+            // list, never displacing an existing confirm verdict.
+            let entry = out.entry(ply).or_insert_with(|| Verdict {
+                status: None,
+                pv_uci: Vec::new(),
+                score_delta_cp: None,
+                mate_in: None,
+                nodes: 0,
+                cleared_suggestions: None,
+            });
+            if entry.cleared_suggestions.is_none() {
+                entry.cleared_suggestions = cleared_suggestions;
+            }
+            continue;
+        }
         let status = match v["status"].as_str() {
             Some("confirmed") => EngineCheckStatus::Confirmed,
             Some("refuted") => EngineCheckStatus::Refuted,
             _ => EngineCheckStatus::UnclearAtBudget,
         };
         let mate_in = v["mate_for_beneficiary"].as_i64().map(|m| m as i32);
-        out.insert(
-            ply,
-            Verdict {
-                status,
-                pv_uci: v["pv"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|u| u.as_str().map(str::to_string))
-                    .collect(),
-                // A mate score must never render as material (run-5 bug 1).
-                score_delta_cp: if mate_in.is_some() {
-                    None
-                } else {
-                    v["score_delta_cp"].as_i64().map(|x| x as i32)
-                },
-                mate_in,
-                nodes: v["nodes"].as_u64().unwrap_or(0),
-                cleared_suggestions: v["cleared_suggestions"].as_array().map(|list| {
-                    list.iter()
-                        .filter_map(|u| u.as_str().map(str::to_string))
-                        .collect()
-                }),
+        let mut verdict = Verdict {
+            status: Some(status),
+            pv_uci: v["pv"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|u| u.as_str().map(str::to_string))
+                .collect(),
+            // A mate score must never render as material (run-5 bug 1).
+            score_delta_cp: if mate_in.is_some() {
+                None
+            } else {
+                v["score_delta_cp"].as_i64().map(|x| x as i32)
             },
-        );
+            mate_in,
+            nodes: v["nodes"].as_u64().unwrap_or(0),
+            cleared_suggestions,
+        };
+        if verdict.cleared_suggestions.is_none() {
+            if let Some(prev) = out.get(&ply) {
+                verdict.cleared_suggestions = prev.cleared_suggestions.clone();
+            }
+        }
+        out.insert(ply, verdict);
     }
     Ok(out)
+}
+
+/// A mainline capture ply: the move takes a piece, or is an en passant
+/// capture. Shared by the narrator's closing gate and annotate's
+/// suggest-verify eligibility — the two must agree on what "capture ply"
+/// means (mid-exchange the only honest advice is to finish the exchange,
+/// so no closing renders and no review is worth enqueueing).
+pub(crate) fn is_capture_ply(board_before: &cozy_chess::Board, mv: cozy_chess::Move) -> bool {
+    board_before.colors(!board_before.side_to_move()).has(mv.to)
+        || (board_before.piece_on(mv.from) == Some(cozy_chess::Piece::Pawn)
+            && mv.from.file() != mv.to.file()
+            && board_before.piece_on(mv.to).is_none())
 }
 
 /// NAG values marking a blunder-class move (? = 2, ?? = 4).
@@ -203,30 +257,35 @@ pub fn narrate_game(
                 kibitz_core::prose_gate::suppress_exchange_noise(&mut record, &board_before, *mv);
                 kibitz_core::prose_gate::suppress_escapable_attack_noise(&mut record, &board);
 
-                // Merge this ply's engine verdict, if any.
+                // Merge this ply's engine verdict, if any. A ply covered
+                // only by a suggest-verify row has no confirm status —
+                // its cleared list feeds the closing below, but it never
+                // grades (or drops) an alert.
                 let mut verdict_status = None;
                 if let Some(v) = verdicts.get(&ply) {
-                    verdict_status = Some(v.status);
-                    match v.status {
-                        EngineCheckStatus::Refuted => {
-                            // The tactic does not work: drop the lead alert.
-                            if !record.wsui.alerts.is_empty() {
-                                record.wsui.alerts.remove(0);
+                    if let Some(status) = v.status {
+                        verdict_status = Some(status);
+                        match status {
+                            EngineCheckStatus::Refuted => {
+                                // The tactic does not work: drop the lead alert.
+                                if !record.wsui.alerts.is_empty() {
+                                    record.wsui.alerts.remove(0);
+                                }
+                            }
+                            _ => {
+                                if let Some(top) = record.wsui.alerts.first_mut() {
+                                    top.engine_check = Some(EngineCheck {
+                                        status,
+                                        pv: pv_to_san(&board, &v.pv_uci),
+                                        score_delta_cp: v.score_delta_cp,
+                                        mate_in: v.mate_in,
+                                        budget_nodes: v.nodes,
+                                    });
+                                }
                             }
                         }
-                        _ => {
-                            if let Some(top) = record.wsui.alerts.first_mut() {
-                                top.engine_check = Some(EngineCheck {
-                                    status: v.status,
-                                    pv: pv_to_san(&board, &v.pv_uci),
-                                    score_delta_cp: v.score_delta_cp,
-                                    mate_in: v.mate_in,
-                                    budget_nodes: v.nodes,
-                                });
-                            }
-                        }
+                        record.wsui.screen_fired = !record.wsui.alerts.is_empty();
                     }
-                    record.wsui.screen_fired = !record.wsui.alerts.is_empty();
                 }
 
                 // Current full story, before delta filtering.
@@ -301,10 +360,7 @@ pub fn narrate_game(
                     // sentence at plies where plans are narrated — but
                     // never on a capture ply, where the only honest
                     // advice is to finish the exchange in progress.
-                    let capture_ply = board_before.colors(!board_before.side_to_move()).has(mv.to)
-                        || (board_before.piece_on(mv.from) == Some(cozy_chess::Piece::Pawn)
-                            && mv.from.file() != mv.to.file()
-                            && board_before.piece_on(mv.to).is_none());
+                    let capture_ply = is_capture_ply(&board_before, *mv);
                     if !sections.plans.is_empty() && !capture_ply {
                         // Engine-verification context (run 11): at plies
                         // where the wsui-confirm job reviewed the static

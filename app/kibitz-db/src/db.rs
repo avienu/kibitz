@@ -30,6 +30,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (11, include_str!("../migrations/0011_endgames.sql")),
     (12, include_str!("../migrations/0012_aliases.sql")),
     (13, include_str!("../migrations/0013_book_extensions.sql")),
+    (14, include_str!("../migrations/0014_suggest_verify.sql")),
 ];
 
 #[derive(Debug, thiserror::Error)]
