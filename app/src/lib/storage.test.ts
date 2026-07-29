@@ -3,10 +3,10 @@ import { isCloudSyncedPath } from "./storage";
 
 describe("isCloudSyncedPath", () => {
   it("flags the major cloud-sync locations", () => {
-    // The maintainer's actual dev path — the case that saturated the machine.
+    // The maintainer's dev-path shape — the case that saturated the machine.
     expect(
       isCloudSyncedPath(
-        "/Users/x/Library/CloudStorage/Dropbox/prog/silman/testdata/corpus/scid.sqlite",
+        "/Users/x/Library/CloudStorage/Dropbox/prog/chess/testdata/corpus/scid.sqlite",
       ),
     ).toBe(true);
     expect(isCloudSyncedPath("/Users/x/Dropbox/chess/db.sqlite")).toBe(true);
