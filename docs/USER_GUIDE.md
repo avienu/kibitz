@@ -101,9 +101,13 @@ of padding the screen.
 - **Annotate** — the *static* Kibitz annotation pass over the loaded
   database game: imbalance comments plus tactical alerts from the WSUI
   screen appear instantly. Each fired alert enqueues a bounded engine
-  confirmation job, **and the worker starts right away** — an inline
-  ANNOTATING progress row appears under the header (Pause anytime);
-  verdicts fold back into the comments when it finishes.
+  confirmation job, and each quiet ply where a plan is narrated enqueues
+  a bounded suggestion review, **and the worker starts right away** — an
+  inline ANNOTATING progress row appears under the header (Pause
+  anytime); verdicts fold back into the comments when it finishes.
+  After fold-back the COACH rows at plan plies close with a recommended
+  move ("If I had the move: …") drawn only from candidates the engine
+  cleared — moves it refuted never appear.
 - **Re-analyze** — one bounded engine evaluation per mainline position,
   enqueued **and run immediately**: an inline REANALYZING progress row
   tracks the batch, and evals/annotations refresh in place when it
@@ -1012,7 +1016,9 @@ Any subset works. Handy for demos, screenshots and shared findings.
 1. Load a game from the Database view.
 2. Header bar → **Annotate** — instant static comments; the engine
    checks run immediately (inline ANNOTATING row) and verdicts fold back
-   automatically when the batch finishes. (Jobs → **Run pending jobs**
+   automatically when the batch finishes: confirmed tactics lead with
+   the engine's line, refuted ones vanish, and plan plies gain a
+   recommended move vetted by the engine. (Jobs → **Run pending jobs**
    still resumes anything paused or left over.)
 3. Edit by hand in the Moves panel (comments, NAGs, variations) and
    **Save**; **Export PGN** to take the annotated game elsewhere.

@@ -76,7 +76,7 @@
 <ul>
 <li><strong>Title block</strong> — "White — Black" with the result, and a meta line: site, year, opening name and ECO (when the database resolved them), ply count, and the game's identity (<code>database #N</code> or <code>pasted PGN</code>). Named events add an <strong>"Event · crosstable"</strong> line — click it for the event's crosstable (see §Crosstables).</li>
 <li><strong>walnut | instrument</strong> — switches the board treatment (same control as in Settings).</li>
-<li><strong>Annotate</strong> — the *static* Kibitz annotation pass over the loaded database game: imbalance comments plus tactical alerts from the WSUI screen appear instantly. Each fired alert enqueues a bounded engine confirmation job, <strong>and the worker starts right away</strong> — an inline ANNOTATING progress row appears under the header (Pause anytime); verdicts fold back into the comments when it finishes.</li>
+<li><strong>Annotate</strong> — the *static* Kibitz annotation pass over the loaded database game: imbalance comments plus tactical alerts from the WSUI screen appear instantly. Each fired alert enqueues a bounded engine confirmation job, and each quiet ply where a plan is narrated enqueues a bounded suggestion review, <strong>and the worker starts right away</strong> — an inline ANNOTATING progress row appears under the header (Pause anytime); verdicts fold back into the comments when it finishes. After fold-back the COACH rows at plan plies close with a recommended move ("If I had the move: …") drawn only from candidates the engine cleared — moves it refuted never appear.</li>
 <li><strong>Re-analyze</strong> — one bounded engine evaluation per mainline position, enqueued <strong>and run immediately</strong>: an inline REANALYZING progress row tracks the batch, and evals/annotations refresh in place when it completes. Clicking while a worker is already running just adds the jobs to the active run.</li>
 <li><strong>Export PGN</strong> — renders the game (with annotations) as PGN in a modal with <strong>Copy</strong> / <strong>Close</strong>.</li>
 </ul>
@@ -400,7 +400,7 @@
 <h3 id="annotate-a-single-game-and-confirm-tactics-with-the-engine">Annotate a single game and confirm tactics with the engine</h3>
 <ol>
 <li>Load a game from the Database view.</li>
-<li>Header bar → <strong>Annotate</strong> — instant static comments; the engine checks run immediately (inline ANNOTATING row) and verdicts fold back automatically when the batch finishes. (Jobs → <strong>Run pending jobs</strong> still resumes anything paused or left over.)</li>
+<li>Header bar → <strong>Annotate</strong> — instant static comments; the engine checks run immediately (inline ANNOTATING row) and verdicts fold back automatically when the batch finishes: confirmed tactics lead with the engine's line, refuted ones vanish, and plan plies gain a recommended move vetted by the engine. (Jobs → <strong>Run pending jobs</strong> still resumes anything paused or left over.)</li>
 <li>Edit by hand in the Moves panel (comments, NAGs, variations) and <strong>Save</strong>; <strong>Export PGN</strong> to take the annotated game elsewhere.</li>
 </ol>
 <h3 id="drill-a-weakness-end-to-end">Drill a weakness end to end</h3>

@@ -206,8 +206,29 @@ eval to CLEAR, clean candidates survive unless refuted. Two paths:
   stored in the job result (`cleared_suggestions`) and the narration
   closing renders only cleared moves at reviewed plies.
 
+**Annotate-time verification at closing-eligible plies (2026-07-29 field
+report).** Confining the review to fired screens made the coach safe but
+silent: in real middlegames the whole-board veto marks most candidates,
+wsui-confirm jobs exist only where the screen fired, and quiet plan plies
+therefore almost never produced a closing ("even though I'm in annotate
+mode I don't see a recommended move"). Annotate — an explicit user engine
+action under the run-9 ruling — now additionally enqueues one bounded
+`suggest-verify` job per quiet closing-eligible ply: screen NOT fired
+(fired plies already get the review via wsui-confirm), composite plans
+present, static suggestions present, and not a capture ply (the
+narrator's own closing gate). The job runs the identical review — one
+baseline search plus one per candidate, ≤4 searches at `VERIFY_NODES`,
+all folded to the side-to-move POV — and stores `cleared_suggestions` in
+the same result shape, which the verdict loader merges into the per-ply
+map (status-less: a suggestion review never grades an alert, and
+fold-back's confirmed/refuted accounting stays wsui-confirm-only). After
+fold-back, closings render engine-cleared moves at quiet plan plies;
+refuted candidates still never appear.
+
 A quiet position never triggers any engine work from this feature
-(CLAUDE.md #6).
+outside an explicit user action (CLAUDE.md #6): live explain stays
+static, and the suggest-verify jobs are enqueued only by Annotate and run
+only when the job worker is started.
 
 ## kibitz-profile — corpus profiling
 
