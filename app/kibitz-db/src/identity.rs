@@ -304,3 +304,44 @@ mod tests {
         assert_ne!(identity_key("Polgar, Judit"), identity_key("Polgar, Sofia"));
     }
 }
+// (identity-grouped suggestion tests live here because they exercise the
+// identity_key/alias grouping that fingerprint::matching_players applies.)
+#[cfg(test)]
+mod suggestion_tests {
+    #[test]
+    fn suggestions_collapse_identity_variants_to_the_games_heaviest_form() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(&dir.path().join("t.sqlite")).unwrap();
+        conn.execute_batch(
+            "INSERT INTO players (id, name) VALUES (1, 'O''Connor, Shawn');
+             INSERT INTO players (id, name) VALUES (2, 'Shawn O''Connor');
+             INSERT INTO players (id, name) VALUES (3, 'Connor,Stephen J');
+             INSERT INTO sources (name, origin, license, kind)
+               VALUES ('t', 't', 't', 'personal');
+             INSERT INTO games (source_id, white_id, black_id, result, ply_count, movetext,
+                                header_sig, moves_hash, encoding_version)
+               VALUES (1, 1, 3, 1, 2, x'00', 'a', 1, 2),
+                      (1, 3, 1, 2, 2, x'00', 'b', 2, 2),
+                      (1, 2, 3, 1, 2, x'00', 'c', 3, 2);",
+        )
+        .unwrap();
+        // Both O'Connor forms match "connor"; they collapse to the form
+        // with more games. The unrelated Connor stays.
+        let names = crate::fingerprint::matching_players(&conn, "Connor").unwrap();
+        assert_eq!(
+            names,
+            vec![
+                "Connor,Stephen J".to_string(),
+                "O'Connor, Shawn".to_string()
+            ],
+            "one entry per identity, games-heaviest form wins"
+        );
+
+        // A declared alias chains transitively: declaring Stephen with
+        // the comma form pulls in its lexical twin too, and the
+        // games-heaviest form of the merged identity represents it.
+        crate::identity::declare_alias(&conn, "Connor,Stephen J", "O'Connor, Shawn").unwrap();
+        let names = crate::fingerprint::matching_players(&conn, "Connor").unwrap();
+        assert_eq!(names, vec!["Connor,Stephen J".to_string()]);
+    }
+}
