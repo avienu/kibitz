@@ -438,7 +438,21 @@ pub(crate) fn spawn_net_worker(
                 .map(|q| q.initial.label.clone())
                 .collect();
             set_progress(&progress, initial);
-            let result = job(&stop, &progress);
+            // Panic armor (2026-07-28 field report): a panicking job used
+            // to kill this thread silently — progress stayed "active"
+            // forever and every queued sync wedged behind a ghost until
+            // the app restarted. A panic is now an ordinary job failure:
+            // visible error, worker moves on.
+            let result =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(&stop, &progress)))
+                    .unwrap_or_else(|panic| {
+                        let msg = panic
+                            .downcast_ref::<&str>()
+                            .map(|s| s.to_string())
+                            .or_else(|| panic.downcast_ref::<String>().cloned())
+                            .unwrap_or_else(|| "unknown panic".to_string());
+                        Err(format!("internal error (please report): {msg}"))
+                    });
             if let Err(e) = &result {
                 update_progress(&progress, |p| p.error = Some(e.clone()));
             }

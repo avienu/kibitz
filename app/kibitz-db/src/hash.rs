@@ -41,16 +41,18 @@ fn has_legal_ep_capture(board: &Board) -> bool {
 }
 
 /// Strip a phantom ep square by round-tripping through FEN with the ep
-/// field replaced by `-`.
+/// field replaced by `-`. The round-trip is NOT infallible: a Chess960
+/// position renders file-letter castling rights that the standard parser
+/// refuses (2026-07-28 field report — one 960 game panicked the import
+/// worker here, silently wedging every chess.com sync at the same month).
+/// Falling back to the un-normalized board keeps the hash total; the
+/// phantom-ep dedup nicety is lost only for positions we cannot round-trip.
 fn without_ep(board: &Board) -> Board {
     let fen = board.to_string();
     let mut fields: Vec<&str> = fen.split_ascii_whitespace().collect();
     debug_assert!(fields.len() >= 4);
     fields[3] = "-";
-    fields
-        .join(" ")
-        .parse()
-        .expect("FEN round-trip of a legal board cannot fail")
+    fields.join(" ").parse().unwrap_or_else(|_| board.clone())
 }
 
 /// The normalized position hash used by the `positions` index.

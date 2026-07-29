@@ -170,6 +170,13 @@ pub enum PrepareError {
     CustomStart(cozy_chess::FenParseError),
     #[error("ply {ply}: {msg}")]
     BadMove { ply: usize, msg: String },
+    /// Kibitz stores standard chess. Variant games (Chess960, bughouse,
+    /// …) are skipped one by one with this named reason — never allowed
+    /// to fail or crash the surrounding import (2026-07-28 field report:
+    /// one 960 game panicked the position hasher and wedged every
+    /// chess.com sync at the same month).
+    #[error("unsupported variant {0:?} — Kibitz stores standard chess")]
+    UnsupportedVariant(String),
 }
 
 /// Convert a raw PGN token stream into encoding-v2 tokens, replaying every
@@ -302,6 +309,14 @@ fn tokens_from_pgn(
 /// Replay the movetext tokens, producing the encoded blob, per-ply position
 /// hashes, and the duplicate-detection signatures.
 fn prepare(game: &RawGame) -> Result<PreparedGame, PrepareError> {
+    // Variant games are named skips, not crashes (chess.com/lichess tag
+    // them; 960 FENs also carry file-letter castling rights the standard
+    // stack cannot represent).
+    if let Some(v) = game.tag("Variant") {
+        if !v.eq_ignore_ascii_case("standard") && !v.eq_ignore_ascii_case("from position") {
+            return Err(PrepareError::UnsupportedVariant(v.to_string()));
+        }
+    }
     let start_fen = match game.tag("FEN") {
         Some(fen) if game.tag("SetUp") != Some("0") => Some(fen.to_string()),
         _ => None,

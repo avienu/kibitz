@@ -165,7 +165,17 @@ pub async fn open_database(
 }
 
 pub(crate) fn db_summary_impl(conn: &Connection) -> Result<DbSummary, String> {
-    let stats = kibitz_db::query::stats(conn).map_err(|e| e.to_string())?;
+    let one = |sql: &str| -> Result<i64, String> {
+        conn.query_row(sql, [], |r| r.get(0))
+            .map_err(|e| e.to_string())
+    };
+    // This runs on the shared UI connection every 3 s during a sync. An
+    // exact COUNT(*) over the positions table (tens of millions of rows)
+    // took multi-second full scans that convoyed every other command
+    // behind the DbState mutex (2026-07-28 process sample: one poll
+    // pinned in pread, nine threads queued). No UI surface displays the
+    // positions count, so the poll uses the O(1) rowid upper bound;
+    // `kibitz-cli stats` keeps the exact count.
     let path: String = conn
         .query_row(
             "SELECT file FROM pragma_database_list WHERE name = 'main'",
@@ -174,10 +184,10 @@ pub(crate) fn db_summary_impl(conn: &Connection) -> Result<DbSummary, String> {
         )
         .map_err(|e| e.to_string())?;
     Ok(DbSummary {
-        games: stats.games,
-        players: stats.players,
-        positions: stats.positions,
-        sources: stats.sources,
+        games: one("SELECT COUNT(*) FROM games")?,
+        players: one("SELECT COUNT(*) FROM players")?,
+        positions: one("SELECT COALESCE(MAX(rowid), 0) FROM positions")?,
+        sources: one("SELECT COUNT(*) FROM sources")?,
         path,
     })
 }
