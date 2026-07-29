@@ -1,12 +1,14 @@
 /**
- * Explain panel (design/handoff-1 §D): headline + sentence blocks with
- * role dots, driving the board's evidence overlays through hover; empty
- * state with an explicit `Explain position (E)` action — the engine (and
- * even the static screen) runs only when asked.
+ * Explain panel (design/handoff-1 §D + round-3 change note): a BOUNDED
+ * three-row panel — header / scrolling prose / pinned foot. Summary
+ * first: only the leading finding renders until the foot's expander
+ * opens the rest (per position; GameView resets it on every step). The
+ * header's caret collapses the whole body for fast stepping. Neither
+ * state touches the board: the overlay always shows the union of ALL
+ * findings — collapsing hides prose, never evidence.
  */
 import {
-  collapsedAlertIndices,
-  MAX_VISIBLE_ALERTS,
+  hiddenFindingIndices,
   selectionNote,
   sentenceOpacity,
   suggestionTitle,
@@ -36,11 +38,14 @@ interface ExplainPanelProps {
   onExplain: () => void;
   /** Plies (of the current game) that already have cached explanations. */
   explainedPlies: number[];
-  /** Alert collapse (audit #13): more than MAX_VISIBLE_ALERTS alert
-   * sentences fold behind a "show N more" toggle. Owned by GameView so
-   * the board's evidence union tracks what is visible. */
-  alertsExpanded: boolean;
-  onToggleAlerts: () => void;
+  /** Summary-first (round-3 change note): false = only the first finding
+   * renders. Owned by GameView; resets on every move step. */
+  findingsExpanded: boolean;
+  onToggleFindings: () => void;
+  /** Whole-body collapse (the header caret) — the fast-stepping state.
+   * Survives move steps. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
 export default function ExplainPanel({
@@ -54,24 +59,19 @@ export default function ExplainPanel({
   selectedSquare,
   onExplain,
   explainedPlies,
-  alertsExpanded,
-  onToggleAlerts,
+  findingsExpanded,
+  onToggleFindings,
+  collapsed,
+  onToggleCollapsed,
 }: ExplainPanelProps) {
   const pill = explanation
     ? `${explanation.tag}${explanation.eval ? `  ${explanation.eval.display}` : ""}`
     : null;
   const pillBad = explanation?.tag === "FORCED MATE";
 
-  // Alert collapse (audit #13): hidden indices when folded, and the block
-  // index the toggle renders after (the last visible alert).
   const blocks = explanation?.blocks ?? [];
-  const alertIndices = blocks.flatMap((b, i) => (b.kind === "alert" ? [i] : []));
-  const hiddenCount = collapsedAlertIndices(blocks, false).length;
-  const hidden = new Set(alertsExpanded ? [] : collapsedAlertIndices(blocks, false));
-  const toggleAfter =
-    hiddenCount > 0
-      ? alertIndices[alertsExpanded ? alertIndices.length - 1 : MAX_VISIBLE_ALERTS - 1]
-      : null;
+  const hidden = new Set(hiddenFindingIndices(blocks, findingsExpanded));
+  const moreCount = blocks.length > 1 ? blocks.length - 1 : 0;
 
   // CONSIDER chips (run 11): statically-marked chips stay hidden until
   // the engine clears them; refuted chips disappear; the pending
@@ -79,8 +79,20 @@ export default function ExplainPanel({
   const chips = visibleChips(explanation, verification);
   const verifying = verification?.kind === "running";
 
+  const meta = explanation
+    ? [
+        verification?.kind === "done"
+          ? "Static screen · candidates engine-checked"
+          : verifying
+            ? "Static screen · checking candidates…"
+            : "Static screen · no engine spawned",
+        `${voice === "coach" ? "Coach" : "Neutral"} voice · templates`,
+        selectionNote(selectedSquare),
+      ].join(" · ")
+    : null;
+
   return (
-    <section className="explain-panel">
+    <section className={`explain-panel${collapsed ? " collapsed" : ""}`}>
       <header className="panel-header">
         <span className="panel-label">EXPLAIN</span>
         {pill && <span className={`verdict-pill${pillBad ? " bad" : ""}`}>{pill}</span>}
@@ -95,92 +107,92 @@ export default function ExplainPanel({
             </button>
           ))}
         </span>
+        <button
+          className="explain-collapse"
+          title={collapsed ? "Show the explanation" : "Collapse — evidence stays on the board"}
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? "▸" : "▾"}
+        </button>
       </header>
 
-      {explanation ? (
-        <div className="explain-body">
-          <p className="explain-headline">{explanation.headline[voice]}</p>
-          {explanation.blocks.map((b, i) =>
-            hidden.has(i) ? null : (
-              <div key={i}>
-                <div
-                  className={`sentence sentence-${b.kind}${hoverSentence === i ? " hovered" : ""}`}
-                  style={{ opacity: sentenceOpacity(b, selectedSquare) }}
-                  onMouseEnter={() => onHoverSentence(i)}
-                  onMouseLeave={() => onHoverSentence(null)}
-                >
-                  <span className="sentence-dot" aria-hidden />
-                  <span className="sentence-main">
-                    <span className="sentence-kind">{KIND_LABEL[b.kind]}</span>
-                    <span className="sentence-prose">{b.text[voice]}</span>
-                  </span>
-                </div>
-                {i === toggleAfter && (
-                  <button className="sentence-more" onClick={onToggleAlerts}>
-                    {alertsExpanded
-                      ? "show fewer alerts"
-                      : `show ${hiddenCount} more alert${hiddenCount === 1 ? "" : "s"}`}
-                  </button>
-                )}
-              </div>
-            ),
-          )}
-          {chips.length > 0 && (
-            <div className="consider-block">
-              <span className="consider-label">CONSIDER</span>
-              {verifying && <span className="consider-verifying">verifying…</span>}
-              <div className="consider-chips">
-                {chips.map(({ s, index: j, pending }, pos) => {
-                  const idx = explanation.blocks.length + j;
-                  return (
-                    <span
-                      key={s.uci}
-                      className={`consider-chip${pos === 0 ? " top" : ""}${
-                        s.prophylactic ? " prophylactic" : ""
-                      }${pending ? " pending" : ""}${hoverSentence === idx ? " hovered" : ""}`}
-                      title={suggestionTitle(s)}
-                      onMouseEnter={() => onHoverSentence(idx)}
-                      onMouseLeave={() => onHoverSentence(null)}
-                    >
-                      {s.san}
+      {!collapsed &&
+        (explanation ? (
+          <>
+            <div className="explain-body">
+              <p className="explain-headline">{explanation.headline[voice]}</p>
+              {explanation.blocks.map((b, i) =>
+                hidden.has(i) ? null : (
+                  <div
+                    key={i}
+                    className={`sentence sentence-${b.kind}${hoverSentence === i ? " hovered" : ""}`}
+                    style={{ opacity: sentenceOpacity(b, selectedSquare) }}
+                    onMouseEnter={() => onHoverSentence(i)}
+                    onMouseLeave={() => onHoverSentence(null)}
+                  >
+                    <span className="sentence-dot" aria-hidden />
+                    <span className="sentence-main">
+                      <span className="sentence-kind">{KIND_LABEL[b.kind]}</span>
+                      <span className="sentence-prose">{b.text[voice]}</span>
                     </span>
-                  );
-                })}
+                  </div>
+                ),
+              )}
+              {chips.length > 0 && (
+                <div className="consider-block">
+                  <span className="consider-label">CONSIDER</span>
+                  {verifying && <span className="consider-verifying">verifying…</span>}
+                  <div className="consider-chips">
+                    {chips.map(({ s, index: j, pending }, pos) => {
+                      const idx = explanation.blocks.length + j;
+                      return (
+                        <span
+                          key={s.uci}
+                          className={`consider-chip${pos === 0 ? " top" : ""}${
+                            s.prophylactic ? " prophylactic" : ""
+                          }${pending ? " pending" : ""}${hoverSentence === idx ? " hovered" : ""}`}
+                          title={suggestionTitle(s)}
+                          onMouseEnter={() => onHoverSentence(idx)}
+                          onMouseLeave={() => onHoverSentence(null)}
+                        >
+                          {s.san}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            <footer className="explain-foot">
+              {moreCount > 0 && (
+                <button className="explain-expander" onClick={onToggleFindings}>
+                  {findingsExpanded
+                    ? "▴ summary only"
+                    : `▾ ${moreCount} more finding${moreCount === 1 ? "" : "s"} — evidence is already on the board`}
+                </button>
+              )}
+              {meta && <div className="explain-meta">{meta}</div>}
+            </footer>
+          </>
+        ) : (
+          <div className="explain-body explain-empty">
+            <p className="explain-empty-prose">
+              No screen has fired on this position. Kibitz keeps the engine cold until you ask, or
+              until a tactical screen actually trips.
+            </p>
+            <button className="btn-primary" onClick={onExplain} disabled={explaining}>
+              {explaining ? "Explaining…" : "Explain position"}
+              <span className="btn-key">E</span>
+            </button>
+            {explainedPlies.length > 0 && (
+              <div className="explain-empty-note">
+                Explanations cached for {explainedPlies.length === 1 ? "ply" : "plies"}{" "}
+                {explainedPlies.join(", ")}.
               </div>
-            </div>
-          )}
-          <footer className="explain-footer">
-            <span>
-              {verification?.kind === "done"
-                ? "Static screen · candidates engine-checked"
-                : verifying
-                  ? "Static screen · checking candidates…"
-                  : "Static screen · no engine spawned"}
-            </span>
-            <span>·</span>
-            <span>{voice === "coach" ? "Coach" : "Neutral"} voice · templates</span>
-            <span>·</span>
-            <span>{selectionNote(selectedSquare)}</span>
-          </footer>
-        </div>
-      ) : (
-        <div className="explain-body explain-empty">
-          <p className="explain-empty-prose">
-            No screen has fired on this position. Kibitz keeps the engine cold until you ask, or
-            until a tactical screen actually trips.
-          </p>
-          <button className="btn-primary" onClick={onExplain} disabled={explaining}>
-            {explaining ? "Explaining…" : "Explain position"}
-            <span className="btn-key">E</span>
-          </button>
-          {explainedPlies.length > 0 && (
-            <div className="explain-empty-note">
-              Explanations cached for {explainedPlies.length === 1 ? "ply" : "plies"}{" "}
-              {explainedPlies.join(", ")}.
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        ))}
     </section>
   );
 }

@@ -335,22 +335,23 @@ export default function GameView({
     return () => ro.disconnect();
   }, [gv.boardTreatment]);
 
-  // Alert collapse (audit #13): the panel shows the top 3 alert
-  // sentences by default; "show N more" reveals the rest. Owned here so
-  // the board's no-hover union tracks what is actually visible. Resets
-  // whenever the explanation (i.e. the ply) changes.
-  const [alertsExpanded, setAlertsExpanded] = useState(false);
-  useEffect(() => setAlertsExpanded(false), [explanation]);
+  // Summary-first (round-3 change note): only the first finding renders
+  // until the pinned-foot expander opens the rest — per position, so it
+  // resets on every step. The whole-body collapse (header caret) is the
+  // fast-stepping state and deliberately SURVIVES steps. Neither state
+  // feeds the board: the overlay always shows the union of all findings.
+  const [findingsExpanded, setFindingsExpanded] = useState(false);
+  useEffect(() => setFindingsExpanded(false), [explanation]);
+  const [explainCollapsed, setExplainCollapsed] = useState(false);
 
   const evidence = useMemo(
     () =>
       explainOn
         ? deriveEvidence(explanation, gv.hoverSentence, {
             previewing: preview !== null,
-            expandedAlerts: alertsExpanded,
           })
         : null,
-    [explainOn, explanation, gv.hoverSentence, preview, alertsExpanded],
+    [explainOn, explanation, gv.hoverSentence, preview],
   );
   const intensity = deriveIntensity(gv.hoverSentence);
 
@@ -740,8 +741,10 @@ export default function GameView({
               selectedSquare={gv.selectedSquare}
               onExplain={onExplain}
               explainedPlies={explainedPlies}
-              alertsExpanded={alertsExpanded}
-              onToggleAlerts={() => setAlertsExpanded((v) => !v)}
+              findingsExpanded={findingsExpanded}
+              onToggleFindings={() => setFindingsExpanded((v) => !v)}
+              collapsed={explainCollapsed}
+              onToggleCollapsed={() => setExplainCollapsed((v) => !v)}
             />
           )}
           <MovesPanel

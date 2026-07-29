@@ -156,6 +156,18 @@ keypress, and still no engine: the tactical screen is static analysis.
   **Explain position** button. The empty state also lists which plies
   already have cached explanations.
 
+The panel is **bounded**: it takes a fixed share of the right pane so the
+moves list below always keeps room. Two controls manage the prose:
+
+- **Summary first** — only the leading finding renders; the rest sit
+  behind the "▾ N more findings" expander in the panel's foot. Expanding
+  is per-position and resets when you step. The board always shows the
+  evidence for **all** findings either way — collapsing hides prose,
+  never evidence.
+- **Collapse caret** (▾/▸ in the header) — hides the prose entirely,
+  leaving just the header and verdict pill. The right state for stepping
+  quickly through a game; the board overlays stay on.
+
 Panel anatomy:
 
 - **Verdict pill** — the tag plus the eval readout (e.g.

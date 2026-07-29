@@ -5,7 +5,7 @@ import {
   blockReferencesSquare,
   chooseResumePly,
   COACH_HOVER_INDEX,
-  collapsedAlertIndices,
+  hiddenFindingIndices,
   deriveEvidence,
   deriveIntensity,
   evalBarView,
@@ -157,22 +157,19 @@ describe("evidence derivation (README §State Management)", () => {
       block({ kind: "imbalance", evidence: { imbalance: ["e5"] } }),
       block({ kind: "plan", evidence: { key: ["f6"] } }),
     ];
-    // Only the 4th alert (index 3) collapses; imbalance/plan never do.
-    expect(collapsedAlertIndices(blocks, false)).toEqual([3]);
-    expect(collapsedAlertIndices(blocks, true)).toEqual([]);
-    // Exactly 3 alerts: nothing collapses.
-    expect(collapsedAlertIndices(blocks.slice(0, 3), false)).toEqual([]);
+    // Summary-first (round-3 change note): everything after the first
+    // finding hides until expanded; a single finding never gets a toggle.
+    expect(hiddenFindingIndices(blocks, false)).toEqual([1, 2, 3, 4, 5]);
+    expect(hiddenFindingIndices(blocks, true)).toEqual([]);
+    expect(hiddenFindingIndices(blocks.slice(0, 1), false)).toEqual([]);
 
-    // The default no-hover union excludes the collapsed alert's evidence…
+    // The board union ALWAYS covers every finding — collapsing hides
+    // prose, never evidence ("evidence is already on the board").
     const e = deriveEvidence(explanation(blocks), null)!;
-    expect(e.alerts).toEqual(["a1", "b2", "c3"]);
-    expect(e.arrows).toEqual([]);
+    expect(e.alerts).toEqual(["a1", "b2", "c3", "d4"]);
+    expect(e.arrows).toHaveLength(1);
     expect(e.imbalance).toEqual(["e5"]);
     expect(e.key).toEqual(["f6"]);
-    // …and the expanded union restores it.
-    const all = deriveEvidence(explanation(blocks), null, { expandedAlerts: true })!;
-    expect(all.alerts).toEqual(["a1", "b2", "c3", "d4"]);
-    expect(all.arrows).toHaveLength(1);
     // Hovering still isolates a single block regardless of the collapse.
     expect(deriveEvidence(explanation(blocks), 2)!.alerts).toEqual(["c3"]);
   });

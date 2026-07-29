@@ -105,31 +105,20 @@ export function unionEvidence(blocks: ExplanationBlockJson[]): Evidence {
   return out;
 }
 
-/** How many alert sentences show before the rest collapse (audit #13). */
-export const MAX_VISIBLE_ALERTS = 3;
 
 /**
- * Block indices hidden by the alert collapse: alert blocks beyond the
- * first [`MAX_VISIBLE_ALERTS`], in block order. The verbalizer already
- * emits alert blocks most-severe first (kibitz-verbalize::explain sorts
- * by severity before rendering), so the leading alerts ARE the top ones;
- * the wire contract carries no per-block severity/side to re-rank by,
- * and re-ranking here would diverge from the narration order. Imbalance
- * and plan blocks never collapse. Empty when expanded.
+ * Block indices hidden by the summary-first rule (design round 3 change
+ * note, supersedes the run-10 top-3 alert collapse): only the FIRST
+ * finding renders until the pinned-foot expander opens the rest. The
+ * verbalizer emits blocks most-important first (alerts by severity), so
+ * the leading block IS the summary. Empty when expanded.
  */
-export function collapsedAlertIndices(
+export function hiddenFindingIndices(
   blocks: ExplanationBlockJson[],
   expanded: boolean,
 ): number[] {
   if (expanded) return [];
-  const out: number[] = [];
-  let alerts = 0;
-  for (let i = 0; i < blocks.length; i++) {
-    if (blocks[i].kind !== "alert") continue;
-    alerts += 1;
-    if (alerts > MAX_VISIBLE_ALERTS) out.push(i);
-  }
-  return out;
+  return blocks.map((_, i) => i).filter((i) => i > 0);
 }
 
 /** Options for [`deriveEvidence`]. */
@@ -138,9 +127,6 @@ export interface EvidenceOptions {
    * game, so its rings/arrows must never paint over the previewed
    * position (audit 2026-07 #4). */
   previewing?: boolean;
-  /** The "show N more" alert toggle is open: collapsed alerts rejoin the
-   * no-hover union (audit #13 — the default union stays uncluttered). */
-  expandedAlerts?: boolean;
 }
 
 /**
@@ -176,10 +162,10 @@ export function deriveEvidence(
     const suggestion = explanation.suggestions?.[hoverSentence - explanation.blocks.length];
     if (suggestion) return normalizeEvidence(suggestion.evidence);
   }
-  // The no-hover union covers the VISIBLE blocks only: alerts collapsed
-  // behind "show N more" keep their rings/arrows off the board too.
-  const hidden = new Set(collapsedAlertIndices(explanation.blocks, opts.expandedAlerts ?? false));
-  return unionEvidence(explanation.blocks.filter((_, i) => !hidden.has(i)));
+  // The no-hover union ALWAYS covers every finding (design round 3
+  // change note: collapsing hides prose, never evidence — the expander
+  // even says "evidence is already on the board").
+  return unionEvidence(explanation.blocks);
 }
 
 /** "PressureBackwardPawn" -> "pressure backward pawn", for chip tooltips. */

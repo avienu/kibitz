@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 # whose contents name the parent checkout's path — never repo content.
 hits=$(grep -rIni 'silman' \
   --exclude-dir=.git --exclude=.git --exclude-dir=target --exclude-dir=node_modules \
-  --exclude-dir=dist --exclude-dir=handoff-1 --exclude-dir=handoff-2 \
+  --exclude-dir=dist --exclude-dir='handoff-*' \
   --exclude-dir=testdata \
   --exclude-dir=private \
   --exclude=RUN_REPORT.md --exclude=name_gate.sh \

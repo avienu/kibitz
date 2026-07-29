@@ -102,6 +102,11 @@
 <li>Positions where the screen fires (<strong>TACTICAL SCREEN FIRED</strong>, or <strong>FORCED MATE</strong>) narrate immediately.</li>
 <li><strong>QUIET POSITION</strong> plies keep the empty state — "No screen has fired on this position…" — until you explicitly ask with <strong>E</strong> or the <strong>Explain position</strong> button. The empty state also lists which plies already have cached explanations.</li>
 </ul>
+<p>The panel is <strong>bounded</strong>: it takes a fixed share of the right pane so the moves list below always keeps room. Two controls manage the prose:</p>
+<ul>
+<li><strong>Summary first</strong> — only the leading finding renders; the rest sit behind the "▾ N more findings" expander in the panel's foot. Expanding is per-position and resets when you step. The board always shows the evidence for <strong>all</strong> findings either way — collapsing hides prose, never evidence.</li>
+<li><strong>Collapse caret</strong> (▾/▸ in the header) — hides the prose entirely, leaving just the header and verdict pill. The right state for stepping quickly through a game; the board overlays stay on.</li>
+</ul>
 <p>Panel anatomy:</p>
 <ul>
 <li><strong>Verdict pill</strong> — the tag plus the eval readout (e.g. "TACTICAL SCREEN FIRED  +2.6", "FORCED MATE  #5").</li>
