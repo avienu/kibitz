@@ -18,7 +18,13 @@ use crate::movebin::Token;
 pub struct AnnotateReport {
     pub positions_analyzed: u32,
     pub screens_fired: u32,
+    /// Bounded wsui-confirm jobs enqueued for fired screens.
     pub jobs_enqueued: u32,
+    /// Bounded suggest-verify jobs enqueued at quiet closing-eligible
+    /// plies (2026-07-29 field report), so annotated games actually
+    /// recommend moves. Annotate is an explicit user engine action
+    /// (run-9 ruling); nothing runs until a worker starts.
+    pub suggest_jobs_enqueued: u32,
     pub comments_added: u32,
 }
 
@@ -47,6 +53,7 @@ pub fn annotate_game(
             Token::VarEnd => depth = depth.saturating_sub(1),
             Token::Null if depth == 0 => break,
             Token::Move(mv) if depth == 0 => {
+                let board_before = board.clone();
                 board.play(*mv);
                 ply_in_main += 1;
                 report.positions_analyzed += 1;
@@ -56,10 +63,36 @@ pub fn annotate_game(
                     .alerts
                     .retain(|a| a.severity >= kibitz_core::record::Severity::Medium);
                 if !record.wsui.screen_fired {
+                    // Quiet ply (2026-07-29 field report): where a
+                    // narration closing would render — plans present,
+                    // suggestions present, not mid-exchange — enqueue one
+                    // bounded suggest-verify review so the closing has
+                    // engine-cleared candidates to show. Fired plies get
+                    // the same review via their wsui-confirm job instead.
+                    // Enqueue-only; idempotent per (game, ply).
+                    if !record.composite_plans.is_empty()
+                        && !crate::narrate::is_capture_ply(&board_before, *mv)
+                        && !kibitz_core::suggest::suggest(&record, &board).is_empty()
+                    {
+                        let (_, created) = crate::jobs::enqueue_suggest_verify(
+                            conn,
+                            game_id,
+                            ply_in_main,
+                            &record.fen,
+                        )?;
+                        if created {
+                            report.suggest_jobs_enqueued += 1;
+                        }
+                    }
                     continue;
                 }
                 report.screens_fired += 1;
-                if existing.contains_key(&ply_in_main) {
+                // A suggest-verify-only verdict never covers a fired ply:
+                // only a completed confirm verdict does.
+                if existing
+                    .get(&ply_in_main)
+                    .is_some_and(|v| v.status.is_some())
+                {
                     continue;
                 }
                 // One bounded confirm per fired position, attributed to
@@ -108,26 +141,34 @@ pub struct FoldReport {
 
 pub fn fold_back(conn: &Connection) -> anyhow::Result<FoldReport> {
     let mut report = FoldReport::default();
-    let jobs: Vec<(i64, String, String)> = {
+    let jobs: Vec<(i64, String, String, String)> = {
         let mut stmt = conn.prepare(
-            "SELECT id, payload, result FROM jobs
-             WHERE purpose = 'wsui-confirm' AND status = 'done'
+            "SELECT id, purpose, payload, result FROM jobs
+             WHERE purpose IN ('wsui-confirm', 'suggest-verify') AND status = 'done'
                AND folded_at IS NULL ORDER BY id",
         )?;
-        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
         rows.collect::<Result<_, _>>()?
     };
 
     let mut touched: Vec<i64> = Vec::new();
-    for (job_id, payload, result) in jobs {
-        let p: crate::jobs::EnginePayload = serde_json::from_str(&payload)?;
-        let v: serde_json::Value = serde_json::from_str(&result)?;
-        match v["status"].as_str() {
-            Some("confirmed") => report.confirmed += 1,
-            Some("refuted") => report.refuted += 1,
-            _ => report.unclear += 1,
-        }
-        if let Some(game_id) = p.game_id {
+    for (job_id, purpose, payload, result) in jobs {
+        // Suggestion reviews only re-narrate their game; the
+        // confirmed/refuted alert grading below is wsui-confirm-only.
+        let game_id = if purpose == "suggest-verify" {
+            let p: crate::jobs::SuggestVerifyPayload = serde_json::from_str(&payload)?;
+            Some(p.game_id)
+        } else {
+            let p: crate::jobs::EnginePayload = serde_json::from_str(&payload)?;
+            let v: serde_json::Value = serde_json::from_str(&result)?;
+            match v["status"].as_str() {
+                Some("confirmed") => report.confirmed += 1,
+                Some("refuted") => report.refuted += 1,
+                _ => report.unclear += 1,
+            }
+            p.game_id
+        };
+        if let Some(game_id) = game_id {
             if !touched.contains(&game_id) {
                 touched.push(game_id);
             }
