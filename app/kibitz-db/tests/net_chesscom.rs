@@ -233,3 +233,60 @@ fn observed_sync_reports_months_and_stops_cleanly() {
     let all_months: usize = report.months.len() + resumed.months.len();
     assert!(all_months >= 2, "resume picked up the remaining months");
 }
+
+/// The 2026-07-28 field report: chess.com throttled a burst by stalling
+/// mid-response-body; without fetcher timeouts the read blocked forever
+/// and the sync wedged at the same month for a day. With timeouts the
+/// stall surfaces as a mid-body read error — this pins the recovery
+/// contract: the month FAILS the sync (visibly), the cursor stays at the
+/// last COMPLETED month, and the next run resumes and finishes.
+#[test]
+fn mid_body_stall_fails_visibly_and_the_next_run_resumes() {
+    let (_dir, conn) = open_temp_db();
+    let fetcher = FixtureFetcher::new();
+    fetcher.script(
+        &chesscom::archives_url("testuser"),
+        Scripted::Body(ARCHIVES_JSON.to_vec()),
+    );
+    fetcher.script(
+        &chesscom::month_pgn_url("testuser", "2024/01"),
+        Scripted::Body(PGN_JAN.to_vec()),
+    );
+    // 2024/02 stalls mid-download (prefix bytes, then a read timeout).
+    fetcher.script(
+        &chesscom::month_pgn_url("testuser", "2024/02"),
+        Scripted::BrokenBody(PGN_FEB[..40].to_vec()),
+    );
+    let err = chesscom::sync_user(&conn, &fetcher, "testuser").unwrap_err();
+    assert!(
+        format!("{err:#}").contains("2024/02"),
+        "the failing month is named: {err:#}"
+    );
+    // Cursor holds at the last fully-imported month.
+    assert_eq!(
+        meta(&conn, "chesscom_last_month_testuser").as_deref(),
+        Some("2024/01")
+    );
+
+    // The next run resumes at 2024/02 and completes.
+    let fetcher2 = FixtureFetcher::new();
+    fetcher2.script(
+        &chesscom::archives_url("testuser"),
+        Scripted::Body(ARCHIVES_JSON.to_vec()),
+    );
+    fetcher2.script(
+        &chesscom::month_pgn_url("testuser", "2024/02"),
+        Scripted::Body(PGN_FEB.to_vec()),
+    );
+    fetcher2.script(
+        &chesscom::month_pgn_url("testuser", "2024/03"),
+        Scripted::Body(PGN_MAR.to_vec()),
+    );
+    let report = chesscom::sync_user(&conn, &fetcher2, "testuser").unwrap();
+    assert_eq!(report.months.len(), 2, "2024/02 and 2024/03");
+    assert_eq!(
+        meta(&conn, "chesscom_last_month_testuser").as_deref(),
+        Some("2024/02"),
+        "newest month still never recorded complete"
+    );
+}

@@ -880,12 +880,19 @@ fn run_service_sync(
         "chesscom" => {
             // Month-by-month sync HAS an honest fraction — show it, and
             // honor Cancel between months (the cursor stays correct, the
-            // next run resumes at the first unfinished month).
+            // next run resumes at the first unfinished month). Months are
+            // PACED: chess.com throttles bursts of month downloads (the
+            // 2026-07-28 wedge), so give the API breathing room.
+            let mut first_month = true;
             let r = kibitz_db::net::chesscom::sync_user_observed(
                 conn,
                 fetcher,
                 username,
                 &mut |done, total, current, games| {
+                    if !first_month {
+                        std::thread::sleep(std::time::Duration::from_millis(600));
+                    }
+                    first_month = false;
                     update_progress(progress, |p| {
                         p.done = done as u32;
                         p.total = total as u32;

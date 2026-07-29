@@ -503,6 +503,18 @@ pub fn import_pgn<R: BufRead>(
     conn.execute_batch("BEGIN")?;
     let mut in_batch = 0usize;
     for item in PgnReader::new(reader) {
+        // A dead INPUT STREAM is not a bad game. Counting an I/O error as
+        // one "failed game" and carrying on lets a partial download pass
+        // as a complete import — the unread remainder is then lost for
+        // good once the caller records the source as done (2026-07-28
+        // field report: a timed-out chess.com month). Malformed games
+        // still skip; a dying stream aborts, keeping what was imported
+        // (duplicates make the re-fetch cheap).
+        if matches!(item, Err(crate::pgn::PgnError::Io(_))) {
+            let _ = conn.execute_batch("COMMIT");
+            let Err(e) = item else { unreachable!() };
+            return Err(anyhow::Error::from(e).context("input stream died mid-import"));
+        }
         match item.map_err(anyhow::Error::from).and_then(|raw| {
             let prepared = prepare(&raw)
                 .map_err(|e| anyhow::anyhow!("game at line {}: {e}", raw.start_line))?;

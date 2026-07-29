@@ -89,6 +89,26 @@ pub trait Fetcher {
 /// Production [`Fetcher`] backed by `ureq` (blocking, serial).
 pub struct UreqFetcher;
 
+/// Shared agent with real timeouts. The default `ureq` agent has NONE: a
+/// server that throttles by stalling the connection (chess.com does this
+/// to bursts, mid-response-body) blocks the read forever and wedges the
+/// strictly-serial network worker until the app is quit — the 2026-07-28
+/// field report's chess.com sync hung at the same month for a full day.
+/// With timeouts a stall becomes an error: the sync fails visibly, the
+/// report records it, and the next run resumes from the cursor.
+fn agent() -> &'static ureq::Agent {
+    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(15))
+            // Per-read, not whole-body: large TWIC zips stream fine as
+            // long as bytes keep arriving.
+            .timeout_read(Duration::from_secs(60))
+            .timeout_write(Duration::from_secs(60))
+            .build()
+    })
+}
+
 /// Map a `ureq` result to a [`FetchOutcome`].
 fn outcome(result: Result<ureq::Response, ureq::Error>, url: &str) -> anyhow::Result<FetchOutcome> {
     match result {
@@ -106,7 +126,7 @@ fn outcome(result: Result<ureq::Response, ureq::Error>, url: &str) -> anyhow::Re
 
 impl Fetcher for UreqFetcher {
     fn get(&self, url: &str, headers: &[(&str, &str)]) -> anyhow::Result<FetchOutcome> {
-        let mut req = ureq::get(url).set("User-Agent", user_agent());
+        let mut req = agent().get(url).set("User-Agent", user_agent());
         for (k, v) in headers {
             req = req.set(k, v);
         }
@@ -114,12 +134,12 @@ impl Fetcher for UreqFetcher {
     }
 
     fn post_form(&self, url: &str, form: &[(&str, &str)]) -> anyhow::Result<FetchOutcome> {
-        let req = ureq::post(url).set("User-Agent", user_agent());
+        let req = agent().post(url).set("User-Agent", user_agent());
         outcome(req.send_form(form), url)
     }
 
     fn head(&self, url: &str) -> anyhow::Result<FetchOutcome> {
-        let req = ureq::head(url).set("User-Agent", user_agent());
+        let req = agent().head(url).set("User-Agent", user_agent());
         outcome(req.call(), url)
     }
 }

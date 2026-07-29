@@ -10,8 +10,35 @@ use kibitz_db::net::{FetchOutcome, Fetcher};
 /// One scripted response for a URL.
 pub enum Scripted {
     Body(Vec<u8>),
+    /// A body whose read fails after the prefix — a stalled/severed
+    /// connection surfacing as a read timeout mid-stream.
+    BrokenBody(Vec<u8>),
     NotFound,
     RateLimited(Option<u64>),
+}
+
+/// Reader that yields `prefix` then errors — the shape of a timed-out
+/// download once the fetcher has real read timeouts.
+struct BrokenReader {
+    prefix: Cursor<Vec<u8>>,
+    done: bool,
+}
+
+impl std::io::Read for BrokenReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.prefix.read(buf)?;
+        if n > 0 {
+            return Ok(n);
+        }
+        if self.done {
+            return Ok(0);
+        }
+        self.done = true;
+        Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "simulated mid-body read timeout",
+        ))
+    }
 }
 
 /// A logged request: the key (URL, or `POST {url}`) and its header pairs
@@ -70,6 +97,10 @@ impl FixtureFetcher {
             .ok_or_else(|| anyhow::anyhow!("no scripted responses left for {key}"))?;
         Ok(match scripted {
             Scripted::Body(bytes) => FetchOutcome::Body(Box::new(Cursor::new(bytes))),
+            Scripted::BrokenBody(prefix) => FetchOutcome::Body(Box::new(BrokenReader {
+                prefix: Cursor::new(prefix),
+                done: false,
+            })),
             Scripted::NotFound => FetchOutcome::NotFound,
             Scripted::RateLimited(retry_after_secs) => {
                 FetchOutcome::RateLimited { retry_after_secs }
