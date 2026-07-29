@@ -184,3 +184,57 @@ describe("honesty", () => {
     expect(container.textContent).toContain("/tmp/fics_FicsUser_2025_0.pgn.bz2");
   });
 });
+
+describe("queueing during other network activity (field report 2026-07-28)", () => {
+  const twicRunning = {
+    kind: "twic",
+    label: "TWIC 1656",
+    detail: "downloading",
+    active: true,
+    done: 0,
+    total: 1,
+    error: null,
+    queued: [],
+  };
+
+  it("Sync now stays clickable while TWIC runs and queues with feedback", async () => {
+    vi.mocked(syncAccounts).mockResolvedValue(
+      accountsFixture({
+        chesscom: { username: "sounix", lastReport: null, gamesTotal: 0 },
+      }),
+    );
+    const { container } = render(<SyncsView progress={twicRunning} />);
+    const input = container.querySelector<HTMLInputElement>(
+      'input[aria-label="chess.com username"]',
+    )!;
+    await waitFor(() => expect(input.value).toBe("sounix"));
+    const button = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "Sync now" && b.closest(".sync-card")?.textContent?.includes("chess.com"),
+    )!;
+    // The worker queues serially — other activity must NOT disable the click.
+    expect(button.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(button);
+    expect(syncRun).toHaveBeenCalledWith("chesscom", "sounix", undefined, undefined);
+    // Immediate acknowledgment before the next 3s progress poll.
+    await waitFor(() =>
+      expect(container.textContent).toContain("Queued — waiting for the network worker."),
+    );
+    expect(button.textContent).toBe("Queued…");
+  });
+
+  it("shows the queued-behind line once the poll advertises the queue", async () => {
+    vi.mocked(syncAccounts).mockResolvedValue(
+      accountsFixture({
+        chesscom: { username: "sounix", lastReport: null, gamesTotal: 0 },
+      }),
+    );
+    const { container } = render(
+      <SyncsView progress={{ ...twicRunning, queued: ["chess.com: sounix"] }} />,
+    );
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        "Queued — starts automatically after TWIC 1656 finishes.",
+      ),
+    );
+  });
+});

@@ -29,13 +29,25 @@ interface SyncsViewProps {
   progress: NetProgress | null;
 }
 
+/** Queue-label prefixes, mirroring netops.rs `service_label` ("chess.com:
+ * sounix" etc.) — used to spot our own click in the advertised queue. */
+const SERVICE_LABELS: Record<SyncService, string> = {
+  lichess: "Lichess",
+  chesscom: "chess.com",
+  fics: "FICS",
+};
+function serviceTitle(s: SyncService): string {
+  return SERVICE_LABELS[s];
+}
+
 interface CardProps {
   service: SyncService;
   title: string;
   blurb: string;
   account: ServiceAccount | null;
   progress: NetProgress | null;
-  busy: boolean;
+  /** Click acknowledged but not yet visible in the progress poll. */
+  pending: boolean;
   onRun: (service: SyncService, username: string, year?: number, month?: number) => void;
   /** Extra inputs (FICS year/month) rendered beside the username. */
   extraInputs?: React.ReactNode;
@@ -49,7 +61,7 @@ function ServiceCard({
   blurb,
   account,
   progress,
-  busy,
+  pending,
   onRun,
   extraInputs,
   extraNote,
@@ -96,14 +108,24 @@ function ServiceCard({
           }}
         />
         {extraInputs}
+        {/* The click is never blocked by other network activity — the
+          * worker queues strictly serially (run-9 ruling: a click is
+          * never discarded). Disabled only when THIS service is already
+          * running/queued or its inputs are unusable (audit follow-up:
+          * a busy-disabled button gave zero feedback). */}
         <button
           className="btn-secondary"
-          disabled={busy || username.trim() === "" || args === null}
+          disabled={
+            Boolean(running) || pending || queuedBehind !== null || username.trim() === "" || args === null
+          }
           onClick={() => onRun(service, username.trim(), args?.year, args?.month)}
         >
-          {running ? "Syncing…" : "Sync now"}
+          {running ? "Syncing…" : pending || queuedBehind ? "Queued…" : "Sync now"}
         </button>
       </div>
+      {pending && !running && !queuedBehind && (
+        <div className="sync-running">Queued — waiting for the network worker.</div>
+      )}
       {queuedBehind && (
         <div className="sync-running">
           Queued — starts automatically after {queuedBehind} finishes.
@@ -161,12 +183,30 @@ export default function SyncsView({ progress }: SyncsViewProps) {
 
   const busy = progress?.active ?? false;
 
+  /** Service whose Sync-now click was accepted but is not yet visible in
+   * the polled progress (≤3 s gap) — immediate button feedback. */
+  const [pendingService, setPendingService] = useState<SyncService | null>(null);
+  useEffect(() => {
+    if (!pendingService) return;
+    // Clear once the worker reflects the click: this service running, its
+    // label waiting in the queue, or the whole worker settled idle.
+    const reflected =
+      (progress?.active && progress.kind === pendingService) ||
+      (progress?.queued ?? []).some((l) => l.startsWith(serviceTitle(pendingService))) ||
+      (wasActive.current && !(progress?.active ?? false));
+    if (reflected) setPendingService(null);
+  }, [progress, pendingService]);
+
   const run = useCallback(
     (service: SyncService, username: string, year?: number, month?: number) => {
       setNote(null);
+      setPendingService(service);
       syncRun(service, username, year, month)
         .then(load) // pick up the persisted username immediately
-        .catch((e) => setNote(String(e)));
+        .catch((e) => {
+          setPendingService(null);
+          setNote(String(e));
+        });
     },
     [load],
   );
@@ -202,7 +242,7 @@ export default function SyncsView({ progress }: SyncsViewProps) {
           blurb="Full game export via the Lichess API, resumed incrementally — after the first sync only games newer than the last one are downloaded."
           account={accounts?.lichess ?? null}
           progress={progress}
-          busy={busy}
+          pending={pendingService === "lichess"}
           onRun={run}
         />
         <ServiceCard
@@ -211,7 +251,7 @@ export default function SyncsView({ progress }: SyncsViewProps) {
           blurb="Monthly archives via the chess.com published-data API, oldest first, resumed incrementally — completed months are never re-fetched (the newest month is re-checked; duplicates are skipped)."
           account={accounts?.chesscom ?? null}
           progress={progress}
-          busy={busy}
+          pending={pendingService === "chesscom"}
           onRun={run}
         />
         <ServiceCard
@@ -220,7 +260,7 @@ export default function SyncsView({ progress }: SyncsViewProps) {
           blurb="FICS games via ficsgames.org (the community archive). One year — or one month — per request; there is no incremental cursor, but re-runs are harmless (duplicates are skipped)."
           account={accounts?.fics ?? null}
           progress={progress}
-          busy={busy}
+          pending={pendingService === "fics"}
           onRun={run}
           runArgs={ficsArgs}
           extraInputs={
