@@ -1,0 +1,60 @@
+# On-demand UNSIGNED test builds for friends-and-family testing
+# (2026-07-30 maintainer request: "compile one of these for a PC for a
+# buddy or two"). Trigger manually from the Actions tab; artifacts hang
+# off the run. These builds are NOT releases: no signing, no updater
+# artifacts, no tag — release.yml (on tag) stays the real pipeline.
+#
+# Windows testers will see a SmartScreen warning (unsigned): More info →
+# Run anyway. Stockfish is not bundled — testers download it and point
+# Settings → engine manager at it (or install it on PATH).
+name: testbuild
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - name: Install frontend deps
+        working-directory: app
+        run: npm ci
+      - name: Build (NSIS installer, unsigned)
+        working-directory: app
+        run: npm run tauri build -- --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kibitz-windows-unsigned
+          path: app/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - name: Install frontend deps
+        working-directory: app
+        run: npm ci
+      - name: Build (dmg, unsigned)
+        working-directory: app
+        run: npm run tauri build -- --bundles dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kibitz-macos-unsigned
+          path: app/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error

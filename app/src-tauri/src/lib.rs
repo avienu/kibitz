@@ -225,6 +225,7 @@ pub fn run() {
             analyze_position,
             stop_analysis,
             browse::open_database,
+            browse::create_database,
             browse::db_summary,
             session::last_database,
             session::migrate_database_to_app_storage,

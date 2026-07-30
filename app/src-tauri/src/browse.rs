@@ -201,6 +201,48 @@ pub async fn db_summary(state: State<'_, DbState>) -> Result<DbSummary, String> 
     with_conn(&state, db_summary_impl)
 }
 
+/// Create a brand-new empty database and open it. `open_database`
+/// deliberately refuses paths that do not exist (a browser user never
+/// wants a silently-created empty db) — this is the EXPLICIT create
+/// action for first-run testers with nothing to browse yet. Default
+/// location: `kibitz.sqlite` in the app data dir. Refuses to overwrite.
+#[tauri::command]
+pub async fn create_database(
+    app: tauri::AppHandle,
+    state: State<'_, DbState>,
+    path: Option<String>,
+) -> Result<DbSummary, String> {
+    use tauri::Manager;
+    let dest = match path {
+        Some(p) if !p.trim().is_empty() => PathBuf::from(p.trim()),
+        _ => app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("no app data dir: {e}"))?
+            .join("kibitz.sqlite"),
+    };
+    if dest.exists() {
+        return Err(format!(
+            "{} already exists — open it instead, or pick another name",
+            dest.display()
+        ));
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("create {}: {e}", parent.display()))?;
+    }
+    let conn = kibitz_db::db::open(&dest).map_err(|e| e.to_string())?;
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
+    let summary = db_summary_impl(&conn)?;
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "db state poisoned".to_string())?;
+    *guard = Some(conn);
+    crate::session::remember_db(&app, &summary.path);
+    Ok(summary)
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameFilter {

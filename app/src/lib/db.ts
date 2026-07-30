@@ -155,6 +155,13 @@ export function openDatabase(path: string): Promise<DbSummary> {
   return invoke<DbSummary>("open_database", { path });
 }
 
+/** Create a brand-new empty database and open it (first-run testers have
+ * nothing to browse; open_database deliberately refuses missing paths).
+ * Default location: kibitz.sqlite in the app data dir. */
+export function createDatabase(path?: string): Promise<DbSummary> {
+  return invoke<DbSummary>("create_database", { path: path ?? null });
+}
+
 /* ---- session restore (run 10): reopen where you were ---- */
 
 /** Database path remembered Rust-side on the last successful open. */

@@ -25,6 +25,7 @@ import {
   getGame,
   getSavedDbPath,
   listGames,
+  createDatabase,
   openDatabase,
   runJobs,
   saveDbPath,
@@ -186,6 +187,26 @@ export default function DatabaseScreen({
       setOpening(false);
     }
   }, [path, onSummary]);
+
+  const doCreate = useCallback(async () => {
+    setOpening(true);
+    setDbError(null);
+    try {
+      const s = await createDatabase();
+      onSummary(s);
+      saveDbPath(s.path);
+      setPage(0);
+      const filename = s.path.split(/[\\/]/).pop() ?? s.path;
+      setWindowTitle(`kibitz — ${filename}`).catch(() => {});
+      onStatus(
+        `Created ${s.path} — import PGN (DATA IN / OUT) or link an account sync to fill it.`,
+      );
+    } catch (e) {
+      setDbError(String(e));
+    } finally {
+      setOpening(false);
+    }
+  }, [onSummary, onStatus]);
 
   const [filtering, setFiltering] = useState(false);
 
@@ -433,6 +454,18 @@ export default function DatabaseScreen({
               />
               <button onClick={() => void doOpen()} disabled={opening}>
                 {opening ? "Opening…" : "Open"}
+              </button>
+              {/* First-run path (2026-07-30, tester builds): a fresh
+                * install has nothing to browse — open_database refuses
+                * missing paths by design, so creating is its own
+                * explicit action. */}
+              <button
+                className="btn-secondary"
+                disabled={opening}
+                onClick={() => void doCreate()}
+                title="Create an empty database in the app's own storage, then import PGN or sync games into it"
+              >
+                Create new database
               </button>
             </div>
           )}

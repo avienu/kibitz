@@ -260,10 +260,14 @@ pub fn resolve_engine_path(user_path: Option<&str>) -> Result<PathBuf, String> {
         }
     }
     if let Some(paths) = std::env::var_os("PATH") {
+        // Windows binaries carry .exe; check both spellings everywhere so
+        // a PATH-installed engine resolves on every platform.
         for dir in std::env::split_paths(&paths) {
-            let candidate = dir.join("stockfish");
-            if candidate.is_file() {
-                return Ok(candidate);
+            for name in ["stockfish", "stockfish.exe"] {
+                let candidate = dir.join(name);
+                if candidate.is_file() {
+                    return Ok(candidate);
+                }
             }
         }
     }
