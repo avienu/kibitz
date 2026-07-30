@@ -697,6 +697,95 @@ fn moves_for_hint(
                 }
             }
         }
+        "CompleteDevelopment" => {
+            // Run 11 (the maintainer's framing): "the knight already
+            // knows where it wants to go; the bishop doesn't yet — that's
+            // why the knight moves first." Knights to natural central
+            // squares outrank bishop developments while both kinds
+            // sleep; once only bishops remain, developing them IS the
+            // plan.
+            let sleepers: Vec<Square> = squares
+                .iter()
+                .filter_map(|s| parse_sq(s))
+                .filter(|&s| {
+                    (board.colored_pieces(side, Piece::Knight)
+                        | board.colored_pieces(side, Piece::Bishop))
+                    .has(s)
+                })
+                .collect();
+            let knights_sleep = sleepers
+                .iter()
+                .any(|&s| board.colored_pieces(side, Piece::Knight).has(s));
+            let rel = |sq: Square| match side {
+                Color::White => sq.rank() as u32,
+                Color::Black => 7 - sq.rank() as u32,
+            };
+            for &mv in legal {
+                if !sleepers.contains(&mv.from) {
+                    continue;
+                }
+                match board.piece_on(mv.from) {
+                    Some(Piece::Knight) => {
+                        let central = (File::C..=File::F).contains(&mv.to.file());
+                        let forward = rel(mv.to) >= 2;
+                        out.push((mv, if central && forward { EXECUTE } else { ENABLE }));
+                    }
+                    Some(Piece::Bishop) => {
+                        out.push((mv, if knights_sleep { PREPARE } else { EXECUTE }));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        "CastleIntoSafety" => {
+            // The castling move itself executes the dream; vacating a
+            // square between the king and the hinted rook enables it (so
+            // a developing move that clears the path earns convergence).
+            let king = squares.first().and_then(|s| parse_sq(s));
+            let rook = squares.get(1).and_then(|s| parse_sq(s));
+            let path: Vec<Square> = match (king, rook) {
+                (Some(k), Some(r)) if k.rank() == r.rank() => {
+                    let (lo, hi) = if (k.file() as i8) < (r.file() as i8) {
+                        (k.file() as i8, r.file() as i8)
+                    } else {
+                        (r.file() as i8, k.file() as i8)
+                    };
+                    ((lo + 1)..hi)
+                        .map(|f| Square::new(File::index(f as usize), k.rank()))
+                        .collect()
+                }
+                _ => Vec::new(),
+            };
+            for &mv in legal {
+                let piece = board.piece_on(mv.from);
+                if piece == Some(Piece::King) && board.colors(side).has(mv.to) {
+                    out.push((mv, EXECUTE));
+                } else if piece != Some(Piece::King)
+                    && path.contains(&mv.from)
+                    && !path.contains(&mv.to)
+                {
+                    out.push((mv, ENABLE));
+                }
+            }
+        }
+        "ClaimTheCenter" => {
+            // The hinted squares are the unplayed two-square center
+            // advances; the single step toward one merely enables.
+            let targets: Vec<Square> = squares.iter().filter_map(|s| parse_sq(s)).collect();
+            for &mv in legal {
+                if board.piece_on(mv.from) != Some(Piece::Pawn) || is_capture(board, mv) {
+                    continue;
+                }
+                if targets.contains(&mv.to) {
+                    out.push((mv, EXECUTE));
+                } else if targets
+                    .iter()
+                    .any(|t| t.try_offset(0, -forward(side)) == Some(mv.to))
+                {
+                    out.push((mv, ENABLE));
+                }
+            }
+        }
         "WingPawnStormClosedCenter" => {
             let Some(brk) = squares.first().and_then(|s| parse_sq(s)) else {
                 return out;
@@ -737,11 +826,19 @@ fn moves_for_hint(
 /// Balanced-owned plans count for BOTH sides: a sided hint carried by a
 /// level imbalance has lost its owner label, and the mapper/blocking
 /// guards recover direction from the board instead.
-fn plan_strength(record: &FeatureRecord, favors: Favors) -> u32 {
+///
+/// `deniable_only` (run 11) skips the development-prior tokens: when
+/// sizing up the OPPONENT's plans for prophylaxis, "deny their
+/// development" degenerates into nonsense at static depth (attack their
+/// home squares?), so prior dreams are never denial targets — one's own
+/// prior dreams still count as constructive strength.
+fn plan_strength(record: &FeatureRecord, favors: Favors, deniable_only: bool) -> u32 {
+    let denied = |hint: &str| deniable_only && crate::development::is_prior_hint(hint);
     let comp = record
         .composite_plans
         .iter()
         .filter(|c| c.favors == favors || c.favors == Favors::Balanced)
+        .filter(|c| c.hints.iter().any(|h| !denied(h)))
         .map(|c| c.score)
         .max()
         .unwrap_or(0);
@@ -753,7 +850,7 @@ fn plan_strength(record: &FeatureRecord, favors: Favors) -> u32 {
                 .iter()
                 .filter(move |p| {
                     let f = effective_favors(&p.hint, i.favors);
-                    f == favors || f == Favors::Balanced
+                    (f == favors || f == Favors::Balanced) && !denied(&p.hint)
                 })
                 .map(move |_| magnitude_weight(i.magnitude))
         })
@@ -765,6 +862,7 @@ fn plan_strength(record: &FeatureRecord, favors: Favors) -> u32 {
 /// The opponent's leading plan: (hint tokens, squares, target square).
 /// Prefers the best composite, else the strongest lone hint with squares.
 /// Balanced-owned plans are eligible (see [`plan_strength`]).
+/// Development-prior tokens are never offered for denial (run 11).
 fn opponent_leading_plan(
     record: &FeatureRecord,
     opp: Favors,
@@ -773,17 +871,29 @@ fn opponent_leading_plan(
         .composite_plans
         .iter()
         .filter(|c| c.favors == opp || c.favors == Favors::Balanced)
+        .filter(|c| {
+            c.hints
+                .iter()
+                .any(|h| !crate::development::is_prior_hint(h))
+        })
         .max_by_key(|c| c.score)
     {
         let target =
             parse_sq(&cp.target).or_else(|| cp.squares.iter().rev().find_map(|s| parse_sq(s)));
-        return Some((cp.hints.clone(), cp.squares.clone(), target));
+        let hints: Vec<String> = cp
+            .hints
+            .iter()
+            .filter(|h| !crate::development::is_prior_hint(h))
+            .cloned()
+            .collect();
+        return Some((hints, cp.squares.clone(), target));
     }
     let mut best: Option<(u32, &crate::record::PlanHint)> = None;
     for imb in &record.imbalances {
         for plan in &imb.plans {
             let f = effective_favors(&plan.hint, imb.favors);
-            if f != opp && f != Favors::Balanced {
+            if (f != opp && f != Favors::Balanced) || crate::development::is_prior_hint(&plan.hint)
+            {
                 continue;
             }
             let w = magnitude_weight(imb.magnitude);
@@ -906,8 +1016,8 @@ pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
 
     // Prophylaxis: when the opponent's best plan rivals ours (within one
     // point), denial competes with construction.
-    let own_strength = plan_strength(record, stm_favors);
-    let opp_strength = plan_strength(record, opp_favors);
+    let own_strength = plan_strength(record, stm_favors, false);
+    let opp_strength = plan_strength(record, opp_favors, true);
     if opp_strength > 0 && opp_strength + 1 >= own_strength {
         if let Some((tokens, squares, target)) = opponent_leading_plan(record, opp_favors) {
             for (mv, w, token) in blocking_moves(board, &legal, stm, &tokens, &squares, target) {
@@ -1504,6 +1614,112 @@ mod tests {
         let b = board(fen);
         assert_eq!(static_risk(&b, "f2f4".parse().unwrap()), None);
         assert_eq!(static_risk(&b, "c1d2".parse().unwrap()), None);
+    }
+
+    /// Emanuel Lasker, Common Sense in Chess (1896), first lecture
+    /// (1.e4 e5): knights before bishops — the knight already knows
+    /// where it wants to go, so Nf3 executes while Bc4 only prepares,
+    /// and the rim hop Nh3 merely enables.
+    #[test]
+    fn knights_develop_before_bishops() {
+        let out = mapper(
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+            "CompleteDevelopment",
+            &["b1", "c1", "f1", "g1"],
+        );
+        assert!(has_move(&out, "Nf3", EXECUTE), "{out:?}");
+        assert!(has_move(&out, "Nc3", EXECUTE), "{out:?}");
+        assert!(has_move(&out, "Bc4", PREPARE), "{out:?}");
+        assert!(has_move(&out, "Nh3", ENABLE), "{out:?}");
+    }
+
+    /// Once only bishops sleep, developing them IS the plan (executes).
+    #[test]
+    fn last_sleeping_bishop_executes() {
+        // Four Knights after 4...Bb4 5.O-O O-O 6.d3 d6: only c1/c8 sleep.
+        let out = mapper(
+            "r1bq1rk1/ppp2ppp/2np1n2/1B2p3/1b2P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7",
+            "CompleteDevelopment",
+            &["c1"],
+        );
+        assert!(has_move(&out, "Bg5", EXECUTE), "{out:?}");
+        assert!(has_move(&out, "Bd2", EXECUTE), "{out:?}");
+    }
+
+    /// The castling move itself executes CastleIntoSafety; a piece
+    /// vacating the path merely enables (so a developing move that
+    /// clears the way earns convergence with CompleteDevelopment).
+    #[test]
+    fn castle_mapper_executes_castling_and_enables_path_clearing() {
+        // Four Knights after 4...Bb4: White can castle short now.
+        let castled = mapper(
+            "r1bqk2r/pppp1ppp/2n2n2/1B2p3/1b2P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 4 5",
+            "CastleIntoSafety",
+            &["e1", "h1"],
+        );
+        assert!(has_move(&castled, "O-O", EXECUTE), "{castled:?}");
+        // After 1.e4 e5 2.Nf3 Nc6 the f1-bishop still blocks the path:
+        // its developing moves enable the castle.
+        let blocked = mapper(
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+            "CastleIntoSafety",
+            &["e1", "h1"],
+        );
+        assert!(has_move(&blocked, "Bc4", ENABLE), "{blocked:?}");
+        assert!(
+            !blocked.iter().any(|(s, _)| s.starts_with("O-O")),
+            "{blocked:?}"
+        );
+    }
+
+    /// ClaimTheCenter: the hinted two-square advance executes, the single
+    /// step toward it enables (1.e4 e5, White's d-pawn dream).
+    #[test]
+    fn claim_the_center_pushes_the_hinted_pawn() {
+        let out = mapper(
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+            "ClaimTheCenter",
+            &["d4"],
+        );
+        assert!(has_move(&out, "d4", EXECUTE), "{out:?}");
+        assert!(has_move(&out, "d3", ENABLE), "{out:?}");
+    }
+
+    /// End to end (the run-11 point: no more silent openings): with the
+    /// move history supplied, an early quiet position produces
+    /// suggestions serving the development dreams.
+    #[test]
+    fn opening_position_finally_gets_suggestions() {
+        let start = Board::default();
+        let moves: Vec<cozy_chess::Move> = ["e2e4", "e7e5"]
+            .iter()
+            .map(|u| u.parse().unwrap())
+            .collect();
+        let record = crate::analyze_with_history(&start, &moves);
+        let mut b = start.clone();
+        for &mv in &moves {
+            b.play(mv);
+        }
+        let s = suggest(&record, &b);
+        assert!(!s.is_empty(), "opening must not be suggestion-silent");
+        assert!(
+            s.iter().any(|x| x
+                .serving
+                .iter()
+                .any(|t| crate::development::is_prior_hint(t))),
+            "{s:?}"
+        );
+        // Prophylaxis never targets the opponent's development dreams.
+        for x in &s {
+            if x.prophylactic {
+                assert!(
+                    x.serving
+                        .first()
+                        .is_none_or(|t| !crate::development::is_prior_hint(t)),
+                    "prior dream offered for denial: {s:?}"
+                );
+            }
+        }
     }
 
     /// SAN formatting: disambiguation, captures, castling, promotion.
