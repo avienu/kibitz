@@ -47,6 +47,44 @@ import type { BoardTreatment } from "./lib/evidence";
 const PLAYER_KEY = "kibitz.labPlayer";
 const COHORT_KEY = "kibitz.labCohort";
 
+/** The damage-ranked branch table (pure — unit-testable). */
+export function BranchList({
+  nodes,
+  selectedFen,
+  onSelect,
+}: {
+  nodes: LabNode[];
+  selectedFen: string | null;
+  onSelect: (node: LabNode) => void;
+}) {
+  return (
+    <>
+      <div className="triage-strip-title">BRANCHES — WHERE YOUR MOVES DIVERGE, DAMAGE FIRST</div>
+      {nodes.length === 0 && <div className="triage-none">no in-book branch points found</div>}
+      {nodes.map((n, i) => (
+        <button
+          key={n.fen}
+          type="button"
+          className={`triage-row${selectedFen === n.fen ? " sel" : ""}`}
+          onClick={() => onSelect(n)}
+        >
+          <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
+          <span className="triage-row-main">
+            <span className="triage-line">{n.line || "start position"}</span>
+            <span className="triage-caption">
+              move {moveNo(n.ply)} ·{" "}
+              {n.moves.map((m) => `${m.san} ${m.games}× (${m.scorePct}%)`).join(" · ")}
+              {n.repSan ? ` · book: ${n.repSan}` : ""}
+              {n.hasExtension ? " · engine lines ready" : ""}
+            </span>
+          </span>
+          <span className="triage-count">dmg {n.damage}</span>
+        </button>
+      ))}
+    </>
+  );
+}
+
 interface OpeningLabViewProps {
   treatment?: BoardTreatment;
   /** Open a database game at a ply (examples + homework deep-link). */
@@ -429,34 +467,7 @@ export default function OpeningLabView({
               )}
 
               {/* step 3: branch table */}
-              <div className="triage-strip-title">
-                BRANCHES — WHERE YOUR MOVES DIVERGE, DAMAGE FIRST
-              </div>
-              {report.nodes.length === 0 && (
-                <div className="triage-none">no in-book branch points found</div>
-              )}
-              {report.nodes.map((n, i) => (
-                <button
-                  key={n.fen}
-                  type="button"
-                  className={`triage-row${sel?.fen === n.fen ? " sel" : ""}`}
-                  onClick={() => select(n)}
-                >
-                  <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="triage-row-main">
-                    <span className="triage-line">{n.line || "start position"}</span>
-                    <span className="triage-caption">
-                      move {moveNo(n.ply)} ·{" "}
-                      {n.moves
-                        .map((m) => `${m.san} ${m.games}× (${m.scorePct}%)`)
-                        .join(" · ")}
-                      {n.repSan ? ` · book: ${n.repSan}` : ""}
-                      {n.hasExtension ? " · engine lines ready" : ""}
-                    </span>
-                  </span>
-                  <span className="triage-count">dmg {n.damage}</span>
-                </button>
-              ))}
+              <BranchList nodes={report.nodes} selectedFen={sel?.fen ?? null} onSelect={select} />
 
               {/* step 5: structure homework */}
               {report.homework.length > 0 && (
