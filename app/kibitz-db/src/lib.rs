@@ -24,6 +24,7 @@ pub mod legacy;
 pub mod movebin;
 pub mod narrate;
 pub mod net;
+pub mod opening_lab;
 pub mod pgn;
 pub mod prep;
 pub mod profile;

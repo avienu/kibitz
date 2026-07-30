@@ -13,7 +13,9 @@ use rusqlite::{params, Connection};
 /// Fresh rows (with their engine identity) are preferred over legacy
 /// imports at the same ply; legacy evals are already White-POV (SCID
 /// convention), fresh rows are side-to-move-POV and get converted here.
-fn game_evals(
+/// Shared with the Opening Lab (run 11) so both surfaces read stored
+/// evals with identical fresh-over-legacy and POV semantics.
+pub(crate) fn game_evals(
     conn: &Connection,
     game_id: i64,
 ) -> anyhow::Result<std::collections::HashMap<u16, i32>> {
@@ -54,6 +56,55 @@ fn phase_tag(p: Phase) -> PhaseTag {
         Phase::Middlegame => PhaseTag::Middlegame,
         Phase::Endgame => PhaseTag::Endgame,
     }
+}
+
+/// Structure flags of `board` from `subject`'s perspective — the shared
+/// classification behind the profile's structure rows AND the Opening
+/// Lab's middlegame tags (run 11). Same flags, same Minor+ magnitude
+/// threshold, so a "own-isolated-pawn" claim means the same thing on
+/// every screen.
+pub(crate) fn structure_flags_at(board: &Board, subject: CozyColor) -> Vec<String> {
+    let mut structure_flags = Vec::new();
+    for imb in kibitz_core::imbalance::assess(board) {
+        if imb.magnitude < Magnitude::Minor {
+            continue;
+        }
+        let me = if subject == CozyColor::White {
+            "white"
+        } else {
+            "black"
+        };
+        let opp = if subject == CozyColor::White {
+            "black"
+        } else {
+            "white"
+        };
+        for key in imb.evidence.keys() {
+            let flag = if key == &format!("isolated_{me}") {
+                Some("own-isolated-pawn")
+            } else if key == &format!("backward_{me}") {
+                Some("own-backward-pawn")
+            } else if key == &format!("doubled_{me}") {
+                Some("own-doubled-pawns")
+            } else if key == &format!("passed_{me}") {
+                Some("own-passed-pawn")
+            } else if key == &format!("bad_bishop_{me}") {
+                Some("own-bad-bishop")
+            } else if key == &format!("bad_bishop_{opp}") {
+                Some("opp-bad-bishop")
+            } else if key == &format!("holes_in_{me}_camp") {
+                Some("holes-in-own-camp")
+            } else {
+                None
+            };
+            if let Some(f) = flag {
+                if !structure_flags.contains(&f.to_string()) {
+                    structure_flags.push(f.to_string());
+                }
+            }
+        }
+    }
+    structure_flags
 }
 
 /// Build the full profile for `player` over up to `max_games` most recent
@@ -140,46 +191,7 @@ pub fn build_profile(
         for &mv in &moves[..sample_ply] {
             sb.play(mv);
         }
-        let mut structure_flags = Vec::new();
-        for imb in kibitz_core::imbalance::assess(&sb) {
-            if imb.magnitude < Magnitude::Minor {
-                continue;
-            }
-            let me = if subject == CozyColor::White {
-                "white"
-            } else {
-                "black"
-            };
-            let opp = if subject == CozyColor::White {
-                "black"
-            } else {
-                "white"
-            };
-            for key in imb.evidence.keys() {
-                let flag = if key == &format!("isolated_{me}") {
-                    Some("own-isolated-pawn")
-                } else if key == &format!("backward_{me}") {
-                    Some("own-backward-pawn")
-                } else if key == &format!("doubled_{me}") {
-                    Some("own-doubled-pawns")
-                } else if key == &format!("passed_{me}") {
-                    Some("own-passed-pawn")
-                } else if key == &format!("bad_bishop_{me}") {
-                    Some("own-bad-bishop")
-                } else if key == &format!("bad_bishop_{opp}") {
-                    Some("opp-bad-bishop")
-                } else if key == &format!("holes_in_{me}_camp") {
-                    Some("holes-in-own-camp")
-                } else {
-                    None
-                };
-                if let Some(f) = flag {
-                    if !structure_flags.contains(&f.to_string()) {
-                        structure_flags.push(f.to_string());
-                    }
-                }
-            }
-        }
+        let structure_flags = structure_flags_at(&sb, subject);
 
         let mut plies = Vec::with_capacity(moves.len());
         for i in 1..=moves.len() {
