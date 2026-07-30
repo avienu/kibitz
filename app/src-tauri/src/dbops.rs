@@ -88,8 +88,9 @@ pub async fn game_analyses(
 // annotate / re-analyze / run jobs (goal 2 + verdict 3d)
 // ---------------------------------------------------------------------------
 
-/// Confirm-job and re-analysis node budget for UI-triggered runs.
-const UI_NODES: u64 = 200_000;
+/// Confirm-job and re-analysis node budget for UI-triggered runs (shared
+/// with the Opening Lab's cohort re-analysis, run 11).
+pub(crate) const UI_NODES: u64 = 200_000;
 /// Inline-comment cap for one UI-triggered annotate pass.
 const UI_MAX_COMMENTS: u32 = 12;
 
@@ -281,7 +282,7 @@ const ESTIMATE_SAMPLE_GAMES: u32 = 15;
 /// nodes/sec figure would require spawning the engine, and the engine stays
 /// OFF outside the job worker (CLAUDE.md #6) — so the estimate uses this
 /// constant and says so in `estimateBasis`.
-const ASSUMED_NODES_PER_SEC: f64 = 1_500_000.0;
+pub(crate) const ASSUMED_NODES_PER_SEC: f64 = 1_500_000.0;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

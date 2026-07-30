@@ -22,6 +22,7 @@ pub mod explain;
 pub mod explorer;
 pub mod home;
 mod identity;
+pub mod lab;
 pub mod lichess_play;
 pub mod netops;
 pub mod prep;
@@ -269,6 +270,11 @@ pub fn run() {
             triage::triage_report,
             triage::triage_extend,
             triage::triage_extension_status,
+            lab::lab_cohorts,
+            lab::lab_report,
+            lab::lab_line_fit,
+            lab::lab_reanalyze_estimate,
+            lab::lab_reanalyze_start,
             dbops::game_analyses,
             dbops::annotate_game,
             dbops::reanalyze_game,
