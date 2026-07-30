@@ -200,6 +200,29 @@ Panel anatomy:
   engine-checked" after a chip verification), the active voice, and the
   selection state.
 
+#### The development coach (openings)
+
+In the opening the coach speaks from the classical principles, voiced as
+dreams rather than rules: which minor pieces are still asleep at home,
+whether the king has castled yet, an early queen sortie, a piece that
+keeps moving while its colleagues wait, and the unclaimed center pawns.
+Because "this knight already moved twice" needs the game's history, this
+layer works from the move list — it is automatic in the Game view (the
+panel receives the moves so far) and in Annotate narrations; explaining a
+bare pasted FEN shows only what a lone position can prove. CONSIDER
+chips follow suit: early developing moves, castling, and center pushes
+now appear as candidates, with knights nudged ahead of bishops while the
+structure is still unresolved.
+
+The coach is also **book-aware**: while the position is still inside the
+bundled openings book it will not lecture principles — you get a single
+quiet line ("Still in the book — theory has walked this road.") and the
+development voice starts at the first move that leaves the book. In
+Annotate, the book line appears once per game, and the development story
+re-tells itself only when it actually changes (a sortie or wandering
+piece appearing, the phase turning). Everything here is static — no
+engine is spawned for any of it.
+
 ### Evidence overlay language
 
 One shared vocabulary, identical in both themes and both board treatments:

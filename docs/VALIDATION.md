@@ -315,3 +315,65 @@ resurface with engine verification — and will accept that trade if
 future corpus entries hit it: bad advice is worse than no advice. All
 other axes are byte-identical to run 10 (the veto touches only
 suggestions).
+
+## Development prior (run 11 baseline)
+
+Run 11 added the development tracker (`kibitz-core::development`): the
+classical opening principles as prior dreams, computed over the move
+SEQUENCE and gated to opening character (see docs/KIBITZ_ENGINE_SPEC.md).
+Five new PlanHint tokens: `CompleteDevelopment`, `CastleIntoSafety`,
+`ClaimTheCenter`, `QueenAheadOfHerArmy`, `SamePieceWandering`.
+
+### Corpus additions
+
+The Complete Book of Chess Strategy's opening-principles section
+(pp. 3-6: Basic Opening Strategy / Castling / Development / Fianchetto),
+which run 8.5 never transcribed, is now in the private corpus: **8 new
+entries** (6 principles + 2 counter-anchors), each a reconstructed line
+with its SAN history in a new optional `sans` field (the wandering axis
+needs history; entries without `sans` are tracked position-only). The
+corpus is now 52 chess-strategy positions / 162 total.
+
+### Baseline (2026-07, run 11)
+
+All books, 162 positions (`kibitz-cli book-eval`, no engine — the
+harness feeds the tracker each entry's replayed history when present):
+
+| axis | run 10 (154 pos) | run 11 (162 pos) |
+|---|---|---|
+| imbalances | 229/281 = 81.5% | 247/287 = **86.1%** |
+| plans | 76/112 = 67.9% | 90/126 = **71.4%** |
+| alerts | 10/32 = 31.2% | 10/32 = 31.2% (untouched) |
+| favors | 62/99 = 62.6% | 62/99 = 62.6% (prior excluded from the vote by design) |
+| suggest@1 / @3 | 8.0% / 32.0% | 8.0% / 32.0% (unchanged) |
+| negatives | 7/7 clean | **14/14 clean** |
+
+Reading the deltas honestly:
+
+- All 14 new plan expectations hit, and all 7 new negative anchors are
+  clean — including the Chigorin-style `3.Qe2` (a queen on the second
+  or third rank must NOT be scolded as a sortie, Silman's own bound)
+  and a fully-developed Four Knights where every prior tag is banned
+  (the gate anchor: once both sides castled and developed, the lecture
+  ends).
+- The imbalance axis gained 12 hits on OLD entries: reconstructed
+  early-middlegame diagrams that expected a `Development` imbalance the
+  position-only detector was too coarse to report. The prior's per-side
+  to-do reading covers them. Nothing regressed.
+- The favors axis is untouched by construction: a development TO-DO
+  belongs to the side that must act and would poison a who-is-better
+  vote, so the harness keeps prior imbalances out of the lean.
+
+### Known limitations (deliberate)
+
+- **Closed-center castling delay** (CBOCS p. 4's caveat: castling can be
+  delayed when the center is locked) is not modeled — `CastleIntoSafety`
+  fires whenever an uncastled side retains the right during the opening.
+  Castling remains sound advice in those positions; the nuance is noted,
+  not chased.
+- The corpus FENs all claim fullmove 1, so the tracker's move-clock gate
+  only binds through the `sans` histories; position-only entries lean on
+  the castled+developed and endgame gates.
+- Queens are never "wanderers" (Morphy's Qd1-f3-b3 in the opera game is
+  a maneuver with targets, not a misplay); repeated early queen moves
+  are covered by the sortie rule alone.
