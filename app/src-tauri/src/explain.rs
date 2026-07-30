@@ -271,8 +271,8 @@ mod tests {
             start_fen: None,
         };
 
-        let with = explain_position_ctx(FEN, Voice::default(), None, Some(history()), false)
-            .unwrap();
+        let with =
+            explain_position_ctx(FEN, Voice::default(), None, Some(history()), false).unwrap();
         let serving = |e: &Explanation| {
             e.explanation["suggestions"]
                 .as_array()
@@ -317,21 +317,36 @@ mod tests {
             false,
         )
         .unwrap();
-        assert!(!serving(&mismatched).iter().any(|t| t == "CompleteDevelopment"));
+        assert!(!serving(&mismatched)
+            .iter()
+            .any(|t| t == "CompleteDevelopment"));
 
         // In book: the development voice defers to theory, and the quiet
         // book line leads the prose and appears in the explanation.
-        let in_book = explain_position_ctx(FEN, Voice::default(), None, Some(history()), true)
-            .unwrap();
+        let in_book =
+            explain_position_ctx(FEN, Voice::default(), None, Some(history()), true).unwrap();
         assert!(!serving(&in_book).iter().any(|t| t == "CompleteDevelopment"));
-        assert!(in_book.prose.starts_with("Still in the book"), "{}", in_book.prose);
-        let blocks = in_book.explanation["blocks"].as_array().cloned().unwrap_or_default();
-        let book_in_blocks = blocks
-            .iter()
-            .any(|b| b["text"]["coach"].as_str().is_some_and(|t| t.contains("book")));
+        assert!(
+            in_book.prose.starts_with("Still in the book"),
+            "{}",
+            in_book.prose
+        );
+        let blocks = in_book.explanation["blocks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let book_in_blocks = blocks.iter().any(|b| {
+            b["text"]["coach"]
+                .as_str()
+                .is_some_and(|t| t.contains("book"))
+        });
         let book_in_headline = in_book.explanation["headline"]["coach"]
             .as_str()
             .is_some_and(|t| t.contains("book"));
-        assert!(book_in_blocks || book_in_headline, "{}", in_book.explanation);
+        assert!(
+            book_in_blocks || book_in_headline,
+            "{}",
+            in_book.explanation
+        );
     }
 }
