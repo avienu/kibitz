@@ -656,6 +656,9 @@ export default function App() {
         gv.voice,
         game && gv.ply > 0 ? game.fens[gv.ply - 1] : undefined,
         game && gv.ply > 0 ? game.sans[gv.ply - 1] : undefined,
+        // Run 11: the moves so far wake the development tracker.
+        game ? game.sans.slice(0, gv.ply) : undefined,
+        game ? game.fens[0] : undefined,
       );
       setExplanations((m) => new Map(m).set(ply, res.explanation));
     } catch (e) {
@@ -677,6 +680,9 @@ export default function App() {
       gv.voice,
       game && gv.ply > 0 ? game.fens[gv.ply - 1] : undefined,
       game && gv.ply > 0 ? game.sans[gv.ply - 1] : undefined,
+      // Run 11: the moves so far wake the development tracker.
+      game ? game.sans.slice(0, gv.ply) : undefined,
+      game ? game.fens[0] : undefined,
     )
       .then((res) => {
         if (!stale) setExplanations((m) => new Map(m).set(ply, res.explanation));

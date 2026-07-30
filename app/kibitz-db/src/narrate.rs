@@ -190,7 +190,20 @@ fn alert_key(a: &kibitz_core::record::TacticAlert) -> String {
 }
 
 fn theme_key(i: &kibitz_core::record::Imbalance) -> String {
-    format!("{:?}:{:?}", i.kind, i.favors)
+    let mut key = format!("{:?}:{:?}", i.kind, i.favors);
+    // Development-prior stories (run 11): a queen sortie or a wandering
+    // piece appearing IS news even while the development theme itself is
+    // already standing — fold the misplay flags into the identity so the
+    // delta narrator re-tells the theme exactly when the story changes.
+    if i.kind == kibitz_core::record::ImbalanceKind::Development {
+        if i.evidence.keys().any(|k| k.starts_with("queen_sortie")) {
+            key.push_str(":sortie");
+        }
+        if i.evidence.keys().any(|k| k.starts_with("wanderer")) {
+            key.push_str(":wander");
+        }
+    }
+    key
 }
 
 fn plan_key(p: &kibitz_core::record::CompositePlan) -> String {
@@ -212,6 +225,16 @@ pub fn narrate_game(
     voice: Voice,
 ) -> anyhow::Result<u32> {
     let (start, tokens) = crate::edit::game_tokens(conn, game_id)?;
+
+    // Book awareness (run 11): while the mainline is still inside the
+    // bundled openings book, the development prior stays quiet — theory
+    // has walked that road — and one book line is narrated at most once.
+    // The book state latches: the first out-of-book position ends it for
+    // good (transpositions back into named theory don't restart it).
+    let theory = crate::fingerprint::theory_set(conn)?;
+    let mut left_book = false;
+    let mut book_told = false;
+    let mut mainline: Vec<cozy_chess::Move> = Vec::new();
 
     let mut board = start.clone();
     let mut depth = 0u32;
@@ -238,6 +261,7 @@ pub fn narrate_game(
             Token::Move(mv) if depth == 0 => {
                 let board_before = board.clone();
                 board.play(*mv);
+                mainline.push(*mv);
                 ply += 1;
                 if board.status() != cozy_chess::GameStatus::Ongoing {
                     // The game is over; narrating hanging pieces in a
@@ -245,7 +269,19 @@ pub fn narrate_game(
                     break;
                 }
 
+                let in_book = !left_book && theory.contains(&crate::hash::position_hash(&board));
+                if !in_book {
+                    left_book = true;
+                }
+
                 let mut record = kibitz_core::analyze(&board);
+                // Development prior (run 11): fed with the full move
+                // history — but only once the game leaves the book. The
+                // first out-of-book moment is where this voice may start.
+                if !in_book {
+                    let report = kibitz_core::development::track(&start, &mainline);
+                    kibitz_core::development::augment(&mut record, &report);
+                }
                 record
                     .wsui
                     .alerts
@@ -329,10 +365,17 @@ pub fn narrate_game(
                 record.wsui.screen_fired = !record.wsui.alerts.is_empty();
 
                 // Themes: narrate when new or when the magnitude moved; at
-                // a phase boundary restate everything still standing.
+                // a phase boundary restate everything still standing. A
+                // story FLAG dropping off (the wanderer was traded, the
+                // queen went home) is not news: a previous key that
+                // extends the current one already told this theme.
                 record.imbalances.retain(|i| {
-                    i.magnitude >= Magnitude::Clear
-                        && (phase_boundary || prev_themes.get(&theme_key(i)) != Some(&i.magnitude))
+                    let key = theme_key(i);
+                    let told = prev_themes.get(&key) == Some(&i.magnitude)
+                        || prev_themes
+                            .iter()
+                            .any(|(k, m)| *m == i.magnitude && k.starts_with(&format!("{key}:")));
+                    i.magnitude >= Magnitude::Clear && (phase_boundary || !told)
                 });
 
                 // Plans: the top composite is narrated once when it forms
@@ -354,6 +397,7 @@ pub fn narrate_game(
                 let has_content = record.wsui.screen_fired
                     || !record.imbalances.is_empty()
                     || !record.composite_plans.is_empty();
+                let mut text = String::new();
                 if has_content && rows.len() < max_comments as usize {
                     let mut sections = kibitz_verbalize::verbalize_sections_voiced(&record, voice);
                     // Candidate-move closing (run 10): one "what to play"
@@ -376,7 +420,7 @@ pub fn narrate_game(
                             sections.plans.push_str(&closing);
                         }
                     }
-                    let text = [sections.tactics, sections.imbalances, sections.plans]
+                    text = [sections.tactics, sections.imbalances, sections.plans]
                         .into_iter()
                         .filter(|s| !s.is_empty())
                         .collect::<Vec<_>>()
@@ -388,8 +432,21 @@ pub fn narrate_game(
                         for a in &record.wsui.alerts {
                             alert_last_narrated.insert(alert_key(a), ply);
                         }
-                        rows.insert(ply, text);
                     }
+                }
+                // The single quiet book line (run 11), told once per
+                // game at the first in-book ply — never per ply.
+                if in_book && !book_told && rows.len() < max_comments as usize {
+                    book_told = true;
+                    let line = kibitz_verbalize::book_line(voice);
+                    text = if text.is_empty() {
+                        line
+                    } else {
+                        format!("{line} {text}")
+                    };
+                }
+                if !text.is_empty() {
+                    rows.insert(ply, text);
                 }
 
                 // Advance the standing story with the FULL picture.

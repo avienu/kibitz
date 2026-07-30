@@ -357,8 +357,14 @@ export function explainPosition(
   voice?: NarrationVoice,
   prevFen?: string,
   lastSan?: string,
+  /** The game's SAN moves up to this position (run 11): lets the
+   * development tracker speak in the opening. Omitted → position-only,
+   * exactly the old behavior. */
+  sans?: string[],
+  /** Start position of the game when not the standard start. */
+  startFen?: string,
 ): Promise<Explanation> {
-  return invoke<Explanation>("explain_position", { fen, voice, prevFen, lastSan });
+  return invoke<Explanation>("explain_position", { fen, voice, prevFen, lastSan, sans, startFen });
 }
 
 /** Cursory engine review of the CONSIDER chips (run 11). Call ONLY when

@@ -157,8 +157,11 @@ fn mate_verdict_renders_as_mate_not_material() {
         pgn.contains("forced mate in 3"),
         "mate verdict must say mate:\n{pgn}"
     );
+    // The engine sentence must not speak material ("winning about N
+    // pawns"). The bare word "pawns" is no longer diagnostic: run-11
+    // development-plan prose legitimately mentions center pawns.
     assert!(
-        !pgn.contains("pawns"),
+        !pgn.contains("winning about"),
         "mate must never render as material:\n{pgn}"
     );
 }
