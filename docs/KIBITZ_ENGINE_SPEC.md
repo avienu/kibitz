@@ -246,7 +246,7 @@ reports everything a bare position can show (wandering excepted).
 
 Per side: minor pieces still on their home squares (listed), castled /
 castling-available / king-in-center state, queen sortie (queen beyond
-the third relative rank while two or more minors sleep — Silman's CBOCS
+the third relative rank while two or more minors sleep — Jeremy Silman's CBOCS
 p. 5 bound: second or third rank is fine), same-piece wandering (a
 minor or rook moved twice-plus while two or more minors sleep; queens
 excluded — repeated queen moves are the sortie rule's story; a piece

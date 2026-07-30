@@ -39,7 +39,7 @@ use crate::record::{Favors, FeatureRecord, Imbalance, ImbalanceKind, Magnitude, 
 pub const OPENING_MOVE_LIMIT: u32 = 13;
 
 /// A queen at or beyond this relative rank (1-based) counts as a sortie
-/// while development is unfinished. Silman's rule of thumb (CBOCS p. 5):
+/// while development is unfinished. Jeremy Silman's rule of thumb (CBOCS p. 5):
 /// the queen belongs no further than the second or third rank early on —
 /// so the fourth rank and beyond is "ahead of her army".
 pub const QUEEN_SORTIE_RANK: u32 = 4;
@@ -488,7 +488,7 @@ mod tests {
     }
 
     /// Counter-anchor for the same rule: a queen on the second/third
-    /// rank is within Silman's bound — no sortie (1.e4 e5 2.Nf3 Nc6
+    /// rank is within Jeremy Silman's bound — no sortie (1.e4 e5 2.Nf3 Nc6
     /// 3.Qe2, an old Chigorin handling).
     #[test]
     fn queen_on_second_rank_is_no_sortie() {

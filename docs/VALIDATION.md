@@ -352,7 +352,7 @@ Reading the deltas honestly:
 
 - All 14 new plan expectations hit, and all 7 new negative anchors are
   clean — including the Chigorin-style `3.Qe2` (a queen on the second
-  or third rank must NOT be scolded as a sortie, Silman's own bound)
+  or third rank must NOT be scolded as a sortie, Jeremy Silman's own bound)
   and a fully-developed Four Knights where every prior tag is banned
   (the gate anchor: once both sides castled and developed, the lecture
   ends).
