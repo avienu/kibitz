@@ -5041,3 +5041,88 @@ button.mv-var-line:hover {
   display: block;
   margin-top: 8px;
 }
+
+/* ---- Opening lab (run 11) ------------------------------------------------ */
+.lab-cohorts {
+  margin-bottom: 14px;
+}
+.lab-verdict {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 10px 0 14px;
+}
+.lab-verdict-text {
+  margin: 6px 0 8px;
+  font: 400 13.5px/1.65 var(--font-prose);
+  text-wrap: pretty;
+}
+.lab-chips,
+.lab-structures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.lab-chip {
+  font: 500 11px var(--font-ui);
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.lab-chip-bad {
+  border-color: var(--bad);
+  color: var(--tx);
+}
+.lab-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--bad);
+  border-radius: 6px;
+  padding: 9px 11px;
+  margin-bottom: 14px;
+  font: 400 12.5px/1.5 var(--font-ui);
+}
+.lab-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font: 400 12px var(--font-ui);
+  color: var(--dim);
+}
+.lab-moves {
+  margin-bottom: 12px;
+}
+.lab-move {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.lab-move-san {
+  flex: 0 0 44px;
+  font: 700 12px var(--font-mono);
+}
+.lab-move-cells {
+  font: 400 11.5px/1.5 var(--font-ui);
+  color: var(--dim);
+}
+.lab-cand .lab-cand-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.lab-fit-note {
+  font: 400 11.5px/1.5 var(--font-ui);
+  color: var(--dim);
+  margin-bottom: 6px;
+}

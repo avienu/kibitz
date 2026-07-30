@@ -14,6 +14,7 @@ import CrosstableView from "./CrosstableView";
 import DatabaseScreen from "./DatabaseScreen";
 import EndgameView from "./EndgameView";
 import HomeView from "./HomeView";
+import OpeningLabView from "./OpeningLabView";
 import OpeningTreeView from "./OpeningTreeView";
 import PositionSearchView from "./PositionSearchView";
 import FirstRunOverlay, { markFirstRunSeen, shouldShowFirstRun } from "./FirstRunOverlay";
@@ -160,6 +161,7 @@ const VIEW_TITLES: Record<ViewId, string> = {
   prep: "Opponent prep",
   train: "Openings SRS",
   triage: "Opening triage",
+  lab: "Opening lab",
   tactics: "Tactics",
   endgames: "Endgames",
   play: "Play online",
@@ -554,6 +556,7 @@ export default function App() {
         tactics: "tactics",
         srs: "train",
         triage: "triage",
+        lab: "lab",
         endgames: "endgames",
         settings: "settings",
       };
@@ -938,6 +941,7 @@ export default function App() {
     view === "search" ||
     view === "train" ||
     view === "triage" ||
+    view === "lab" ||
     view === "endgames" ||
     view === "settings" ||
     view === "profile" ||
@@ -1013,6 +1017,14 @@ export default function App() {
       case "triage":
         return (
           <TriageView
+            treatment={gv.boardTreatment}
+            onOpenGameAt={(id, ply) => void loadDbGameAt(id, ply)}
+            onCountsChanged={refreshCounts}
+          />
+        );
+      case "lab":
+        return (
+          <OpeningLabView
             treatment={gv.boardTreatment}
             onOpenGameAt={(id, ply) => void loadDbGameAt(id, ply)}
             onCountsChanged={refreshCounts}

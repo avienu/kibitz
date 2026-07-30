@@ -75,7 +75,8 @@ pub enum GameEvent {
 }
 
 /// Append `san` to a numbered-SAN line (standard-start move numbering).
-fn push_numbered(prefix: &mut String, to_move: CozyColor, move_no: u32, san: &str) {
+/// Shared with the Opening Lab's branch-line rendering (run 11).
+pub(crate) fn push_numbered(prefix: &mut String, to_move: CozyColor, move_no: u32, san: &str) {
     let number = match to_move {
         CozyColor::White => format!("{move_no}. "),
         CozyColor::Black if prefix.is_empty() => format!("{move_no}... "),
