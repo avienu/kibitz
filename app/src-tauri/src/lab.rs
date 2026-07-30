@@ -40,8 +40,7 @@ pub async fn lab_report(
     ecos: Vec<String>,
 ) -> Result<kibitz_db::opening_lab::LabReport, String> {
     with_conn(&state, |conn| {
-        kibitz_db::opening_lab::lab_report(conn, &player, &color, &ecos)
-            .map_err(|e| e.to_string())
+        kibitz_db::opening_lab::lab_report(conn, &player, &color, &ecos).map_err(|e| e.to_string())
     })
 }
 
@@ -72,7 +71,11 @@ pub struct LineFit {
     pub profile_built_at: Option<String>,
 }
 
-pub(crate) fn line_fit_impl(conn: &Connection, fen: &str, sans: &[String]) -> Result<LineFit, String> {
+pub(crate) fn line_fit_impl(
+    conn: &Connection,
+    fen: &str,
+    sans: &[String],
+) -> Result<LineFit, String> {
     let structures =
         kibitz_db::opening_lab::candidate_structures(fen, sans).map_err(|e| e.to_string())?;
 
@@ -149,7 +152,11 @@ fn reanalyze_targets(
     let is_white = match color {
         "white" => true,
         "black" => false,
-        other => return Err(format!("color must be \"white\" or \"black\", got {other:?}")),
+        other => {
+            return Err(format!(
+                "color must be \"white\" or \"black\", got {other:?}"
+            ))
+        }
     };
     let unanalyzed = kibitz_db::opening_lab::cohort_unanalyzed(conn, player, is_white, ecos)
         .map_err(|e| e.to_string())?;
@@ -197,9 +204,9 @@ pub(crate) fn reanalyze_estimate_impl(
 ) -> Result<LabReanalyzeEstimate, String> {
     let targets = reanalyze_targets(conn, player, color, ecos)?;
     let jobs: i64 = targets.iter().map(|(_, p)| p).sum();
-    let total_estimate_ms =
-        jobs as f64 * (crate::dbops::UI_NODES as f64) / crate::dbops::ASSUMED_NODES_PER_SEC
-            * 1000.0;
+    let total_estimate_ms = jobs as f64 * (crate::dbops::UI_NODES as f64)
+        / crate::dbops::ASSUMED_NODES_PER_SEC
+        * 1000.0;
     Ok(LabReanalyzeEstimate {
         games: targets.len() as i64,
         jobs,
@@ -354,8 +361,16 @@ mod tests {
         assert_eq!(est.games, 1, "only the eval-less G2");
         assert_eq!(est.jobs, 12, "one job per mainline position of G2");
         // 12 positions × 200k nodes at the assumed speed = 1.6 s.
-        assert!((est.total_estimate_ms - 1600.0).abs() < 1.0, "{}", est.total_estimate_ms);
-        assert!(est.estimate_basis.starts_with("assumed"), "{}", est.estimate_basis);
+        assert!(
+            (est.total_estimate_ms - 1600.0).abs() < 1.0,
+            "{}",
+            est.total_estimate_ms
+        );
+        assert!(
+            est.estimate_basis.starts_with("assumed"),
+            "{}",
+            est.estimate_basis
+        );
 
         // Bad inputs fail cleanly.
         assert!(reanalyze_estimate_impl(&conn, "Lab, Tester", "purple", &ecos).is_err());
@@ -409,7 +424,11 @@ mod tests {
             worker_active: true,
         };
         let json = serde_json::to_string(&started).unwrap();
-        for needle in ["\"gamesEnqueued\":", "\"jobsEnqueued\":", "\"workerActive\":"] {
+        for needle in [
+            "\"gamesEnqueued\":",
+            "\"jobsEnqueued\":",
+            "\"workerActive\":",
+        ] {
             assert!(json.contains(needle), "missing {needle} in {json}");
         }
     }

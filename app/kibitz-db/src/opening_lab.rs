@@ -196,8 +196,7 @@ pub fn diagnose_game(
         if !user_moved {
             continue;
         }
-        let (Some(&before), Some(&after)) =
-            (evals.get(&((i - 1) as u16)), evals.get(&(i as u16)))
+        let (Some(&before), Some(&after)) = (evals.get(&((i - 1) as u16)), evals.get(&(i as u16)))
         else {
             continue;
         };
@@ -904,11 +903,7 @@ pub fn lab_report(
             })
         })
         .collect();
-    homework.sort_by(|a, b| {
-        b.swing_cp
-            .cmp(&a.swing_cp)
-            .then(b.game_id.cmp(&a.game_id))
-    });
+    homework.sort_by(|a, b| b.swing_cp.cmp(&a.swing_cp).then(b.game_id.cmp(&a.game_id)));
     homework.truncate(MAX_HOMEWORK);
 
     let games_count = games.len() as u32;
@@ -1011,7 +1006,9 @@ mod tests {
         set
     }
 
-    const RUY: &[&str] = &["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6", "O-O", "Be7"];
+    const RUY: &[&str] = &[
+        "e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6", "O-O", "Be7",
+    ];
 
     #[test]
     fn diagnose_detects_exit_and_collects_branch_observations() {
@@ -1084,8 +1081,7 @@ mod tests {
 
         // White POV evals (the game_evals convention): fine until White's
         // 11th ply drops +30 → −150 (swing 180 ≥ 120).
-        let evals: HashMap<u16, i32> =
-            [(8, 20), (9, 25), (10, 30), (11, -150), (12, -140)].into();
+        let evals: HashMap<u16, i32> = [(8, 20), (9, 25), (10, 30), (11, -150), (12, -140)].into();
         let d = diagnose_game(true, &moves, &evals, &theory);
         assert!(d.analyzed);
         let err = d.first_error.expect("error found");
@@ -1326,12 +1322,18 @@ mod tests {
         assert_eq!(node.moves[1].san, "Bb5");
         assert_eq!((node.moves[1].games, node.moves[1].damage), (2, 0.0));
         assert_eq!(node.moves[1].score_pct, 50.0);
-        assert!(node.eco.is_some() && node.opening_name.is_some(), "book node is named");
+        assert!(
+            node.eco.is_some() && node.opening_name.is_some(),
+            "book node is named"
+        );
         assert_eq!(node.rep_san, None, "no repertoire yet");
         assert!(!node.has_extension);
         // Games walk newest-first (id DESC): G3's Bc4 is the first example.
         assert_eq!(node.examples.len(), 3);
-        assert_eq!((node.examples[0].game_id, node.examples[0].san.as_str()), (3, "Bc4"));
+        assert_eq!(
+            (node.examples[0].game_id, node.examples[0].san.as_str()),
+            (3, "Bc4")
+        );
         assert_eq!(node.examples[0].ply, 5);
 
         // Coverage raw material: after 3.Bb5 both games saw ...a6 (still
@@ -1339,7 +1341,11 @@ mod tests {
         let bb5 = &node.moves[1];
         assert_eq!(bb5.replies.len(), 1);
         assert_eq!(
-            (bb5.replies[0].san.as_str(), bb5.replies[0].games, bb5.replies[0].in_book),
+            (
+                bb5.replies[0].san.as_str(),
+                bb5.replies[0].games,
+                bb5.replies[0].in_book
+            ),
             ("a6", 2, true)
         );
         let bc4 = &node.moves[0];
@@ -1374,7 +1380,10 @@ mod tests {
             .iter()
             .find(|s| s.flag == "own-doubled-pawns")
             .expect("doubled-pawn structure aggregated");
-        assert_eq!((doubled.games, doubled.score_pct, doubled.damage), (2, 0.0, 1.0));
+        assert_eq!(
+            (doubled.games, doubled.score_pct, doubled.damage),
+            (2, 0.0, 1.0)
+        );
         let killers = killer_structures(&r.structures);
         assert!(killers.contains(&"own-doubled-pawns".to_string()));
         let hw2 = r
@@ -1524,7 +1533,11 @@ mod tests {
             .find(|r| r.color == "black" && r.family.contains("Nimzo"))
             .unwrap_or_else(|| panic!("Nimzo family cohort missing: {rows:?}"));
         assert_eq!(nimzo.games, 2);
-        assert!(nimzo.ecos.len() >= 2, "distinct codes merged: {:?}", nimzo.ecos);
+        assert!(
+            nimzo.ecos.len() >= 2,
+            "distinct codes merged: {:?}",
+            nimzo.ecos
+        );
         assert!(nimzo.eco_min < nimzo.eco_max);
         assert!(nimzo.ecos.iter().all(|e| e.starts_with('E')));
 
@@ -1588,9 +1601,8 @@ mod tests {
         let theory = crate::fingerprint::theory_set(&conn).unwrap();
         assert!(theory.len() > 5_000, "real dataset loaded");
         let (_, moves) = play_sans(&[
-            "e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6", "O-O", "Rg8", "d4", "h6",
-            "dxe5", "Nxe4", "Qd5", "Nc5", "Nc3", "d6", "exd6", "Bxd6", "Bxc6", "bxc6", "Qxd6",
-            "cxd6",
+            "e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6", "O-O", "Rg8", "d4", "h6", "dxe5",
+            "Nxe4", "Qd5", "Nc5", "Nc3", "d6", "exd6", "Bxd6", "Bxc6", "bxc6", "Qxd6", "cxd6",
         ]);
         let blob = crate::movebin::encode_game(&Board::default(), &moves).unwrap();
         let evals: HashMap<u16, i32> = (1..=24).map(|p| (p as u16, p)).collect();
