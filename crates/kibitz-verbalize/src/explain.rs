@@ -23,6 +23,32 @@ use kibitz_core::record::{
 use crate::board::Board;
 use crate::Voice;
 
+/// [`explain`] with openings-book context (run 11). While `in_book`, the
+/// caller has already withheld the development prior (theory outranks a
+/// principles lecture); this adds the single quiet book line — as the
+/// headline when the position is otherwise silent, else as one trailing
+/// block. Book state comes from the caller: this crate never knows WHERE
+/// the book lives.
+pub fn explain_in_book(record: &FeatureRecord, in_book: bool) -> Explanation {
+    let mut explanation = explain(record);
+    if in_book {
+        let text = VoiceText {
+            coach: crate::book_line(Voice::Coach),
+            neutral: crate::book_line(Voice::Neutral),
+        };
+        if explanation.blocks.is_empty() {
+            explanation.headline = text;
+        } else {
+            explanation.blocks.push(ExplanationBlock {
+                kind: BlockKind::Plan,
+                text,
+                evidence: Evidence::default(),
+            });
+        }
+    }
+    explanation
+}
+
 /// Build the full explanation for one analyzed position.
 pub fn explain(record: &FeatureRecord) -> Explanation {
     let board = Board::from_fen(&record.fen);

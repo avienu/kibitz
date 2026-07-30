@@ -27,6 +27,13 @@ pub struct Entry {
     #[serde(default)]
     pub citation: String,
     pub fen: String,
+    /// Optional SAN move list from the standard start reaching `fen`
+    /// (run 11): principle entries reconstruct exactly, and the
+    /// development tracker needs the history for its wandering/tempo
+    /// observations. A list that fails to replay to `fen` is ignored
+    /// (the tracker then sees the bare position).
+    #[serde(default)]
+    pub sans: Vec<String>,
     #[serde(default)]
     pub kind: String,
     #[serde(default)]
@@ -91,6 +98,12 @@ const KNOWN_HINTS: &[&str] = &[
     "RestrictKnight",
     "AdvanceCentralMajority",
     "OpenLinesTowardWeakKing",
+    // Run 11: development-prior vocabulary (kibitz-core::development).
+    "CompleteDevelopment",
+    "CastleIntoSafety",
+    "ClaimTheCenter",
+    "QueenAheadOfHerArmy",
+    "SamePieceWandering",
 ];
 
 #[derive(Debug, Default)]
@@ -141,11 +154,38 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
         r.positions += 1;
         let record = kibitz_core::analyze(&board);
 
-        let detected_kinds: Vec<String> = record
+        // Development prior (run 11): fed with the entry's replayed
+        // history when it reaches the FEN, else with the bare position.
+        // Its hints/kind extend detection only — the favors vote stays
+        // untouched (a to-do list is not an advantage lean).
+        let development = {
+            let start = cozy_chess::Board::default();
+            let mut replay = start.clone();
+            let mut moves: Vec<cozy_chess::Move> = Vec::new();
+            for san in &e.sans {
+                let Ok(mv) = crate::san::parse_san(&replay, san) else {
+                    moves.clear();
+                    break;
+                };
+                replay.play(mv);
+                moves.push(mv);
+            }
+            if !moves.is_empty() && replay.same_position(&board) {
+                kibitz_core::development::track(&start, &moves)
+            } else {
+                kibitz_core::development::track(&board, &[])
+            }
+        };
+        let development = kibitz_core::development::imbalances(&development);
+
+        let mut detected_kinds: Vec<String> = record
             .imbalances
             .iter()
             .map(|i| format!("{:?}", i.kind))
             .collect();
+        if !development.is_empty() {
+            detected_kinds.push("Development".to_string());
+        }
         for want in &e.expected.imbalances {
             r.imbalance.total += 1;
             if detected_kinds.iter().any(|k| k == want) {
@@ -161,6 +201,11 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
             .flat_map(|i| i.plans.iter().map(|p| p.hint.clone()))
             .collect();
         detected_hints.extend(record.composite_plans.iter().flat_map(|c| c.hints.clone()));
+        detected_hints.extend(
+            development
+                .iter()
+                .flat_map(|i| i.plans.iter().map(|p| p.hint.clone())),
+        );
         for want in &e.expected.plan_tags {
             if KNOWN_HINTS.contains(&want.as_str()) {
                 r.plans.total += 1;
@@ -372,6 +417,7 @@ mod tests {
                 Entry {
                     id: "syn-1".into(),
                     citation: String::new(),
+                    sans: vec![],
                     fen: "r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7"
                         .into(),
                     kind: "example".into(),
@@ -392,6 +438,7 @@ mod tests {
                 Entry {
                     id: "syn-bad-fen".into(),
                     citation: String::new(),
+                    sans: vec![],
                     fen: "not a fen".into(),
                     kind: "example".into(),
                     confidence: "high".into(),

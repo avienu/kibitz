@@ -63,6 +63,10 @@ Detectors:
 7. **Development**: developed-minor count, castling status, uncoordinated pieces;
    only meaningful before a move threshold or with closed center caveat.
    PlanHint (if leading): open the position, act before opponent completes.
+   Since run 11 this detector's who-is-ahead story is complemented by the
+   history-fed development PRIOR (see "Development tracker" below), which
+   reports each side's development TO-DO as separate Development
+   imbalances.
 8. **Initiative**: threat count per tempo (moves creating forcing replies),
    who is dictating; interacts with development lead.
 
@@ -229,6 +233,65 @@ A quiet position never triggers any engine work from this feature
 outside an explicit user action (CLAUDE.md #6): live explain stays
 static, and the suggest-verify jobs are enqueued only by Annotate and run
 only when the job worker is started.
+
+## Development tracker — the prior side of the dream system (run 11)
+
+`kibitz-core::development` voices the classical opening principles as
+dreams-under-uncertainty (never a rulebook): every other dream derives
+from pawn structure, which is fog at move 5, so the opening needs a
+PRIOR. It is a pure function over the MOVE SEQUENCE
+(`track(start, &moves) -> DevelopmentReport`), because "this piece
+already moved twice" needs history; with an empty move list it still
+reports everything a bare position can show (wandering excepted).
+
+Per side: minor pieces still on their home squares (listed), castled /
+castling-available / king-in-center state, queen sortie (queen beyond
+the third relative rank while two or more minors sleep — Jeremy Silman's CBOCS
+p. 5 bound: second or third rank is fine), same-piece wandering (a
+minor or rook moved twice-plus while two or more minors sleep; queens
+excluded — repeated queen moves are the sortie rule's story; a piece
+the enemy can profitably capture is mid-exchange, not wandering),
+still-home center pawns and their unplayed two-square advances, and a
+rough tempo balance. **Opening gate**: the tracker reports only before
+fullmove 14 OR until both sides are castled and fully developed,
+whichever comes first — and never in an endgame.
+
+`imbalances(&report)` emits one `Development` imbalance per side with
+dreams left, **favors = the side that OWNS the plans** (a to-do, not an
+advantage — the verbalizer renders these with dedicated to-do headlines
+and the book-eval harness keeps them out of the favors vote), carrying
+five additive PlanHint tokens (schema stays v3):
+
+| hint | evidence / squares |
+|---|---|
+| `CompleteDevelopment` | the sleeping minors' squares |
+| `CastleIntoSafety` | king + preferred rook square |
+| `ClaimTheCenter` | the unplayed center-pawn advance squares |
+| `QueenAheadOfHerArmy` | the sortie queen's square (misplay observation) |
+| `SamePieceWandering` | the wanderer's square + spelled-out move count (misplay observation) |
+
+These flow through the SAME machinery as every other hint: plan
+synthesis (the two misplay tokens and the location-shaped hints are
+excluded from composite clustering — only `ClaimTheCenter` names a real
+target), narration, explain blocks, and the suggestion mappers
+(knight developments to natural central squares execute while bishops
+prepare — the knight already knows where it wants to go; the castling
+move executes with path-clearing enables; the hinted center pushes
+execute). Prior tokens are never offered for prophylactic denial.
+`analyze_with_history(start, moves)` is the one-call form; callers that
+gate on external state (the openings book) call `track`/`augment`
+directly.
+
+**Book awareness (app layer)**: while the position is still in the
+bundled CC0 openings book (`kibitz_db::fingerprint::theory_set`), the
+narration walk and the live explain IPC withhold the development prior
+and its suggestions and render a single quiet book line instead
+(narrated once per game; the state latches at the first out-of-book
+position). The explain IPC accepts additive optional `sans`/`start_fen`
+params carrying the game so far; without them the tracker is silent and
+position-only callers are unchanged. Book state never enters
+kibitz-core — callers pass `in_book` into the assembly
+(`kibitz_verbalize::explain_in_book`, `book_line`).
 
 ## kibitz-profile — corpus profiling
 

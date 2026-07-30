@@ -14,7 +14,7 @@
 
 # Presentation order for evidence keys within one imbalance sentence,
 # by base key (side suffixes stripped). Unlisted keys come last.
-evidence.order = passed|isolated|doubled|backward|hanging|queenside_majority|kingside_majority|bishop_pair|bad_bishop|character|pattern|material_diff_cp|open_files|half_open_files|doubled_majors|rook_on_seventh|holes|established_outpost
+evidence.order = passed|isolated|doubled|backward|hanging|queenside_majority|kingside_majority|bishop_pair|bad_bishop|character|pattern|material_diff_cp|open_files|half_open_files|doubled_majors|rook_on_seventh|holes|established_outpost|sleeping_minors|king_in_center|queen_sortie|wanderer|center_unclaimed
 
 # Pawn-structure weaknesses and assets. The .neutral variants are used
 # when no owner can be established from the key or the FEN.
@@ -76,6 +76,22 @@ evidence.rook_on_seventh = {side} has a rook on the seventh rank
 evidence.holes = {side}'s position has a hole on {items}
 evidence.holes.plural = {side}'s position has holes on {items}
 evidence.established_outpost = {side}'s knight is entrenched on {items}
+
+# Development prior (run 11): the classical principles as evidence.
+# The piece mix (knights/bishops/mixed) is resolved from the FEN.
+evidence.sleeping_minors.one_knight = {side}'s knight on {items} has yet to enter the game
+evidence.sleeping_minors.one_bishop = {side}'s bishop on {items} has yet to enter the game
+evidence.sleeping_minors.one = {side}'s minor piece on {items} has yet to enter the game
+evidence.sleeping_minors.knights = {side}'s knights on {items} are still at home
+evidence.sleeping_minors.bishops = {side}'s bishops on {items} are still at home
+evidence.sleeping_minors.mixed = {side}'s minor pieces on {items} are still at home
+evidence.sleeping_minors.plural = {side}'s minor pieces on {items} are still at home
+evidence.king_in_center.available = {side}'s king is still in the center, with castling available
+evidence.king_in_center.lost = {side}'s king is stuck in the center and can no longer castle
+evidence.queen_sortie = {side}'s queen is already out on {items} while the minor pieces wait at home
+evidence.wanderer = the {side} piece now on {square} has moved {times} while development waits
+evidence.center_unclaimed = {side} has yet to stake a claim in the center; the advance to {items} is still available
+evidence.center_unclaimed.plural = {side} has yet to stake a claim in the center; the advances to {items} are still available
 
 # Material in piece terms (run 9): a won knight is not "three pawns".
 evidence.material.piece_up = {side} is up a piece
