@@ -449,6 +449,19 @@ fn full_coverage_record() -> FeatureRecord {
     record
 }
 
+/// (g) Development prior (run 11): a REAL record with history — the
+/// scholar's-mate-adjacent 1.e4 e5 2.Qh5, White's queen ahead of her
+/// sleeping army — exercising the prior evidence keys, the to-do
+/// headline, and the misplay observations end to end.
+fn development_prior_record() -> FeatureRecord {
+    let start = kibitz_core::cozy_chess::Board::default();
+    let moves: Vec<kibitz_core::cozy_chess::Move> = ["e2e4", "e7e5", "d1h5"]
+        .iter()
+        .map(|u| u.parse().unwrap())
+        .collect();
+    kibitz_core::analyze_with_history(&start, &moves)
+}
+
 fn all_records() -> Vec<FeatureRecord> {
     vec![
         tactical_record(),
@@ -457,6 +470,7 @@ fn all_records() -> Vec<FeatureRecord> {
         empty_record(),
         maintainer_case_record(),
         full_coverage_record(),
+        development_prior_record(),
     ]
 }
 
@@ -500,6 +514,73 @@ fn quiet_positional_prose_neutral() {
     let out = verbalize_voiced(&record, Voice::Neutral);
     lint_prose(&out);
     insta::assert_snapshot!(out);
+}
+
+/// Run 11: the development prior speaks as dreams-under-uncertainty in
+/// Coach and as plain facts in Neutral — never as a numbered rulebook.
+#[test]
+fn development_prior_prose() {
+    let record = development_prior_record();
+    let coach = verbalize_voiced(&record, Voice::Coach);
+    let neutral = verbalize_voiced(&record, Voice::Neutral);
+    lint_prose(&coach);
+    lint_prose(&neutral);
+    // The prior's stories are present in both voices.
+    for out in [&coach, &neutral] {
+        let lower = out.to_lowercase();
+        assert!(lower.contains("queen"), "queen sortie missing: {out}");
+        assert!(
+            lower.contains("develop") || lower.contains("dreaming") || lower.contains("at home"),
+            "development story missing: {out}"
+        );
+        // Never rulebook phrasing.
+        assert!(!lower.contains("principle"), "{out}");
+        assert!(!lower.contains("rule"), "{out}");
+    }
+    // Coach voices the maintainer's framing on the mixed sleeper list.
+    assert!(
+        coach.contains("the knights already know where they are going"),
+        "{coach}"
+    );
+    insta::assert_snapshot!(coach);
+}
+
+#[test]
+fn development_prior_prose_neutral() {
+    let out = verbalize_voiced(&development_prior_record(), Voice::Neutral);
+    lint_prose(&out);
+    insta::assert_snapshot!(out);
+}
+
+/// Run 11: the book line renders in both voices, and explain_in_book
+/// places it as the headline of a silent position or as a trailing block
+/// otherwise. Book state is purely the caller's flag.
+#[test]
+fn book_line_and_explain_in_book() {
+    use kibitz_verbalize::{book_line, explain_in_book};
+    let coach = book_line(Voice::Coach);
+    let neutral = book_line(Voice::Neutral);
+    assert!(coach.contains("book"), "{coach}");
+    assert!(neutral.contains("book"), "{neutral}");
+    assert_ne!(coach, neutral);
+    lint_prose(&coach);
+    lint_prose(&neutral);
+
+    // A silent record: the book line becomes the headline.
+    let silent = empty_record();
+    let e = explain_in_book(&silent, true);
+    assert_eq!(e.headline.coach, coach);
+    assert_eq!(e.headline.neutral, neutral);
+
+    // A talkative record: the line is one trailing block, evidence-free.
+    let busy = quiet_record();
+    let e = explain_in_book(&busy, true);
+    let last = e.blocks.last().expect("blocks");
+    assert_eq!(last.text.coach, coach);
+    assert_eq!(last.evidence, Default::default());
+    // And the flag off changes nothing.
+    let plain = explain_in_book(&busy, false);
+    assert_eq!(plain, kibitz_verbalize::explain(&busy));
 }
 
 /// Run 10: the candidate-move closing sentence — rendered on demand (the

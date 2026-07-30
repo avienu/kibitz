@@ -63,9 +63,11 @@ pub struct SideDevelopment {
     /// Queen out beyond [`QUEEN_SORTIE_RANK`] while at least two minors
     /// sleep.
     pub queen_sortie: Option<Square>,
-    /// A non-pawn, non-king piece that moved at least twice while at
-    /// least two minors sleep: (current square, times moved). The queen
-    /// is not double-reported when the sortie already names her.
+    /// A minor piece or rook that moved at least twice while at least
+    /// two minors sleep: (current square, times moved). Queens are
+    /// excluded — repeated queen moves are the sortie rule's story, and
+    /// a queen maneuver with concrete targets (Morphy's Qd1-f3-b3 in the
+    /// opera game) must not be scolded as wandering.
     pub wanderer: Option<(Square, u32)>,
     /// Still-home center pawns (d/e files).
     pub center_pawns_home: Vec<Square>,
@@ -196,8 +198,14 @@ pub fn track(start: &Board, moves: &[Move]) -> DevelopmentReport {
                 .colors(color)
                 .into_iter()
                 .filter(|&sq| {
-                    !matches!(board.piece_on(sq), Some(Piece::Pawn | Piece::King))
-                        && (queen_sortie != Some(sq))
+                    matches!(
+                        board.piece_on(sq),
+                        Some(Piece::Knight | Piece::Bishop | Piece::Rook)
+                    )
+                        // A piece the enemy can profitably capture is
+                        // mid-exchange, not wandering — the story about
+                        // it is the capture, and it tells itself.
+                        && crate::see::see(&board, sq, !color) <= 0
                 })
                 .filter_map(|sq| moved.get(&sq).map(|&n| (sq, n)))
                 .filter(|&(_, n)| n >= 2)

@@ -46,6 +46,13 @@ pub fn synthesize(imbalances: &[Imbalance]) -> Vec<CompositePlan> {
 
     for imb in imbalances {
         for plan in &imb.plans {
+            // Development-prior hints (run 11) name LOCATIONS (sleeping
+            // pieces, the king's home, a wandering piece), not targets —
+            // clustering them around a file produces signpost nonsense.
+            // Only ClaimTheCenter carries a genuine target square.
+            if crate::development::is_prior_hint(&plan.hint) && plan.hint != "ClaimTheCenter" {
+                continue;
+            }
             // A hint's TARGET is its last square (routes end at the
             // destination; blockades name the stop square).
             let Some(target_file) = plan.squares.last().and_then(|s| file_of(s)) else {

@@ -42,6 +42,13 @@ plan.RestrictKnight = keep denying the enemy knight a stable square
 plan.AdvanceCentralMajority = roll the central pawn majority forward
 plan.OpenLinesTowardWeakKing = open lines toward the exposed enemy king
 
+# Development prior (run 11): the classical principles as plans.
+plan.CompleteDevelopment = finish development — bring the remaining minor pieces off the back rank
+plan.CastleIntoSafety = castle and bring the king to safety
+plan.ClaimTheCenter = advance a center pawn and stake a claim in the center
+plan.QueenAheadOfHerArmy = bring the queen back in step with her army before she is chased with tempo
+plan.SamePieceWandering = stop moving the same piece and spend the next move on one still at home
+
 # Composite plans (schema v2): several imbalances converging on one point.
 plan.composite.lead = Everything points to {target}: {clauses}.
 plan.composite.runner_up = A secondary idea for {side} is to work around {target}.
@@ -65,6 +72,11 @@ plan.composite.clause.RestrictKnight = keep the knight there from ever settling
 plan.composite.clause.AdvanceCentralMajority = roll the central majority through it
 plan.composite.clause.OpenLinesTowardWeakKing = pry open lines toward the king there
 plan.composite.clause.MinorityAttack = throw the minority pawns at it
+plan.composite.clause.CompleteDevelopment = finish development first
+plan.composite.clause.CastleIntoSafety = castle before committing there
+plan.composite.clause.ClaimTheCenter = stake the center claim there
+plan.composite.clause.QueenAheadOfHerArmy = let the queen fall back in step first
+plan.composite.clause.SamePieceWandering = stop walking the same piece
 
 # Candidate-move closing (run 10): {first}/{second} are SAN moves, {n} a
 # spelled-out count, {their_plan} a plan verb phrase (base plan.* keys).

@@ -1,0 +1,10 @@
+---
+source: crates/kibitz-verbalize/tests/verbalize.rs
+assertion_line: 552
+expression: out
+---
+White's queen on h5 has been left without a defender — worth keeping an eye on.
+
+White's development is unfinished. White's minor pieces on b1, c1, f1 and g1 are still at home. White's king is still in the center, with castling available. White's queen is already out on h5 while the minor pieces wait at home. White has yet to stake a claim in the center; the advance to d4 is still available. Meanwhile, Black's development is unfinished. Black's minor pieces on b8, c8, f8 and g8 are still at home. Black's king is still in the center, with castling available. Black has yet to stake a claim in the center; the advance to d5 is still available.
+
+A good plan for White: finish development — bring the remaining minor pieces off the back rank (key squares: b1, c1, f1 and g1). Another idea for White: castle and bring the king to safety (key squares: e1 and h1). Another idea for White: advance a center pawn and stake a claim in the center (key squares: d4). Another idea for White: bring the queen back in step with her army before she is chased with tempo (key squares: h5).

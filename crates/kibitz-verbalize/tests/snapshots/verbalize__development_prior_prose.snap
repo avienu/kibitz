@@ -1,0 +1,10 @@
+---
+source: crates/kibitz-verbalize/tests/verbalize.rs
+assertion_line: 545
+expression: coach
+---
+White's queen on h5 has lost its bodyguard — keep half an eye on it.
+
+Half of White's army is still dreaming on the back rank — development first. Among the sleepers on b1, c1, f1 and g1, the knights already know where they are going — the bishops are waiting to find out. White's king is still standing in the middle of the road, and castling is right there waiting. White's queen has marched out to h5 ahead of her army — every enemy developing move may ask her to move again. The center is still there for the taking — White's advance to d4 would stake the claim. Meanwhile, half of Black's army is still dreaming on the back rank — development first. Among the sleepers on b8, c8, f8 and g8, the knights already know where they are going — the bishops are waiting to find out. Black's king is still standing in the middle of the road, and castling is right there waiting. The center is still there for the taking — Black's advance to d5 would stake the claim.
+
+Here is what White should be dreaming about: wake the rest of the army — the pieces still at home are missing the story (key squares: b1, c1, f1 and g1). Another dream for White: tuck the king into its corner — it dreams of a quiet life, and the rook it trades places with gets a real job (key squares: e1 and h1). Another dream for White: the center pawns want to stand tall — claim the ground while it is still free (key squares: d4). Another dream for White: walk the queen back toward her army — out this early she is a target for every developing piece, not a threat (key squares: h5).

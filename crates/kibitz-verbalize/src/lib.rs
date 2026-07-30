@@ -42,7 +42,7 @@ use kibitz_core::record::{
 use serde_json::Value;
 
 use board::{Board, PieceKind};
-pub use explain::explain;
+pub use explain::{explain, explain_in_book};
 use phrase::{
     capitalize_first, decapitalize_first, favors_side, humanize, join_and, magnitude_key,
     pawns_amount, phase_key, see_key, severity_key, side_name,
@@ -674,6 +674,22 @@ pub(crate) fn render_imbalance(
         known_aspect.to_string()
     };
 
+    // The development PRIOR (run 11) is a to-do list, not an advantage:
+    // its headline must never claim {beneficiary} is ahead. Prior
+    // imbalances are recognized by their evidence keys, so position-only
+    // records (the plain development detector) keep the classic phrasing.
+    let development_prior = kind == "Development"
+        && imbalance.evidence.keys().any(|key| {
+            matches!(
+                evidence_base_key(key),
+                "sleeping_minors"
+                    | "king_in_center"
+                    | "queen_sortie"
+                    | "wanderer"
+                    | "center_unclaimed"
+            )
+        });
+
     let headline = match favors_side(imbalance.favors) {
         None => {
             let balanced_key = format!("imbalance.{kind}.balanced");
@@ -684,18 +700,21 @@ pub(crate) fn render_imbalance(
         }
         Some(side) => {
             let magnitude = magnitude_key(imbalance.magnitude);
+            let todo_key = format!("imbalance.{kind}.todo.{magnitude}");
             let phased_key = format!("imbalance.{kind}.{magnitude}.{}", phase_key(phase));
             let plain_key = format!("imbalance.{kind}.{magnitude}");
             let generic_key = format!("imbalance.generic.{magnitude}");
+            let mut keys: Vec<&str> = Vec::new();
+            if development_prior {
+                keys.push(todo_key.as_str());
+            }
+            keys.extend([
+                phased_key.as_str(),
+                plain_key.as_str(),
+                generic_key.as_str(),
+            ]);
             fill(
-                lookup_voiced(
-                    voice,
-                    &[
-                        phased_key.as_str(),
-                        plain_key.as_str(),
-                        generic_key.as_str(),
-                    ],
-                ),
+                lookup_voiced(voice, &keys),
                 &[("beneficiary", side_name(side)), ("aspect", &aspect)],
             )
         }
@@ -1027,8 +1046,107 @@ fn render_evidence(
             ))
         }
 
+        // --- Development prior (run 11) ---
+        "sleeping_minors" => {
+            let squares = string_list(value)?;
+            let side = key_side?;
+            let kinds: Vec<Option<PieceKind>> = squares
+                .iter()
+                .map(|square| board.piece_at(square).map(|(_, kind)| kind))
+                .collect();
+            let knights = kinds
+                .iter()
+                .filter(|k| **k == Some(PieceKind::Knight))
+                .count();
+            let bishops = kinds
+                .iter()
+                .filter(|k| **k == Some(PieceKind::Bishop))
+                .count();
+            let template_key = if squares.len() == 1 {
+                match kinds[0] {
+                    Some(PieceKind::Knight) => "evidence.sleeping_minors.one_knight",
+                    Some(PieceKind::Bishop) => "evidence.sleeping_minors.one_bishop",
+                    _ => "evidence.sleeping_minors.one",
+                }
+            } else if knights > 0 && bishops > 0 {
+                "evidence.sleeping_minors.mixed"
+            } else if knights > 0 {
+                "evidence.sleeping_minors.knights"
+            } else if bishops > 0 {
+                "evidence.sleeping_minors.bishops"
+            } else {
+                "evidence.sleeping_minors.plural"
+            };
+            Some(fill(
+                lookup_voiced(voice, &[template_key, "evidence.sleeping_minors.plural"]),
+                &[("side", side_name(side)), ("items", &join_and(&squares))],
+            ))
+        }
+
+        "king_in_center" => {
+            let side = key_side?;
+            let state_key = match value.as_str()? {
+                "lost" => "evidence.king_in_center.lost",
+                _ => "evidence.king_in_center.available",
+            };
+            Some(fill(
+                lookup_voiced(voice, &[state_key]),
+                &[("side", side_name(side))],
+            ))
+        }
+
+        "queen_sortie" => {
+            let side = key_side?;
+            let square = value.as_str()?;
+            Some(fill(
+                lookup_voiced(voice, &["evidence.queen_sortie"]),
+                &[("side", side_name(side)), ("items", square)],
+            ))
+        }
+
+        "wanderer" => {
+            let side = key_side?;
+            let object = value.as_object()?;
+            let square = object.get("square")?.as_str()?;
+            let times_key = match object.get("times").and_then(Value::as_u64) {
+                Some(2) => "count.twice",
+                Some(3) => "count.three_times",
+                _ => "count.many_times",
+            };
+            Some(fill(
+                lookup_voiced(voice, &["evidence.wanderer"]),
+                &[
+                    ("side", side_name(side)),
+                    ("square", square),
+                    ("times", lookup(&[times_key])),
+                ],
+            ))
+        }
+
+        "center_unclaimed" => {
+            let squares = string_list(value)?;
+            let side = key_side?;
+            let template_key = if squares.len() > 1 {
+                "evidence.center_unclaimed.plural"
+            } else {
+                "evidence.center_unclaimed"
+            };
+            Some(fill(
+                lookup_voiced(voice, &[template_key]),
+                &[("side", side_name(side)), ("items", &join_and(&squares))],
+            ))
+        }
+
         _ => None,
     }
+}
+
+/// The single quiet line shown while a position is still in the openings
+/// book (run 11). The BOOK STATE itself is the caller's knowledge —
+/// kibitz-core/-verbalize never touch a database; the caller passes
+/// `in_book` and this renders the line in the requested voice.
+pub fn book_line(voice: Voice) -> String {
+    lookup_voiced(voice, &["book.in_theory"]).to_string()
 }
 
 /// `Some(side)` when every listed square holds a pawn of one color on the
