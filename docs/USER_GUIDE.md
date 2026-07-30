@@ -649,8 +649,9 @@ where the damage happens, honestly:
   itself is the problem; fix the highest-damage branches.
 - Games without stored evals are counted as **unanalyzed** — never
   guessed at. The one **Re-analyze N games** button covers exactly
-  those: it shows a measured-or-assumed estimate first (basis string
-  shown verbatim), and **Start now** enqueues one bounded eval per
+  those: it shows an estimate first (its basis string shown verbatim —
+  assumed engine speed, since measuring would spawn the engine), and
+  **Start now** enqueues one bounded eval per
   position through the shared job queue and starts the worker — the
   click is the explicit engine request. Progress is the real queue
   count; the verdict rebuilds when the run finishes.
