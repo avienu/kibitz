@@ -33,8 +33,10 @@ is currently CLI-only. It is also available inside the app: press
   "on"/"off"), **Profile** (badge: "N findings" once a profile is built),
   **Opponent prep**.
 - **TRAIN** — **Openings SRS** (badge: "N due"), **Opening triage**
-  (where your games left your book, and where to grow it), **Tactics**
-  (badge: attempts, or puzzle count before any attempt), **Endgames**.
+  (where your games left your book, and where to grow it), **Opening
+  lab** (where an opening actually fails you, from your own games),
+  **Tactics** (badge: attempts, or puzzle count before any attempt),
+  **Endgames**.
 - **DATA IN / OUT** — **Import PGN / SCID**, **TWIC ingest** (badge:
   "wk NNNN", the newest imported week), **Account syncs** (badge: "N
   linked" configured accounts), **Jobs** (badge: "N running" /
@@ -615,6 +617,73 @@ being a gap on the next triage run; its frontier moves outward instead.
 If a color has no repertoire cards yet, the triage says so instead of
 inventing findings — add lines from the Game view ("→ repertoire") or
 import a study first.
+
+### Opening lab
+
+"I've struggled with my Nimzo for years without improving — which book
+moves should I actually pick and train?" The Opening lab answers that
+from your **own games**, with a reframe: it finds where the games
+actually *die*. Maybe the opening isn't the problem at all. Layout:
+picker + verdict + branch table | board + recommendation aside.
+
+**Step 1 — pick a cohort.** Type your name (all your name forms and
+declared aliases count as you) and **List my openings**: every opening
+family you actually play, per color, with real game counts and ECO
+ranges ("Nimzo-Indian Defense · as Black · E20–E59 · 412 games"). Pick
+one; your last pick is remembered.
+
+**Step 2 — the verdict.** For each cohort game the Lab computes, from a
+static walk (engine off): the ply it left opening theory (the bundled
+CC0 dataset), the stored eval at that exit, your **first significant
+error** (the first of your moves that drops the eval by ≥ 1.2 pawns
+from your point of view — stored evals only, fresh preferred over
+legacy imports), and the game's middlegame **structure tags** (the same
+classification the Profile uses). The one-paragraph verdict states
+where the damage happens, honestly:
+
+- *"Your games leave book around move 9 with 80% of evaluated games
+  still equal or better — the opening is not where they die. The damage
+  happens around moves 18–26 …, most often in own-isolated-pawn
+  positions."* — a middlegame-understanding gap; see the homework list.
+- *"You are often already worse when you leave book …"* — the opening
+  itself is the problem; fix the highest-damage branches.
+- Games without stored evals are counted as **unanalyzed** — never
+  guessed at. The one **Re-analyze N games** button covers exactly
+  those: it shows a measured-or-assumed estimate first (basis string
+  shown verbatim), and **Start now** enqueues one bounded eval per
+  position through the shared job queue and starts the worker — the
+  click is the explicit engine request. Progress is the real queue
+  count; the verdict rebuilds when the run finishes.
+
+**Step 3 — branches.** Every in-book position where it was your move,
+ranked by **damage = frequency × score deficit** (games × points lost
+vs a 50% baseline). Each row shows your actual move distribution with
+per-move score, stored-eval average, book status, and the opponent
+replies you really faced. Selecting a branch shows the position and its
+source games (deep-linked to the exact ply).
+
+**Step 4 — the recommendation.** **Extend with engine (4 lines)** runs
+the same deep MultiPV book-extension job the triage uses (queued +
+worker started on click; idempotent). Each candidate line then shows
+its factors **separately — never a single opaque score**:
+
+- **SOUND** — the engine eval of the line.
+- **FITS** — the structures the line steers into, joined against your
+  **cached profile's** scores in them ("own-isolated-pawn 29.2% (12
+  games)"). No cached profile → an honest "build a profile to see fit"
+  note instead of a number.
+- **COVERAGE** — the share of opponent replies you actually face that
+  the move keeps inside theory; a candidate you have never played says
+  "no reply data yet" rather than faking 100%.
+- An **in repertoire** marker when the candidate is already your card.
+
+**Adopt** puts the line into that color's repertoire from the branch
+position — your moves become SRS cards on their normal schedule.
+
+**Step 5 — structure homework.** Your first-error positions in the
+verdict's killer structures, each deep-linking the game at the error
+ply with the eval swing ("+0.1 → −1.6"). Reviewing those moments — not
+more move memorization — is the point when the verdict says middlegame.
 
 ### Tactics
 
