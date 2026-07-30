@@ -3,11 +3,15 @@ fn main() {
 
     // tbprobe.c #includes tbchess.c internally, so only tbprobe.c is compiled.
     // Fathom is plain C (upstream builds with -std=gnu99, plus C11 <stdatomic.h>
-    // when threads are enabled); no exotic flags are needed on macOS or Linux.
+    // when threads are enabled). MSVC defaults to C89 and its
+    // vcruntime_c11_stdatomic.h hard-errors without /std:c11 — the first
+    // Windows test build died exactly there (2026-07-30).
     cc::Build::new()
         .file("vendor/fathom/tbprobe.c")
         .include("vendor/fathom")
         .flag_if_supported("-std=gnu11")
+        .flag_if_supported("/std:c11")
+        .flag_if_supported("/experimental:c11atomics")
         .warnings(false)
         .compile("fathom");
 
