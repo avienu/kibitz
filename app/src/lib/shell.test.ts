@@ -33,6 +33,7 @@ describe("rail structure", () => {
       "prep",
       "train",
       "triage",
+      "lab",
       "tactics",
       "endgames",
       "play",
