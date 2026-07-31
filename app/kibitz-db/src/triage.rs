@@ -26,7 +26,7 @@
 //! ('book-extension' jobs, explicit user request); this module just
 //! stores and reads their results (`book_extensions`, migration 0013).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cozy_chess::{Board, Color as CozyColor, Move};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -292,6 +292,10 @@ pub struct ColorTriage {
     pub has_cards: bool,
     /// Games of this color actually walked.
     pub games_scanned: u32,
+    /// Games of this color present in the walked cohort, whether or not
+    /// they were triaged. A card-less color skips its games but still
+    /// reports how many are waiting — the UI's default-tab signal.
+    pub games_seen: u32,
     pub deviations: Vec<TriageItem>,
     pub gaps: Vec<TriageItem>,
     pub frontiers: Vec<TriageItem>,
@@ -390,8 +394,14 @@ pub fn triage_report(
 
     let mut aggs: HashMap<(bool, Class, u64), Agg> = HashMap::new();
     let mut scanned = (0u32, 0u32); // (white, black) games walked
+    let mut seen = (0u32, 0u32); // (white, black) games in the cohort
 
     for (is_white, game_id, movetext, white, black, date) in rows {
+        if is_white {
+            seen.0 += 1;
+        } else {
+            seen.1 += 1;
+        }
         let color_has_cards = if is_white {
             white_has_cards
         } else {
@@ -474,58 +484,60 @@ pub fn triage_report(
         }
     }
 
-    let build_color = |is_white: bool, has: bool, count: u32| -> anyhow::Result<ColorTriage> {
-        let mut lists: [Vec<TriageItem>; 3] = [Vec::new(), Vec::new(), Vec::new()];
-        for ((w, class, hash), agg) in &aggs {
-            if *w != is_white {
-                continue;
+    let build_color =
+        |is_white: bool, has: bool, count: u32, seen: u32| -> anyhow::Result<ColorTriage> {
+            let mut lists: [Vec<TriageItem>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+            for ((w, class, hash), agg) in &aggs {
+                if *w != is_white {
+                    continue;
+                }
+                let (eco, opening_name) = match crate::eco::classify_hash(conn, *hash)? {
+                    Some((e, n)) => (Some(e), Some(n)),
+                    None => (None, None),
+                };
+                let has_extension = latest_book_extension(conn, &agg.fen)?.is_some();
+                let item = TriageItem {
+                    fen: agg.fen.clone(),
+                    ply: agg.min_ply,
+                    games: agg.count,
+                    line: agg.line.clone(),
+                    eco,
+                    opening_name,
+                    expected_san: agg.expected_san.clone(),
+                    played_san: agg.played_san.clone(),
+                    opponent_san: agg.opponent_san.clone(),
+                    has_extension,
+                    examples: agg.examples.clone(),
+                };
+                let idx = match class {
+                    Class::Deviation => 0,
+                    Class::Gap => 1,
+                    Class::Frontier => 2,
+                };
+                lists[idx].push(item);
             }
-            let (eco, opening_name) = match crate::eco::classify_hash(conn, *hash)? {
-                Some((e, n)) => (Some(e), Some(n)),
-                None => (None, None),
-            };
-            let has_extension = latest_book_extension(conn, &agg.fen)?.is_some();
-            let item = TriageItem {
-                fen: agg.fen.clone(),
-                ply: agg.min_ply,
-                games: agg.count,
-                line: agg.line.clone(),
-                eco,
-                opening_name,
-                expected_san: agg.expected_san.clone(),
-                played_san: agg.played_san.clone(),
-                opponent_san: agg.opponent_san.clone(),
-                has_extension,
-                examples: agg.examples.clone(),
-            };
-            let idx = match class {
-                Class::Deviation => 0,
-                Class::Gap => 1,
-                Class::Frontier => 2,
-            };
-            lists[idx].push(item);
-        }
-        for list in &mut lists {
-            list.sort_by(|a, b| {
-                b.games
-                    .cmp(&a.games)
-                    .then(a.ply.cmp(&b.ply))
-                    .then(a.fen.cmp(&b.fen))
-            });
-        }
-        let [deviations, gaps, frontiers] = lists;
-        Ok(ColorTriage {
-            color: if is_white { "white" } else { "black" }.to_string(),
-            has_cards: has,
-            games_scanned: count,
-            deviations,
-            gaps,
-            frontiers,
-        })
-    };
+            for list in &mut lists {
+                list.sort_by(|a, b| {
+                    b.games
+                        .cmp(&a.games)
+                        .then(a.ply.cmp(&b.ply))
+                        .then(a.fen.cmp(&b.fen))
+                });
+            }
+            let [deviations, gaps, frontiers] = lists;
+            Ok(ColorTriage {
+                color: if is_white { "white" } else { "black" }.to_string(),
+                has_cards: has,
+                games_scanned: count,
+                games_seen: seen,
+                deviations,
+                gaps,
+                frontiers,
+            })
+        };
 
-    let white = build_color(true, white_has_cards, scanned.0)?;
-    let black = build_color(false, black_has_cards, scanned.1)?;
+    let white = build_color(true, white_has_cards, scanned.0, seen.0)?;
+    let black = build_color(false, black_has_cards, scanned.1, seen.1)?;
     Ok(TriageReport {
         player: player.to_string(),
         white,
@@ -670,6 +682,242 @@ pub fn latest_book_extension(
         multipv: multipv as u32,
         lines: serde_json::from_str(&lines)?,
     }))
+}
+
+// ---------------------------------------------------------------------------
+// repertoire inference: "you didn't name a repertoire, but your games
+// already show what you play" (2026-07-30 field report)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct InferOptions {
+    /// Most-recent games of the color walked (the triage cohort cap).
+    pub max_games: u32,
+    /// A branch is followed only while at least this many games support
+    /// it — on the user's moves AND on opponent replies alike.
+    pub min_games: u32,
+    /// Depth cap on an inferred line, in plies.
+    pub max_plies: usize,
+    /// Inferred lines returned (games-heaviest first).
+    pub max_lines: usize,
+}
+
+impl Default for InferOptions {
+    fn default() -> Self {
+        Self {
+            max_games: 400,
+            min_games: 3,
+            max_plies: 24,
+            max_lines: 12,
+        }
+    }
+}
+
+/// One line the user's own games suggest for their repertoire.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InferredLine {
+    /// SAN moves from the standard start. Replays legally by
+    /// construction: every move was decoded from a stored game and the
+    /// tree is keyed by the move path.
+    pub sans: Vec<String>,
+    /// Games whose in-book play followed this whole line.
+    pub games: u32,
+    /// The user's points share in those games, in percent (one decimal),
+    /// over the games with a known result; 0.0 when none has one.
+    pub score: f64,
+    /// Named via the bundled CC0 openings dataset (the line's deepest
+    /// position is in the dataset by construction).
+    pub eco: Option<String>,
+    pub opening_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InferredRepertoire {
+    pub player: String,
+    /// "white" | "black" — the color the user played these games.
+    pub color: String,
+    /// Standard-start games of the color walked (total-games context;
+    /// 0 = the identity has no games of this color at all).
+    pub games_scanned: u32,
+    pub lines: Vec<InferredLine>,
+}
+
+/// One game's contribution to inference.
+pub struct InferGame {
+    pub moves: Vec<Move>,
+    /// User points (1.0 / 0.5 / 0.0); `None` when the result is unknown
+    /// (the game still counts, it just cannot contribute to scores).
+    pub points: Option<f64>,
+}
+
+#[derive(Default)]
+struct InferNode {
+    games: u32,
+    points: f64,
+    scored: u32,
+    /// (san, arena index) — insertion order, tiny fan-out in practice.
+    children: Vec<(String, usize)>,
+}
+
+fn score_pct(points: f64, scored: u32) -> f64 {
+    if scored == 0 {
+        0.0
+    } else {
+        (points / scored as f64 * 1000.0).round() / 10.0
+    }
+}
+
+/// Pure inference over decoded games: build the tree of in-book opening
+/// prefixes (a position is in book when its `theory` membership holds —
+/// the same bundled-dataset test the Opening Lab uses; the first move
+/// producing an out-of-book position ends a game's contribution), then
+/// emit every branch the games support. A line ends where the book ends,
+/// where support thins below `min_games`, or at the ply cap. ECO naming
+/// is left to the caller.
+pub fn infer_lines(
+    games: &[InferGame],
+    theory: &HashSet<u64>,
+    opts: &InferOptions,
+) -> Vec<InferredLine> {
+    // Trie over the games' in-book opening prefixes (root = start).
+    let mut nodes: Vec<InferNode> = vec![InferNode::default()];
+    for g in games {
+        let mut board = Board::default();
+        let mut cur = 0usize;
+        for &mv in g.moves.iter().take(opts.max_plies) {
+            let san = format_san(&board, mv);
+            board.play(mv);
+            if !theory.contains(&position_hash(&board)) {
+                break; // out of book: this move and the rest contribute nothing
+            }
+            cur = match nodes[cur].children.iter().find(|(s, _)| s == &san) {
+                Some(&(_, idx)) => idx,
+                None => {
+                    nodes.push(InferNode::default());
+                    let idx = nodes.len() - 1;
+                    nodes[cur].children.push((san.clone(), idx));
+                    idx
+                }
+            };
+            nodes[cur].games += 1;
+            if let Some(p) = g.points {
+                nodes[cur].points += p;
+                nodes[cur].scored += 1;
+            }
+        }
+    }
+
+    // Walk the min-support-pruned trie; leaves are the inferred lines.
+    let mut out: Vec<InferredLine> = Vec::new();
+    let mut stack: Vec<(usize, Vec<String>)> = vec![(0, Vec::new())];
+    while let Some((idx, path)) = stack.pop() {
+        let followed: Vec<(String, usize)> = nodes[idx]
+            .children
+            .iter()
+            .filter(|(_, c)| nodes[*c].games >= opts.min_games)
+            .cloned()
+            .collect();
+        if followed.is_empty() {
+            if !path.is_empty() {
+                let node = &nodes[idx];
+                out.push(InferredLine {
+                    sans: path,
+                    games: node.games,
+                    score: score_pct(node.points, node.scored),
+                    eco: None,
+                    opening_name: None,
+                });
+            }
+            continue;
+        }
+        for (san, child) in followed {
+            let mut p = path.clone();
+            p.push(san);
+            stack.push((child, p));
+        }
+    }
+    out.sort_by(|a, b| {
+        b.games
+            .cmp(&a.games)
+            .then(a.sans.len().cmp(&b.sans.len()))
+            .then(a.sans.cmp(&b.sans))
+    });
+    out.truncate(opts.max_lines);
+    out
+}
+
+/// Infer the repertoire `player` already plays as `color` from their own
+/// recent games (identity-resolved, standard-start, newest first — the
+/// triage cohort shape). Static database walk — no engine (CLAUDE.md #6).
+pub fn infer_repertoire(
+    conn: &Connection,
+    player: &str,
+    color: &str,
+    opts: &InferOptions,
+) -> anyhow::Result<InferredRepertoire> {
+    let is_white = match color {
+        "white" => true,
+        "black" => false,
+        other => anyhow::bail!("color must be \"white\" or \"black\", got {other:?}"),
+    };
+    let ids = crate::identity::resolve_identity_ids(conn, player)?;
+    if ids.is_empty() {
+        anyhow::bail!("no player named {player:?} in this database");
+    }
+    let id_list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    let theory = crate::fingerprint::theory_set(conn)?;
+
+    // Recent games the user played as `color`, newest first. Custom-start
+    // games are studies/fragments, not repertoire evidence — skipped,
+    // exactly as in `triage_report`.
+    let side = if is_white { "white_id" } else { "black_id" };
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT g.result, g.movetext FROM games g
+         WHERE g.{side} IN ({id_list})
+           AND g.start_fen IS NULL
+         ORDER BY g.id DESC LIMIT ?1"
+    ))?;
+    let rows: Vec<(i64, Vec<u8>)> = stmt
+        .query_map([opts.max_games as i64], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+
+    let mut games: Vec<InferGame> = Vec::with_capacity(rows.len());
+    for (result, movetext) in rows {
+        let Ok(moves) = decode_game(&Board::default(), &movetext) else {
+            continue;
+        };
+        let points = match (result, is_white) {
+            (1, true) | (2, false) => Some(1.0),
+            (2, true) | (1, false) => Some(0.0),
+            (3, _) => Some(0.5),
+            _ => None,
+        };
+        games.push(InferGame { moves, points });
+    }
+    let games_scanned = games.len() as u32;
+
+    let mut lines = infer_lines(&games, &theory, opts);
+    // Name each line by its deepest position (in the dataset by
+    // construction — theory membership is dataset membership).
+    for line in &mut lines {
+        let mut board = Board::default();
+        for san in &line.sans {
+            board.play(crate::san::parse_san(&board, san)?);
+        }
+        if let Some((eco, name)) = crate::eco::classify_hash(conn, position_hash(&board))? {
+            line.eco = Some(eco);
+            line.opening_name = Some(name);
+        }
+    }
+
+    Ok(InferredRepertoire {
+        player: player.to_string(),
+        color: color.to_string(),
+        games_scanned,
+        lines,
+    })
 }
 
 #[cfg(test)]
@@ -912,6 +1160,7 @@ mod tests {
             w.games_scanned, 5,
             "identity resolution merges 'Ann Tester' (run 8.5)"
         );
+        assert_eq!(w.games_seen, 5);
 
         // Deviation: 3.Bc4 instead of 3.Bb5.
         assert_eq!(w.deviations.len(), 1);
@@ -942,10 +1191,12 @@ mod tests {
         assert_eq!(f.fen, want.to_string());
         assert!(!f.has_extension, "no extension stored yet");
 
-        // Black side: no cards → honest emptiness, games not scanned.
+        // Black side: no cards → honest emptiness, games not scanned —
+        // but the cohort count is still reported (the default-tab signal).
         let b = &report.black;
         assert!(!b.has_cards);
         assert_eq!(b.games_scanned, 0);
+        assert_eq!(b.games_seen, 0, "the fixture user never plays Black");
         assert!(b.deviations.is_empty() && b.gaps.is_empty() && b.frontiers.is_empty());
 
         // Wire shape: camelCase.
@@ -953,6 +1204,7 @@ mod tests {
         for needle in [
             "\"hasCards\":",
             "\"gamesScanned\":",
+            "\"gamesSeen\":",
             "\"expectedSan\":",
             "\"opponentSan\":",
             "\"hasExtension\":",
@@ -1058,5 +1310,311 @@ mod tests {
         );
         assert_eq!(report.white.gaps[0].opponent_san.as_deref(), Some("e6"));
         assert_eq!(crate::engine::spawn_count(), 0, "all of this is static");
+    }
+
+    // ---- repertoire inference ----
+
+    /// Theory set from explicit "book lines": every position after every
+    /// prefix of every line — the Opening Lab's test convention, fully
+    /// under test control.
+    fn theory_of(lines: &[&[&str]]) -> HashSet<u64> {
+        let mut set = HashSet::new();
+        for line in lines {
+            let mut board = Board::default();
+            for san in line.iter() {
+                let mv = crate::san::parse_san(&board, san).unwrap();
+                board.play(mv);
+                set.insert(position_hash(&board));
+            }
+        }
+        set
+    }
+
+    fn infer_game(sans: &[&str], points: Option<f64>) -> InferGame {
+        let (_, moves) = play_sans(sans);
+        InferGame { moves, points }
+    }
+
+    fn sans_of(line: &InferredLine) -> Vec<&str> {
+        line.sans.iter().map(String::as_str).collect()
+    }
+
+    #[test]
+    fn infer_lines_counts_scores_branches_and_prunes_by_support() {
+        let theory = theory_of(&[
+            &["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4"],
+            &["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"],
+            &["e4", "c5", "Nf3", "d6", "d4", "cxd4"],
+        ]);
+        let games = vec![
+            // Ruy twice through 4.Ba4 (one with an off-book tail: 4...b5
+            // leaves the test theory, so nothing after Ba4 contributes).
+            infer_game(
+                &["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "b5"],
+                Some(1.0),
+            ),
+            infer_game(&["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4"], Some(0.5)),
+            // Berlin: 3...Nf6 is outside the test theory — the game's
+            // contribution ends after 3.Bb5.
+            infer_game(&["e4", "e5", "Nf3", "Nc6", "Bb5", "Nf6"], Some(0.0)),
+            // Italian once: below any min_games ≥ 2.
+            infer_game(&["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"], Some(1.0)),
+            // Sicilian three times, one with an unknown result.
+            infer_game(&["e4", "c5", "Nf3", "d6"], Some(1.0)),
+            infer_game(&["e4", "c5", "Nf3", "d6"], Some(0.5)),
+            infer_game(&["e4", "c5", "Nf3", "d6"], None),
+            // Entirely out of the test theory: contributes nothing.
+            infer_game(&["d4", "d5"], Some(1.0)),
+        ];
+
+        // Default support 3: the opponent split after 3.Bb5 (2× a6, 1×
+        // Nf6-exit) thins the Ruy at Bb5; the Sicilian ends where the
+        // games end.
+        let opts = InferOptions::default();
+        let lines = infer_lines(&games, &theory, &opts);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert_eq!(sans_of(&lines[0]), ["e4", "c5", "Nf3", "d6"]);
+        assert_eq!(lines[0].games, 3);
+        assert_eq!(
+            lines[0].score, 75.0,
+            "1.5 points over the TWO scored games — the unknown result never fakes a score"
+        );
+        assert_eq!(sans_of(&lines[1]), ["e4", "e5", "Nf3", "Nc6", "Bb5"]);
+        assert_eq!((lines[1].games, lines[1].score), (3, 50.0));
+
+        // Every emitted line replays legally from the standard start.
+        for line in &lines {
+            let mut board = Board::default();
+            for san in &line.sans {
+                let mv = crate::san::parse_san(&board, san).unwrap();
+                board.play(mv);
+            }
+        }
+
+        // Support 2 follows the opponent's ...a6 branch deeper; the
+        // 1-game Italian stays pruned.
+        let opts2 = InferOptions {
+            min_games: 2,
+            ..InferOptions::default()
+        };
+        let lines = infer_lines(&games, &theory, &opts2);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(sans_of(&lines[0]), ["e4", "c5", "Nf3", "d6"]);
+        assert_eq!(
+            sans_of(&lines[1]),
+            ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4"]
+        );
+        assert_eq!((lines[1].games, lines[1].score), (2, 75.0));
+
+        // Support 1 surfaces the Italian too; max_lines caps the list
+        // games-heaviest first.
+        let opts1 = InferOptions {
+            min_games: 1,
+            ..InferOptions::default()
+        };
+        let lines = infer_lines(&games, &theory, &opts1);
+        assert_eq!(lines.len(), 3);
+        assert_eq!(sans_of(&lines[2]), ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]);
+        let capped = infer_lines(
+            &games,
+            &theory,
+            &InferOptions {
+                min_games: 1,
+                max_lines: 2,
+                ..InferOptions::default()
+            },
+        );
+        assert_eq!(capped.len(), 2);
+        assert_eq!(capped[0].games, 3);
+
+        // The ply cap ends lines early.
+        let shallow = infer_lines(
+            &games,
+            &theory,
+            &InferOptions {
+                max_plies: 2,
+                ..InferOptions::default()
+            },
+        );
+        assert_eq!(shallow.len(), 2);
+        assert_eq!(
+            (sans_of(&shallow[0]).as_slice(), shallow[0].games),
+            (["e4", "e5"].as_slice(), 4)
+        );
+        assert_eq!(
+            (sans_of(&shallow[1]).as_slice(), shallow[1].games),
+            (["e4", "c5"].as_slice(), 3)
+        );
+
+        // No games at all: no lines, no panic.
+        assert!(infer_lines(&[], &theory, &opts).is_empty());
+    }
+
+    /// Fixture games for the db-level inference: the user under two
+    /// lexically equivalent name forms plays the Najdorf three times as
+    /// White (mixed results), one under-supported Ruy, one Black game,
+    /// and one custom-start study that must never contribute.
+    const INFER_GAMES: &str = r#"[Event "Club"]
+[White "Infer, Ida"]
+[Black "Gegner, Anna"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 1-0
+
+[Event "Online"]
+[White "Ida Infer"]
+[Black "Gegner, Bea"]
+[Result "0-1"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 0-1
+
+[Event "Club"]
+[White "Infer, Ida"]
+[Black "Gegner, Cora"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 1-0
+
+[Event "Club"]
+[White "Infer, Ida"]
+[Black "Spanier, Dora"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 1-0
+
+[Event "Club"]
+[White "Gegner, Emil"]
+[Black "Infer, Ida"]
+[Result "0-1"]
+
+1. d4 d5 2. c4 e6 0-1
+
+[Event "Study"]
+[White "Infer, Ida"]
+[Black "Gegner, Fritz"]
+[Result "1-0"]
+[SetUp "1"]
+[FEN "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"]
+
+2. Nf3 d6 1-0
+"#;
+
+    #[test]
+    fn infer_repertoire_walks_real_games_and_adoption_flips_the_triage() {
+        let (_dir, conn) = open_db();
+        let st = import_pgn(&conn, &source(), Cursor::new(INFER_GAMES)).unwrap();
+        assert_eq!(st.games_imported, 6, "failures: {:?}", st.failures);
+
+        let inf = infer_repertoire(&conn, "Infer, Ida", "white", &InferOptions::default()).unwrap();
+        assert_eq!(inf.color, "white");
+        assert_eq!(
+            inf.games_scanned, 4,
+            "3 Najdorfs + 1 Ruy, both name forms; the Black game and the custom-start study are out"
+        );
+        assert_eq!(inf.lines.len(), 1, "the 1-game Ruy is under-supported");
+        let line = &inf.lines[0];
+        assert_eq!(
+            sans_of(line),
+            ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6"]
+        );
+        assert_eq!((line.games, line.score), (3, 66.7));
+        // Named via the CC0 dataset. The exact code is transposition-
+        // dependent (equally deep dataset entries tie-break by code), so
+        // assert the family, not the sub-code.
+        assert!(
+            line.eco.as_deref().unwrap_or("").starts_with('B'),
+            "{:?}",
+            line.eco
+        );
+        assert!(
+            line.opening_name
+                .as_deref()
+                .unwrap_or("")
+                .contains("Sicilian"),
+            "{:?}",
+            line.opening_name
+        );
+
+        // Wire shape: camelCase.
+        let json = serde_json::to_string(&inf).unwrap();
+        for needle in [
+            "\"gamesScanned\":",
+            "\"openingName\":",
+            "\"sans\":",
+            "\"score\":",
+        ] {
+            assert!(json.contains(needle), "missing {needle} in {json}");
+        }
+
+        // Lower support surfaces the Ruy too.
+        let inf2 = infer_repertoire(
+            &conn,
+            "Infer, Ida",
+            "white",
+            &InferOptions {
+                min_games: 1,
+                ..InferOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(inf2.lines.len(), 2);
+
+        // Black: one game, below support — honest counts, no lines.
+        let black =
+            infer_repertoire(&conn, "Infer, Ida", "black", &InferOptions::default()).unwrap();
+        assert_eq!((black.games_scanned, black.lines.len()), (1, 0));
+
+        // Bad inputs fail cleanly.
+        assert!(infer_repertoire(&conn, "Infer, Ida", "pink", &InferOptions::default()).is_err());
+        assert!(
+            infer_repertoire(&conn, "Nobody, At All", "white", &InferOptions::default()).is_err()
+        );
+
+        // Before adoption the triage skips every White game...
+        let report = triage_report(&conn, "Infer, Ida", &TriageOptions::default()).unwrap();
+        assert!(!report.white.has_cards);
+        assert_eq!(report.white.games_scanned, 0);
+        assert_eq!(
+            report.white.games_seen, 4,
+            "the default-tab signal still counts them"
+        );
+        assert_eq!(report.black.games_seen, 1);
+
+        // ...adopting the inferred line (the trainAddLine path) flips it.
+        let rep = crate::repertoire::ensure_repertoire(
+            &conn,
+            kibitz_profile::Color::White,
+            "main",
+            &source(),
+        )
+        .unwrap();
+        let now = crate::repertoire::now_utc(&conn).unwrap();
+        let st = crate::repertoire::add_line(
+            &conn,
+            rep,
+            kibitz_profile::Color::White,
+            &Board::default(),
+            &line.sans,
+            &now,
+        )
+        .unwrap();
+        assert_eq!(st.cards_added, 5, "e4, Nf3, d4, Nxd4, Nc3 become cards");
+
+        let report = triage_report(&conn, "Infer, Ida", &TriageOptions::default()).unwrap();
+        assert!(
+            report.white.has_cards,
+            "adopted inference is no longer 'no cards'"
+        );
+        assert_eq!(report.white.games_scanned, 4);
+        // The Najdorf games follow the new book to the end; the Ruy game
+        // now surfaces as a real triage point (1...e5 gap — 1...c5 is
+        // covered).
+        assert_eq!(report.white.gaps.len(), 1);
+        assert_eq!(report.white.gaps[0].opponent_san.as_deref(), Some("e5"));
+        assert_eq!(
+            crate::engine::spawn_count(),
+            0,
+            "inference is a static walk"
+        );
     }
 }

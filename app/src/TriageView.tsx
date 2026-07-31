@@ -9,26 +9,33 @@
  * The report itself is a static database walk — the engine only runs
  * when the user clicks "Extend with engine" (CLAUDE.md #6).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Board from "./Board";
 import ScreenHeader from "./shell/ScreenHeader";
-import { matchingPlayers, selfPlayerGet, selfPlayerSet, trainAddLine } from "./lib/db";
+import { identityGroup, matchingPlayers, selfPlayerGet, selfPlayerSet, trainAddLine } from "./lib/db";
 import {
+  colorName,
+  defaultTriageColor,
   evalLabel,
+  inferredLineLabel,
   itemCaption,
   numberedLine,
   triageExtend,
   triageExtensionStatus,
+  triageInferRepertoire,
   triageReport,
   triageSummary,
   type ColorTriage,
   type ExtensionStatus,
+  type InferredLine,
+  type InferredRepertoire,
   type TriageItem,
   type TriageReport,
 } from "./lib/triage";
 import type { BoardTreatment } from "./lib/evidence";
 
 const PLAYER_KEY = "kibitz.triagePlayer";
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 export type TriageKind = "deviation" | "gap" | "frontier";
 
@@ -119,6 +126,17 @@ export default function TriageView({
   const [adoptMsg, setAdoptMsg] = useState<string | null>(null);
   const [adopting, setAdopting] = useState(false);
 
+  /* ---- inferred-repertoire suggestion flow (card-less colors) ---- */
+  const [inferred, setInferred] = useState<InferredRepertoire | null>(null);
+  const [inferring, setInferring] = useState(false);
+  const [inferError, setInferError] = useState<string | null>(null);
+  /** Name forms searched, shown when the identity has zero games. */
+  const [identityForms, setIdentityForms] = useState<string[] | null>(null);
+  const [inferMsg, setInferMsg] = useState<string | null>(null);
+  /** The first report of the session picks the tab (a color that has
+   * cards — never a dead tab); an explicit toggle is never overridden. */
+  const colorAutoPicked = useRef(false);
+
   /* ---- player suggestions (debounced) ---- */
   useEffect(() => {
     const q = player.trim();
@@ -141,6 +159,10 @@ export default function TriageView({
     try {
       const r = await triageReport(p);
       setReport(r);
+      if (!colorAutoPicked.current) {
+        colorAutoPicked.current = true;
+        setColor(defaultTriageColor(r));
+      }
       localStorage.setItem(PLAYER_KEY, p);
       selfPlayerSet(p).catch(() => {}); // running triage declares self
     } catch (e) {
@@ -241,6 +263,80 @@ export default function TriageView({
     [sel, color, adopting, onCountsChanged],
   );
 
+  /* ---- inference: runs whenever the selected color has no cards ---- */
+  const needInfer = report !== null && ct !== null && !ct.hasCards;
+  const reportPlayer = report?.player ?? null;
+  useEffect(() => {
+    if (!needInfer || reportPlayer === null) {
+      setInferred(null);
+      setInferError(null);
+      setInferring(false);
+      return;
+    }
+    let stale = false;
+    setInferring(true);
+    setInferError(null);
+    setInferred(null);
+    setIdentityForms(null);
+    triageInferRepertoire(reportPlayer, color)
+      .then(async (inf) => {
+        if (stale) return;
+        setInferred(inf);
+        if (inf.gamesScanned === 0) {
+          // Zero games for the identity: name the forms actually searched.
+          try {
+            const forms = await identityGroup(reportPlayer);
+            if (!stale) setIdentityForms(forms.map((f) => f.name));
+          } catch {
+            if (!stale) setIdentityForms([reportPlayer]);
+          }
+        }
+      })
+      .catch((e) => {
+        if (!stale) setInferError(String(e));
+      })
+      .finally(() => {
+        if (!stale) setInferring(false);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [needInfer, reportPlayer, color]);
+
+  /** Adopt inferred lines (trainAddLine per line), then re-run the
+   * triage so the user lands on actual triage points. */
+  const adoptInferred = useCallback(
+    async (lines: InferredLine[]) => {
+      if (adopting || lines.length === 0) return;
+      setAdopting(true);
+      setInferMsg(null);
+      try {
+        let added = 0;
+        let existing = 0;
+        let repName = "";
+        for (const l of lines) {
+          const res = await trainAddLine(color, l.sans);
+          added += res.cardsAdded;
+          existing += res.cardsExisting;
+          repName = res.repertoire;
+        }
+        setInferMsg(
+          `Adopted ${lines.length} line${lines.length === 1 ? "" : "s"} into "${repName}": ` +
+            `${added} new card${added === 1 ? "" : "s"}, ${existing} position${
+              existing === 1 ? "" : "s"
+            } already covered.`,
+        );
+        onCountsChanged?.();
+        await run(); // land on the real triage points
+      } catch (e) {
+        setInferMsg(`Adoption failed: ${e}`);
+      } finally {
+        setAdopting(false);
+      }
+    },
+    [color, adopting, onCountsChanged, run],
+  );
+
   const extension = extStatus?.extension ?? null;
 
   return (
@@ -253,6 +349,7 @@ export default function TriageView({
             <button
               className={color === "white" ? "cur" : ""}
               onClick={() => {
+                colorAutoPicked.current = true;
                 setColor("white");
                 setSel(null);
               }}
@@ -262,6 +359,7 @@ export default function TriageView({
             <button
               className={color === "black" ? "cur" : ""}
               onClick={() => {
+                colorAutoPicked.current = true;
                 setColor("black");
                 setSel(null);
               }}
@@ -307,14 +405,81 @@ export default function TriageView({
           {report && ct && (
             <>
               <div className="triage-summary">
-                {report.player} as {color === "white" ? "White" : "Black"} ·{" "}
-                {ct.gamesScanned} game{ct.gamesScanned === 1 ? "" : "s"} scanned ·{" "}
-                {triageSummary(ct)}
+                {report.player} as {colorName(color)}
+                {ct.hasCards
+                  ? ` · ${ct.gamesScanned} game${ct.gamesScanned === 1 ? "" : "s"} scanned`
+                  : ""}{" "}
+                · {triageSummary(ct)}
               </div>
+              {inferMsg && <div className="triage-adopt-msg">{inferMsg}</div>}
               {!ct.hasCards ? (
-                <div className="pf2-empty">
-                  No {color} repertoire cards yet — add lines from the Game view (&ldquo;→
-                  repertoire&rdquo;) or import a PGN study, then re-run the triage.
+                <div className="triage-infer">
+                  {inferring && (
+                    <div className="triage-ext-progress">
+                      Reading your {colorName(color)} games for the lines you already play…
+                    </div>
+                  )}
+                  {inferError && <div className="error">{inferError}</div>}
+                  {inferred && inferred.gamesScanned === 0 && (
+                    <div className="pf2-empty">
+                      No {colorName(color)} games found for this identity
+                      {identityForms && identityForms.length > 0
+                        ? ` (searched: ${identityForms.join(", ")})`
+                        : ""}
+                      . If you play under another handle — your chess.com username, say — it may
+                      not be declared as you yet: add it on the Profile screen&rsquo;s INCLUDES
+                      strip, then re-run the triage.
+                    </div>
+                  )}
+                  {inferred && inferred.gamesScanned > 0 && inferred.lines.length === 0 && (
+                    <div className="pf2-empty">
+                      Walked {inferred.gamesScanned} {colorName(color)} game
+                      {inferred.gamesScanned === 1 ? "" : "s"}, but no opening line repeats in
+                      enough of them to suggest (3+ games in book). Add lines from the Game view
+                      (&ldquo;→ repertoire&rdquo;) or import a PGN study instead.
+                    </div>
+                  )}
+                  {inferred && inferred.lines.length > 0 && (
+                    <>
+                      <div className="triage-infer-headline">
+                        No {colorName(color)} repertoire yet — but your games already show what
+                        you play:
+                      </div>
+                      {inferred.lines.map((l, i) => (
+                        <div className="triage-infer-line" key={l.sans.join(" ")}>
+                          <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
+                          <span className="triage-row-main">
+                            <span className="triage-line">{numberedLine(l.sans, START_FEN)}</span>
+                            <span className="triage-caption">{inferredLineLabel(l)}</span>
+                          </span>
+                          <button
+                            className="btn-secondary"
+                            disabled={adopting}
+                            onClick={() => void adoptInferred([l])}
+                          >
+                            Adopt
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        className="btn-primary"
+                        disabled={adopting}
+                        onClick={() => void adoptInferred(inferred.lines)}
+                      >
+                        {adopting
+                          ? "Adopting…"
+                          : `Adopt all ${inferred.lines.length} line${
+                              inferred.lines.length === 1 ? "" : "s"
+                            }`}
+                      </button>
+                      <p className="triage-footnote">
+                        Inferred from your {inferred.gamesScanned} most recent {colorName(color)}{" "}
+                        games: the tree of your in-book moves, following every branch at least 3
+                        games support. Adopting creates SRS cards from your moves and re-runs
+                        the triage automatically.
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <TriageLists ct={ct} selectedFen={sel?.item.fen ?? null} onSelect={select} />
@@ -325,7 +490,7 @@ export default function TriageView({
 
         <aside className="triage-aside">
           <Board
-            fen={sel?.item.fen ?? "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}
+            fen={sel?.item.fen ?? START_FEN}
             orientation={color}
             treatment={treatment}
             size={360}

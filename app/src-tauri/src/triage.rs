@@ -33,6 +33,28 @@ pub async fn triage_report(
     })
 }
 
+/// Infer the lines `player` already plays as `color` ("white" | "black")
+/// from their own games — the no-repertoire-yet suggestion flow
+/// (2026-07-30 field report: a card-less color must suggest, not
+/// dead-end). Identity-resolved, standard-start games only; static
+/// database walk, engine off (CLAUDE.md #6).
+#[tauri::command]
+pub async fn triage_infer_repertoire(
+    state: State<'_, DbState>,
+    player: String,
+    color: String,
+) -> Result<kibitz_db::triage::InferredRepertoire, String> {
+    with_conn(&state, |conn| {
+        kibitz_db::triage::infer_repertoire(
+            conn,
+            &player,
+            &color,
+            &kibitz_db::triage::InferOptions::default(),
+        )
+        .map_err(|e| e.to_string())
+    })
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtendStarted {

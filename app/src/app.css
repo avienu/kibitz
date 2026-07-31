@@ -5023,6 +5023,25 @@ button.mv-var-line:hover {
   color: var(--dim);
   text-wrap: pretty;
 }
+/* Inferred-repertoire suggestion flow (card-less colors, 2026-07-30). */
+.triage-infer {
+  margin-top: 4px;
+}
+.triage-infer-headline {
+  margin: 10px 0;
+  font: 600 13.5px/1.5 var(--font-prose);
+}
+.triage-infer-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--panel);
+}
 
 /* ---- Database storage (Settings, 2026-07-29) ---------------------------- */
 .storage-warning {
