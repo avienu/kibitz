@@ -637,9 +637,25 @@ SRS cards (confirmed with the real cards-added count) and show up in
 Openings SRS on their normal schedule. A gap you adopt a line for stops
 being a gap on the next triage run; its frontier moves outward instead.
 
-If a color has no repertoire cards yet, the triage says so instead of
-inventing findings — add lines from the Game view ("→ repertoire") or
-import a study first.
+**No repertoire yet? The triage suggests one from your games.** You
+don't have to have named a repertoire before the screen is useful. The
+color tab you land on is one that actually has cards (with no cards
+anywhere, the color you have more games as) — never a dead tab. When
+the selected color has no cards, its games are honestly reported as
+skipped ("White games are skipped until a White repertoire exists —
+adopt one below.") and the triage reads your recent games as that color
+instead: it builds the tree of your own in-book moves (the bundled CC0
+openings dataset decides what's "in book") and lists every line at
+least 3 of your games support — branching on opponent replies too — up
+to 12 lines, each with its game count, your score in those games, and
+the opening name. **Adopt** a single line or **Adopt all N lines**:
+your moves become SRS cards (real cards-added totals are shown) and the
+triage re-runs automatically, so you land on actual triage points for
+the repertoire you really play. If no games are found for your name at
+all, the message names the identity forms it searched — declare your
+online handle on the Profile screen's INCLUDES strip if it's missing.
+You can still build the book by hand instead: add lines from the Game
+view ("→ repertoire") or import a PGN study.
 
 ### Opening lab
 
