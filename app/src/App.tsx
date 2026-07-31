@@ -1060,12 +1060,14 @@ export default function App() {
             treatment={gv.boardTreatment}
             onOpenGameAt={(id, ply) => void loadDbGameAt(id, ply)}
             onCountsChanged={refreshCounts}
+            onNavigate={navigate}
           />
         );
       case "lab":
         return (
           <OpeningLabView
             treatment={gv.boardTreatment}
+            onNavigate={navigate}
             onOpenGameAt={(id, ply) => void loadDbGameAt(id, ply)}
             onCountsChanged={refreshCounts}
           />

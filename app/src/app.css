@@ -5199,3 +5199,31 @@ button.mv-var-line:hover {
   gap: 10px;
   margin-top: 16px;
 }
+
+/* ---- Identity note on self-facing screens (2026-07-30) ------------------ */
+.triage-identity {
+  font: 400 12.5px var(--font-ui);
+  color: var(--dim);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.triage-identity strong {
+  color: var(--tx);
+  font-weight: 600;
+}
+.triage-setup {
+  max-width: 520px;
+}
+.linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  font: 500 11.5px var(--font-ui);
+  color: var(--accent);
+  cursor: pointer;
+}
+.linklike:hover {
+  text-decoration: underline;
+}

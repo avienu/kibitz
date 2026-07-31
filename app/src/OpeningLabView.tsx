@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Board from "./Board";
 import ScreenHeader from "./shell/ScreenHeader";
-import { jobsStatus, matchingPlayers, selfPlayerGet, selfPlayerSet, trainAddLine } from "./lib/db";
+import { jobsStatus, selfPlayerGet, trainAddLine } from "./lib/db";
 import { fmtDurationMs } from "./lib/home";
 import {
   evalLabel,
@@ -44,7 +44,6 @@ import {
 } from "./lib/openingLab";
 import type { BoardTreatment } from "./lib/evidence";
 
-const PLAYER_KEY = "kibitz.labPlayer";
 const COHORT_KEY = "kibitz.labCohort";
 
 /** The damage-ranked branch table (pure — unit-testable). */
@@ -91,26 +90,19 @@ interface OpeningLabViewProps {
   onOpenGameAt: (gameId: number, ply: number) => void;
   /** Adoption creates SRS cards — let the shell refresh its due badges. */
   onCountsChanged?: () => void;
+  /** Identity lives on the Profile page — links point there. */
+  onNavigate?: (view: "profile") => void;
 }
 
 export default function OpeningLabView({
   treatment = "walnut",
   onOpenGameAt,
   onCountsChanged,
+  onNavigate,
 }: OpeningLabViewProps) {
-  const [player, setPlayer] = useState(() => localStorage.getItem(PLAYER_KEY) ?? "");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  // The app knows who you are (2026-07-30): empty field seeds from the
-  // database's canonical self_player.
-  useEffect(() => {
-    if (player.trim() !== "") return;
-    selfPlayerGet()
-      .then((name) => {
-        if (name) setPlayer((cur) => (cur.trim() === "" ? name : cur));
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /** Canonical identity (null = still asking; "" = app doesn't know you
+   * yet). Identity is configured on the Profile page ONLY. */
+  const [selfName, setSelfName] = useState<string | null>(null);
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
   const [cohort, setCohort] = useState<CohortRow | null>(null);
   const [report, setReport] = useState<LabReport | null>(null);
@@ -129,32 +121,17 @@ export default function OpeningLabView({
   const [rePending, setRePending] = useState<number | null>(null);
   const [reError, setReError] = useState<string | null>(null);
 
-  /* ---- player suggestions (debounced) ---- */
-  useEffect(() => {
-    const q = player.trim();
-    if (q.length < 2) return;
-    const t = setTimeout(() => {
-      matchingPlayers(q)
-        .then((names) => setSuggestions(names.slice(0, 8)))
-        .catch(() => setSuggestions([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [player]);
-
-  /* ---- step 1: the user's openings ---- */
-  const loadCohorts = useCallback(async () => {
-    const p = player.trim();
-    if (p === "" || busy) return;
+  /* ---- step 1: the user's openings (auto-loads for the self identity) ---- */
+  const loadCohorts = useCallback(async (p: string) => {
+    if (p.trim() === "") return;
     setBusy(true);
     setError(null);
     setReport(null);
     setCohort(null);
     setSel(null);
     try {
-      const rows = await labCohorts(p);
+      const rows = await labCohorts(p.trim());
       setCohorts(rows);
-      localStorage.setItem(PLAYER_KEY, p);
-      selfPlayerSet(p).catch(() => {}); // using the lab declares self
       // Reopen the last-picked cohort when it still exists.
       const remembered = localStorage.getItem(COHORT_KEY);
       const match = rows.find((r) => `${r.color}:${r.family}` === remembered);
@@ -165,8 +142,16 @@ export default function OpeningLabView({
     } finally {
       setBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player, busy]);
+  }, []);
+
+  useEffect(() => {
+    selfPlayerGet()
+      .then((name) => {
+        setSelfName(name ?? "");
+        if (name) void loadCohorts(name);
+      })
+      .catch(() => setSelfName(""));
+  }, [loadCohorts]);
 
   const pickCohortInner = async (p: string, c: CohortRow) => {
     setCohort(c);
@@ -186,16 +171,16 @@ export default function OpeningLabView({
 
   const pickCohort = useCallback(
     (c: CohortRow) => {
-      void pickCohortInner(player.trim(), c);
+      if (selfName) void pickCohortInner(selfName, c);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [player],
+    [selfName],
   );
 
   const reloadReport = useCallback(() => {
-    if (cohort) void pickCohortInner(player.trim(), cohort);
+    if (cohort && selfName) void pickCohortInner(selfName, cohort);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player, cohort]);
+  }, [selfName, cohort]);
 
   /* ---- node selection + extension polling (the triage pattern) ---- */
   const select = useCallback((node: LabNode) => {
@@ -292,24 +277,24 @@ export default function OpeningLabView({
     if (!cohort) return;
     setReError(null);
     try {
-      setReEst(await labReanalyzeEstimate(player.trim(), cohort.color, cohort.ecos));
+      setReEst(await labReanalyzeEstimate(selfName ?? "", cohort.color, cohort.ecos));
     } catch (e) {
       setReError(String(e));
     }
-  }, [player, cohort]);
+  }, [selfName, cohort]);
 
   const startReanalyze = useCallback(async () => {
     if (!cohort) return;
     setReError(null);
     try {
-      const started = await labReanalyzeStart(player.trim(), cohort.color, cohort.ecos);
+      const started = await labReanalyzeStart(selfName ?? "", cohort.color, cohort.ecos);
       setReEst(null);
       setReRunning(true);
       setRePending(started.pending);
     } catch (e) {
       setReError(String(e));
     }
-  }, [player, cohort]);
+  }, [selfName, cohort]);
 
   // Inline progress: poll the shared queue while the run is live; when
   // the worker goes idle, rebuild the report with the fresh evals.
@@ -347,29 +332,26 @@ export default function OpeningLabView({
       <div className="triage-body">
         <div className="triage-main">
           {/* step 1: who + which opening */}
-          <div className="triage-search-row">
-            <input
-              type="text"
-              value={player}
-              onChange={(e) => setPlayer(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && void loadCohorts()}
-              placeholder="Your name as it appears in your games…"
-              list="lab-player-suggestions"
-              spellCheck={false}
-            />
-            <datalist id="lab-player-suggestions">
-              {suggestions.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-            <button
-              className="btn-primary"
-              onClick={() => void loadCohorts()}
-              disabled={busy || player.trim() === ""}
-            >
-              {busy ? "Listing your openings…" : "List my openings"}
-            </button>
-          </div>
+          {selfName === "" && (
+            <div className="triage-setup">
+              <p className="triage-footnote">
+                Kibitz doesn&apos;t know who you are yet — build your profile once and the lab
+                knows whose games to read.
+              </p>
+              <button className="btn-primary" onClick={() => onNavigate?.("profile")}>
+                Set up on Profile
+              </button>
+            </div>
+          )}
+          {selfName && (
+            <div className="triage-identity">
+              for <strong>{selfName}</strong>
+              {busy && <span className="dim"> · reading your openings…</span>}
+              <button className="linklike" onClick={() => onNavigate?.("profile")}>
+                change on Profile
+              </button>
+            </div>
+          )}
           {error && <div className="error">{error}</div>}
           {!cohorts && !error && (
             <p className="triage-footnote">

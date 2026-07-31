@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Board, { type BoardMovable } from "./Board";
 import ScreenHeader from "./shell/ScreenHeader";
 import { usePromotionPicker } from "./PromotionPicker";
-import { identityGroup, matchingPlayers, selfPlayerGet, selfPlayerSet, trainAddLine } from "./lib/db";
+import { identityGroup, selfPlayerGet, trainAddLine } from "./lib/db";
 import { sanForBoardMove, trainDests } from "./lib/train";
 import {
   answerConfirmCopy,
@@ -45,7 +45,6 @@ import {
 } from "./lib/triage";
 import type { BoardTreatment } from "./lib/evidence";
 
-const PLAYER_KEY = "kibitz.triagePlayer";
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 export type TriageKind = "deviation" | "gap" | "frontier";
@@ -104,33 +103,26 @@ interface TriageViewProps {
   onOpenGameAt: (gameId: number, ply: number) => void;
   /** Adoption creates SRS cards — let the shell refresh its due badges. */
   onCountsChanged?: () => void;
+  /** Identity lives on the Profile page — links point there. */
+  onNavigate?: (view: "profile") => void;
 }
 
 export default function TriageView({
   treatment = "walnut",
   onOpenGameAt,
   onCountsChanged,
+  onNavigate,
 }: TriageViewProps) {
-  const [player, setPlayer] = useState(() => localStorage.getItem(PLAYER_KEY) ?? "");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  /** Canonical identity (null = still asking; "" = app doesn't know you
+   * yet). Identity is configured on the Profile page ONLY (2026-07-30
+   * maintainer ruling: asking for a name here was dumb). */
+  const [selfName, setSelfName] = useState<string | null>(null);
   const [report, setReport] = useState<TriageReport | null>(null);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [color, setColor] = useState<"white" | "black">("white");
   const [sel, setSel] = useState<Selection | null>(null);
 
-  // The app knows who you are (2026-07-30): empty field seeds from the
-  // database's canonical self_player (localStorage is only the
-  // screen-local last-used and dies with webview storage).
-  useEffect(() => {
-    if (player.trim() !== "") return;
-    selfPlayerGet()
-      .then((name) => {
-        if (name) setPlayer((cur) => (cur.trim() === "" ? name : cur));
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const [extStatus, setExtStatus] = useState<ExtensionStatus | null>(null);
   const [extError, setExtError] = useState<string | null>(null);
@@ -163,43 +155,38 @@ export default function TriageView({
    * written (keyed to the position it was played from). */
   const [pendingAnswer, setPendingAnswer] = useState<{ fen: string; san: string } | null>(null);
 
-  /* ---- player suggestions (debounced) ---- */
-  useEffect(() => {
-    const q = player.trim();
-    if (q.length < 2) return;
-    const t = setTimeout(() => {
-      matchingPlayers(q)
-        .then((names) => setSuggestions(names.slice(0, 8)))
-        .catch(() => setSuggestions([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [player]);
 
-  /* ---- build the report ---- */
-  const run = useCallback(async () => {
-    const p = player.trim();
-    if (p === "" || building) return;
+  /* ---- build the report (auto-runs: visiting the page = current truth) ---- */
+  const run = useCallback(async (p: string) => {
+    if (p.trim() === "") return;
     setBuilding(true);
     setError(null);
     setSel(null);
     setHoleInfer(null);
     setPendingAnswer(null);
     try {
-      const r = await triageReport(p);
+      const r = await triageReport(p.trim());
       setReport(r);
       if (!colorAutoPicked.current) {
         colorAutoPicked.current = true;
         setColor(defaultTriageColor(r));
       }
-      localStorage.setItem(PLAYER_KEY, p);
-      selfPlayerSet(p).catch(() => {}); // running triage declares self
     } catch (e) {
       setReport(null);
       setError(String(e));
     } finally {
       setBuilding(false);
     }
-  }, [player, building]);
+  }, []);
+
+  useEffect(() => {
+    selfPlayerGet()
+      .then((name) => {
+        setSelfName(name ?? "");
+        if (name) void run(name);
+      })
+      .catch(() => setSelfName(""));
+  }, [run]);
 
   const ct: ColorTriage | null = report ? (color === "white" ? report.white : report.black) : null;
 
@@ -356,14 +343,14 @@ export default function TriageView({
             } already covered.`,
         );
         onCountsChanged?.();
-        await run(); // land on the real triage points
+        if (selfName) await run(selfName); // land on the real triage points
       } catch (e) {
         setInferMsg(`Adoption failed: ${e}`);
       } finally {
         setAdopting(false);
       }
     },
-    [color, adopting, onCountsChanged, run],
+    [color, adopting, onCountsChanged, run, selfName],
   );
 
   /** Adopt what a reality-check panel shows the user really plays:
@@ -394,14 +381,14 @@ export default function TriageView({
         bits.push(`${existing} position${existing === 1 ? "" : "s"} already covered`);
         setInferMsg(`Adopted what you play into "${repName}": ${bits.join(", ")}.`);
         onCountsChanged?.();
-        await run();
+        if (selfName) await run(selfName);
       } catch (e) {
         setInferMsg(`Adoption failed: ${e}`);
       } finally {
         setAdopting(false);
       }
     },
-    [color, adopting, onCountsChanged, run],
+    [color, adopting, onCountsChanged, run, selfName],
   );
 
   /** "[Infer from your games]" on a whole-opening hole: rooted inference
@@ -476,13 +463,13 @@ export default function TriageView({
       );
       setPendingAnswer(null);
       onCountsChanged?.();
-      await run();
+      if (selfName) await run(selfName);
     } catch (e) {
       setAdoptMsg(`Adoption failed: ${e}`);
     } finally {
       setAdopting(false);
     }
-  }, [sel, pendingAnswer, adopting, color, onCountsChanged, run]);
+  }, [sel, pendingAnswer, adopting, color, onCountsChanged, run, selfName]);
 
   const extension = extStatus?.extension ?? null;
 
@@ -536,29 +523,26 @@ export default function TriageView({
       />
       <div className="triage-body">
         <div className="triage-main">
-          <div className="triage-search-row">
-            <input
-              type="text"
-              value={player}
-              onChange={(e) => setPlayer(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && void run()}
-              placeholder="Your name as it appears in your games…"
-              list="triage-player-suggestions"
-              spellCheck={false}
-            />
-            <datalist id="triage-player-suggestions">
-              {suggestions.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-            <button
-              className="btn-primary"
-              onClick={() => void run()}
-              disabled={building || player.trim() === ""}
-            >
-              {building ? "Walking your games…" : "Run triage"}
-            </button>
-          </div>
+          {selfName === "" && (
+            <div className="triage-setup">
+              <p className="triage-footnote">
+                Kibitz doesn&apos;t know who you are yet — build your profile once and every
+                self-facing screen (triage, the lab, Home) knows whose games to read.
+              </p>
+              <button className="btn-primary" onClick={() => onNavigate?.("profile")}>
+                Set up on Profile
+              </button>
+            </div>
+          )}
+          {selfName && (
+            <div className="triage-identity">
+              for <strong>{selfName}</strong>
+              {building && <span className="dim"> · walking your games…</span>}
+              <button className="linklike" onClick={() => onNavigate?.("profile")}>
+                change on Profile
+              </button>
+            </div>
+          )}
           {error && <div className="error">{error}</div>}
           {!report && !error && (
             <p className="triage-footnote">

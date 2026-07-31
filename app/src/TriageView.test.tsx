@@ -31,9 +31,7 @@ vi.mock("./Board", () => ({
 
 // Explicit export list: extend it when TriageView imports more from db.
 vi.mock("./lib/db", () => ({
-  matchingPlayers: vi.fn(() => Promise.resolve([])),
-  selfPlayerGet: vi.fn(() => Promise.resolve(null)),
-  selfPlayerSet: vi.fn(() => Promise.resolve()),
+  selfPlayerGet: vi.fn(() => Promise.resolve("Infer, Ida")),
   trainAddLine: vi.fn(() =>
     Promise.resolve({
       repertoire: "main (white)",
@@ -198,11 +196,9 @@ const emptyInference = (gamesScanned: number): InferredRepertoire => ({
 });
 
 function renderAndRun() {
-  const utils = render(<TriageView onOpenGameAt={vi.fn()} />);
-  const input = utils.container.querySelector("input")!;
-  fireEvent.change(input, { target: { value: "Infer, Ida" } });
-  fireEvent.click(utils.getByText("Run triage"));
-  return utils;
+  // Identity is canonical (selfPlayerGet mock) and triage AUTO-RUNS on
+  // mount — visiting the page IS running it (2026-07-30 ruling).
+  return render(<TriageView onOpenGameAt={vi.fn()} />);
 }
 
 describe("TriageView — default color tab", () => {
@@ -576,5 +572,34 @@ describe("TriageView — whole-opening holes", () => {
     expect(container.textContent).not.toContain("Set 1... Nf6");
     expect(container.textContent).toContain("Know your answer? Play it on the board");
     expect(vi.mocked(trainAddLine)).not.toHaveBeenCalled();
+  });
+});
+
+describe("TriageView — identity is canonical (2026-07-30 ruling)", () => {
+  it("renders no name input; auto-runs for the self identity with a Profile pointer", async () => {
+    vi.mocked(triageReport).mockResolvedValue(reportOf({ gamesSeen: 5 }, { gamesSeen: 1 }));
+    const { container } = render(<TriageView onOpenGameAt={vi.fn()} />);
+    expect(container.querySelector("input")).toBeNull();
+    await waitFor(() =>
+      expect(vi.mocked(triageReport)).toHaveBeenCalledWith("Infer, Ida"),
+    );
+    await waitFor(() => expect(container.textContent).toContain("for Infer, Ida"));
+    expect(container.textContent).toContain("change on Profile");
+  });
+
+  it("without a self identity: honest setup state pointing at Profile", async () => {
+    const { selfPlayerGet } = await import("./lib/db");
+    vi.mocked(selfPlayerGet).mockResolvedValueOnce(null);
+    vi.mocked(triageReport).mockClear();
+    const onNavigate = vi.fn();
+    const { container, getByText } = render(
+      <TriageView onOpenGameAt={vi.fn()} onNavigate={onNavigate} />,
+    );
+    await waitFor(() =>
+      expect(container.textContent).toContain("doesn't know who you are yet"),
+    );
+    fireEvent.click(getByText("Set up on Profile"));
+    expect(onNavigate).toHaveBeenCalledWith("profile");
+    expect(vi.mocked(triageReport)).not.toHaveBeenCalled();
   });
 });
