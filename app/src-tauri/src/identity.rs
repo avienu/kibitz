@@ -94,3 +94,24 @@ mod tests {
         assert!(!names.contains(&"O'Connor, Shawn".to_string()));
     }
 }
+
+/// Boot-time identity auto-link (see kibitz_db::identity::
+/// auto_link_sync_handles): connect the user's linked-account handles to
+/// their self identity, once each, honestly reported. No-op without a
+/// self player or linked accounts.
+#[tauri::command]
+pub async fn auto_link_identities(state: State<'_, DbState>) -> Result<Vec<String>, String> {
+    with_conn(&state, |conn| {
+        let self_name: Option<String> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'self_player'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        let Some(self_name) = self_name.filter(|n| !n.trim().is_empty()) else {
+            return Ok(Vec::new());
+        };
+        identity::auto_link_sync_handles(conn, self_name.trim()).map_err(|e| e.to_string())
+    })
+}

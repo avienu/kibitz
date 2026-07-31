@@ -208,7 +208,11 @@ describe("TriageView — default color tab", () => {
     });
     const { getByText } = renderAndRun();
     await waitFor(() => expect(getByText("as Black").className).toBe("cur"));
-    expect(vi.mocked(triageInferRepertoire)).toHaveBeenCalledWith("Infer, Ida", "black");
+    // The inference call lands a microtask after the tab settles — wait
+    // for it too (this raced on the slower CI runner).
+    await waitFor(() =>
+      expect(vi.mocked(triageInferRepertoire)).toHaveBeenCalledWith("Infer, Ida", "black"),
+    );
   });
 });
 
