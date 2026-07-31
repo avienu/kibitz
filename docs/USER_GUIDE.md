@@ -694,6 +694,13 @@ online handle on the Profile screen's INCLUDES strip if it's missing.
 You can still build the book by hand instead: add lines from the Game
 view ("→ repertoire") or import a PGN study.
 
+**Hover a line to walk it on the board.** Every prospective line —
+inferred lines, reality-panel lines, whole-opening-hole suggestions,
+and engine candidates (here and in the Opening lab) — scrubs on hover:
+sweep the mouse across the moves and the position board plays them out
+(a small caption says where you are, e.g. "after 3. Nf3"); leaving the
+line snaps the board back.
+
 ### Opening lab
 
 "I've struggled with my Nimzo for years without improving — which book
