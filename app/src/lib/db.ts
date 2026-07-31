@@ -191,6 +191,17 @@ export function lastGameGet(): Promise<LastGameMeta | null> {
   return invoke<LastGameMeta | null>("last_game_get");
 }
 
+/** THE user of this database — the one name Profile/Triage/Lab share
+ * instead of each asking again (2026-07-30 field report). Stored in the
+ * db's meta (travels with the file, survives webview storage resets);
+ * falls back to the cached self profile's player. */
+export function selfPlayerGet(): Promise<string | null> {
+  return invoke<string | null>("self_player_get");
+}
+export function selfPlayerSet(name: string): Promise<void> {
+  return invoke<void>("self_player_set", { name });
+}
+
 /** Fresh summary counts for the open database — the SINGLE count source
  * every display shares (rail badge, Database header, list refetch). App
  * re-polls it on one cadence while a network sync runs so all counts

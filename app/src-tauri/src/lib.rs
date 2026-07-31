@@ -233,6 +233,8 @@ pub fn run() {
             session::ui_session_get,
             session::ui_session_set,
             home::last_game_get,
+            home::self_player_get,
+            home::self_player_set,
             browse::list_games,
             browse::get_game,
             browse::opening_tree,

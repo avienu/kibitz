@@ -21,6 +21,8 @@ import {
   buildProfile,
   identityGroup,
   cacheProfile,
+  selfPlayerGet,
+  selfPlayerSet,
   getGame,
   matchingPlayers,
   type MotifRow,
@@ -98,6 +100,18 @@ export default function ProfileView({
     if (c) setSelected(c);
   }, [claim]);
 
+  // The app knows who you are (2026-07-30): seed the self field from the
+  // database's canonical self_player instead of asking every session.
+  useEffect(() => {
+    if (player.trim() !== "") return;
+    selfPlayerGet()
+      .then((name) => {
+        if (name) setPlayer((cur) => (cur.trim() === "" ? name : cur));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Opponent navigation switches the subject.
   useEffect(() => {
     if (opponent) setSubject("opponent");
@@ -155,6 +169,8 @@ export default function ProfileView({
       onProfileBuilt(p);
       // Home's findings read the cache — refresh it on every SELF build.
       cacheProfile(player.trim()).catch(() => {});
+      // Building a self profile IS declaring who you are.
+      selfPlayerSet(player.trim()).catch(() => {});
       setSelected((c) => c ?? defaultClaim(p));
       refreshForms(player.trim());
     } catch (e) {

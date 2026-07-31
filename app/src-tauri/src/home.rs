@@ -175,6 +175,45 @@ pub(crate) fn touch_last_game_impl(
     )
 }
 
+/// THE user of this database (2026-07-30 field report: Profile, Opening
+/// triage and the Opening lab each asked for the name again — three
+/// screen-local memories, none consulting the identity the app already
+/// knew). One canonical value in meta, written whenever a self profile
+/// is built or a self screen runs; falls back to the cached profile's
+/// player for databases from before the key existed. Travels with the
+/// database, unlike webview localStorage.
+#[tauri::command]
+pub async fn self_player_get(
+    state: State<'_, crate::browse::DbState>,
+) -> Result<Option<String>, String> {
+    crate::browse::with_conn(&state, |conn| {
+        if let Some(name) = meta_get(conn, "self_player")? {
+            if !name.trim().is_empty() {
+                return Ok(Some(name));
+            }
+        }
+        // Pre-key databases: the cached self profile knows the name.
+        Ok(meta_get(conn, "profile_cache_self")?
+            .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+            .and_then(|v| v["player"].as_str().map(str::to_string)))
+    })
+}
+
+#[tauri::command]
+pub async fn self_player_set(
+    state: State<'_, crate::browse::DbState>,
+    name: String,
+) -> Result<(), String> {
+    crate::browse::with_conn(&state, |conn| {
+        let trimmed = name.trim();
+        meta_set(
+            conn,
+            "self_player",
+            (!trimmed.is_empty()).then_some(trimmed),
+        )
+    })
+}
+
 /// Raw last-game pointer for session restore at launch (the Continue
 /// card uses the richer `home_summary`; this is the cheap direct read).
 /// Verifies the game still exists — a deleted game degrades to None.
@@ -759,5 +798,38 @@ mod tests {
         touch_last_game_impl(&conn, 999, 5, false).unwrap();
         let s = home_summary_impl(&conn, false).unwrap();
         assert!(s.last_game.is_none(), "dangling pointer degrades to null");
+    }
+}
+
+#[cfg(test)]
+mod self_player_tests {
+    use super::{meta_get, meta_set};
+
+    #[test]
+    fn self_player_falls_back_to_the_cached_profile_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+        // Nothing set: no name.
+        assert!(meta_get(&conn, "self_player").unwrap().is_none());
+        // A pre-key database has only the profile cache envelope.
+        meta_set(
+            &conn,
+            "profile_cache_self",
+            Some(r#"{"player":"O'Connor, Shawn","builtAt":"2026-07-27","profile":{}}"#),
+        )
+        .unwrap();
+        let fallback = meta_get(&conn, "profile_cache_self")
+            .unwrap()
+            .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+            .and_then(|v| v["player"].as_str().map(str::to_string));
+        assert_eq!(fallback.as_deref(), Some("O'Connor, Shawn"));
+        // Explicit set wins; blank clears.
+        meta_set(&conn, "self_player", Some("sounix")).unwrap();
+        assert_eq!(
+            meta_get(&conn, "self_player").unwrap().as_deref(),
+            Some("sounix")
+        );
+        meta_set(&conn, "self_player", None).unwrap();
+        assert!(meta_get(&conn, "self_player").unwrap().is_none());
     }
 }

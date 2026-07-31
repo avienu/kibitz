@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Board from "./Board";
 import ScreenHeader from "./shell/ScreenHeader";
-import { matchingPlayers, trainAddLine } from "./lib/db";
+import { matchingPlayers, selfPlayerGet, selfPlayerSet, trainAddLine } from "./lib/db";
 import {
   evalLabel,
   itemCaption,
@@ -101,6 +101,19 @@ export default function TriageView({
   const [color, setColor] = useState<"white" | "black">("white");
   const [sel, setSel] = useState<Selection | null>(null);
 
+  // The app knows who you are (2026-07-30): empty field seeds from the
+  // database's canonical self_player (localStorage is only the
+  // screen-local last-used and dies with webview storage).
+  useEffect(() => {
+    if (player.trim() !== "") return;
+    selfPlayerGet()
+      .then((name) => {
+        if (name) setPlayer((cur) => (cur.trim() === "" ? name : cur));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [extStatus, setExtStatus] = useState<ExtensionStatus | null>(null);
   const [extError, setExtError] = useState<string | null>(null);
   const [adoptMsg, setAdoptMsg] = useState<string | null>(null);
@@ -129,6 +142,7 @@ export default function TriageView({
       const r = await triageReport(p);
       setReport(r);
       localStorage.setItem(PLAYER_KEY, p);
+      selfPlayerSet(p).catch(() => {}); // running triage declares self
     } catch (e) {
       setReport(null);
       setError(String(e));

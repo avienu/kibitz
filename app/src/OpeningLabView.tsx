@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Board from "./Board";
 import ScreenHeader from "./shell/ScreenHeader";
-import { jobsStatus, matchingPlayers, trainAddLine } from "./lib/db";
+import { jobsStatus, matchingPlayers, selfPlayerGet, selfPlayerSet, trainAddLine } from "./lib/db";
 import { fmtDurationMs } from "./lib/home";
 import {
   evalLabel,
@@ -100,6 +100,17 @@ export default function OpeningLabView({
 }: OpeningLabViewProps) {
   const [player, setPlayer] = useState(() => localStorage.getItem(PLAYER_KEY) ?? "");
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  // The app knows who you are (2026-07-30): empty field seeds from the
+  // database's canonical self_player.
+  useEffect(() => {
+    if (player.trim() !== "") return;
+    selfPlayerGet()
+      .then((name) => {
+        if (name) setPlayer((cur) => (cur.trim() === "" ? name : cur));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
   const [cohort, setCohort] = useState<CohortRow | null>(null);
   const [report, setReport] = useState<LabReport | null>(null);
@@ -143,6 +154,7 @@ export default function OpeningLabView({
       const rows = await labCohorts(p);
       setCohorts(rows);
       localStorage.setItem(PLAYER_KEY, p);
+      selfPlayerSet(p).catch(() => {}); // using the lab declares self
       // Reopen the last-picked cohort when it still exists.
       const remembered = localStorage.getItem(COHORT_KEY);
       const match = rows.find((r) => `${r.color}:${r.family}` === remembered);
