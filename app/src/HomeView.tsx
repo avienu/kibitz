@@ -337,7 +337,36 @@ export default function HomeView({
 
   useEffect(refresh, [refresh]);
 
-  if (!dbOpen || (!data && !error)) {
+  if (!dbOpen) {
+    // First-run welcome (2026-07-30, tester feedback: a fresh install
+    // lands on an empty Home that reads as broken — "the board is
+    // gone"). Say what this is and put the first step ON the screen,
+    // not in the status strip.
+    return (
+      <div className="home">
+        <p className="home-prose">
+          Welcome to Kibitz. Boards, coaching and training all grow out of a game
+          database — and there is no database open yet.
+        </p>
+        <p className="home-prose dim">
+          Create one, then fill it: import a PGN file, or link your chess.com /
+          lichess username and your games download themselves.
+        </p>
+        <div className="home-welcome-actions">
+          <button className="btn-primary" onClick={() => onNavigate("database")}>
+            Set up your database
+          </button>
+          <button className="btn-secondary" onClick={() => onNavigate("import")}>
+            Import PGN
+          </button>
+          <button className="btn-secondary" onClick={() => onNavigate("syncs")}>
+            Link an account
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (!data && !error) {
     return <div className="home"><p className="home-prose dim">Open a database to see your day.</p></div>;
   }
   if (error) {

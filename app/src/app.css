@@ -5145,3 +5145,10 @@ button.mv-var-line:hover {
   color: var(--dim);
   margin-bottom: 6px;
 }
+
+/* ---- Home first-run welcome (2026-07-30) -------------------------------- */
+.home-welcome-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
