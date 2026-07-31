@@ -286,6 +286,22 @@ pub(crate) fn cache_profile_impl(
     })
 }
 
+/// The cached self profile, whole (2026-07-30 field report: "every time
+/// I open this app I have to click build profile — why isn't that
+/// saving?" — it WAS saving; nothing ever read it back). App hydrates
+/// its in-memory profile from this at launch, so the Profile screen
+/// opens showing the last build instead of the build form.
+#[tauri::command]
+pub async fn cached_profile(
+    state: State<'_, DbState>,
+) -> Result<Option<serde_json::Value>, String> {
+    with_conn(&state, |conn| {
+        Ok(meta_get(conn, "profile_cache_self")?
+            .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+            .filter(|v| v["profile"].is_object() && v["player"].is_string()))
+    })
+}
+
 /// Build the player's profile (static analysis + stored evals; no engine)
 /// and cache it for Home's findings panel. The Profile screen calls this
 /// when it builds the self profile; `home_summary` only ever reads the

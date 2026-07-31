@@ -161,6 +161,17 @@ export default function ProfileView({
       .catch(() => setNameForms([]));
   }, []);
 
+  // Aliases/INCLUDES visible without a build (2026-07-30: "I don't even
+  // see aliases listed") — the declared groups live in the db; show them
+  // as soon as a self name is known, debounced with the suggestions.
+  useEffect(() => {
+    if (subject !== "self") return;
+    const n = player.trim();
+    if (n.length < 2) return;
+    const t = setTimeout(() => refreshForms(n), 300);
+    return () => clearTimeout(t);
+  }, [subject, player, refreshForms]);
+
   const buildSelf = useCallback(async () => {
     setBuilding(true);
     setError(null);

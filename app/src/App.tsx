@@ -45,6 +45,7 @@ import {
   getNarrationVoice,
   getSavedDbPath,
   getSavedVoice,
+  cachedProfile,
   jobsStatus,
   lastDatabase,
   lastGameGet,
@@ -291,6 +292,23 @@ export default function App() {
       // TWIC auto-download hook: quietly syncs NEW issues only when the
       // user enabled the toggle (netops.rs; no-op otherwise).
       twicAutoSyncCheck().catch(() => {});
+      // Hydrate the last-built self profile ("why isn't that saving?" —
+      // it was; nothing read it back). Also doubles as the stale-backend
+      // probe: a hot-reloaded frontend calling a command the running
+      // binary predates fails with "not found" — say so LOUDLY instead
+      // of silently looking broken (this bit us three times).
+      cachedProfile()
+        .then((c) => {
+          if (c) setProfile(c.profile);
+        })
+        .catch((e) => {
+          if (String(e).toLowerCase().includes("not found")) {
+            setStatus(
+              "⚠ The app backend is older than the UI — fully quit and restart the dev app " +
+                "(Rust changes need a rebuild; hot reload only updates the frontend).",
+            );
+          }
+        });
       if (deepLinked) return; // deep links own the destination
       const session = parseSession(await uiSessionGet().catch(() => null));
       if (!session) return;

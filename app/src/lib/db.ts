@@ -198,6 +198,18 @@ export function lastGameGet(): Promise<LastGameMeta | null> {
 export function selfPlayerGet(): Promise<string | null> {
   return invoke<string | null>("self_player_get");
 }
+
+/** The cached self profile, whole ("why isn't that saving?" — it was;
+ * nothing read it back). App hydrates from this at launch so Profile
+ * opens showing the last build instead of the build form. */
+export interface CachedProfile {
+  player: string;
+  builtAt: string;
+  profile: PlayerProfile;
+}
+export function cachedProfile(): Promise<CachedProfile | null> {
+  return invoke<CachedProfile | null>("cached_profile");
+}
 export function selfPlayerSet(name: string): Promise<void> {
   return invoke<void>("self_player_set", { name });
 }

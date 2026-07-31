@@ -233,6 +233,7 @@ pub fn run() {
             session::ui_session_get,
             session::ui_session_set,
             home::last_game_get,
+            home::cached_profile,
             home::self_player_get,
             home::self_player_set,
             browse::list_games,
