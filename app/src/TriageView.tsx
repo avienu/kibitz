@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import Board, { type BoardMovable } from "./Board";
+import ScrubLine, { type ScrubPreview } from "./components/ScrubLine";
 import ScreenHeader from "./shell/ScreenHeader";
 import { usePromotionPicker } from "./PromotionPicker";
 import { identityGroup, selfPlayerGet, trainAddLine } from "./lib/db";
@@ -25,7 +26,6 @@ import {
   inferredLineLabel,
   itemCaption,
   lineSans,
-  numberedLine,
   realityDeviations,
   realityHeadline,
   triageExtend,
@@ -155,6 +155,11 @@ export default function TriageView({
    * written (keyed to the position it was played from). */
   const [pendingAnswer, setPendingAnswer] = useState<{ fen: string; san: string } | null>(null);
 
+  /** Hover-scrub line preview (2026-07-30 field request): while non-null
+   * the aside board shows this position instead of the selected item's,
+   * read-only. Every prospective-line surface feeds the same state. */
+  const [preview, setPreview] = useState<ScrubPreview | null>(null);
+
 
   /* ---- build the report (auto-runs: visiting the page = current truth) ---- */
   const run = useCallback(async (p: string) => {
@@ -164,6 +169,7 @@ export default function TriageView({
     setSel(null);
     setHoleInfer(null);
     setPendingAnswer(null);
+    setPreview(null);
     try {
       const r = await triageReport(p.trim());
       setReport(r);
@@ -196,6 +202,7 @@ export default function TriageView({
     setExtError(null);
     setAdoptMsg(null);
     setPendingAnswer(null);
+    setPreview(null);
   }, []);
 
   /* ---- extension status: fetch on selection, poll while queued/running ---- */
@@ -502,6 +509,7 @@ export default function TriageView({
                 setSel(null);
                 setHoleInfer(null);
                 setPendingAnswer(null);
+                setPreview(null);
               }}
             >
               as White
@@ -514,6 +522,7 @@ export default function TriageView({
                 setSel(null);
                 setHoleInfer(null);
                 setPendingAnswer(null);
+                setPreview(null);
               }}
             >
               as Black
@@ -598,7 +607,11 @@ export default function TriageView({
                         <div className="triage-infer-line" key={l.sans.join(" ")}>
                           <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
                           <span className="triage-row-main">
-                            <span className="triage-line">{numberedLine(l.sans, START_FEN)}</span>
+                            <ScrubLine
+                              className="triage-line"
+                              sans={l.sans}
+                              onPreview={setPreview}
+                            />
                             <span className="triage-caption">{inferredLineLabel(l)}</span>
                           </span>
                           <button
@@ -639,7 +652,11 @@ export default function TriageView({
                         <div className="triage-infer-line" key={l.sans.join(" ")}>
                           <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
                           <span className="triage-row-main">
-                            <span className="triage-line">{numberedLine(l.sans, START_FEN)}</span>
+                            <ScrubLine
+                              className="triage-line"
+                              sans={l.sans}
+                              onPreview={setPreview}
+                            />
                             <span className="triage-caption">{inferredLineLabel(l)}</span>
                           </span>
                           <button
@@ -735,9 +752,11 @@ export default function TriageView({
                                       {String(i + 1).padStart(2, "0")}
                                     </span>
                                     <span className="triage-row-main">
-                                      <span className="triage-line">
-                                        {numberedLine(l.sans, START_FEN)}
-                                      </span>
+                                      <ScrubLine
+                                        className="triage-line"
+                                        sans={l.sans}
+                                        onPreview={setPreview}
+                                      />
                                       <span className="triage-caption">{inferredLineLabel(l)}</span>
                                     </span>
                                     <button
@@ -786,14 +805,18 @@ export default function TriageView({
 
         <aside className="triage-aside">
           <div className="triage-board-wrap">
+            {/* A live scrub preview drives the board read-only; null
+             * restores the selected item's position and movability. */}
             <Board
-              fen={sel?.item.fen ?? START_FEN}
+              fen={preview?.fen ?? sel?.item.fen ?? START_FEN}
+              lastMove={preview?.lastMove ?? undefined}
               orientation={color}
               treatment={treatment}
               size={360}
-              movable={movable}
+              movable={preview ? undefined : movable}
             />
             {promo.element}
+            {preview && <div className="scrub-caption">after {preview.label}</div>}
           </div>
           {!sel && <div className="triage-aside-caption">SELECT A ROW TO SEE THE POSITION</div>}
           {sel && (
@@ -868,9 +891,12 @@ export default function TriageView({
                       {extension.lines.map((line, i) => (
                         <div className="triage-ext-line" key={i}>
                           <span className="triage-ext-eval">{evalLabel(line, extension.fen)}</span>
-                          <span className="triage-ext-sans">
-                            {numberedLine(line.sans, extension.fen)}
-                          </span>
+                          <ScrubLine
+                            className="triage-ext-sans"
+                            sans={line.sans}
+                            startFen={extension.fen}
+                            onPreview={setPreview}
+                          />
                           <button
                             className="btn-secondary"
                             disabled={adopting}

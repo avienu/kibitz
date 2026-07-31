@@ -5090,6 +5090,28 @@ button.mv-var-line:hover {
   background: var(--panel);
 }
 
+/* ---- Hover-scrub line preview (2026-07-30 field request) ---------------- */
+.scrub-line {
+  cursor: ew-resize;
+}
+.scrub-line:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.scrub-tok {
+  border-radius: 3px;
+}
+.scrub-tok:hover,
+.scrub-tok.cur {
+  background: var(--panel2);
+  color: var(--accent);
+}
+.scrub-caption {
+  margin-top: 4px;
+  font: 500 11px var(--font-mono);
+  color: var(--dim);
+}
+
 /* ---- Database storage (Settings, 2026-07-29) ---------------------------- */
 .storage-warning {
   font: 400 12px/1.55 var(--font-ui);
