@@ -45,6 +45,7 @@ import {
   getNarrationVoice,
   getSavedDbPath,
   getSavedVoice,
+  autoLinkIdentities,
   cachedProfile,
   jobsStatus,
   lastDatabase,
@@ -297,6 +298,21 @@ export default function App() {
       // probe: a hot-reloaded frontend calling a command the running
       // binary predates fails with "not found" — say so LOUDLY instead
       // of silently looking broken (this bit us three times).
+      // Connect linked-account handles to the self identity (the app
+      // knows both names — it should connect its own dots; 2026-07-30
+      // field report: thousands of chess.com games missing from triage
+      // because the alias was never manually declared).
+      autoLinkIdentities()
+        .then((linked) => {
+          if (linked.length > 0) {
+            setStatus(
+              `Linked your account name${linked.length === 1 ? "" : "s"} ${linked.join(", ")} ` +
+                `to your identity — profile, triage and the lab now include those games ` +
+                `(see Profile → INCLUDES to review).`,
+            );
+          }
+        })
+        .catch(() => {});
       cachedProfile()
         .then((c) => {
           if (c) setProfile(c.profile);

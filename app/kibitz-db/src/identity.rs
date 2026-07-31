@@ -172,6 +172,71 @@ pub fn remove_alias(conn: &Connection, name: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Auto-link the user's LINKED-ACCOUNT handles to their self identity
+/// (2026-07-30 field report: triage scanned 199 OTB games while
+/// thousands of chess.com games sat under the handle the user had
+/// typed into Account syncs — the app knew both names and connected
+/// nothing; asking the user to declare an alias manually was the wrong
+/// design). For each `sync_user_<service>` meta handle: if the handle
+/// exists as a player, is not already in the self identity, and has not
+/// been auto-linked before (a tombstone in meta makes user removal
+/// stick — we never re-declare something the user undid), declare it.
+/// Returns the newly linked handles so the UI can say so out loud; the
+/// INCLUDES strip shows and can remove them like any declared alias.
+pub fn auto_link_sync_handles(conn: &Connection, self_name: &str) -> rusqlite::Result<Vec<String>> {
+    let mut done: Vec<String> = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'identity_auto_linked'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .map(|json| serde_json::from_str(&json).unwrap_or_default())
+        .unwrap_or_default();
+    let mut newly = Vec::new();
+    for service in ["lichess", "chesscom", "fics"] {
+        let handle: Option<String> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = ?1",
+                [format!("sync_user_{service}")],
+                |r| r.get(0),
+            )
+            .ok();
+        let Some(handle) = handle
+            .map(|h| h.trim().to_string())
+            .filter(|h| !h.is_empty())
+        else {
+            continue;
+        };
+        if done.iter().any(|d| d == &handle) {
+            continue; // tombstoned: auto-linked once already (maybe removed)
+        }
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM players WHERE name = ?1)",
+            [&handle],
+            |r| r.get(0),
+        )?;
+        if !exists {
+            continue; // no imported games under this handle yet
+        }
+        let already = resolve_identity(conn, self_name)?
+            .iter()
+            .any(|f| f.name == handle);
+        if !already {
+            declare_alias(conn, &handle, self_name)?;
+            newly.push(handle.clone());
+        }
+        done.push(handle);
+    }
+    if !newly.is_empty() || !done.is_empty() {
+        conn.execute(
+            "INSERT INTO meta (key, value) VALUES ('identity_auto_linked', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [serde_json::to_string(&done).unwrap_or_default()],
+        )?;
+    }
+    Ok(newly)
+}
+
 /// Full identity resolution: the transitive closure of lexical variants
 /// (identity_key equality) and DECLARED aliases, starting from `name`.
 /// Returns every matching name form in the database plus declared names
@@ -343,5 +408,61 @@ mod suggestion_tests {
         crate::identity::declare_alias(&conn, "Connor,Stephen J", "O'Connor, Shawn").unwrap();
         let names = crate::fingerprint::matching_players(&conn, "Connor").unwrap();
         assert_eq!(names, vec!["Connor,Stephen J".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod auto_link_tests {
+    #[test]
+    fn linked_account_handles_join_the_self_identity_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(&dir.path().join("t.sqlite")).unwrap();
+        conn.execute_batch(
+            "INSERT INTO players (name) VALUES ('O''Connor, Shawn');
+             INSERT INTO players (name) VALUES ('handle77');
+             INSERT INTO meta (key, value) VALUES ('sync_user_chesscom', 'handle77');
+             INSERT INTO meta (key, value) VALUES ('sync_user_lichess', 'ghosthandle');",
+        )
+        .unwrap();
+        // chesscom handle exists as a player → linked; lichess handle has
+        // no imported games → skipped (and NOT tombstoned, so it links
+        // later once games arrive).
+        let newly = crate::identity::auto_link_sync_handles(&conn, "O'Connor, Shawn").unwrap();
+        assert_eq!(newly, vec!["handle77".to_string()]);
+        let names: Vec<String> = crate::identity::resolve_identity(&conn, "O'Connor, Shawn")
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert!(names.contains(&"handle77".to_string()));
+
+        // Second run: nothing new (already in the identity).
+        assert!(
+            crate::identity::auto_link_sync_handles(&conn, "O'Connor, Shawn")
+                .unwrap()
+                .is_empty()
+        );
+
+        // User removal STICKS: the tombstone stops re-linking forever.
+        crate::identity::remove_alias(&conn, "handle77").unwrap();
+        assert!(
+            crate::identity::auto_link_sync_handles(&conn, "O'Connor, Shawn")
+                .unwrap()
+                .is_empty()
+        );
+        let names: Vec<String> = crate::identity::resolve_identity(&conn, "O'Connor, Shawn")
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert!(!names.contains(&"handle77".to_string()));
+
+        // The ghost handle links once its games exist.
+        conn.execute("INSERT INTO players (name) VALUES ('ghosthandle')", [])
+            .unwrap();
+        assert_eq!(
+            crate::identity::auto_link_sync_handles(&conn, "O'Connor, Shawn").unwrap(),
+            vec!["ghosthandle".to_string()]
+        );
     }
 }

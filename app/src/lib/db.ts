@@ -210,6 +210,13 @@ export interface CachedProfile {
 export function cachedProfile(): Promise<CachedProfile | null> {
   return invoke<CachedProfile | null>("cached_profile");
 }
+
+/** Connect linked-account handles (Account syncs usernames) to the self
+ * identity, once each; returns newly linked names. User removal via the
+ * INCLUDES strip sticks — a tombstone prevents re-linking. */
+export function autoLinkIdentities(): Promise<string[]> {
+  return invoke<string[]>("auto_link_identities");
+}
 export function selfPlayerSet(name: string): Promise<void> {
   return invoke<void>("self_player_set", { name });
 }

@@ -21,7 +21,7 @@ pub mod endgame;
 pub mod explain;
 pub mod explorer;
 pub mod home;
-mod identity;
+pub mod identity;
 pub mod lab;
 pub mod lichess_play;
 pub mod netops;
@@ -236,6 +236,7 @@ pub fn run() {
             home::cached_profile,
             home::self_player_get,
             home::self_player_set,
+            identity::auto_link_identities,
             browse::list_games,
             browse::get_game,
             browse::opening_tree,
