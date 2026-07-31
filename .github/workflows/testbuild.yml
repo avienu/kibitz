@@ -27,13 +27,26 @@ jobs:
       - name: Install frontend deps
         working-directory: app
         run: npm ci
-      - name: Build (NSIS installer, unsigned)
+      - name: Build (NSIS + MSI installers, unsigned)
         working-directory: app
-        run: npm run tauri build -- --bundles nsis
+        run: npm run tauri build -- --bundles nsis,msi
+      # Defender's ML heuristics frequently flag unsigned NSIS installers
+      # from unknown origins as viruses (classic Tauri false positive).
+      # Ship the MSI and the bare exe too — both trip the alarm far less.
       - uses: actions/upload-artifact@v4
         with:
-          name: kibitz-windows-unsigned
+          name: kibitz-windows-msi
+          path: app/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kibitz-windows-nsis
           path: app/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kibitz-windows-portable-exe
+          path: app/src-tauri/target/release/kibitz-app.exe
           if-no-files-found: error
 
   linux:
