@@ -55,6 +55,30 @@ pub async fn triage_infer_repertoire(
     })
 }
 
+/// Rooted inference for a whole-opening hole (2026-07-30 v2): what does
+/// `player` already play as `color` from the position after `prefix`
+/// (SAN moves from the standard start)? Same contract as
+/// `triage_infer_repertoire`; lines come back full-length from the
+/// start. Static database walk, engine off (CLAUDE.md #6).
+#[tauri::command]
+pub async fn triage_infer_from(
+    state: State<'_, DbState>,
+    player: String,
+    color: String,
+    prefix: Vec<String>,
+) -> Result<kibitz_db::triage::InferredRepertoire, String> {
+    with_conn(&state, |conn| {
+        kibitz_db::triage::infer_from(
+            conn,
+            &player,
+            &color,
+            &prefix,
+            &kibitz_db::triage::InferOptions::default(),
+        )
+        .map_err(|e| e.to_string())
+    })
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtendStarted {
