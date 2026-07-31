@@ -610,15 +610,52 @@ Each recent game is classified at the FIRST moment it left your book:
 - **GAPS — opponent moves your book doesn't answer.** While you were
   still in book, the opponent played a move whose resulting position has
   no card, although another reply from the same position is covered
-  (e.g. you know 1.e4 e5 but they played 1...c5).
+  (e.g. you know 1.e4 e5 but they played 1...c5). Gaps come in two
+  shapes, and the triage keeps them apart honestly:
+  - **Whole-opening holes** — the uncovered move was the opponent's
+    FIRST move of the game. That is not nine near-identical rows of
+    "no card after 1.d4 / 1.c4 / 1.g3…"; it is one row per opponent
+    move: "No repertoire vs 1. d4 (63 games)", with an **Infer from
+    your games** button that reads what you already play from exactly
+    that position (your own games, rooted after the opponent's move)
+    and offers those lines for adoption.
+  - **In-book gaps** — mid-line holes inside a line you were actually
+    following. These keep the classic per-position rows; they are the
+    per-move repairs the triage was built for.
 - **FRONTIERS — where your book ends.** Both sides followed the book
   until it simply ran out: after your last carded move, no opponent
   reply leads to a covered position.
 
+**When your play IS your repertoire — the reality check.** If your cards
+say one thing but your own games overwhelmingly play another (the played
+move appears in at least 10 games AND at least 3× as often as you
+actually followed the card), the triage stops scolding and says so:
+"Your cards say 1... e5 — but you've played 1... c5 in 119 of 120
+games. That looks like your real repertoire." The panel lists the lines
+you actually play from there (game counts, your score, opening names)
+with two honest choices: **Adopt what you play** rewrites the
+conflicting card to your real move (its training restarts fresh — the
+old memory was memory of the old move), adds cards for the rest of each
+line, and re-runs the triage; **Keep training the cards** dismisses the
+panel for this session and lists the deviation normally. Nothing is
+ever adopted automatically.
+
+**I know my answer — play it on the board.** Every gap row (whole-opening
+holes and in-book gaps alike) and every reality-check panel also takes
+your own move directly: select the row and the position board accepts a
+move for your color (promotions included). Nothing is written until you
+confirm — "Set 1... Nf6 as your repertoire answer to 1. d4? [Set as my
+answer] [Cancel]". Confirming adds the line (the path to the position
+plus your move) as SRS cards and re-runs the triage; cancelling snaps
+the board back.
+
 Rows are ranked by how many games hit the same point (the **N×** badge —
-transpositions collapse onto one row), then by earliest ply. Selecting a
-row shows the position on the board, the line that reached it, the ECO
-name when it is a book position, and every source game as a link.
+transpositions collapse onto one row), then by earliest ply. The summary
+line reports the real shapes it found, e.g. "199 games scanned · your
+play disagrees with your cards at 1 position · 2 whole-opening holes ·
+3 in-book gaps". Selecting a row shows the position on the board, the
+line that reached it, the ECO name when it is a book position, and
+every source game as a link.
 
 **Extending the book** (gaps and frontiers): **Extend with engine
 (4 lines)** asks Stockfish for a deep MultiPV analysis (4 candidate
