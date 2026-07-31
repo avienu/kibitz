@@ -11,12 +11,12 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import Board from "./Board";
+import ScrubLine, { type ScrubPreview } from "./components/ScrubLine";
 import ScreenHeader from "./shell/ScreenHeader";
 import { jobsStatus, selfPlayerGet, trainAddLine } from "./lib/db";
 import { fmtDurationMs } from "./lib/home";
 import {
   evalLabel,
-  numberedLine,
   triageExtend,
   triageExtensionStatus,
   type ExtensionStatus,
@@ -116,6 +116,11 @@ export default function OpeningLabView({
   const [adoptMsg, setAdoptMsg] = useState<string | null>(null);
   const [adopting, setAdopting] = useState(false);
 
+  /** Hover-scrub preview of a candidate line (2026-07-30 field request):
+   * while non-null the aside board shows this position instead of the
+   * selected branch's. The Lab board is read-only either way. */
+  const [preview, setPreview] = useState<ScrubPreview | null>(null);
+
   const [reEst, setReEst] = useState<LabReanalyzeEstimate | null>(null);
   const [reRunning, setReRunning] = useState(false);
   const [rePending, setRePending] = useState<number | null>(null);
@@ -156,6 +161,7 @@ export default function OpeningLabView({
   const pickCohortInner = async (p: string, c: CohortRow) => {
     setCohort(c);
     setSel(null);
+    setPreview(null);
     setReEst(null);
     setReError(null);
     setError(null);
@@ -189,6 +195,7 @@ export default function OpeningLabView({
     setExtError(null);
     setFits(new Map());
     setAdoptMsg(null);
+    setPreview(null);
   }, []);
 
   const selFen = sel?.fen ?? null;
@@ -492,12 +499,16 @@ export default function OpeningLabView({
 
         {/* step 4: branch detail + recommendation */}
         <aside className="triage-aside">
+          {/* A live scrub preview drives the board; null restores the
+           * selected branch's position (the Lab board is read-only). */}
           <Board
-            fen={sel?.fen ?? "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}
+            fen={preview?.fen ?? sel?.fen ?? "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}
+            lastMove={preview?.lastMove ?? undefined}
             orientation={orientation}
             treatment={treatment}
             size={360}
           />
+          {preview && <div className="scrub-caption">after {preview.label}</div>}
           {!sel && <div className="triage-aside-caption">SELECT A BRANCH TO SEE THE POSITION</div>}
           {sel && cohort && (
             <>
@@ -576,7 +587,11 @@ export default function OpeningLabView({
                             {evalLabel(line, extension.fen)}
                           </span>
                           <span className="triage-ext-sans">
-                            {numberedLine(line.sans, extension.fen)}
+                            <ScrubLine
+                              sans={line.sans}
+                              startFen={extension.fen}
+                              onPreview={setPreview}
+                            />
                             <span className="lab-cand-badges">
                               {inRep && <span className="lab-chip">in repertoire</span>}
                               <span className="lab-chip">

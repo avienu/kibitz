@@ -12,13 +12,24 @@ import {
   type TriageReport,
 } from "./lib/triage";
 import { trainAddLine } from "./lib/db";
+import { gameFromSans } from "./lib/game";
 
 // The mock board exposes move-input triggers when the view makes it
 // movable (the "I know my answer" flow) — the real legality/SAN wiring
-// (trainDests, sanForBoardMove) still runs in the view.
+// (trainDests, sanForBoardMove) still runs in the view. It also reflects
+// the fen/lastMove props so the hover-scrub preview tests can see what
+// position the aside board is showing.
 vi.mock("./Board", () => ({
-  default: ({ movable }: { movable?: { onMove: (o: string, d: string) => void } }) => (
-    <div data-testid="board">
+  default: ({
+    fen,
+    lastMove,
+    movable,
+  }: {
+    fen: string;
+    lastMove?: [string, string];
+    movable?: { onMove: (o: string, d: string) => void };
+  }) => (
+    <div data-testid="board" data-fen={fen} data-lastmove={lastMove ? lastMove.join("") : ""}>
       {movable && (
         <>
           <button onClick={() => movable.onMove("g8", "f6")}>board-g8f6</button>
@@ -572,6 +583,86 @@ describe("TriageView — whole-opening holes", () => {
     expect(container.textContent).not.toContain("Set 1... Nf6");
     expect(container.textContent).toContain("Know your answer? Play it on the board");
     expect(vi.mocked(trainAddLine)).not.toHaveBeenCalled();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Hover-scrub line preview (2026-07-30 field request): hovering a     */
+/* prospective line's move tokens walks the aside board through it     */
+/* ------------------------------------------------------------------ */
+
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+/** The fen the mock aside board is currently showing. */
+const boardFen = (container: HTMLElement): string | null =>
+  container.querySelector('[data-testid="board"]')?.getAttribute("data-fen") ?? null;
+
+/** Ground truth: position after `sans` from the standard start. */
+const fenAfter = (sans: string[]): string => {
+  const r = gameFromSans(sans);
+  if (!r.ok) throw new Error("fixture line must replay");
+  return r.game.fens[sans.length];
+};
+
+describe("TriageView — hover-scrub line preview", () => {
+  it("hovering an inferred line's second move drives the aside board; leave restores", async () => {
+    vi.mocked(triageReport).mockResolvedValue(reportOf({ gamesSeen: 5 }, { gamesSeen: 1 }));
+    vi.mocked(triageInferRepertoire).mockResolvedValue({
+      player: "Infer, Ida",
+      color: "white",
+      gamesScanned: 5,
+      lines: [
+        {
+          sans: ["e4", "c5", "Nf3"],
+          games: 4,
+          score: 62.5,
+          eco: "B27",
+          openingName: "Sicilian Defense",
+        },
+      ],
+    });
+    const { container } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("1. e4 c5 2. Nf3"));
+    expect(boardFen(container)).toBe(START_FEN);
+
+    const toks = container.querySelectorAll(".triage-infer-line .scrub-tok");
+    expect([...toks].map((t) => t.textContent)).toEqual(["1. e4", "c5", "2. Nf3"]);
+    fireEvent.mouseOver(toks[1]);
+    expect(boardFen(container)).toBe(fenAfter(["e4", "c5"]));
+    expect(
+      container.querySelector('[data-testid="board"]')?.getAttribute("data-lastmove"),
+    ).toBe("c7c5");
+    // Honest tiny caption under the board while scrubbing.
+    expect(container.querySelector(".scrub-caption")?.textContent).toBe("after 1... c5");
+
+    fireEvent.mouseOut(container.querySelector(".triage-infer-line .scrub-line")!);
+    expect(boardFen(container)).toBe(START_FEN);
+    expect(container.querySelector(".scrub-caption")).toBeNull();
+  });
+
+  it("a live preview suspends the movable set-my-answer board; leave restores both", async () => {
+    vi.mocked(triageReport).mockClear();
+    vi.mocked(triageReport).mockResolvedValue(realityReport());
+    const { container, getByText, queryByText } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("Your cards say 1... e5"));
+    fireEvent.click(getByText("I know my answer — play it on the board"));
+    // Selected item's position, movable for the user's own move.
+    expect(boardFen(container)).toBe(AFTER_E4);
+    expect(queryByText("board-b8c6")).not.toBeNull();
+
+    // Hover the reality line's third move (2. Nf3): the board scrubs to
+    // that position and is NOT movable — the scrub never fights the
+    // set-my-answer flow.
+    const toks = container.querySelectorAll(".triage-reality .scrub-tok");
+    fireEvent.mouseOver(toks[2]);
+    expect(boardFen(container)).toBe(fenAfter(["e4", "c5", "Nf3"]));
+    expect(queryByText("board-b8c6")).toBeNull();
+    expect(container.querySelector(".scrub-caption")?.textContent).toBe("after 2. Nf3");
+
+    // Leaving restores the item position AND the movable behavior.
+    fireEvent.mouseOut(container.querySelector(".triage-reality .scrub-line")!);
+    expect(boardFen(container)).toBe(AFTER_E4);
+    expect(queryByText("board-b8c6")).not.toBeNull();
   });
 });
 
