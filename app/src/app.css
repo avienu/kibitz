@@ -5027,6 +5027,53 @@ button.mv-var-line:hover {
 .triage-infer {
   margin-top: 4px;
 }
+/* Declared-vs-played (2026-07-30 v2): reality panel, whole-opening
+ * holes, and the board-played "I know my answer" confirm. */
+.triage-reality {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0 14px;
+}
+.triage-reality-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.triage-hole {
+  cursor: default;
+}
+.triage-hole-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--tx);
+}
+.triage-hole-infer {
+  margin: 0 0 10px 24px;
+}
+.triage-board-wrap {
+  position: relative;
+}
+.triage-answer {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-top: 8px;
+}
+.triage-answer-copy {
+  font: 500 12.5px/1.5 var(--font-ui);
+}
 .triage-infer-headline {
   margin: 10px 0;
   font: 600 13.5px/1.5 var(--font-prose);

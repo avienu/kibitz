@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TriageView, { TriageLists } from "./TriageView";
 import {
+  triageInferFrom,
   triageInferRepertoire,
   triageReport,
   type ColorTriage,
@@ -12,8 +13,20 @@ import {
 } from "./lib/triage";
 import { trainAddLine } from "./lib/db";
 
+// The mock board exposes move-input triggers when the view makes it
+// movable (the "I know my answer" flow) — the real legality/SAN wiring
+// (trainDests, sanForBoardMove) still runs in the view.
 vi.mock("./Board", () => ({
-  default: () => <div data-testid="board" />,
+  default: ({ movable }: { movable?: { onMove: (o: string, d: string) => void } }) => (
+    <div data-testid="board">
+      {movable && (
+        <>
+          <button onClick={() => movable.onMove("g8", "f6")}>board-g8f6</button>
+          <button onClick={() => movable.onMove("b8", "c6")}>board-b8c6</button>
+        </>
+      )}
+    </div>
+  ),
 }));
 
 // Explicit export list: extend it when TriageView imports more from db.
@@ -22,7 +35,12 @@ vi.mock("./lib/db", () => ({
   selfPlayerGet: vi.fn(() => Promise.resolve(null)),
   selfPlayerSet: vi.fn(() => Promise.resolve()),
   trainAddLine: vi.fn(() =>
-    Promise.resolve({ repertoire: "main (white)", cardsAdded: 4, cardsExisting: 1 }),
+    Promise.resolve({
+      repertoire: "main (white)",
+      cardsAdded: 4,
+      cardsExisting: 1,
+      cardsReplaced: 1,
+    }),
   ),
   identityGroup: vi.fn(() =>
     Promise.resolve([
@@ -39,6 +57,7 @@ vi.mock("./lib/triage", async (importOriginal) => {
     ...actual,
     triageReport: vi.fn(),
     triageInferRepertoire: vi.fn(),
+    triageInferFrom: vi.fn(),
     triageExtend: vi.fn(),
     triageExtensionStatus: vi.fn(() =>
       Promise.resolve({ extension: null, jobStatus: null, jobsAhead: 0, workerActive: false }),
@@ -57,6 +76,11 @@ function item(over: Partial<TriageItem>): TriageItem {
     expectedSan: null,
     playedSan: null,
     opponentSan: null,
+    playedCount: 0,
+    cardFollowed: 0,
+    realityCheck: false,
+    inferredLines: [],
+    wholeOpening: false,
     hasExtension: false,
     examples: [],
     ...over,
@@ -312,5 +336,245 @@ describe("TriageView — card-less color suggestion flow", () => {
     );
     expect(container.textContent).toContain("searched: Infer, Ida, Ida Infer");
     expect(container.textContent).toContain("Profile screen’s INCLUDES strip");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Declared-vs-played (2026-07-30 v2): reality panel, whole-opening    */
+/* holes, and the board-played "I know my answer" flow                 */
+/* ------------------------------------------------------------------ */
+
+/** After 1.e4 — Black (the user) to move. */
+const AFTER_E4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
+/** After 1.d4 — Black (the user) to move. */
+const AFTER_D4 = "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1";
+
+const REALITY = item({
+  fen: AFTER_E4,
+  ply: 2,
+  games: 119,
+  line: "1. e4",
+  expectedSan: "e5",
+  playedSan: "c5",
+  playedCount: 119,
+  cardFollowed: 1,
+  realityCheck: true,
+  inferredLines: [
+    {
+      sans: ["e4", "c5", "Nf3", "d6"],
+      games: 63,
+      score: 48.4,
+      eco: "B50",
+      openingName: "Sicilian Defense",
+    },
+    { sans: ["e4", "c5", "c3"], games: 21, score: 52.4, eco: "B22", openingName: "Alapin" },
+  ],
+});
+
+const realityReport = (): TriageReport =>
+  reportOf(
+    { gamesSeen: 2 },
+    { hasCards: true, gamesScanned: 199, gamesSeen: 199, deviations: [REALITY] },
+  );
+
+describe("TriageView — reality-check deviation panel", () => {
+  it("confronts declared-vs-played instead of a scolding row, and adopts what you play", async () => {
+    vi.mocked(triageReport).mockClear();
+    vi.mocked(triageReport).mockResolvedValue(realityReport());
+    vi.mocked(trainAddLine).mockClear();
+    const { container, getByText } = renderAndRun();
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        "Your cards say 1... e5 — but you've played 1... c5 in 119 of 120 games. " +
+          "That looks like your real repertoire.",
+      ),
+    );
+    // The summary uses the new honest shape; the scolding row is gone
+    // (the deviations section reports none found instead).
+    expect(container.textContent).toContain("your play disagrees with your cards at 1 position");
+    expect(container.textContent).not.toContain("book: e5 — played c5");
+    // Inferred lines with games/score/name captions.
+    expect(container.textContent).toContain("1. e4 c5 2. Nf3 d6");
+    expect(container.textContent).toContain("63 games · 48.4% score · B50 Sicilian Defense");
+
+    fireEvent.click(getByText("Adopt what you play"));
+    await waitFor(() => expect(vi.mocked(trainAddLine)).toHaveBeenCalledTimes(2));
+    // REPLACE mode: the conflicting card must be rewritten, or the panel
+    // would return forever.
+    expect(vi.mocked(trainAddLine)).toHaveBeenCalledWith(
+      "black",
+      ["e4", "c5", "Nf3", "d6"],
+      undefined,
+      undefined,
+      true,
+    );
+    expect(vi.mocked(trainAddLine)).toHaveBeenCalledWith(
+      "black",
+      ["e4", "c5", "c3"],
+      undefined,
+      undefined,
+      true,
+    );
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        'Adopted what you play into "main (white)": 8 new cards, ' +
+          "2 cards rewritten to your move, 2 positions already covered.",
+      ),
+    );
+    // The adoption re-runs the triage.
+    await waitFor(() => expect(vi.mocked(triageReport)).toHaveBeenCalledTimes(2));
+  });
+
+  it("'Keep training the cards' dismisses the panel and lists the deviation normally", async () => {
+    vi.mocked(triageReport).mockClear();
+    vi.mocked(triageReport).mockResolvedValue(realityReport());
+    vi.mocked(trainAddLine).mockClear();
+    const { container, getByText } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("Your cards say 1... e5"));
+    fireEvent.click(getByText("Keep training the cards"));
+    expect(container.textContent).not.toContain("Your cards say 1... e5");
+    expect(container.textContent).toContain("book: e5 — played c5");
+    expect(vi.mocked(trainAddLine)).not.toHaveBeenCalled();
+  });
+
+  it("offers the board as a third path: play a THIRD move, confirm, replace", async () => {
+    vi.mocked(triageReport).mockClear();
+    vi.mocked(triageReport).mockResolvedValue(realityReport());
+    vi.mocked(trainAddLine).mockClear();
+    const { container, getByText } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("Your cards say 1... e5"));
+    fireEvent.click(getByText("I know my answer — play it on the board"));
+    // The aside board is now movable; play 1...Nc6 (neither e5 nor c5).
+    fireEvent.click(getByText("board-b8c6"));
+    expect(container.textContent).toContain("Set 1... Nc6 as your repertoire answer?");
+    fireEvent.click(getByText("Set as my answer"));
+    await waitFor(() =>
+      expect(vi.mocked(trainAddLine)).toHaveBeenCalledWith(
+        "black",
+        ["e4", "Nc6"],
+        undefined,
+        undefined,
+        true,
+      ),
+    );
+  });
+});
+
+const HOLE = item({
+  fen: AFTER_D4,
+  ply: 1,
+  games: 63,
+  line: "1. d4",
+  opponentSan: "d4",
+  wholeOpening: true,
+});
+
+const holeReport = (): TriageReport =>
+  reportOf(
+    { gamesSeen: 2 },
+    {
+      hasCards: true,
+      gamesScanned: 199,
+      gamesSeen: 199,
+      gaps: [HOLE, item({ opponentSan: "Nc3", ply: 3, line: "1. e4 c5 2. Nc3" })],
+    },
+  );
+
+describe("TriageView — whole-opening holes", () => {
+  it("groups the opponent-first-move gap into one labelled row, keeping mid-line gaps as rows", async () => {
+    vi.mocked(triageReport).mockResolvedValue(holeReport());
+    const { container } = renderAndRun();
+    await waitFor(() =>
+      expect(container.textContent).toContain("No repertoire vs 1. d4 (63 games)"),
+    );
+    expect(container.textContent).toContain("WHOLE-OPENING HOLES");
+    // The mid-line gap keeps its per-position row and the summary splits
+    // the two shapes honestly.
+    expect(container.textContent).toContain("opponent played Nc3 — no card after it");
+    expect(container.textContent).toContain("1 whole-opening hole · 1 in-book gap");
+  });
+
+  it("infers from the user's games rooted after the opponent move, then adopts", async () => {
+    vi.mocked(triageReport).mockClear();
+    vi.mocked(triageReport).mockResolvedValue(holeReport());
+    vi.mocked(triageInferFrom).mockResolvedValue({
+      player: "Infer, Ida",
+      color: "black",
+      gamesScanned: 63,
+      lines: [
+        {
+          sans: ["d4", "Nf6", "c4", "e6"],
+          games: 40,
+          score: 55,
+          eco: "E00",
+          openingName: "Indian Defense",
+        },
+        { sans: ["d4", "d5"], games: 23, score: 47.8, eco: "D00", openingName: "Queen's Pawn" },
+      ],
+    });
+    vi.mocked(trainAddLine).mockClear();
+    const { container, getByText } = renderAndRun();
+    await waitFor(() =>
+      expect(container.textContent).toContain("No repertoire vs 1. d4 (63 games)"),
+    );
+    fireEvent.click(getByText("Infer from your games"));
+    await waitFor(() =>
+      expect(vi.mocked(triageInferFrom)).toHaveBeenCalledWith("Infer, Ida", "black", ["d4"]),
+    );
+    await waitFor(() => expect(container.textContent).toContain("Adopt all 2 lines"));
+    expect(container.textContent).toContain("40 games · 55% score · E00 Indian Defense");
+    fireEvent.click(getByText("Adopt all 2 lines"));
+    await waitFor(() => expect(vi.mocked(trainAddLine)).toHaveBeenCalledTimes(2));
+    // Plain adds (no conflicting card exists in a hole — no replace).
+    expect(vi.mocked(trainAddLine)).toHaveBeenCalledWith("black", ["d4", "Nf6", "c4", "e6"]);
+    expect(vi.mocked(trainAddLine)).toHaveBeenCalledWith("black", ["d4", "d5"]);
+    await waitFor(() => expect(vi.mocked(triageReport)).toHaveBeenCalledTimes(2));
+  });
+
+  it("board answer on a hole: confirm shows the exact move and target, adopt passes the prefixed line", async () => {
+    vi.mocked(triageReport).mockClear();
+    vi.mocked(triageReport).mockResolvedValue(holeReport());
+    vi.mocked(trainAddLine).mockClear();
+    const { container, getByText } = renderAndRun();
+    await waitFor(() =>
+      expect(container.textContent).toContain("No repertoire vs 1. d4 (63 games)"),
+    );
+    // Selecting the hole shows its position; the board accepts the
+    // user's move (real legality + SAN wiring: g8→f6 is 1...Nf6).
+    fireEvent.click(getByText("No repertoire vs 1. d4 (63 games)"));
+    expect(container.textContent).toContain("Know your answer? Play it on the board");
+    fireEvent.click(getByText("board-g8f6"));
+    expect(container.textContent).toContain("Set 1... Nf6 as your repertoire answer to 1. d4?");
+    fireEvent.click(getByText("Set as my answer"));
+    await waitFor(() =>
+      expect(vi.mocked(trainAddLine)).toHaveBeenCalledWith(
+        "black",
+        ["d4", "Nf6"],
+        undefined,
+        undefined,
+        false,
+      ),
+    );
+    await waitFor(() =>
+      expect(container.textContent).toContain('Set Nf6 as your answer in "main (white)"'),
+    );
+    await waitFor(() => expect(vi.mocked(triageReport)).toHaveBeenCalledTimes(2));
+  });
+
+  it("cancel discards the pending answer without writing anything", async () => {
+    vi.mocked(triageReport).mockClear();
+    vi.mocked(triageReport).mockResolvedValue(holeReport());
+    vi.mocked(trainAddLine).mockClear();
+    const { container, getByText } = renderAndRun();
+    await waitFor(() =>
+      expect(container.textContent).toContain("No repertoire vs 1. d4 (63 games)"),
+    );
+    fireEvent.click(getByText("No repertoire vs 1. d4 (63 games)"));
+    fireEvent.click(getByText("board-g8f6"));
+    expect(container.textContent).toContain("Set 1... Nf6 as your repertoire answer to 1. d4?");
+    fireEvent.click(getByText("Cancel"));
+    expect(container.textContent).not.toContain("Set 1... Nf6");
+    expect(container.textContent).toContain("Know your answer? Play it on the board");
+    expect(vi.mocked(trainAddLine)).not.toHaveBeenCalled();
   });
 });

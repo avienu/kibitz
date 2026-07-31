@@ -10,21 +10,32 @@
  * when the user clicks "Extend with engine" (CLAUDE.md #6).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import Board from "./Board";
+import Board, { type BoardMovable } from "./Board";
 import ScreenHeader from "./shell/ScreenHeader";
+import { usePromotionPicker } from "./PromotionPicker";
 import { identityGroup, matchingPlayers, selfPlayerGet, selfPlayerSet, trainAddLine } from "./lib/db";
+import { sanForBoardMove, trainDests } from "./lib/train";
 import {
+  answerConfirmCopy,
+  answerLineSans,
   colorName,
   defaultTriageColor,
   evalLabel,
+  inBookGaps,
   inferredLineLabel,
   itemCaption,
+  lineSans,
   numberedLine,
+  realityDeviations,
+  realityHeadline,
   triageExtend,
   triageExtensionStatus,
+  triageInferFrom,
   triageInferRepertoire,
   triageReport,
   triageSummary,
+  wholeGapLabel,
+  wholeOpeningGaps,
   type ColorTriage,
   type ExtensionStatus,
   type InferredLine,
@@ -137,6 +148,21 @@ export default function TriageView({
    * cards — never a dead tab); an explicit toggle is never overridden. */
   const colorAutoPicked = useRef(false);
 
+  /* ---- declared-vs-played state (2026-07-30 v2) ---- */
+  /** Reality panels dismissed with "Keep training the cards" — session
+   * state only (keyed by position FEN); the deviation then lists normally. */
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  /** Whole-opening-hole inference, one hole at a time (keyed by FEN). */
+  const [holeInfer, setHoleInfer] = useState<{
+    fen: string;
+    loading: boolean;
+    inf: InferredRepertoire | null;
+    error: string | null;
+  } | null>(null);
+  /** Board-played answer awaiting explicit confirmation — never silently
+   * written (keyed to the position it was played from). */
+  const [pendingAnswer, setPendingAnswer] = useState<{ fen: string; san: string } | null>(null);
+
   /* ---- player suggestions (debounced) ---- */
   useEffect(() => {
     const q = player.trim();
@@ -156,6 +182,8 @@ export default function TriageView({
     setBuilding(true);
     setError(null);
     setSel(null);
+    setHoleInfer(null);
+    setPendingAnswer(null);
     try {
       const r = await triageReport(p);
       setReport(r);
@@ -180,6 +208,7 @@ export default function TriageView({
     setExtStatus(null);
     setExtError(null);
     setAdoptMsg(null);
+    setPendingAnswer(null);
   }, []);
 
   /* ---- extension status: fetch on selection, poll while queued/running ---- */
@@ -337,7 +366,139 @@ export default function TriageView({
     [color, adopting, onCountsChanged, run],
   );
 
+  /** Adopt what a reality-check panel shows the user really plays:
+   * trainAddLine in REPLACE mode (the conflicting card is rewritten to
+   * the played move — otherwise first-card-wins would keep the old card
+   * and the panel would return forever), then re-run the triage. */
+  const adoptPlayed = useCallback(
+    async (lines: InferredLine[]) => {
+      if (adopting || lines.length === 0) return;
+      setAdopting(true);
+      setInferMsg(null);
+      try {
+        let added = 0;
+        let existing = 0;
+        let replaced = 0;
+        let repName = "";
+        for (const l of lines) {
+          const res = await trainAddLine(color, l.sans, undefined, undefined, true);
+          added += res.cardsAdded;
+          existing += res.cardsExisting;
+          replaced += res.cardsReplaced;
+          repName = res.repertoire;
+        }
+        const bits = [`${added} new card${added === 1 ? "" : "s"}`];
+        if (replaced > 0) {
+          bits.push(`${replaced} card${replaced === 1 ? "" : "s"} rewritten to your move`);
+        }
+        bits.push(`${existing} position${existing === 1 ? "" : "s"} already covered`);
+        setInferMsg(`Adopted what you play into "${repName}": ${bits.join(", ")}.`);
+        onCountsChanged?.();
+        await run();
+      } catch (e) {
+        setInferMsg(`Adoption failed: ${e}`);
+      } finally {
+        setAdopting(false);
+      }
+    },
+    [color, adopting, onCountsChanged, run],
+  );
+
+  /** "[Infer from your games]" on a whole-opening hole: rooted inference
+   * after the opponent's move (static walk — no engine). */
+  const inferHole = useCallback(
+    async (it: TriageItem) => {
+      if (reportPlayer === null) return;
+      setHoleInfer({ fen: it.fen, loading: true, inf: null, error: null });
+      try {
+        const inf = await triageInferFrom(reportPlayer, color, lineSans(it.line));
+        setHoleInfer({ fen: it.fen, loading: false, inf, error: null });
+      } catch (e) {
+        setHoleInfer({ fen: it.fen, loading: false, inf: null, error: String(e) });
+      }
+    },
+    [reportPlayer, color],
+  );
+
+  /* ---- "I know my answer": play the move on the position board ---- */
+
+  /** A selected gap (any kind) or reality-check deviation accepts the
+   * user's own move on the aside board; everything else stays read-only. */
+  const answerable =
+    sel !== null && (sel.kind === "gap" || (sel.kind === "deviation" && sel.item.realityCheck));
+
+  const answerMove = useCallback(
+    (orig: string, dest: string, role?: "queen" | "rook" | "bishop" | "knight") => {
+      if (!sel) return;
+      const san = sanForBoardMove(sel.item.fen, orig, dest, role);
+      if (san) setPendingAnswer({ fen: sel.item.fen, san });
+    },
+    [sel],
+  );
+  const answerMoveRef = useRef(answerMove);
+  answerMoveRef.current = answerMove;
+  const promo = usePromotionPicker((orig, dest, role) =>
+    answerMoveRef.current(orig, dest, role),
+  );
+
+  const movable: BoardMovable | undefined =
+    answerable && sel
+      ? {
+          color,
+          dests: trainDests(sel.item.fen),
+          onMove: (orig, dest) => {
+            if (!promo.guard(sel.item.fen, orig, dest)) answerMoveRef.current(orig, dest);
+          },
+        }
+      : undefined;
+
+  /** Confirmed board answer → trainAddLine with the item's path + the
+   * move (replace mode only at a deviation, where a card conflicts). */
+  const adoptAnswer = useCallback(async () => {
+    if (!sel || !pendingAnswer || pendingAnswer.fen !== sel.item.fen || adopting) return;
+    setAdopting(true);
+    setAdoptMsg(null);
+    try {
+      const sans = answerLineSans(sel.item, pendingAnswer.san);
+      const replace = sel.kind === "deviation";
+      const res = await trainAddLine(color, sans, undefined, undefined, replace);
+      const bits = [`${res.cardsAdded} new card${res.cardsAdded === 1 ? "" : "s"}`];
+      if (res.cardsReplaced > 0) {
+        bits.push(
+          `${res.cardsReplaced} card${res.cardsReplaced === 1 ? "" : "s"} rewritten to your move`,
+        );
+      }
+      bits.push(
+        `${res.cardsExisting} position${res.cardsExisting === 1 ? "" : "s"} already covered`,
+      );
+      setInferMsg(
+        `Set ${pendingAnswer.san} as your answer in "${res.repertoire}": ${bits.join(", ")}.`,
+      );
+      setPendingAnswer(null);
+      onCountsChanged?.();
+      await run();
+    } catch (e) {
+      setAdoptMsg(`Adoption failed: ${e}`);
+    } finally {
+      setAdopting(false);
+    }
+  }, [sel, pendingAnswer, adopting, color, onCountsChanged, run]);
+
   const extension = extStatus?.extension ?? null;
+
+  /** Reality panels still standing this session (not dismissed). */
+  const realityItems =
+    ct && ct.hasCards ? realityDeviations(ct).filter((d) => !dismissed.includes(d.fen)) : [];
+  /** Whole-opening holes get their own rows; the ranked lists keep the
+   * remaining deviations and the real in-book gaps. */
+  const holes = ct && ct.hasCards ? wholeOpeningGaps(ct) : [];
+  const listCt: ColorTriage | null = ct
+    ? {
+        ...ct,
+        deviations: ct.deviations.filter((d) => !realityItems.some((r) => r.fen === d.fen)),
+        gaps: inBookGaps(ct),
+      }
+    : null;
 
   return (
     <div className="triage2">
@@ -352,6 +513,8 @@ export default function TriageView({
                 colorAutoPicked.current = true;
                 setColor("white");
                 setSel(null);
+                setHoleInfer(null);
+                setPendingAnswer(null);
               }}
             >
               as White
@@ -362,6 +525,8 @@ export default function TriageView({
                 colorAutoPicked.current = true;
                 setColor("black");
                 setSel(null);
+                setHoleInfer(null);
+                setPendingAnswer(null);
               }}
             >
               as Black
@@ -482,19 +647,170 @@ export default function TriageView({
                   )}
                 </div>
               ) : (
-                <TriageLists ct={ct} selectedFen={sel?.item.fen ?? null} onSelect={select} />
+                <>
+                  {realityItems.map((it) => (
+                    <div className="triage-reality" key={it.fen}>
+                      <div className="triage-infer-headline">{realityHeadline(it)}</div>
+                      {it.inferredLines.map((l, i) => (
+                        <div className="triage-infer-line" key={l.sans.join(" ")}>
+                          <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
+                          <span className="triage-row-main">
+                            <span className="triage-line">{numberedLine(l.sans, START_FEN)}</span>
+                            <span className="triage-caption">{inferredLineLabel(l)}</span>
+                          </span>
+                          <button
+                            className="btn-secondary"
+                            disabled={adopting}
+                            onClick={() => void adoptPlayed([l])}
+                          >
+                            Adopt
+                          </button>
+                        </div>
+                      ))}
+                      <div className="triage-reality-actions">
+                        <button
+                          className="btn-primary"
+                          disabled={adopting || it.inferredLines.length === 0}
+                          onClick={() => void adoptPlayed(it.inferredLines)}
+                        >
+                          {adopting ? "Adopting…" : "Adopt what you play"}
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          onClick={() => setDismissed((d) => [...d, it.fen])}
+                        >
+                          Keep training the cards
+                        </button>
+                        <button className="btn-secondary" onClick={() => select("deviation", it)}>
+                          I know my answer — play it on the board
+                        </button>
+                      </div>
+                      <p className="triage-footnote">
+                        Adopting rewrites the conflicting card to the move you actually play (its
+                        training restarts fresh) and adds cards for the rest of each line. Keeping
+                        the cards leaves this listed as a normal deviation for this session.
+                      </p>
+                    </div>
+                  ))}
+                  {holes.length > 0 && (
+                    <div className="triage-section">
+                      <div className="triage-strip-title">
+                        WHOLE-OPENING HOLES — NO BOOK AT ALL AFTER THESE
+                      </div>
+                      {holes.map((it) => (
+                        <div key={it.fen}>
+                          <div
+                            className={`triage-row triage-hole${
+                              sel?.item.fen === it.fen ? " sel" : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className="triage-hole-main"
+                              onClick={() => select("gap", it)}
+                            >
+                              <span className="triage-line">{wholeGapLabel(it)}</span>
+                              <span className="triage-caption">
+                                {it.eco && it.openingName
+                                  ? `${it.eco} ${it.openingName}`
+                                  : "the opponent's first move — your book has no answer"}
+                                {it.hasExtension ? " · engine lines ready" : ""}
+                              </span>
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              disabled={holeInfer?.loading && holeInfer.fen === it.fen}
+                              onClick={() => {
+                                select("gap", it);
+                                void inferHole(it);
+                              }}
+                            >
+                              Infer from your games
+                            </button>
+                          </div>
+                          {holeInfer?.fen === it.fen && (
+                            <div className="triage-hole-infer">
+                              {holeInfer.loading && (
+                                <div className="triage-ext-progress">
+                                  Reading your games for what you already play here…
+                                </div>
+                              )}
+                              {holeInfer.error && <div className="error">{holeInfer.error}</div>}
+                              {holeInfer.inf && holeInfer.inf.lines.length === 0 && (
+                                <div className="pf2-empty">
+                                  Walked {holeInfer.inf.gamesScanned} game
+                                  {holeInfer.inf.gamesScanned === 1 ? "" : "s"} here, but no line
+                                  repeats in enough of them to suggest (3+ games in book). Play
+                                  your answer on the board instead, or extend with the engine.
+                                </div>
+                              )}
+                              {holeInfer.inf &&
+                                holeInfer.inf.lines.map((l, i) => (
+                                  <div className="triage-infer-line" key={l.sans.join(" ")}>
+                                    <span className="triage-rank">
+                                      {String(i + 1).padStart(2, "0")}
+                                    </span>
+                                    <span className="triage-row-main">
+                                      <span className="triage-line">
+                                        {numberedLine(l.sans, START_FEN)}
+                                      </span>
+                                      <span className="triage-caption">{inferredLineLabel(l)}</span>
+                                    </span>
+                                    <button
+                                      className="btn-secondary"
+                                      disabled={adopting}
+                                      onClick={() => void adoptInferred([l])}
+                                    >
+                                      Adopt
+                                    </button>
+                                  </div>
+                                ))}
+                              {holeInfer.inf && holeInfer.inf.lines.length > 0 && (
+                                <button
+                                  className="btn-primary"
+                                  disabled={adopting}
+                                  onClick={() => {
+                                    const lines = holeInfer.inf?.lines ?? [];
+                                    void adoptInferred(lines);
+                                  }}
+                                >
+                                  {adopting
+                                    ? "Adopting…"
+                                    : `Adopt all ${holeInfer.inf.lines.length} line${
+                                        holeInfer.inf.lines.length === 1 ? "" : "s"
+                                      }`}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {listCt && (
+                    <TriageLists
+                      ct={listCt}
+                      selectedFen={sel?.item.fen ?? null}
+                      onSelect={select}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
         </div>
 
         <aside className="triage-aside">
-          <Board
-            fen={sel?.item.fen ?? START_FEN}
-            orientation={color}
-            treatment={treatment}
-            size={360}
-          />
+          <div className="triage-board-wrap">
+            <Board
+              fen={sel?.item.fen ?? START_FEN}
+              orientation={color}
+              treatment={treatment}
+              size={360}
+              movable={movable}
+            />
+            {promo.element}
+          </div>
           {!sel && <div className="triage-aside-caption">SELECT A ROW TO SEE THE POSITION</div>}
           {sel && (
             <>
@@ -513,6 +829,31 @@ export default function TriageView({
                 <div className="triage-detail-line">{sel.item.line || "start position"}</div>
                 <div className="triage-detail-caption">{itemCaption(sel.kind, sel.item)}</div>
               </div>
+
+              {answerable && pendingAnswer && pendingAnswer.fen === sel.item.fen ? (
+                <div className="triage-answer">
+                  <div className="triage-answer-copy">
+                    {answerConfirmCopy(sel.item, pendingAnswer.san)}
+                  </div>
+                  <div className="triage-reality-actions">
+                    <button
+                      className="btn-primary"
+                      disabled={adopting}
+                      onClick={() => void adoptAnswer()}
+                    >
+                      Set as my answer
+                    </button>
+                    <button className="btn-secondary" onClick={() => setPendingAnswer(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : answerable ? (
+                <p className="triage-footnote">
+                  Know your answer? Play it on the board and confirm — nothing is written until
+                  you do.
+                </p>
+              ) : null}
 
               <div className="triage-strip-title">SOURCE GAMES</div>
               <div className="triage-examples">
