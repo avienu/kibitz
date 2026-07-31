@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultTriageColor,
   evalLabel,
+  inferredLineLabel,
   itemCaption,
   numberedLine,
   triageSummary,
   type ColorTriage,
+  type InferredLine,
   type TriageItem,
+  type TriageReport,
 } from "./triage";
 
 /** After 1.e4 c5 — White to move, move 2 (the Sicilian gap spot). */
@@ -68,6 +72,7 @@ describe("triageSummary and captions", () => {
     color: "white",
     hasCards: true,
     gamesScanned: 12,
+    gamesSeen: 12,
     deviations: [],
     gaps: [],
     frontiers: [],
@@ -93,5 +98,76 @@ describe("triageSummary and captions", () => {
       "opponent played c5 — no card after it",
     );
     expect(itemCaption("frontier", item({}))).toBe("your book ends here");
+  });
+
+  it("never says '0 games' for a skipped color — it says why", () => {
+    expect(triageSummary({ ...base, hasCards: false, gamesScanned: 0 })).toBe(
+      "White games are skipped until a White repertoire exists — adopt one below.",
+    );
+    expect(
+      triageSummary({ ...base, color: "black", hasCards: false, gamesScanned: 0 }),
+    ).toBe("Black games are skipped until a Black repertoire exists — adopt one below.");
+  });
+});
+
+describe("defaultTriageColor", () => {
+  const ct = (over: Partial<ColorTriage>): ColorTriage => ({
+    color: "white",
+    hasCards: false,
+    gamesScanned: 0,
+    gamesSeen: 0,
+    deviations: [],
+    gaps: [],
+    frontiers: [],
+    ...over,
+  });
+  const report = (white: Partial<ColorTriage>, black: Partial<ColorTriage>): TriageReport => ({
+    player: "Infer, Ida",
+    white: ct(white),
+    black: ct({ color: "black", ...black }),
+  });
+
+  it("picks a color that has cards (White when both do)", () => {
+    expect(defaultTriageColor(report({ hasCards: true }, {}))).toBe("white");
+    expect(defaultTriageColor(report({}, { hasCards: true }))).toBe("black");
+    expect(defaultTriageColor(report({ hasCards: true }, { hasCards: true }))).toBe("white");
+  });
+
+  it("with no cards anywhere, picks the color with more cohort games", () => {
+    expect(defaultTriageColor(report({ gamesSeen: 2 }, { gamesSeen: 9 }))).toBe("black");
+    expect(defaultTriageColor(report({ gamesSeen: 9 }, { gamesSeen: 2 }))).toBe("white");
+    // Ties (including 0–0) fall back to White deterministically.
+    expect(defaultTriageColor(report({}, {}))).toBe("white");
+  });
+
+  it("cards beat game counts — never a dead tab", () => {
+    expect(defaultTriageColor(report({ hasCards: true, gamesSeen: 1 }, { gamesSeen: 99 }))).toBe(
+      "white",
+    );
+  });
+});
+
+describe("inferredLineLabel", () => {
+  const line = (over: Partial<InferredLine>): InferredLine => ({
+    sans: ["e4", "c5", "Nf3"],
+    games: 4,
+    score: 62.5,
+    eco: "B27",
+    openingName: "Sicilian Defense",
+    ...over,
+  });
+
+  it("joins games, score and the dataset name", () => {
+    expect(inferredLineLabel(line({}))).toBe("4 games · 62.5% score · B27 Sicilian Defense");
+    expect(inferredLineLabel(line({ games: 1, score: 100 }))).toBe(
+      "1 game · 100% score · B27 Sicilian Defense",
+    );
+  });
+
+  it("omits missing name parts instead of printing placeholders", () => {
+    expect(inferredLineLabel(line({ eco: null }))).toBe("4 games · 62.5% score · Sicilian Defense");
+    expect(inferredLineLabel(line({ eco: null, openingName: null }))).toBe(
+      "4 games · 62.5% score",
+    );
   });
 });

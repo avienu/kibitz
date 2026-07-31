@@ -43,9 +43,13 @@ export interface TriageItem {
 
 export interface ColorTriage {
   color: "white" | "black";
-  /** False = this color has no repertoire cards (nothing to triage). */
+  /** False = this color has no repertoire cards (its games are skipped;
+   * the view offers the inferred-repertoire suggestion flow instead). */
   hasCards: boolean;
   gamesScanned: number;
+  /** Games of this color in the walked cohort, whether or not they were
+   * triaged — the default-tab signal for card-less colors. */
+  gamesSeen: number;
   deviations: TriageItem[];
   gaps: TriageItem[];
   frontiers: TriageItem[];
@@ -59,6 +63,38 @@ export interface TriageReport {
 
 export function triageReport(player: string): Promise<TriageReport> {
   return invoke<TriageReport>("triage_report", { player });
+}
+
+/* ---- repertoire inference (the no-repertoire-yet suggestion flow) ---- */
+
+export interface InferredLine {
+  /** SAN moves from the standard start (replays legally). */
+  sans: string[];
+  /** Games whose in-book play followed this whole line. */
+  games: number;
+  /** The user's points share in those games, percent (one decimal),
+   * over the games with a known result. */
+  score: number;
+  eco: string | null;
+  openingName: string | null;
+}
+
+export interface InferredRepertoire {
+  player: string;
+  color: "white" | "black";
+  /** Standard-start games of the color walked (0 = the identity has no
+   * games of this color at all). */
+  gamesScanned: number;
+  lines: InferredLine[];
+}
+
+/** Infer the lines the user already plays as `color` from their own
+ * games (static database walk — no engine). */
+export function triageInferRepertoire(
+  player: string,
+  color: "white" | "black",
+): Promise<InferredRepertoire> {
+  return invoke<InferredRepertoire>("triage_infer_repertoire", { player, color });
 }
 
 /* ---- book extensions ---- */
@@ -150,9 +186,42 @@ export function numberedLine(sans: string[], fen: string): string {
   return out.join(" ");
 }
 
+/** Capitalized display name of a color. */
+export function colorName(color: "white" | "black"): "White" | "Black" {
+  return color === "white" ? "White" : "Black";
+}
+
+/**
+ * Which color tab the triage screen should open on: a color that has
+ * cards (White when both do); when neither has cards, the color with
+ * more games in the report's cohort — never a dead tab out of the box
+ * (the run-10 SRS default-color rule, applied to triage).
+ */
+export function defaultTriageColor(r: TriageReport): "white" | "black" {
+  if (r.white.hasCards) return "white";
+  if (r.black.hasCards) return "black";
+  return r.black.gamesSeen > r.white.gamesSeen ? "black" : "white";
+}
+
+/** "6 games · 58.3% score · B90 Sicilian Defense" — the caption under an
+ * inferred line. Only real data: an unnamed line omits the name part. */
+export function inferredLineLabel(l: InferredLine): string {
+  const parts = [`${l.games} game${l.games === 1 ? "" : "s"}`, `${l.score}% score`];
+  if (l.openingName) {
+    parts.push(l.eco ? `${l.eco} ${l.openingName}` : l.openingName);
+  }
+  return parts.join(" · ");
+}
+
 /** "3 deviations · 1 gap · 2 frontiers" (only non-zero classes named;
- * empty-but-scanned reports say so honestly). */
+ * empty-but-scanned reports say so honestly). A card-less color says WHY
+ * it was skipped instead of the misleading "no triage points in 0
+ * games" (2026-07-30 field report). */
 export function triageSummary(ct: ColorTriage): string {
+  if (!ct.hasCards) {
+    const c = colorName(ct.color);
+    return `${c} games are skipped until a ${c} repertoire exists — adopt one below.`;
+  }
   const part = (n: number, name: string) => `${n} ${name}${n === 1 ? "" : "s"}`;
   const parts: string[] = [];
   if (ct.deviations.length > 0) parts.push(part(ct.deviations.length, "deviation"));

@@ -271,6 +271,7 @@ pub fn run() {
             train::train_grade,
             train::train_add_line,
             triage::triage_report,
+            triage::triage_infer_repertoire,
             triage::triage_extend,
             triage::triage_extension_status,
             lab::lab_cohorts,
