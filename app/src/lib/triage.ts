@@ -36,6 +36,19 @@ export interface TriageItem {
   playedSan: string | null;
   /** Gaps: the opponent's uncovered move. */
   opponentSan: string | null;
+  /** Deviations: games that played the DOMINANT off-book move here. */
+  playedCount: number;
+  /** Deviations: cohort games that actually played the card's move here. */
+  cardFollowed: number;
+  /** Deviations: the played move dominates the card in the user's own
+   * games — this is their real repertoire, not a lapse. */
+  realityCheck: boolean;
+  /** Reality-check deviations only: what the user actually plays from
+   * here (full lines from the standard start through the played move). */
+  inferredLines: InferredLine[];
+  /** Gaps: the uncovered move was the opponent's FIRST move of the game
+   * — a whole-opening hole, not a mid-line gap. */
+  wholeOpening: boolean;
   /** True when a completed engine extension is stored for `fen`. */
   hasExtension: boolean;
   examples: TriageExample[];
@@ -95,6 +108,18 @@ export function triageInferRepertoire(
   color: "white" | "black",
 ): Promise<InferredRepertoire> {
   return invoke<InferredRepertoire>("triage_infer_repertoire", { player, color });
+}
+
+/** Rooted inference for a whole-opening hole: what the user already
+ * plays from the position after `prefix` (SAN from the standard start).
+ * Lines come back full-length from the start; `gamesScanned` counts the
+ * cohort games that reached the prefix. Static walk — no engine. */
+export function triageInferFrom(
+  player: string,
+  color: "white" | "black",
+  prefix: string[],
+): Promise<InferredRepertoire> {
+  return invoke<InferredRepertoire>("triage_infer_from", { player, color, prefix });
 }
 
 /* ---- book extensions ---- */
@@ -213,10 +238,84 @@ export function inferredLineLabel(l: InferredLine): string {
   return parts.join(" · ");
 }
 
-/** "3 deviations · 1 gap · 2 frontiers" (only non-zero classes named;
- * empty-but-scanned reports say so honestly). A card-less color says WHY
+/* ---- declared-vs-played helpers (2026-07-30 field report) ---- */
+
+/** Deviations the reality check flagged: the user's play IS their
+ * repertoire — the panel confronts it instead of a scolding row. */
+export function realityDeviations(ct: ColorTriage): TriageItem[] {
+  return ct.deviations.filter((d) => d.realityCheck);
+}
+
+/** Gaps at the opponent's first move: whole-opening holes, one row per
+ * opponent move family (positions already collapse them). */
+export function wholeOpeningGaps(ct: ColorTriage): TriageItem[] {
+  return ct.gaps.filter((g) => g.wholeOpening);
+}
+
+/** Mid-line gaps inside a followed book line — the per-move holes the
+ * triage rows were built for. */
+export function inBookGaps(ct: ColorTriage): TriageItem[] {
+  return ct.gaps.filter((g) => !g.wholeOpening);
+}
+
+/** Raw SAN tokens of a numbered-SAN line ("1. e4 c5" → ["e4","c5"]).
+ * SAN never starts with a digit, so dropping digit-led tokens is exact. */
+export function lineSans(line: string): string[] {
+  return line.split(/\s+/).filter((t) => t !== "" && !/^\d/.test(t));
+}
+
+/** Number a single move played FROM `fen` ("1. e4" / "1... e5" style). */
+export function numberedSan(fen: string, san: string): string {
+  const moveNo = Number.parseInt(fen.split(" ")[5] ?? "1", 10) || 1;
+  return fenStm(fen) === "w" ? `${moveNo}. ${san}` : `${moveNo}... ${san}`;
+}
+
+/** Number the opponent move a gap records (`fen` is the position AFTER
+ * it, user to move): after 1.d4 → "1. d4"; after 1.e4 c5 → "1... c5". */
+export function opponentMoveLabel(item: TriageItem): string {
+  const san = item.opponentSan ?? "?";
+  const fields = item.fen.split(" ");
+  const moveNo = Number.parseInt(fields[5] ?? "1", 10) || 1;
+  return fields[1] === "b" ? `${moveNo}. ${san}` : `${moveNo - 1}... ${san}`;
+}
+
+/** "No repertoire vs 1. d4 (63 games)" — the whole-opening-hole row. */
+export function wholeGapLabel(item: TriageItem): string {
+  return `No repertoire vs ${opponentMoveLabel(item)} (${item.games} game${
+    item.games === 1 ? "" : "s"
+  })`;
+}
+
+/** The reality panel's honest headline: cards vs actual play, counted. */
+export function realityHeadline(item: TriageItem): string {
+  const total = item.playedCount + item.cardFollowed;
+  return (
+    `Your cards say ${numberedSan(item.fen, item.expectedSan ?? "?")} — but you've played ` +
+    `${numberedSan(item.fen, item.playedSan ?? "?")} in ${item.playedCount} of ${total} game` +
+    `${total === 1 ? "" : "s"}. That looks like your real repertoire.`
+  );
+}
+
+/** The full line (SAN from the standard start) that adopts `san` as the
+ * user's answer at a triage item's position: the item's own path plus
+ * the move. Works for gaps (path ends with the opponent's move) and for
+ * deviations (path ends before the user's move) alike — `item.fen` is
+ * the position the user moves from in both. */
+export function answerLineSans(item: TriageItem, san: string): string[] {
+  return [...lineSans(item.line), san];
+}
+
+/** Confirm copy for a board-played answer — never silently write. */
+export function answerConfirmCopy(item: TriageItem, san: string): string {
+  const target = item.opponentSan ? ` to ${opponentMoveLabel(item)}` : "";
+  return `Set ${numberedSan(item.fen, san)} as your repertoire answer${target}?`;
+}
+
+/** "your play disagrees with your cards at 1 position · 2 whole-opening
+ * holes · 3 in-book gaps · 1 frontier" — only non-zero classes named;
+ * empty-but-scanned reports say so honestly. A card-less color says WHY
  * it was skipped instead of the misleading "no triage points in 0
- * games" (2026-07-30 field report). */
+ * games" (2026-07-30 field report, both rounds). */
 export function triageSummary(ct: ColorTriage): string {
   if (!ct.hasCards) {
     const c = colorName(ct.color);
@@ -224,8 +323,14 @@ export function triageSummary(ct: ColorTriage): string {
   }
   const part = (n: number, name: string) => `${n} ${name}${n === 1 ? "" : "s"}`;
   const parts: string[] = [];
-  if (ct.deviations.length > 0) parts.push(part(ct.deviations.length, "deviation"));
-  if (ct.gaps.length > 0) parts.push(part(ct.gaps.length, "gap"));
+  const dev = ct.deviations.length;
+  if (dev > 0) {
+    parts.push(`your play disagrees with your cards at ${dev} position${dev === 1 ? "" : "s"}`);
+  }
+  const holes = wholeOpeningGaps(ct).length;
+  if (holes > 0) parts.push(part(holes, "whole-opening hole"));
+  const gaps = inBookGaps(ct).length;
+  if (gaps > 0) parts.push(part(gaps, "in-book gap"));
   if (ct.frontiers.length > 0) parts.push(part(ct.frontiers.length, "frontier"));
   if (parts.length === 0) {
     return `no triage points in ${ct.gamesScanned} game${ct.gamesScanned === 1 ? "" : "s"}`;

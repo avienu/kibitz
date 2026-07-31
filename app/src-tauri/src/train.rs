@@ -84,6 +84,9 @@ pub struct AddLineDto {
     pub repertoire: String,
     pub cards_added: u32,
     pub cards_existing: u32,
+    /// Replace mode only: positions whose cards were rewritten to the
+    /// line's move (the triage "adopt what you play" flow).
+    pub cards_replaced: u32,
 }
 
 fn counts_impl(
@@ -162,6 +165,7 @@ pub(crate) fn train_add_line_impl(
     start_fen: Option<&str>,
     sans: &[String],
     name: Option<&str>,
+    replace: bool,
 ) -> Result<AddLineDto, String> {
     let parsed = parse_color(color)?;
     let name = name.unwrap_or("main");
@@ -178,12 +182,19 @@ pub(crate) fn train_add_line_impl(
     let rep_id = kibitz_db::repertoire::ensure_repertoire(conn, parsed, name, &source)
         .map_err(|e| e.to_string())?;
     let now = kibitz_db::repertoire::now_utc(conn).map_err(|e| e.to_string())?;
-    let st = kibitz_db::repertoire::add_line(conn, rep_id, parsed, &start, sans, &now)
-        .map_err(|e| e.to_string())?;
+    let st = if replace {
+        // Triage "adopt what you play": conflicting cards along the line
+        // are rewritten to the played move instead of silently kept.
+        kibitz_db::repertoire::add_line_replacing(conn, rep_id, parsed, &start, sans, &now)
+    } else {
+        kibitz_db::repertoire::add_line(conn, rep_id, parsed, &start, sans, &now)
+    }
+    .map_err(|e| e.to_string())?;
     Ok(AddLineDto {
         repertoire: format!("{name} ({color})"),
         cards_added: st.cards_added,
         cards_existing: st.cards_existing,
+        cards_replaced: st.cards_replaced,
     })
 }
 
@@ -216,6 +227,8 @@ pub async fn train_grade(
 }
 
 /// Add a SAN line to the color's repertoire (created on first use).
+/// `replace: true` rewrites cards that conflict with the line's moves —
+/// the triage reality-check "adopt what you play" flow only.
 #[tauri::command]
 pub async fn train_add_line(
     state: State<'_, DbState>,
@@ -223,9 +236,17 @@ pub async fn train_add_line(
     start_fen: Option<String>,
     sans: Vec<String>,
     name: Option<String>,
+    replace: Option<bool>,
 ) -> Result<AddLineDto, String> {
     with_conn(&state, |conn| {
-        train_add_line_impl(conn, &color, start_fen.as_deref(), &sans, name.as_deref())
+        train_add_line_impl(
+            conn,
+            &color,
+            start_fen.as_deref(),
+            &sans,
+            name.as_deref(),
+            replace.unwrap_or(false),
+        )
     })
 }
 
@@ -246,9 +267,30 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let added = train_add_line_impl(&conn, "white", None, &sans, None).unwrap();
+        let added = train_add_line_impl(&conn, "white", None, &sans, None, false).unwrap();
         assert_eq!(added.cards_added, 3, "e4, Nf3, Bb5");
         assert_eq!(added.repertoire, "main (white)");
+
+        // Replace mode rewrites a conflicting card to the new line's move
+        // (the triage "adopt what you play" flow); plain mode never does.
+        let italian: Vec<String> = ["e4", "e5", "Bc4"].iter().map(|s| s.to_string()).collect();
+        let plain = train_add_line_impl(&conn, "white", None, &italian, None, false).unwrap();
+        assert_eq!((plain.cards_added, plain.cards_replaced), (0, 0));
+        let replaced = train_add_line_impl(&conn, "white", None, &italian, None, true).unwrap();
+        assert_eq!(
+            (
+                replaced.cards_added,
+                replaced.cards_existing,
+                replaced.cards_replaced
+            ),
+            (0, 1, 1),
+            "the e4 card matches; the Nf3 card is rewritten to Bc4"
+        );
+        let json = serde_json::to_string(&replaced).unwrap();
+        assert!(json.contains("\"cardsReplaced\":"), "{json}");
+        // Put the Ruy card back for the rest of the round trip.
+        let ruy: Vec<String> = ["e4", "e5", "Nf3"].iter().map(|s| s.to_string()).collect();
+        train_add_line_impl(&conn, "white", None, &ruy, None, true).unwrap();
 
         let summary = train_summary_impl(&conn).unwrap();
         assert_eq!((summary.white.due, summary.white.total), (3, 3));

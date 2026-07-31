@@ -20,6 +20,12 @@
 //! collapses into one ranked item. Ranking: game count desc, then
 //! earliest ply, then FEN (deterministic).
 //!
+//! Two honesty refinements (2026-07-30 field report, declared-vs-played):
+//! a deviation whose played move DOMINATES the card in the user's own
+//! games is flagged `reality_check` and carries the inferred lines they
+//! actually play from there; a gap at the opponent's FIRST move is
+//! flagged `whole_opening` — a missing repertoire, not a mid-line hole.
+//!
 //! Everything in this module is a static database walk — no engine
 //! (CLAUDE.md #6). Book EXTENSIONS (the engine-proposed candidate lines
 //! for a gap/frontier) are only ever produced by the job queue
@@ -113,20 +119,32 @@ where
     Ok(false)
 }
 
+/// What one game's walk against the book yields: its first triage point
+/// (if any) plus every position where the user actually PLAYED the
+/// card's move — the card-followed evidence the reality check weighs
+/// deviations against (2026-07-30 field report).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameWalk {
+    pub event: Option<GameEvent>,
+    /// Position hashes (card keys) where the user's move matched the card.
+    pub followed: Vec<u64>,
+}
+
 /// Classify one standard-start mainline against the user's book for the
 /// color they played. `card_at(position_hash)` returns the repertoire
 /// card `(expected_san, expected_uci)` covering a position, if any —
 /// the exact first-card-wins lookup `repertoire::game_marks` uses.
 ///
-/// Returns the game's FIRST triage point (everything after it is out of
-/// book), or `None` when the game stayed in book to the end of the
-/// window, or never was in the user's book at all.
+/// The returned walk carries the game's FIRST triage point (everything
+/// after it is out of book) — `None` when the game stayed in book to the
+/// end of the window, or never was in the user's book at all — plus the
+/// positions where the user followed their cards on the way.
 pub fn classify_game<F>(
     is_white: bool,
     moves: &[Move],
     max_plies: usize,
     mut card_at: F,
-) -> anyhow::Result<Option<GameEvent>>
+) -> anyhow::Result<GameWalk>
 where
     F: FnMut(u64) -> anyhow::Result<Option<(String, String)>>,
 {
@@ -139,6 +157,7 @@ where
     let mut prefix = String::new();
     let mut move_no = 1u32;
     let mut made_book_move = false;
+    let mut followed: Vec<u64> = Vec::new();
     // Position after the user's last carded move: (fen, ply, line).
     let mut last_book: Option<(String, u32, String)> = None;
     // Opponent's most recent move: (position before it, move, ply, san).
@@ -151,18 +170,23 @@ where
         let user_to_move = to_move == user;
 
         if user_to_move {
-            match card_at(position_hash(&board))? {
+            let hash = position_hash(&board);
+            match card_at(hash)? {
                 Some((expected_san, expected_uci)) => {
                     if mv.to_string() != expected_uci {
-                        return Ok(Some(GameEvent::Deviation {
-                            fen: board.to_string(),
-                            ply,
-                            expected_san,
-                            played_san: san,
-                            line: prefix.clone(),
-                        }));
+                        return Ok(GameWalk {
+                            event: Some(GameEvent::Deviation {
+                                fen: board.to_string(),
+                                ply,
+                                expected_san,
+                                played_san: san,
+                                line: prefix.clone(),
+                            }),
+                            followed,
+                        });
                     }
                     made_book_move = true;
+                    followed.push(hash);
                 }
                 None => {
                     // Out of book at the user's turn. A gap/frontier is
@@ -173,20 +197,26 @@ where
                     if let Some((opp_before, opp_mv, opp_ply, opp_san)) = prev_opp {
                         if made_book_move || first_own_reply {
                             if sibling_covered(&opp_before, opp_mv, &mut card_at)? {
-                                return Ok(Some(GameEvent::Gap {
-                                    fen: board.to_string(),
-                                    ply: opp_ply,
-                                    opponent_san: opp_san,
-                                    line: prefix.clone(),
-                                }));
+                                return Ok(GameWalk {
+                                    event: Some(GameEvent::Gap {
+                                        fen: board.to_string(),
+                                        ply: opp_ply,
+                                        opponent_san: opp_san,
+                                        line: prefix.clone(),
+                                    }),
+                                    followed,
+                                });
                             }
                             if made_book_move {
                                 let (fen, q_ply, line) = last_book.expect("book move was recorded");
-                                return Ok(Some(GameEvent::Frontier {
-                                    fen,
-                                    ply: q_ply,
-                                    line,
-                                }));
+                                return Ok(GameWalk {
+                                    event: Some(GameEvent::Frontier {
+                                        fen,
+                                        ply: q_ply,
+                                        line,
+                                    }),
+                                    followed,
+                                });
                             }
                             // Black's first reply with no sibling covered:
                             // the black book doesn't start from the
@@ -195,7 +225,10 @@ where
                     }
                     // User White with no card at the start position: the
                     // white book doesn't start here — nothing to report.
-                    return Ok(None);
+                    return Ok(GameWalk {
+                        event: None,
+                        followed,
+                    });
                 }
             }
         } else {
@@ -212,7 +245,10 @@ where
             last_book = Some((board.to_string(), ply, prefix.clone()));
         }
     }
-    Ok(None)
+    Ok(GameWalk {
+        event: None,
+        followed,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -276,10 +312,36 @@ pub struct TriageItem {
     pub played_san: Option<String>,
     /// Gaps: the opponent's uncovered move.
     pub opponent_san: Option<String>,
+    /// Deviations: games (of this item) that played the DOMINANT off-book
+    /// move — equal to `games` when everyone played the same thing.
+    pub played_count: u32,
+    /// Deviations: cohort games that actually played the card's move at
+    /// this position (counted across the whole walk).
+    pub card_followed: u32,
+    /// Deviations: the played move dominates the card's move in the
+    /// user's own games (`played_count >= REALITY_MIN_GAMES` and
+    /// `>= REALITY_DOMINANCE * card_followed`) — this "deviation" is
+    /// their real repertoire, not a lapse (2026-07-30 field report).
+    pub reality_check: bool,
+    /// Reality-check deviations only: what the user actually plays from
+    /// here — full lines from the standard start through the played move,
+    /// inferred from their own games. Empty otherwise.
+    pub inferred_lines: Vec<InferredLine>,
+    /// Gaps: the uncovered move was the opponent's FIRST move of the game
+    /// — a whole-opening hole, not a mid-line gap.
+    pub whole_opening: bool,
     /// True when a completed book extension exists for `fen`.
     pub has_extension: bool,
     pub examples: Vec<TriageExample>,
 }
+
+/// Reality-check thresholds (2026-07-30 field report): the dominant
+/// off-book move at a deviation must appear in at least this many
+/// games...
+pub const REALITY_MIN_GAMES: u32 = 10;
+/// ...and at least this many times per game that actually followed the
+/// card, before the deviation is called the user's real repertoire.
+pub const REALITY_DOMINANCE: u32 = 3;
 
 /// Ranked lists for one repertoire color.
 #[derive(Debug, Clone, Serialize)]
@@ -318,6 +380,15 @@ struct Agg {
     expected_san: Option<String>,
     played_san: Option<String>,
     opponent_san: Option<String>,
+    /// Deviations: how often each off-book move was played here.
+    played_counts: HashMap<String, u32>,
+    /// Deviations: dominant played-move count (reality-check numerator).
+    played_count: u32,
+    /// Deviations: cohort games that played the card's move here.
+    card_followed: u32,
+    reality_check: bool,
+    /// Reality-check deviations: rooted inference of what's really played.
+    inferred: Vec<InferredLine>,
     examples: Vec<TriageExample>,
 }
 
@@ -371,7 +442,7 @@ pub fn triage_report(
     let mut games_stmt = conn.prepare_cached(&format!(
         "SELECT g.white_id IN ({id_list}), g.id, g.movetext,
                 COALESCE(wp.name, '?'), COALESCE(bp.name, '?'),
-                COALESCE(g.date, '')
+                COALESCE(g.date, ''), g.result
          FROM games g
          LEFT JOIN players wp ON wp.id = g.white_id
          LEFT JOIN players bp ON bp.id = g.black_id
@@ -379,7 +450,9 @@ pub fn triage_report(
            AND g.start_fen IS NULL
          ORDER BY g.id DESC LIMIT ?1"
     ))?;
-    let rows: Vec<(bool, i64, Vec<u8>, String, String, String)> = games_stmt
+    /// (user_is_white, game id, movetext, white, black, date, result).
+    type GameRow = (bool, i64, Vec<u8>, String, String, String, i64);
+    let rows: Vec<GameRow> = games_stmt
         .query_map([opts.max_games as i64], |r| {
             Ok((
                 r.get(0)?,
@@ -388,6 +461,7 @@ pub fn triage_report(
                 r.get(3)?,
                 r.get(4)?,
                 r.get(5)?,
+                r.get(6)?,
             ))
         })?
         .collect::<Result<_, _>>()?;
@@ -395,8 +469,13 @@ pub fn triage_report(
     let mut aggs: HashMap<(bool, Class, u64), Agg> = HashMap::new();
     let mut scanned = (0u32, 0u32); // (white, black) games walked
     let mut seen = (0u32, 0u32); // (white, black) games in the cohort
+                                 // Card-followed counts per (is_white, position hash) — the reality
+                                 // check's denominator evidence.
+    let mut followed_counts: HashMap<(bool, u64), u32> = HashMap::new();
+    // The walked games again, as inference input for reality checks.
+    let mut cohort: (Vec<InferGame>, Vec<InferGame>) = (Vec::new(), Vec::new());
 
-    for (is_white, game_id, movetext, white, black, date) in rows {
+    for (is_white, game_id, movetext, white, black, date, result) in rows {
         if is_white {
             seen.0 += 1;
         } else {
@@ -419,14 +498,24 @@ pub fn triage_report(
             scanned.1 += 1;
         }
         let color_str = if is_white { "white" } else { "black" };
-        let event = classify_game(is_white, &moves, opts.max_plies, |hash| {
+        let walk = classify_game(is_white, &moves, opts.max_plies, |hash| {
             Ok(lookup
                 .query_row(params![color_str, hash as i64], |r| {
                     Ok((r.get(0)?, r.get(1)?))
                 })
                 .optional()?)
         })?;
-        let Some(event) = event else { continue };
+        for h in walk.followed.iter().copied().collect::<HashSet<_>>() {
+            *followed_counts.entry((is_white, h)).or_insert(0) += 1;
+        }
+        let points = points_for(result, is_white);
+        let side = if is_white {
+            &mut cohort.0
+        } else {
+            &mut cohort.1
+        };
+        side.push(InferGame { moves, points });
+        let Some(event) = walk.event else { continue };
 
         let (class, fen, ply, line, expected_san, played_san, opponent_san) = match event {
             GameEvent::Deviation {
@@ -472,9 +561,19 @@ pub fn triage_report(
             expected_san,
             played_san,
             opponent_san,
+            played_counts: HashMap::new(),
+            played_count: 0,
+            card_followed: 0,
+            reality_check: false,
+            inferred: Vec::new(),
             examples: Vec::new(),
         });
         agg.count += 1;
+        if class == Class::Deviation {
+            if let Some(ps) = &example.played_san {
+                *agg.played_counts.entry(ps.clone()).or_insert(0) += 1;
+            }
+        }
         if ply < agg.min_ply {
             agg.min_ply = ply;
             agg.line = line;
@@ -482,6 +581,53 @@ pub fn triage_report(
         if agg.examples.len() < opts.max_examples {
             agg.examples.push(example);
         }
+    }
+
+    // Dominant-deviation reality check (2026-07-30 field report): when the
+    // user's own games play some OTHER move at a carded position far more
+    // often than they ever follow the card, the "deviation" is not a lapse
+    // — it is their real repertoire. Mark it and attach what they actually
+    // play from there (inference rooted after the played move, over the
+    // same cohort). Still a static walk — no engine (CLAUDE.md #6).
+    let mut theory: Option<HashSet<u64>> = None;
+    for ((is_white, class, hash), agg) in aggs.iter_mut() {
+        if *class != Class::Deviation {
+            continue;
+        }
+        let Some((dom_san, dom_n)) = agg
+            .played_counts
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
+            .map(|(s, n)| (s.clone(), *n))
+        else {
+            continue;
+        };
+        agg.played_count = dom_n;
+        agg.card_followed = followed_counts
+            .get(&(*is_white, *hash))
+            .copied()
+            .unwrap_or(0);
+        if dom_n < REALITY_MIN_GAMES || dom_n < REALITY_DOMINANCE * agg.card_followed {
+            continue;
+        }
+        agg.reality_check = true;
+        // The panel names the dominant move, not whichever example
+        // happened to aggregate first.
+        agg.played_san = Some(dom_san.clone());
+        if theory.is_none() {
+            theory = Some(crate::fingerprint::theory_set(conn)?);
+        }
+        let mut prefix = line_sans(&agg.line);
+        prefix.push(dom_san);
+        let games = if *is_white { &cohort.0 } else { &cohort.1 };
+        let mut lines = infer_lines_from(
+            &prefix,
+            games,
+            theory.as_ref().expect("just filled"),
+            &InferOptions::default(),
+        )?;
+        name_lines(conn, &mut lines)?;
+        agg.inferred = lines;
     }
 
     let build_color =
@@ -506,6 +652,14 @@ pub fn triage_report(
                     expected_san: agg.expected_san.clone(),
                     played_san: agg.played_san.clone(),
                     opponent_san: agg.opponent_san.clone(),
+                    played_count: agg.played_count,
+                    card_followed: agg.card_followed,
+                    reality_check: agg.reality_check,
+                    inferred_lines: agg.inferred.clone(),
+                    // The opponent's first move of the game is ply 1 when
+                    // the user is Black, ply 2 when the user is White.
+                    whole_opening: matches!(class, Class::Gap)
+                        && agg.min_ply == if is_white { 2 } else { 1 },
                     has_extension,
                     examples: agg.examples.clone(),
                 };
@@ -775,18 +929,53 @@ fn score_pct(points: f64, scored: u32) -> f64 {
 /// producing an out-of-book position ends a game's contribution), then
 /// emit every branch the games support. A line ends where the book ends,
 /// where support thins below `min_games`, or at the ply cap. ECO naming
-/// is left to the caller.
+/// is left to the caller. Rooted at the standard start; see
+/// [`infer_lines_from`] for an arbitrary root.
 pub fn infer_lines(
     games: &[InferGame],
     theory: &HashSet<u64>,
     opts: &InferOptions,
 ) -> Vec<InferredLine> {
-    // Trie over the games' in-book opening prefixes (root = start).
+    infer_lines_from(&[], games, theory, opts).expect("an empty prefix always parses")
+}
+
+/// [`infer_lines`] rooted mid-line: `prefix` is the SAN path from the
+/// standard start to the root, and only games whose opening moves are
+/// exactly that path contribute — `max_plies` then caps the CONTINUATION
+/// depth. Emitted lines are FULL lines from the standard start (prefix +
+/// continuation), so they display, adopt and replay exactly like
+/// start-rooted ones. When the games support no continuation branch but
+/// at least `min_games` of them reached the root, the bare prefix itself
+/// is emitted — adopting it still covers the prefix moves. Pure; fails
+/// only on an unparseable prefix.
+pub fn infer_lines_from(
+    prefix: &[String],
+    games: &[InferGame],
+    theory: &HashSet<u64>,
+    opts: &InferOptions,
+) -> anyhow::Result<Vec<InferredLine>> {
+    let mut root = Board::default();
+    let mut prefix_moves = Vec::with_capacity(prefix.len());
+    for san in prefix {
+        let mv = crate::san::parse_san(&root, san)?;
+        prefix_moves.push(mv);
+        root.play(mv);
+    }
+
+    // Trie over the games' in-book continuations (node 0 = the root).
     let mut nodes: Vec<InferNode> = vec![InferNode::default()];
     for g in games {
-        let mut board = Board::default();
+        if g.moves.len() < prefix_moves.len() || g.moves[..prefix_moves.len()] != prefix_moves[..] {
+            continue;
+        }
+        let mut board = root.clone();
         let mut cur = 0usize;
-        for &mv in g.moves.iter().take(opts.max_plies) {
+        nodes[0].games += 1;
+        if let Some(p) = g.points {
+            nodes[0].points += p;
+            nodes[0].scored += 1;
+        }
+        for &mv in g.moves[prefix_moves.len()..].iter().take(opts.max_plies) {
             let san = format_san(&board, mv);
             board.play(mv);
             if !theory.contains(&position_hash(&board)) {
@@ -820,10 +1009,14 @@ pub fn infer_lines(
             .cloned()
             .collect();
         if followed.is_empty() {
-            if !path.is_empty() {
-                let node = &nodes[idx];
+            let node = &nodes[idx];
+            // The bare-prefix fallback only exists for a rooted call.
+            let bare_root = path.is_empty() && !prefix.is_empty() && node.games >= opts.min_games;
+            if !path.is_empty() || bare_root {
+                let mut sans = prefix.to_vec();
+                sans.extend(path);
                 out.push(InferredLine {
-                    sans: path,
+                    sans,
                     games: node.games,
                     score: score_pct(node.points, node.scored),
                     eco: None,
@@ -845,7 +1038,90 @@ pub fn infer_lines(
             .then(a.sans.cmp(&b.sans))
     });
     out.truncate(opts.max_lines);
-    out
+    Ok(out)
+}
+
+/// The raw SAN tokens of a numbered-SAN line ("1. e4 c5" → ["e4", "c5"]).
+/// SAN never starts with a digit, so dropping digit-led tokens is exact.
+fn line_sans(line: &str) -> Vec<String> {
+    line.split_whitespace()
+        .filter(|t| !t.starts_with(|c: char| c.is_ascii_digit()))
+        .map(str::to_string)
+        .collect()
+}
+
+/// The user's points for a stored result code (1 = 1-0, 2 = 0-1,
+/// 3 = draw); `None` when the result is unknown.
+fn points_for(result: i64, is_white: bool) -> Option<f64> {
+    match (result, is_white) {
+        (1, true) | (2, false) => Some(1.0),
+        (2, true) | (1, false) => Some(0.0),
+        (3, _) => Some(0.5),
+        _ => None,
+    }
+}
+
+/// Name full-from-start lines by their deepest position via the bundled
+/// CC0 dataset; positions outside the dataset keep `None` honestly.
+fn name_lines(conn: &Connection, lines: &mut [InferredLine]) -> anyhow::Result<()> {
+    for line in lines.iter_mut() {
+        let mut board = Board::default();
+        for san in &line.sans {
+            board.play(crate::san::parse_san(&board, san)?);
+        }
+        if let Some((eco, name)) = crate::eco::classify_hash(conn, position_hash(&board))? {
+            line.eco = Some(eco);
+            line.opening_name = Some(name);
+        }
+    }
+    Ok(())
+}
+
+fn parse_infer_color(color: &str) -> anyhow::Result<bool> {
+    match color {
+        "white" => Ok(true),
+        "black" => Ok(false),
+        other => anyhow::bail!("color must be \"white\" or \"black\", got {other:?}"),
+    }
+}
+
+/// Recent standard-start games `player` played as the given color,
+/// newest first, decoded with the user's points — the shared inference
+/// cohort (identity-resolved; custom-start games are studies/fragments,
+/// not repertoire evidence — skipped, exactly as in `triage_report`).
+fn infer_cohort(
+    conn: &Connection,
+    player: &str,
+    is_white: bool,
+    max_games: u32,
+) -> anyhow::Result<Vec<InferGame>> {
+    let ids = crate::identity::resolve_identity_ids(conn, player)?;
+    if ids.is_empty() {
+        anyhow::bail!("no player named {player:?} in this database");
+    }
+    let id_list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    let side = if is_white { "white_id" } else { "black_id" };
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT g.result, g.movetext FROM games g
+         WHERE g.{side} IN ({id_list})
+           AND g.start_fen IS NULL
+         ORDER BY g.id DESC LIMIT ?1"
+    ))?;
+    let rows: Vec<(i64, Vec<u8>)> = stmt
+        .query_map([max_games as i64], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+
+    let mut games: Vec<InferGame> = Vec::with_capacity(rows.len());
+    for (result, movetext) in rows {
+        let Ok(moves) = decode_game(&Board::default(), &movetext) else {
+            continue;
+        };
+        games.push(InferGame {
+            moves,
+            points: points_for(result, is_white),
+        });
+    }
+    Ok(games)
 }
 
 /// Infer the repertoire `player` already plays as `color` from their own
@@ -857,60 +1133,54 @@ pub fn infer_repertoire(
     color: &str,
     opts: &InferOptions,
 ) -> anyhow::Result<InferredRepertoire> {
-    let is_white = match color {
-        "white" => true,
-        "black" => false,
-        other => anyhow::bail!("color must be \"white\" or \"black\", got {other:?}"),
-    };
-    let ids = crate::identity::resolve_identity_ids(conn, player)?;
-    if ids.is_empty() {
-        anyhow::bail!("no player named {player:?} in this database");
-    }
-    let id_list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    let is_white = parse_infer_color(color)?;
     let theory = crate::fingerprint::theory_set(conn)?;
-
-    // Recent games the user played as `color`, newest first. Custom-start
-    // games are studies/fragments, not repertoire evidence — skipped,
-    // exactly as in `triage_report`.
-    let side = if is_white { "white_id" } else { "black_id" };
-    let mut stmt = conn.prepare_cached(&format!(
-        "SELECT g.result, g.movetext FROM games g
-         WHERE g.{side} IN ({id_list})
-           AND g.start_fen IS NULL
-         ORDER BY g.id DESC LIMIT ?1"
-    ))?;
-    let rows: Vec<(i64, Vec<u8>)> = stmt
-        .query_map([opts.max_games as i64], |r| Ok((r.get(0)?, r.get(1)?)))?
-        .collect::<Result<_, _>>()?;
-
-    let mut games: Vec<InferGame> = Vec::with_capacity(rows.len());
-    for (result, movetext) in rows {
-        let Ok(moves) = decode_game(&Board::default(), &movetext) else {
-            continue;
-        };
-        let points = match (result, is_white) {
-            (1, true) | (2, false) => Some(1.0),
-            (2, true) | (1, false) => Some(0.0),
-            (3, _) => Some(0.5),
-            _ => None,
-        };
-        games.push(InferGame { moves, points });
-    }
+    let games = infer_cohort(conn, player, is_white, opts.max_games)?;
     let games_scanned = games.len() as u32;
 
     let mut lines = infer_lines(&games, &theory, opts);
-    // Name each line by its deepest position (in the dataset by
-    // construction — theory membership is dataset membership).
-    for line in &mut lines {
-        let mut board = Board::default();
-        for san in &line.sans {
-            board.play(crate::san::parse_san(&board, san)?);
-        }
-        if let Some((eco, name)) = crate::eco::classify_hash(conn, position_hash(&board))? {
-            line.eco = Some(eco);
-            line.opening_name = Some(name);
-        }
+    name_lines(conn, &mut lines)?;
+
+    Ok(InferredRepertoire {
+        player: player.to_string(),
+        color: color.to_string(),
+        games_scanned,
+        lines,
+    })
+}
+
+/// [`infer_repertoire`] rooted mid-line: what does `player` already play
+/// as `color` from the position after `prefix` (SAN from the standard
+/// start)? Powers the whole-opening-hole "[Infer from your games]" flow;
+/// `games_scanned` counts the cohort games that actually reached the
+/// prefix. Static database walk — no engine (CLAUDE.md #6).
+pub fn infer_from(
+    conn: &Connection,
+    player: &str,
+    color: &str,
+    prefix: &[String],
+    opts: &InferOptions,
+) -> anyhow::Result<InferredRepertoire> {
+    let is_white = parse_infer_color(color)?;
+    let theory = crate::fingerprint::theory_set(conn)?;
+    let games = infer_cohort(conn, player, is_white, opts.max_games)?;
+
+    let mut board = Board::default();
+    let mut prefix_moves = Vec::with_capacity(prefix.len());
+    for san in prefix {
+        let mv = crate::san::parse_san(&board, san)?;
+        prefix_moves.push(mv);
+        board.play(mv);
     }
+    let games_scanned = games
+        .iter()
+        .filter(|g| {
+            g.moves.len() >= prefix_moves.len() && g.moves[..prefix_moves.len()] == prefix_moves[..]
+        })
+        .count() as u32;
+
+    let mut lines = infer_lines_from(prefix, &games, &theory, opts)?;
+    name_lines(conn, &mut lines)?;
 
     Ok(InferredRepertoire {
         player: player.to_string(),
@@ -979,13 +1249,21 @@ mod tests {
         cards
     }
 
+    fn walk_with_map(
+        is_white: bool,
+        game: &[&str],
+        cards: &HashMap<u64, (String, String)>,
+    ) -> GameWalk {
+        let (_, moves) = play_sans(game);
+        classify_game(is_white, &moves, 60, |h| Ok(cards.get(&h).cloned())).unwrap()
+    }
+
     fn classify_with_map(
         is_white: bool,
         game: &[&str],
         cards: &HashMap<u64, (String, String)>,
     ) -> Option<GameEvent> {
-        let (_, moves) = play_sans(game);
-        classify_game(is_white, &moves, 60, |h| Ok(cards.get(&h).cloned())).unwrap()
+        walk_with_map(is_white, game, cards).event
     }
 
     /// Ruy López fixture book: 1.e4 e5 2.Nf3 Nc6 3.Bb5 (Morphy's own
@@ -1051,8 +1329,19 @@ mod tests {
             other => panic!("expected frontier, got {other:?}"),
         }
 
-        // Still in book at the end of a short game: nothing to report.
-        assert_eq!(classify_with_map(true, &["e4", "e5", "Nf3"], &cards), None);
+        // Still in book at the end of a short game: nothing to report —
+        // and the walk counted both followed cards (1.e4 and 2.Nf3).
+        let walk = walk_with_map(true, &["e4", "e5", "Nf3"], &cards);
+        assert_eq!(walk.event, None);
+        assert_eq!(walk.followed.len(), 2, "e4 and Nf3 followed the cards");
+        // A deviation still reports the cards followed on the way to it.
+        let walk = walk_with_map(true, &["e4", "e5", "Nf3", "Nc6", "Bc4"], &cards);
+        assert!(matches!(walk.event, Some(GameEvent::Deviation { .. })));
+        assert_eq!(
+            walk.followed.len(),
+            2,
+            "the deviation itself is not 'followed'"
+        );
 
         // White book that doesn't cover the start position (custom-study
         // cards only): silent, never a fake triage point.
@@ -1162,24 +1451,31 @@ mod tests {
         );
         assert_eq!(w.games_seen, 5);
 
-        // Deviation: 3.Bc4 instead of 3.Bb5.
+        // Deviation: 3.Bc4 instead of 3.Bb5. One game deviated, one (the
+        // Ruy game) actually followed the card here — far from dominance.
         assert_eq!(w.deviations.len(), 1);
         let d = &w.deviations[0];
         assert_eq!((d.ply, d.games), (5, 1));
         assert_eq!(d.expected_san.as_deref(), Some("Bb5"));
         assert_eq!(d.played_san.as_deref(), Some("Bc4"));
         assert_eq!(d.line, "1. e4 e5 2. Nf3 Nc6");
+        assert_eq!((d.played_count, d.card_followed), (1, 1));
+        assert!(!d.reality_check);
+        assert!(d.inferred_lines.is_empty());
         assert_eq!(d.examples.len(), 1);
         assert_eq!(d.examples[0].black, "Kiebitz, Bea");
         assert_eq!(d.examples[0].played_san.as_deref(), Some("Bc4"));
 
         // Gaps ranked by frequency: 1...c5 (2 games) before 1...e6 (1).
+        // Both are the opponent's FIRST move — whole-opening holes.
         assert_eq!(w.gaps.len(), 2);
         assert_eq!(w.gaps[0].opponent_san.as_deref(), Some("c5"));
         assert_eq!(w.gaps[0].games, 2);
         assert_eq!(w.gaps[0].examples.len(), 2);
+        assert!(w.gaps[0].whole_opening);
         assert_eq!(w.gaps[1].opponent_san.as_deref(), Some("e6"));
         assert_eq!(w.gaps[1].games, 1);
+        assert!(w.gaps[1].whole_opening);
         // The Sicilian gap position is book — named via the CC0 dataset.
         assert_eq!(w.gaps[0].eco.as_deref(), Some("B20"));
 
@@ -1207,6 +1503,11 @@ mod tests {
             "\"gamesSeen\":",
             "\"expectedSan\":",
             "\"opponentSan\":",
+            "\"playedCount\":",
+            "\"cardFollowed\":",
+            "\"realityCheck\":",
+            "\"inferredLines\":",
+            "\"wholeOpening\":",
             "\"hasExtension\":",
             "\"gameId\":",
             "\"openingName\":",
@@ -1616,5 +1917,369 @@ mod tests {
             0,
             "inference is a static walk"
         );
+    }
+
+    #[test]
+    fn infer_lines_from_roots_filters_and_falls_back() {
+        let theory = theory_of(&[
+            &["e4", "c5", "Nf3", "d6", "d4", "cxd4"],
+            &["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4"],
+        ]);
+        let games = vec![
+            infer_game(&["e4", "c5", "Nf3", "d6"], Some(1.0)),
+            infer_game(&["e4", "c5", "Nf3", "d6"], Some(0.0)),
+            infer_game(&["e4", "c5", "Nf3", "d6"], None),
+            infer_game(&["e4", "e5", "Nf3", "Nc6", "Bb5"], Some(1.0)),
+        ];
+        let opts = InferOptions::default();
+        let prefix = vec!["e4".to_string(), "c5".to_string()];
+
+        // Rooted: only prefix-matching games contribute, and the emitted
+        // line is FULL from the standard start (prefix + continuation).
+        let lines = infer_lines_from(&prefix, &games, &theory, &opts).unwrap();
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert_eq!(sans_of(&lines[0]), ["e4", "c5", "Nf3", "d6"]);
+        assert_eq!((lines[0].games, lines[0].score), (3, 50.0));
+
+        // max_plies caps the CONTINUATION, not the whole line.
+        let shallow = infer_lines_from(
+            &prefix,
+            &games,
+            &theory,
+            &InferOptions {
+                max_plies: 1,
+                ..InferOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(sans_of(&shallow[0]), ["e4", "c5", "Nf3"]);
+
+        // An empty prefix is exactly infer_lines.
+        assert_eq!(
+            infer_lines_from(&[], &games, &theory, &opts).unwrap(),
+            infer_lines(&games, &theory, &opts)
+        );
+
+        // No supported continuation but enough games at the root: the
+        // bare prefix itself comes back (its adoption still covers the
+        // prefix moves).
+        let short_theory = theory_of(&[&["e4", "c5"]]);
+        let bare = infer_lines_from(&prefix, &games, &short_theory, &opts).unwrap();
+        assert_eq!(bare.len(), 1, "{bare:?}");
+        assert_eq!(sans_of(&bare[0]), ["e4", "c5"]);
+        assert_eq!(bare[0].games, 3);
+
+        // ...but never for an under-supported root, and a bad prefix is a
+        // clean error, not a panic.
+        assert!(infer_lines_from(&prefix, &games[..2], &short_theory, &opts)
+            .unwrap()
+            .is_empty());
+        assert!(infer_lines_from(&["zz".to_string()], &games, &theory, &opts).is_err());
+    }
+
+    // ---- declared-vs-played reality check (2026-07-30 field report) ----
+
+    /// `n` games where "Real, Rita" (Black) plays `moves` against
+    /// distinct opponents, all ending `result`.
+    fn black_games(n: usize, tag: &str, moves: &str, result: &str) -> String {
+        (0..n)
+            .map(|i| {
+                format!(
+                    "[Event \"Club\"]\n[White \"Opp {tag}{i}\"]\n[Black \"Real, Rita\"]\n\
+                     [Result \"{result}\"]\n\n{moves} {result}\n\n"
+                )
+            })
+            .collect()
+    }
+
+    /// DB whose Black cards say 1...e5 but whose games answer 1.e4 with
+    /// 1...c5 `deviated` times (half wins, half losses) and follow the
+    /// card `followed` times.
+    fn reality_fixture(deviated: usize, followed: usize) -> (tempfile::TempDir, Connection) {
+        let (dir, conn) = open_db();
+        add_rep_line(&conn, kibitz_profile::Color::Black, &["e4", "e5"]);
+        let wins = deviated / 2;
+        let mut pgn = black_games(wins, "w", "1. e4 c5 2. Nf3 d6", "0-1");
+        pgn.push_str(&black_games(
+            deviated - wins,
+            "l",
+            "1. e4 c5 2. Nf3 d6",
+            "1-0",
+        ));
+        pgn.push_str(&black_games(followed, "f", "1. e4 e5", "1/2-1/2"));
+        let st = import_pgn(&conn, &source(), Cursor::new(pgn)).unwrap();
+        assert_eq!(
+            st.games_imported as usize,
+            deviated + followed,
+            "failures: {:?}",
+            st.failures
+        );
+        (dir, conn)
+    }
+
+    #[test]
+    fn reality_check_confronts_declared_vs_played_and_roots_inference() {
+        let (_dir, conn) = reality_fixture(10, 1);
+        let report = triage_report(&conn, "Real, Rita", &TriageOptions::default()).unwrap();
+        let b = &report.black;
+        assert_eq!(b.games_scanned, 11);
+        assert_eq!(b.deviations.len(), 1);
+        let d = &b.deviations[0];
+        assert_eq!(d.expected_san.as_deref(), Some("e5"));
+        assert_eq!(d.played_san.as_deref(), Some("c5"));
+        assert_eq!((d.games, d.played_count, d.card_followed), (10, 10, 1));
+        assert!(d.reality_check, "10 >= 10 games and 10 >= 3 x 1 followed");
+        // The attached inference is rooted after the played move and
+        // comes back as a FULL line from the standard start.
+        assert_eq!(d.inferred_lines.len(), 1, "{:?}", d.inferred_lines);
+        let l = &d.inferred_lines[0];
+        assert_eq!(sans_of(l), ["e4", "c5", "Nf3", "d6"]);
+        assert_eq!((l.games, l.score), (10, 50.0));
+        assert!(
+            l.opening_name.as_deref().unwrap_or("").contains("Sicilian"),
+            "{:?}",
+            l.opening_name
+        );
+        assert_eq!(crate::engine::spawn_count(), 0, "reality check is static");
+    }
+
+    #[test]
+    fn reality_thresholds_hold_at_the_boundaries() {
+        // (deviated, followed) → the 10-game floor and the 3x dominance
+        // rule, each hit and missed by exactly one game.
+        for (dev, fol, want) in [
+            (10, 0, true),
+            (9, 0, false),
+            (30, 10, true),
+            (29, 10, false),
+        ] {
+            let (_dir, conn) = reality_fixture(dev, fol);
+            let report = triage_report(&conn, "Real, Rita", &TriageOptions::default()).unwrap();
+            let d = &report.black.deviations[0];
+            assert_eq!(
+                (d.played_count, d.card_followed),
+                (dev as u32, fol as u32),
+                "deviated {dev} / followed {fol}"
+            );
+            assert_eq!(d.reality_check, want, "deviated {dev} / followed {fol}");
+            if !want {
+                assert!(d.inferred_lines.is_empty(), "no inference without the flag");
+            }
+        }
+    }
+
+    #[test]
+    fn dominance_weighs_the_top_played_move_not_the_position_total() {
+        let (_dir, conn) = open_db();
+        add_rep_line(&conn, kibitz_profile::Color::Black, &["e4", "e5"]);
+        let mut pgn = black_games(7, "s", "1. e4 c5 2. Nf3 d6", "1-0");
+        pgn.push_str(&black_games(5, "c", "1. e4 c6 2. d4 d5", "1-0"));
+        import_pgn(&conn, &source(), Cursor::new(pgn)).unwrap();
+        let report = triage_report(&conn, "Real, Rita", &TriageOptions::default()).unwrap();
+        let d = &report.black.deviations[0];
+        assert_eq!(d.games, 12, "both off-book moves aggregate here");
+        assert_eq!(d.played_count, 7, "dominance weighs the top move only");
+        assert!(!d.reality_check, "7 < 10 even though the position saw 12");
+    }
+
+    #[test]
+    fn adopting_the_reality_line_replaces_the_card_and_flips_the_triage() {
+        let (_dir, conn) = reality_fixture(10, 1);
+        // Give the aspirational e5 card real SRS history so the rewrite's
+        // state reset is observable.
+        let card_id: i64 = conn
+            .query_row(
+                "SELECT id FROM repertoire_cards WHERE expected_san = 'e5'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let now = crate::repertoire::now_utc(&conn).unwrap();
+        crate::repertoire::grade_card(
+            &conn,
+            &kibitz_srs::Scheduler::default(),
+            card_id,
+            kibitz_srs::Grade::Good,
+            &now,
+        )
+        .unwrap();
+
+        let report = triage_report(&conn, "Real, Rita", &TriageOptions::default()).unwrap();
+        let line = report.black.deviations[0].inferred_lines[0].clone();
+
+        // Adopt what you play: the e4-position card is REWRITTEN e5 → c5
+        // (fresh SRS state — the old memory was memory of e5); the d6
+        // card is new.
+        let rep = crate::repertoire::ensure_repertoire(
+            &conn,
+            kibitz_profile::Color::Black,
+            "main",
+            &source(),
+        )
+        .unwrap();
+        let st = crate::repertoire::add_line_replacing(
+            &conn,
+            rep,
+            kibitz_profile::Color::Black,
+            &Board::default(),
+            &line.sans,
+            &now,
+        )
+        .unwrap();
+        assert_eq!(
+            (st.cards_replaced, st.cards_added, st.cards_existing),
+            (1, 1, 0)
+        );
+        let (san, reps, fresh): (String, u32, bool) = conn
+            .query_row(
+                "SELECT expected_san, reps, stability IS NULL
+                 FROM repertoire_cards WHERE id = ?1",
+                [card_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!((san.as_str(), reps, fresh), ("c5", 0, true));
+
+        // Re-adding the same line is now idempotent, replace mode or not.
+        let st2 = crate::repertoire::add_line_replacing(
+            &conn,
+            rep,
+            kibitz_profile::Color::Black,
+            &Board::default(),
+            &line.sans,
+            &now,
+        )
+        .unwrap();
+        assert_eq!(
+            (st2.cards_replaced, st2.cards_added, st2.cards_existing),
+            (0, 0, 2)
+        );
+
+        // Re-run: the 10 Sicilian games now follow the book; the lone
+        // 1...e5 game becomes the (honest, tiny) deviation.
+        let report = triage_report(&conn, "Real, Rita", &TriageOptions::default()).unwrap();
+        let b = &report.black;
+        assert_eq!(b.deviations.len(), 1);
+        assert_eq!(b.deviations[0].played_san.as_deref(), Some("e5"));
+        assert_eq!(b.deviations[0].games, 1);
+        assert!(!b.deviations[0].reality_check);
+        assert!(b.gaps.is_empty() && b.frontiers.is_empty());
+        assert_eq!(crate::engine::spawn_count(), 0);
+    }
+
+    #[test]
+    fn whole_opening_flags_first_move_gaps_but_not_midline_holes() {
+        let (_dir, conn) = open_db();
+        add_rep_line(&conn, kibitz_profile::Color::White, &["e4", "e5", "Nf3"]);
+        add_rep_line(
+            &conn,
+            kibitz_profile::Color::Black,
+            &["e4", "c5", "Nf3", "d6"],
+        );
+        let pgn = r#"[Event "Club"]
+[White "Dame, Anna"]
+[Black "Hole, Hanna"]
+[Result "1/2-1/2"]
+
+1. d4 d5 2. c4 e6 1/2-1/2
+
+[Event "Club"]
+[White "Dame, Bea"]
+[Black "Hole, Hanna"]
+[Result "1/2-1/2"]
+
+1. d4 d5 2. c4 e6 1/2-1/2
+
+[Event "Club"]
+[White "Dame, Cora"]
+[Black "Hole, Hanna"]
+[Result "1/2-1/2"]
+
+1. d4 d5 2. c4 e6 1/2-1/2
+
+[Event "Club"]
+[White "Closed, Dan"]
+[Black "Hole, Hanna"]
+[Result "0-1"]
+
+1. e4 c5 2. Nc3 Nc6 0-1
+
+[Event "Club"]
+[White "Hole, Hanna"]
+[Black "Sizil, Emma"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 1-0
+"#;
+        let st = import_pgn(&conn, &source(), Cursor::new(pgn)).unwrap();
+        assert_eq!(st.games_imported, 5, "failures: {:?}", st.failures);
+
+        let report = triage_report(&conn, "Hole, Hanna", &TriageOptions::default()).unwrap();
+        // Black: 1.d4 (opponent's first move, 3 games) is a whole-opening
+        // hole; 2.Nc3 inside the covered Sicilian line is a mid-line gap.
+        let b = &report.black;
+        assert_eq!(b.gaps.len(), 2);
+        assert_eq!(b.gaps[0].opponent_san.as_deref(), Some("d4"));
+        assert_eq!((b.gaps[0].games, b.gaps[0].ply), (3, 1));
+        assert!(b.gaps[0].whole_opening);
+        assert_eq!(b.gaps[1].opponent_san.as_deref(), Some("Nc3"));
+        assert_eq!((b.gaps[1].games, b.gaps[1].ply), (1, 3));
+        assert!(!b.gaps[1].whole_opening, "a real per-move gap stays one");
+        // White: the opponent's first REPLY (ply 2) is their first move —
+        // no repertoire vs 1...c5 is a whole-opening hole too.
+        let w = &report.white;
+        assert_eq!(w.gaps.len(), 1);
+        assert_eq!(w.gaps[0].opponent_san.as_deref(), Some("c5"));
+        assert!(w.gaps[0].whole_opening);
+    }
+
+    #[test]
+    fn infer_from_roots_the_db_walk_at_the_given_prefix() {
+        let (_dir, conn) = open_db();
+        import_pgn(&conn, &source(), Cursor::new(INFER_GAMES)).unwrap();
+
+        // Rooted at 1.e4 c5: only the three Najdorf games reach it, and
+        // the line comes back full-length from the start.
+        let prefix: Vec<String> = ["e4", "c5"].iter().map(|s| s.to_string()).collect();
+        let inf = infer_from(
+            &conn,
+            "Infer, Ida",
+            "white",
+            &prefix,
+            &InferOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(inf.games_scanned, 3, "cohort games that reached 1.e4 c5");
+        assert_eq!(inf.lines.len(), 1);
+        assert_eq!(
+            sans_of(&inf.lines[0]),
+            ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6"]
+        );
+        assert_eq!(inf.lines[0].games, 3);
+
+        // A prefix nobody reached: honest zeros, no lines.
+        let unreached: Vec<String> = ["d4", "f5"].iter().map(|s| s.to_string()).collect();
+        let inf = infer_from(
+            &conn,
+            "Infer, Ida",
+            "white",
+            &unreached,
+            &InferOptions::default(),
+        )
+        .unwrap();
+        assert_eq!((inf.games_scanned, inf.lines.len()), (0, 0));
+
+        // Bad inputs fail cleanly.
+        let bad: Vec<String> = vec!["zz".into()];
+        assert!(infer_from(&conn, "Infer, Ida", "white", &bad, &InferOptions::default()).is_err());
+        assert!(infer_from(
+            &conn,
+            "Infer, Ida",
+            "pink",
+            &prefix,
+            &InferOptions::default()
+        )
+        .is_err());
+        assert_eq!(crate::engine::spawn_count(), 0);
     }
 }

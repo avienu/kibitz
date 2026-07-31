@@ -76,6 +76,9 @@ pub struct AddLineStats {
     pub cards_added: u32,
     /// Training-color moves whose position already had a card.
     pub cards_existing: u32,
+    /// Replace mode only: positions whose existing cards were rewritten
+    /// to the line's move (with a fresh SRS state).
+    pub cards_replaced: u32,
     /// Total plies walked.
     pub plies_walked: u32,
 }
@@ -93,6 +96,37 @@ pub fn add_line(
     sans: &[String],
     now: &str,
 ) -> anyhow::Result<AddLineStats> {
+    add_line_inner(conn, repertoire_id, color, start, sans, now, false)
+}
+
+/// [`add_line`] in "adopt what you play" mode (triage reality check,
+/// 2026-07-30): where a position already holds cards for this COLOR that
+/// expect a different move — in any repertoire, since the first-card-wins
+/// lookup and the training queue span them all — those cards are
+/// rewritten to the line's move (expected move, prompt context, and a
+/// fresh SRS state: the old memory was memory of the old move) instead
+/// of being silently left in place. Cards already expecting the line's
+/// move count as existing, exactly as in [`add_line`].
+pub fn add_line_replacing(
+    conn: &Connection,
+    repertoire_id: i64,
+    color: Color,
+    start: &Board,
+    sans: &[String],
+    now: &str,
+) -> anyhow::Result<AddLineStats> {
+    add_line_inner(conn, repertoire_id, color, start, sans, now, true)
+}
+
+fn add_line_inner(
+    conn: &Connection,
+    repertoire_id: i64,
+    color: Color,
+    start: &Board,
+    sans: &[String],
+    now: &str,
+    replace: bool,
+) -> anyhow::Result<AddLineStats> {
     let mut board = start.clone();
     let mut stats = AddLineStats::default();
     let mut prefix = String::new();
@@ -104,6 +138,23 @@ pub fn add_line(
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT (repertoire_id, position_hash) DO NOTHING",
     )?;
+    // The winning card for the color at a position — the same
+    // first-card-wins lookup triage and the game marks use.
+    let mut winning = conn.prepare_cached(
+        "SELECT c.expected_uci FROM repertoire_cards c
+         JOIN repertoires r ON r.id = c.repertoire_id
+         WHERE r.color = ?1 AND c.position_hash = ?2
+         ORDER BY c.id LIMIT 1",
+    )?;
+    let mut rewrite = conn.prepare_cached(
+        "UPDATE repertoire_cards
+         SET expected_san = ?1, expected_uci = ?2, ply = ?3, line_prefix = ?4,
+             stability = NULL, difficulty = NULL, reps = 0, lapses = 0,
+             last_review = NULL, due = ?5
+         WHERE id IN (SELECT c.id FROM repertoire_cards c
+                      JOIN repertoires r ON r.id = c.repertoire_id
+                      WHERE r.color = ?6 AND c.position_hash = ?7)",
+    )?;
     for (ply, san) in sans.iter().enumerate() {
         let mv = crate::san::parse_san(&board, san)
             .map_err(|e| anyhow::anyhow!("ply {}: {e}", ply + 1))?;
@@ -113,20 +164,38 @@ pub fn add_line(
         };
         if to_move == color {
             let hash = crate::hash::position_hash(&board) as i64;
-            let changed = insert.execute(params![
-                repertoire_id,
-                hash,
-                board.to_string(),
-                san,
-                mv.to_string(),
-                ply as i64,
-                prefix,
-                now,
-            ])?;
-            if changed > 0 {
-                stats.cards_added += 1;
+            let conflicting = replace
+                && winning
+                    .query_row(params![color_str(color), hash], |r| r.get::<_, String>(0))
+                    .optional()?
+                    .is_some_and(|uci| uci != mv.to_string());
+            if conflicting {
+                rewrite.execute(params![
+                    san,
+                    mv.to_string(),
+                    ply as i64,
+                    prefix,
+                    now,
+                    color_str(color),
+                    hash,
+                ])?;
+                stats.cards_replaced += 1;
             } else {
-                stats.cards_existing += 1;
+                let changed = insert.execute(params![
+                    repertoire_id,
+                    hash,
+                    board.to_string(),
+                    san,
+                    mv.to_string(),
+                    ply as i64,
+                    prefix,
+                    now,
+                ])?;
+                if changed > 0 {
+                    stats.cards_added += 1;
+                } else {
+                    stats.cards_existing += 1;
+                }
             }
         }
         // Extend the numbered-SAN prompt with the move just examined.

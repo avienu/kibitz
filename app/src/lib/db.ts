@@ -598,6 +598,9 @@ export interface TrainAdded {
   repertoire: string;
   cardsAdded: number;
   cardsExisting: number;
+  /** Replace mode only: positions whose cards were rewritten to the
+   * line's move (the triage "adopt what you play" flow). */
+  cardsReplaced: number;
 }
 
 export type TrainColor = "white" | "black";
@@ -626,8 +629,11 @@ export function trainAddLine(
   sans: string[],
   startFen?: string,
   name?: string,
+  /** Rewrite cards that conflict with the line's moves (fresh SRS state)
+   * — the triage reality-check "adopt what you play" flow only. */
+  replace?: boolean,
 ): Promise<TrainAdded> {
-  return invoke<TrainAdded>("train_add_line", { color, sans, startFen, name });
+  return invoke<TrainAdded>("train_add_line", { color, sans, startFen, name, replace });
 }
 
 /* ---- Round 2: Home (Direction A) — honest data only ---- */
