@@ -7,11 +7,49 @@
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::engine::Engine;
+
+/// What the engine is chewing on right now, so a caller polling a job can
+/// show the search working rather than a spinner and a promise.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveSearch {
+    pub job_id: i64,
+    /// Position being searched — a poller must check this is the one it
+    /// asked about before showing the lines.
+    pub fen: String,
+    /// Depth the last reported iteration reached, and the one it is
+    /// heading for.
+    pub depth: u32,
+    pub target_depth: u32,
+    pub nodes: u64,
+    pub nps: u64,
+    /// Best line per MultiPV slot so far — same shape as the stored
+    /// result, so it renders through the same code.
+    pub lines: Vec<crate::triage::CandidateLine>,
+}
+
+/// The queue runs one engine, one job at a time, so a single slot holds
+/// the whole picture. `None` between jobs — a stale snapshot would read as
+/// a search that is still going.
+static LIVE: Mutex<Option<LiveSearch>> = Mutex::new(None);
+
+/// Snapshot of the running search, if one is running.
+pub fn live_search() -> Option<LiveSearch> {
+    LIVE.lock().ok()?.clone()
+}
+
+fn set_live(s: Option<LiveSearch>) {
+    if let Ok(mut slot) = LIVE.lock() {
+        *slot = s;
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Purpose {
@@ -268,7 +306,30 @@ pub fn run_pending_until(
                 }
                 let e = engine.as_mut().expect("just spawned");
                 let identity = e.identity.clone();
-                let raw = e.eval_depth_multipv(&p.fen, p.multipv, p.depth)?;
+                // Publish each iteration as it lands, throttled: the search
+                // reports far faster than anyone can read, and converting
+                // PVs to SAN on every info line would be wasted work.
+                let mut next_tick = Instant::now();
+                let raw =
+                    e.eval_depth_multipv_watched(&p.fen, p.multipv, p.depth, &mut |tick| {
+                        let now = Instant::now();
+                        if now < next_tick {
+                            return;
+                        }
+                        next_tick = now + Duration::from_millis(250);
+                        let Ok(lines) = crate::triage::candidate_lines(&p.fen, tick.lines) else {
+                            return;
+                        };
+                        set_live(Some(LiveSearch {
+                            job_id: id,
+                            fen: p.fen.clone(),
+                            depth: tick.depth,
+                            target_depth: p.depth,
+                            nodes: tick.nodes,
+                            nps: tick.nps,
+                            lines,
+                        }));
+                    })?;
                 let lines = crate::triage::candidate_lines(&p.fen, &raw)?;
                 let extension_id = crate::triage::store_book_extension(
                     conn, &p.fen, &identity, p.depth, p.multipv, &lines,
@@ -445,6 +506,9 @@ pub fn run_pending_until(
             }
             Ok(result)
         })();
+        // The search is over either way: a snapshot left behind would read
+        // as a search still running.
+        set_live(None);
         match outcome {
             Ok(result) => {
                 conn.execute(

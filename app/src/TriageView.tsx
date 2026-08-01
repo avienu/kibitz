@@ -30,6 +30,9 @@ import {
   realityDeviations,
   realityHeadline,
   triageExtend,
+  searchProgressFraction,
+  searchProgressLabel,
+  type LiveSearch,
   triageExtensionStatus,
   triageInferFrom,
   triageInferRepertoire,
@@ -133,6 +136,47 @@ function InferLineRow({
         Adopt
       </button>
     </div>
+  );
+}
+
+/** The engine working, not a spinner: how deep it has got, and the lines
+ * it likes at that depth. They reorder and change as the search deepens —
+ * that IS the sausage being made, so it is labelled as provisional. */
+function LiveSearchPanel({
+  search,
+  onPreview,
+}: {
+  search: LiveSearch;
+  onPreview: (p: ScrubPreview | null) => void;
+}) {
+  return (
+    <>
+      <div
+        className="triage-ext-bar"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={search.targetDepth}
+        aria-valuenow={search.depth}
+        aria-label="Search depth reached"
+      >
+        <span style={{ width: `${searchProgressFraction(search) * 100}%` }} />
+      </div>
+      {search.lines.map((line, i) => (
+        <div className="triage-ext-line triage-ext-live" key={i}>
+          <span className="triage-ext-eval">{evalLabel(line, search.fen)}</span>
+          <ScrubLine
+            className="triage-ext-sans"
+            sans={line.sans}
+            startFen={search.fen}
+            onPreview={onPreview}
+          />
+        </div>
+      ))}
+      <p className="triage-footnote">
+        Still searching: these are the engine's picks at depth {search.depth} and can still
+        change. Nothing is stored until the search finishes.
+      </p>
+    </>
   );
 }
 
@@ -277,6 +321,9 @@ export default function TriageView({
   /* ---- extension status: fetch on selection, poll while queued/running ---- */
   const selFen = sel && sel.kind !== "deviation" ? sel.item.fen : null;
   const pollBusy = extStatus?.jobStatus === "pending" || extStatus?.jobStatus === "running";
+  // A running search reports every quarter second; waiting in a queue does
+  // not change that fast, so only the live case polls quickly.
+  const pollMs = extStatus?.jobStatus === "running" ? 1000 : 2500;
   useEffect(() => {
     if (!selFen) return;
     let stale = false;
@@ -293,12 +340,12 @@ export default function TriageView({
     if (!pollBusy) return () => {
       stale = true;
     };
-    const t = setInterval(fetchStatus, 2500);
+    const t = setInterval(fetchStatus, pollMs);
     return () => {
       stale = true;
       clearInterval(t);
     };
-  }, [selFen, pollBusy]);
+  }, [selFen, pollBusy, pollMs]);
 
   // Once a result lands, reflect it in the list badge without a rebuild.
   useEffect(() => {
@@ -327,6 +374,7 @@ export default function TriageView({
         jobStatus: "pending",
         jobsAhead: s?.jobsAhead ?? 0,
         workerActive: true,
+        search: null,
       }));
     } catch (e) {
       setExtError(String(e));
@@ -946,9 +994,16 @@ export default function TriageView({
                       {extStatus.workerActive ? " · worker running…" : " · worker starting…"}
                     </div>
                   ) : extStatus?.jobStatus === "running" ? (
-                    <div className="triage-ext-progress">
-                      Engine analysing — 4 lines, deep search. This can take a few minutes…
-                    </div>
+                    <>
+                      <div className="triage-ext-progress">
+                        {extStatus.search
+                          ? `Engine searching — ${searchProgressLabel(extStatus.search)}`
+                          : "Engine starting the search…"}
+                      </div>
+                      {extStatus.search !== null && (
+                        <LiveSearchPanel search={extStatus.search} onPreview={setPreview} />
+                      )}
+                    </>
                   ) : (
                     <>
                       {extStatus?.jobStatus === "failed" && (

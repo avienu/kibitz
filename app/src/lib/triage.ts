@@ -155,6 +155,18 @@ export function triageExtend(fen: string): Promise<ExtendStarted> {
   return invoke<ExtendStarted>("triage_extend", { fen });
 }
 
+/** The running search, iteration by iteration — what the engine has found
+ * so far and how deep it has got. Only ever about the polled position. */
+export interface LiveSearch {
+  jobId: number;
+  fen: string;
+  depth: number;
+  targetDepth: number;
+  nodes: number;
+  nps: number;
+  lines: CandidateLine[];
+}
+
 export interface ExtensionStatus {
   extension: BookExtension | null;
   /** "pending" | "running" | "done" | "failed"; null = never requested. */
@@ -162,6 +174,8 @@ export interface ExtensionStatus {
   /** Queue rows ahead of a pending job (honest wait explanation). */
   jobsAhead: number;
   workerActive: boolean;
+  /** Present only while the engine is searching THIS position. */
+  search: LiveSearch | null;
 }
 
 export function triageExtensionStatus(fen: string): Promise<ExtensionStatus> {
@@ -169,6 +183,31 @@ export function triageExtensionStatus(fen: string): Promise<ExtensionStatus> {
 }
 
 /* ---- pure display helpers ---- */
+
+/** "depth 22 of 30 · 41M nodes · 1.8 Mn/s" — the live search caption.
+ * Only what the engine actually reported: a zero rate is left out. */
+export function searchProgressLabel(s: LiveSearch): string {
+  const parts = [`depth ${s.depth} of ${s.targetDepth}`, `${compactCount(s.nodes)} nodes`];
+  if (s.nps > 0) parts.push(`${compactCount(s.nps)}/s`);
+  return parts.join(" · ");
+}
+
+/** 41_200_000 -> "41.2M". Thousands separators are unreadable at a glance
+ * when the number changes four times a second. */
+export function compactCount(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}G`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
+  return `${n}`;
+}
+
+/** How far along a live search is, 0..1 — depth is the only honest axis
+ * the engine gives us, and it is wildly non-linear in time, so callers
+ * should present it as a position, never as an ETA. */
+export function searchProgressFraction(s: LiveSearch): number {
+  if (s.targetDepth <= 0) return 0;
+  return Math.max(0, Math.min(1, s.depth / s.targetDepth));
+}
 
 /** Side to move of a FEN ("w" | "b"). */
 function fenStm(fen: string): "w" | "b" {

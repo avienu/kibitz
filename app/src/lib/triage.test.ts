@@ -5,8 +5,11 @@ import {
   defaultTriageColor,
   evalLabel,
   inBookGaps,
+  compactCount,
   continuationDepths,
   inferredLineLabel,
+  searchProgressFraction,
+  searchProgressLabel,
   itemCaption,
   lineSans,
   numberedLine,
@@ -19,6 +22,7 @@ import {
   wholeOpeningGaps,
   type ColorTriage,
   type InferredLine,
+  type LiveSearch,
   type TriageItem,
   type TriageReport,
 } from "./triage";
@@ -179,6 +183,41 @@ describe("defaultTriageColor", () => {
     expect(defaultTriageColor(report({ hasCards: true, gamesSeen: 1 }, { gamesSeen: 99 }))).toBe(
       "white",
     );
+  });
+});
+
+describe("live search progress", () => {
+  const search = (over: Partial<LiveSearch> = {}): LiveSearch => ({
+    jobId: 7,
+    fen: "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    depth: 22,
+    targetDepth: 30,
+    nodes: 41_200_000,
+    nps: 1_800_000,
+    lines: [],
+    ...over,
+  });
+
+  it("reads out depth, nodes and rate", () => {
+    expect(searchProgressLabel(search())).toBe("depth 22 of 30 · 41.2M nodes · 1.8M/s");
+  });
+
+  it("omits a rate the engine has not reported yet", () => {
+    expect(searchProgressLabel(search({ nps: 0, nodes: 900 }))).toBe("depth 22 of 30 · 900 nodes");
+  });
+
+  it("compacts counts at each scale", () => {
+    expect([compactCount(900), compactCount(41_200), compactCount(2_500_000)]).toEqual([
+      "900",
+      "41.2k",
+      "2.5M",
+    ]);
+  });
+
+  it("reports depth as a fraction, clamped and never dividing by zero", () => {
+    expect(searchProgressFraction(search())).toBeCloseTo(22 / 30);
+    expect(searchProgressFraction(search({ targetDepth: 0 }))).toBe(0);
+    expect(searchProgressFraction(search({ depth: 44 }))).toBe(1);
   });
 });
 

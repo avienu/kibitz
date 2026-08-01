@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TriageView, { TriageLists } from "./TriageView";
 import {
+  triageExtensionStatus,
   triageInferFrom,
   triageInferRepertoire,
   triageReport,
@@ -69,7 +70,13 @@ vi.mock("./lib/triage", async (importOriginal) => {
     triageInferFrom: vi.fn(),
     triageExtend: vi.fn(),
     triageExtensionStatus: vi.fn(() =>
-      Promise.resolve({ extension: null, jobStatus: null, jobsAhead: 0, workerActive: false }),
+      Promise.resolve({
+        extension: null,
+        jobStatus: null,
+        jobsAhead: 0,
+        workerActive: false,
+        search: null,
+      }),
     ),
   };
 });
@@ -603,6 +610,72 @@ const fenAfter = (sans: string[]): string => {
   if (!r.ok) throw new Error("fixture line must replay");
   return r.game.fens[sans.length];
 };
+
+describe("TriageView — a running extension shows its work", () => {
+  const GAP_FEN = "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
+
+  it("reports depth and the engine's current picks instead of a bare wait", async () => {
+    vi.mocked(triageReport).mockResolvedValue(
+      reportOf(
+        { gamesSeen: 5, hasCards: true, gaps: [item({ fen: GAP_FEN, opponentSan: "c5" })] },
+        { gamesSeen: 1 },
+      ),
+    );
+    vi.mocked(triageExtensionStatus).mockResolvedValue({
+      extension: null,
+      jobStatus: "running",
+      jobsAhead: 0,
+      workerActive: true,
+      search: {
+        jobId: 7,
+        fen: GAP_FEN,
+        depth: 22,
+        targetDepth: 30,
+        nodes: 41_200_000,
+        nps: 1_800_000,
+        lines: [{ sans: ["Nf3", "d6", "d4"], scoreCp: 35, mate: null }],
+      },
+    });
+    const { container, getByText } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("opponent played c5"));
+    fireEvent.click(getByText(/opponent played c5/));
+    await waitFor(() => expect(container.textContent).toContain("EXTEND THE BOOK"));
+
+    await waitFor(() =>
+      expect(container.textContent).toContain("depth 22 of 30 · 41.2M nodes · 1.8M/s"),
+    );
+    // The provisional line is on screen, and marked as provisional.
+    // Numbered from the analysed position (after 1.e4 c5), not from move 1.
+    expect(container.querySelector(".triage-ext-live")?.textContent).toContain("2. Nf3 d6 3. d4");
+    expect(container.textContent).toContain("Nothing is stored until the search finishes");
+    // Depth drives the bar, and it is a position — not a percentage of time.
+    const bar = container.querySelector('[role="progressbar"]');
+    expect(bar?.getAttribute("aria-valuenow")).toBe("22");
+    expect(bar?.getAttribute("aria-valuemax")).toBe("30");
+  });
+
+  it("says the search is starting when the engine has not reported yet", async () => {
+    vi.mocked(triageReport).mockResolvedValue(
+      reportOf(
+        { gamesSeen: 5, hasCards: true, gaps: [item({ fen: GAP_FEN, opponentSan: "c5" })] },
+        { gamesSeen: 1 },
+      ),
+    );
+    vi.mocked(triageExtensionStatus).mockResolvedValue({
+      extension: null,
+      jobStatus: "running",
+      jobsAhead: 0,
+      workerActive: true,
+      search: null,
+    });
+    const { container, getByText } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("opponent played c5"));
+    fireEvent.click(getByText(/opponent played c5/));
+
+    await waitFor(() => expect(container.textContent).toContain("Engine starting the search"));
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+  });
+});
 
 describe("TriageView — inferred lines read as trunk plus detail", () => {
   it("indents a line that goes deeper into the one above and dims the shared moves", async () => {

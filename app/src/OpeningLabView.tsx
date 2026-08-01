@@ -251,6 +251,7 @@ export default function OpeningLabView({
         jobStatus: "pending",
         jobsAhead: s?.jobsAhead ?? 0,
         workerActive: true,
+        search: null,
       }));
     } catch (e) {
       setExtError(String(e));

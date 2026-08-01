@@ -53,6 +53,16 @@ pub struct Engine {
     pub identity: String,
 }
 
+/// One iteration of a running search, as reported to a watcher.
+pub struct SearchTick<'a> {
+    /// Depth this `info` line reports (not the target depth).
+    pub depth: u32,
+    pub nodes: u64,
+    pub nps: u64,
+    /// Best line per MultiPV slot so far, best first.
+    pub lines: &'a [EngineLine],
+}
+
 #[derive(Debug, Clone)]
 pub struct EngineLine {
     pub score_cp: i32,
@@ -118,6 +128,20 @@ impl Engine {
         multipv: u32,
         depth: u32,
     ) -> anyhow::Result<Vec<EngineLine>> {
+        self.eval_depth_multipv_watched(fen, multipv, depth, &mut |_| {})
+    }
+
+    /// [`eval_depth_multipv`] reporting each iteration as it lands, so a
+    /// caller can show the search working instead of a spinner. `on_tick`
+    /// fires once per `info` line that carries a PV — often, and from the
+    /// search thread: throttle in the callback, do no real work there.
+    pub fn eval_depth_multipv_watched(
+        &mut self,
+        fen: &str,
+        multipv: u32,
+        depth: u32,
+        on_tick: &mut dyn FnMut(SearchTick<'_>),
+    ) -> anyhow::Result<Vec<EngineLine>> {
         let multipv = multipv.max(1);
         self.send("ucinewgame")?;
         self.send(&format!("setoption name MultiPV value {multipv}"))?;
@@ -138,9 +162,15 @@ impl Engine {
                 let mut score_cp = None;
                 let mut mate = None;
                 let mut pv = vec![];
+                let mut at_depth = 0;
+                let mut nodes = 0;
+                let mut nps = 0;
                 let mut it = l.split_whitespace().peekable();
                 while let Some(tok) = it.next() {
                     match tok {
+                        "depth" => at_depth = it.next().and_then(|v| v.parse().ok()).unwrap_or(0),
+                        "nodes" => nodes = it.next().and_then(|v| v.parse().ok()).unwrap_or(0),
+                        "nps" => nps = it.next().and_then(|v| v.parse().ok()).unwrap_or(0),
                         "multipv" => {
                             idx = it.next().and_then(|v| v.parse().ok()).unwrap_or(1);
                         }
@@ -160,6 +190,13 @@ impl Engine {
                         }),
                         mate,
                         pv,
+                    });
+                    let so_far: Vec<EngineLine> = lines.iter().flatten().cloned().collect();
+                    on_tick(SearchTick {
+                        depth: at_depth,
+                        nodes,
+                        nps,
+                        lines: &so_far,
                     });
                 }
             } else if l.starts_with("bestmove") {

@@ -5012,6 +5012,25 @@ button.mv-var-line:hover {
   font: 400 12px var(--font-ui);
   color: var(--dim);
 }
+/* Depth reached, as a position — never an ETA: engine depth is wildly
+   non-linear in time and a countdown here would be a lie. */
+.triage-ext-bar {
+  height: 3px;
+  margin: 6px 0 2px;
+  border-radius: 2px;
+  background: var(--panel2);
+  overflow: hidden;
+}
+.triage-ext-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s linear;
+}
+/* Provisional lines: readable, but visibly not the stored result. */
+.triage-ext-live {
+  opacity: 0.75;
+}
 .triage-adopt-msg {
   margin-top: 6px;
   font: 500 12px var(--font-ui);

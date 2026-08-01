@@ -149,6 +149,9 @@ pub struct ExtensionStatus {
     /// "N jobs before yours" figure. 0 when not pending.
     pub jobs_ahead: i64,
     pub worker_active: bool,
+    /// The running search on THIS position, iteration by iteration, so the
+    /// wait shows its work. None unless the engine is on this very FEN.
+    pub search: Option<kibitz_db::jobs::LiveSearch>,
 }
 
 pub(crate) fn extension_status_impl(
@@ -191,6 +194,7 @@ pub(crate) fn extension_status_impl(
         job_status,
         jobs_ahead,
         worker_active,
+        search: kibitz_db::jobs::live_search().filter(|s| s.fen == fen),
     })
 }
 
