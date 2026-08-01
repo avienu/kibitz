@@ -240,6 +240,33 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # Twice in one day the artifact a user would receive was not the
+      # artifact anything had verified: a DMG that was signed but never
+      # notarized, and releases that silently contained no Windows build
+      # at all while the tester workflow produced one. Both passed every
+      # green check that existed. So the release asserts what it is FOR —
+      # one installer per platform we claim to support — and refuses to
+      # publish a release that quietly drops one.
+      - name: Every supported platform is present
+        run: |
+          set -euo pipefail
+          missing=""
+          for want in '*.dmg:macOS' '*.msi:Windows' '*.AppImage:Linux' '*.deb:Linux (deb)'; do
+            pat="${want%%:*}"; label="${want##*:}"
+            found=$(find dist -type f -name "$pat" | head -1)
+            if [ -z "$found" ]; then
+              missing="$missing $label($pat)"
+            else
+              echo "  ok  $label -> $(basename "$found")"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::release is missing:$missing — a platform vanished from the \
+          bundle matrix. Fix the matrix rather than publishing a release that has no \
+          build for it."
+            exit 1
+          fi
+
       - name: Detect updater key
         id: gate
         env:

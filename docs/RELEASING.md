@@ -11,6 +11,33 @@ skips cleanly (with an explicit message) until those secrets exist.
 Releases cut before then carry clearly-marked unsigned artifacts and no
 updater feed.
 
+## The artifact is not the build log
+
+Two failures on 2026-08-01, both caught by looking at what a user would
+download rather than at a green pipeline:
+
+- The `.dmg` was **signed but never notarized**. Tauri notarizes and
+  staples the `.app`, then builds the disk image around it and stops.
+  Every app-level check passed — `spctl` accepted it, the ticket was
+  stapled — while the file people actually double-click was refused by
+  Gatekeeper, online or off.
+- Releases contained **no Windows build at all**. `tauri.conf`'s bundle
+  targets are the macOS set, so the workflow produced a `.dmg`, Linux
+  packages by Tauri's platform fallback, and nothing for Windows. The
+  testers' `.msi` came from `testbuild.yml` and had never been part of a
+  release. Discovered by clicking the website's download button.
+
+Same shape both times: **the artifact the user receives was never the
+artifact anything verified.** A build that exits 0 says the steps ran, not
+that the output is what you meant to ship.
+
+So the pipeline now checks its own output rather than its exit code — the
+macOS bundle is stapler-validated and spctl-checked as a `.dmg` and as
+the `.app` inside it, and the release refuses to publish unless one
+installer per supported platform is present. When adding a platform or a
+bundle format, extend those two checks first; they are what stops the
+next silent gap.
+
 ## Versions
 
 `0.1.0` is set in four places; keep them in lockstep:
