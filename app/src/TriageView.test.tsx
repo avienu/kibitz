@@ -611,6 +611,42 @@ const fenAfter = (sans: string[]): string => {
   return r.game.fens[sans.length];
 };
 
+describe("TriageView — triage rows scrub too", () => {
+  it("hovering a row's moves walks them on the aside board", async () => {
+    vi.mocked(triageReport).mockResolvedValue(
+      reportOf(
+        { gamesSeen: 5, hasCards: true, gaps: [item({ opponentSan: "c5" })] },
+        { gamesSeen: 1 },
+      ),
+    );
+    const { container } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("opponent played c5"));
+    expect(boardFen(container)).toBe(START_FEN);
+
+    // The row's own line is scrubbable — it is the most obvious thing on
+    // the screen to hover, and the aside board is right there.
+    const toks = container.querySelectorAll(".triage-row .scrub-tok");
+    expect([...toks].map((t) => t.textContent)).toEqual(["1. e4", "c5"]);
+    fireEvent.mouseOver(toks[0]);
+    expect(boardFen(container)).toBe(fenAfter(["e4"]));
+    fireEvent.mouseOut(container.querySelector(".triage-row .scrub-line")!);
+    expect(boardFen(container)).toBe(START_FEN);
+  });
+
+  it("keeps the row itself the only keyboard stop", async () => {
+    vi.mocked(triageReport).mockResolvedValue(
+      reportOf(
+        { gamesSeen: 5, hasCards: true, gaps: [item({ opponentSan: "c5" })] },
+        { gamesSeen: 1 },
+      ),
+    );
+    const { container } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("opponent played c5"));
+    // A focusable line nested in the row button would be a keyboard trap.
+    expect(container.querySelector(".triage-row .scrub-line")?.getAttribute("tabindex")).toBeNull();
+  });
+});
+
 describe("TriageView — a running extension shows its work", () => {
   const GAP_FEN = "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
 

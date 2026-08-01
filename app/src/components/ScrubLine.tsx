@@ -66,6 +66,11 @@ interface ScrubLineProps {
   /** Dim the first N moves: the part this line shares with the trunk it
    * continues, so the eye lands on what is new. Still hoverable. */
   dimBefore?: number;
+  /** Own the keyboard (focusable, arrow keys step the preview). Set false
+   * inside an interactive parent — a focusable element nested in a button
+   * is a keyboard trap, so there the line is hover-only and the parent
+   * keeps its own keyboard behaviour. */
+  focusable?: boolean;
 }
 
 export default function ScrubLine({
@@ -74,6 +79,7 @@ export default function ScrubLine({
   onPreview,
   className,
   dimBefore = 0,
+  focusable = true,
 }: ScrubLineProps) {
   // Latest-callback ref: hover handlers and the unmount cleanup never
   // capture a stale onPreview.
@@ -143,11 +149,15 @@ export default function ScrubLine({
   return (
     <span
       className={`scrub-line${className ? ` ${className}` : ""}`}
-      tabIndex={0}
-      aria-label={`Line ${plainText}. Hover or use arrow keys to preview the moves on the board.`}
+      tabIndex={focusable ? 0 : undefined}
+      aria-label={
+        focusable
+          ? `Line ${plainText}. Hover or use arrow keys to preview the moves on the board.`
+          : undefined
+      }
       onMouseLeave={clear}
-      onBlur={clear}
-      onKeyDown={onKeyDown}
+      onBlur={focusable ? clear : undefined}
+      onKeyDown={focusable ? onKeyDown : undefined}
     >
       {tokens.map((t, i) => (
         <span key={i}>

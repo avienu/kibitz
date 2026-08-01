@@ -63,10 +63,14 @@ export function TriageLists({
   ct,
   selectedFen,
   onSelect,
+  onPreview,
 }: {
   ct: ColorTriage;
   selectedFen: string | null;
   onSelect: (kind: TriageKind, item: TriageItem) => void;
+  /** Hovering a row's moves walks them on the aside board, same as any
+   * other line on this screen. Omitted in the pure list tests. */
+  onPreview?: (p: ScrubPreview | null) => void;
 }) {
   const section = (kind: TriageKind, title: string, items: TriageItem[]) => (
     <div className="triage-section" key={kind}>
@@ -81,7 +85,16 @@ export function TriageLists({
         >
           <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
           <span className="triage-row-main">
-            <span className="triage-line">{it.line || "start position"}</span>
+            {it.line && onPreview ? (
+              <ScrubLine
+                className="triage-line"
+                sans={lineSans(it.line)}
+                onPreview={onPreview}
+                focusable={false}
+              />
+            ) : (
+              <span className="triage-line">{it.line || "start position"}</span>
+            )}
             <span className="triage-caption">
               {itemCaption(kind, it)}
               {it.hasExtension ? " · engine lines ready" : ""}
@@ -870,6 +883,7 @@ export default function TriageView({
                       ct={listCt}
                       selectedFen={sel?.item.fen ?? null}
                       onSelect={select}
+                      onPreview={setPreview}
                     />
                   )}
                 </>
