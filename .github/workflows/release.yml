@@ -8,7 +8,15 @@
 # (pre-enrollment state — see docs/RELEASE_CHECKLIST.md for the exact list):
 #   TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD  → updater artifacts + latest.json
 #   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
-#   APPLE_ID / APPLE_APP_PASSWORD / APPLE_TEAM_ID                   → macOS codesign + notarization
+#                                                                   → macOS codesign (Developer ID Application)
+# Notarization takes EITHER credential, API key preferred (revocable, no
+# account password in CI); the key route wins when both are present:
+#   APPLE_API_ISSUER / APPLE_API_KEY / APPLE_API_KEY_P8   → App Store Connect API key
+#   APPLE_ID / APPLE_APP_PASSWORD / APPLE_TEAM_ID         → Apple ID + app-specific password
+#
+# Signing without notarization is worse than neither: Gatekeeper reports a
+# signed-but-unnotarized app more harshly than an unsigned one, so the
+# build refuses that combination rather than shipping it.
 name: Release
 
 on:
@@ -79,10 +87,52 @@ jobs:
             fi
           fi
 
-      # Signed path: updater artifacts on; Apple env vars are picked up by the
-      # Tauri bundler when set (codesign + notarize during bundling on macOS).
-      - name: Build bundles (signed)
-        if: steps.gate.outputs.updater == 'true'
+      # The App Store Connect key is a FILE credential: write the .p8 the
+      # secret carries to the runner and point the bundler at it. Written
+      # under RUNNER_TEMP, which the runner wipes when the job ends.
+      - name: Prepare Apple notarization credentials (macOS)
+        if: runner.os == 'macOS' && steps.gate.outputs.applesign == 'true'
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "$APPLE_API_ISSUER" ] && [ -n "$APPLE_API_KEY" ] && [ -n "$APPLE_API_KEY_P8" ]; then
+            key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+            printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$key_path"
+            chmod 600 "$key_path"
+            # Never echo the path's contents; the filename is not secret.
+            {
+              echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+              echo "APPLE_API_KEY=$APPLE_API_KEY"
+              echo "APPLE_API_KEY_PATH=$key_path"
+            } >> "$GITHUB_ENV"
+            echo "Notarization: App Store Connect API key." >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            {
+              echo "APPLE_ID=$APPLE_ID"
+              echo "APPLE_PASSWORD=$APPLE_APP_PASSWORD"
+              echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+            } >> "$GITHUB_ENV"
+            echo "Notarization: Apple ID + app-specific password." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::APPLE_CERTIFICATE is set but no notarization credential is. A signed, \
+          un-notarized app is treated WORSE by Gatekeeper than an unsigned one. Add either \
+          APPLE_API_ISSUER + APPLE_API_KEY + APPLE_API_KEY_P8, or APPLE_ID + APPLE_APP_PASSWORD \
+          + APPLE_TEAM_ID."
+            exit 1
+          fi
+
+      # One build step: the two signatures are independent. The updater key
+      # decides whether updater artifacts are produced; the Apple secrets
+      # decide whether the macOS bundle is signed and notarized. Gating one
+      # on the other would silently ship unsigned macOS builds to anyone
+      # who has certificates but no updater key.
+      - name: Build bundles
         working-directory: app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -90,15 +140,15 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":true}}'
-
-      - name: Build bundles (unsigned — no updater key present)
-        if: steps.gate.outputs.updater != 'true'
-        working-directory: app
-        run: npm run tauri build
+          # Notarization credentials come from the prepare step via
+          # GITHUB_ENV — whichever of the two routes was configured.
+          UPDATER: ${{ steps.gate.outputs.updater }}
+        run: |
+          if [ "$UPDATER" = "true" ]; then
+            npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          else
+            npm run tauri build
+          fi
 
       - name: Collect bundles
         run: |

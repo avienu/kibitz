@@ -22,7 +22,13 @@ export default function StorageSection() {
   }, []);
 
   const cloud = path !== null && isCloudSyncedPath(path);
-  const inAppStorage = path !== null && !cloud && path.includes("org.kibitzchess.app");
+  // Both identifiers: the bundle ID changed for Developer ID signing and
+  // an install can be a launch away from having its directory adopted.
+  const inAppStorage =
+    path !== null &&
+    !cloud &&
+    (path.includes("org.kibitzchess.kibitz") ||
+      path.includes("org.kibitzchess.app"));
 
   const move = async () => {
     setMoving(true);
@@ -52,10 +58,15 @@ export default function StorageSection() {
         <div className="set-row">
           <div className="set-label" />
           <div className="storage-warning">
-            This database lives in a <strong>cloud-synced folder</strong> — the sync client
-            re-uploads it on every write (this file is large, so that can saturate the machine),
-            and cloud sync interfering with a live database risks corruption.
-            <button className="btn-secondary storage-move" disabled={moving} onClick={() => void move()}>
+            This database lives in a <strong>cloud-synced folder</strong> — the
+            sync client re-uploads it on every write (this file is large, so
+            that can saturate the machine), and cloud sync interfering with a
+            live database risks corruption.
+            <button
+              className="btn-secondary storage-move"
+              disabled={moving}
+              onClick={() => void move()}
+            >
               {moving ? "Moving…" : "Move to app storage"}
             </button>
           </div>
@@ -64,7 +75,9 @@ export default function StorageSection() {
       {inAppStorage && (
         <div className="set-row">
           <div className="set-label" />
-          <div className="set-help">In app storage — not cloud-synced. Good.</div>
+          <div className="set-help">
+            In app storage — not cloud-synced. Good.
+          </div>
         </div>
       )}
       {note && (

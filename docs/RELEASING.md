@@ -24,7 +24,7 @@ updater feed.
 
 ## Identity
 
-The bundle identifier is **`org.kibitzchess.app`** (final — the
+The bundle identifier is **`org.kibitzchess.kibitz`** (final — the
 kibitzchess.org domain is secured; set only in
 `app/src-tauri/tauri.conf.json`). Signing, notarization, and updater
 artifacts must all carry this identifier — verification is a release
@@ -106,7 +106,10 @@ scripts/release/staple_mac.sh                    # staple + verify
 
 In CI the same signing happens inside `npm run tauri build` itself: the
 Tauri bundler picks up `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
-`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
+`APPLE_SIGNING_IDENTITY` for codesigning, and for notarization either
+`APPLE_API_ISSUER` + `APPLE_API_KEY` + `APPLE_API_KEY_PATH` (the release
+workflow writes the `.p8` from `APPLE_API_KEY_P8` and sets the path) or
+`APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
 from the environment and performs codesign + notarization during
 bundling. The scripts are the local/recovery path and the dry-run
 validation surface.
@@ -187,7 +190,10 @@ build).
 |---|---|
 | `TAURI_SIGNING_PRIVATE_KEY` | updater artifact signing (contents of the generated key file) |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | password for the above |
-| `APPLE_ID` | notarization (Apple account email) |
+| `APPLE_API_ISSUER` | notarization: App Store Connect Issuer ID (preferred route) |
+| `APPLE_API_KEY` | notarization: App Store Connect Key ID |
+| `APPLE_API_KEY_P8` | CI only: base64 of the `.p8`; the workflow writes it to a temp file and sets `APPLE_API_KEY_PATH` |
+| `APPLE_ID` | notarization fallback (Apple account email) |
 | `APPLE_TEAM_ID` | notarization / signing team |
 | `APPLE_APP_PASSWORD` | app-specific password for notarytool |
 | `APPLE_CERT_IDENTITY` | local scripts: codesign identity string |

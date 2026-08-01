@@ -16,6 +16,7 @@
 //! Database browsing never touches the engine.
 
 pub mod browse;
+pub mod datadir;
 pub mod dbops;
 pub mod endgame;
 pub mod explain;
@@ -332,6 +333,26 @@ pub fn run() {
             lichess_play::lichess_seek_cancel,
             lichess_play::lichess_now_playing
         ])
+        // Before anything reads either directory: an install made under
+        // the old bundle identifier keeps its database at the old path.
+        .setup(|app| {
+            use tauri::Manager;
+            let data = app.path().app_data_dir();
+            let config = app.path().app_config_dir();
+            if let (Ok(data), Ok(config)) = (data, config) {
+                let adopted = datadir::adopt_all(&data, &config);
+                if !adopted.is_empty() {
+                    println!(
+                        "data dir: adopted {} entr{} from {} ({} left in place)",
+                        adopted.moved.len(),
+                        if adopted.moved.len() == 1 { "y" } else { "ies" },
+                        datadir::LEGACY_IDENTIFIER,
+                        adopted.kept.len(),
+                    );
+                }
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

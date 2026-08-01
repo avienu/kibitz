@@ -9,14 +9,14 @@ point along this list.
 
 ## 1. Identity (bundle ID final; mail pending)
 
-- [x] Bundle identifier finalized: **`org.kibitzchess.app`**
+- [x] Bundle identifier finalized: **`org.kibitzchess.kibitz`**
       (kibitzchess.org secured; set in `app/src-tauri/tauri.conf.json`
       only — commit 350350e).
 - [ ] Set up `contact@kibitzchess.org` mail forwarding **before release**
       (registrar/DNS forwarding to the maintainer inbox; this address is
       the UA contact default and will receive notarization and user
       mail).
-- [ ] After the first signed build: verify `org.kibitzchess.app` appears
+- [ ] After the first signed build: verify `org.kibitzchess.kibitz` appears
       consistently across signing/notarization artifacts —
       `codesign -dv Kibitz.app` (Identifier), the notarytool submission
       log, and the stapled ticket (`xcrun stapler validate`).
@@ -32,21 +32,35 @@ point along this list.
       Certificates → Create → Developer ID Application with a local CSR).
       It lands in the login keychain; export a `.p12` with a strong
       password into the password manager.
-- [ ] Create an **app-specific password** for notarization:
-      account.apple.com → Sign-In and Security → App-Specific Passwords.
-      Store it in the password manager.
-- [ ] Set the four core secrets (GitHub → repo → Settings → Secrets →
-      Actions; same names in the local shell for the
-      `scripts/release/*.sh` scripts):
-      1. `APPLE_ID` — Apple account email
-      2. `APPLE_TEAM_ID` — the Team ID from enrollment
-      3. `APPLE_APP_PASSWORD` — the app-specific password
-      4. `APPLE_CERT_IDENTITY` — the identity string, e.g.
+- [ ] **Back the `.p12` up before doing anything else.** The private key
+      exists only in the login keychain until it is exported. Lose it and
+      the same identity can never sign again — for Developer ID that means
+      every existing user gets a fresh Gatekeeper prompt on the next
+      update. Password manager plus a second, offline vault.
+- [ ] Notarization credential — **App Store Connect API key preferred**
+      (revocable on its own, no account password in CI):
+      App Store Connect → Users and Access → Integrations → App Store
+      Connect API → “+”, Developer access. Apple serves the `.p8` ONCE;
+      losing it means issuing a new key.
+      - `APPLE_API_ISSUER` — the Issuer ID (a UUID, one per team)
+      - `APPLE_API_KEY` — the Key ID (10 characters)
+      - `APPLE_API_KEY_P8` — base64 of the `.p8`:
+        `base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy`
+      The older route still works if the key ones are absent: `APPLE_ID`,
+      `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (app-specific password from
+      account.apple.com → Sign-In and Security).
+- [ ] Set the codesigning secrets (GitHub → repo → Settings → Secrets →
+      Actions):
+      1. `APPLE_CERTIFICATE` — base64 of the exported `.p12`:
+         `base64 -i cert.p12 | pbcopy`
+      2. `APPLE_CERTIFICATE_PASSWORD` — the `.p12` password
+      3. `APPLE_SIGNING_IDENTITY` — the identity string, e.g.
          `Developer ID Application: <Name> (<TEAMID>)`
-- [ ] For CI-side codesigning additionally set:
-      `APPLE_CERTIFICATE` (base64 of the exported `.p12`:
-      `base64 -i cert.p12 | pbcopy`), `APPLE_CERTIFICATE_PASSWORD`, and
-      `APPLE_SIGNING_IDENTITY` (same value as `APPLE_CERT_IDENTITY`).
+      `APPLE_CERT_IDENTITY` is the same string, for the local
+      `scripts/release/*.sh` scripts.
+- [ ] Sanity: the release build FAILS if `APPLE_CERTIFICATE` is set with
+      no notarization credential. That is deliberate — Gatekeeper treats a
+      signed, un-notarized app worse than an unsigned one.
 - [ ] Verify: `scripts/release/sign_mac.sh --dry-run` and
       `notarize_mac.sh --dry-run` now report OK instead of SKIP.
 

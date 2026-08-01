@@ -49,6 +49,22 @@ pub(crate) fn recall_db_path(dir: &Path) -> Option<String> {
     Some(parsed.last_db)
 }
 
+/// Rewrite a remembered database path that still points inside `from`, so
+/// it names the same file under `to`. Best-effort: no session file, an
+/// unreadable one, or a path that lives elsewhere all leave it untouched.
+pub(crate) fn repoint_remembered_db(config_dir: &Path, from: &Path, to: &Path) {
+    let Some(old) = recall_db_path(config_dir) else {
+        return;
+    };
+    let Ok(rest) = Path::new(&old).strip_prefix(from) else {
+        return;
+    };
+    let moved = to.join(rest);
+    if let Err(e) = remember_db_path(config_dir, &moved.to_string_lossy()) {
+        eprintln!("session: could not repoint the remembered database: {e}");
+    }
+}
+
 /// Config dir for this app (wrapped so commands share one resolution).
 fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
