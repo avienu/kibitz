@@ -7,6 +7,23 @@ scripted and verified. CI skips signing cleanly until the secrets in
 items 2–3 exist, so releases can be cut (clearly marked unsigned) at any
 point along this list.
 
+## How this list fails you
+
+Every signing failure met so far reported something true about the wrong
+layer. None was a wrong message; none pointed at its fix:
+
+| What it said | What was actually wrong |
+|---|---|
+| `0 valid identities found` | Apple's intermediates missing, so the certificate was untrusted — and an untrusted certificate is not an identity |
+| `certificate ... does not match provided identity` | the `.p12` held `Apple Distribution` instead of `Developer ID Application` |
+| `Invalid symbol 37, offset 348` | a `%` copied out of a terminal along with the key |
+
+So when a step here fails, do not start from the message's own layer.
+Check what it presupposes: that the certificate is trusted, that it is
+the right *kind* of certificate, that a secret holds exactly the bytes of
+the file it came from. The steps below name those preconditions because
+each one has already cost an hour.
+
 ## 1. Identity (bundle ID final; mail pending)
 
 - [x] Bundle identifier finalized: **`org.kibitzchess.kibitz`**
