@@ -46,6 +46,18 @@ point along this list.
       Certificates → Create → Developer ID Application with a local CSR).
       It lands in the login keychain; export a `.p12` with a strong
       password into the password manager.
+
+      **Export the one whose name begins `Developer ID Application:`.**
+      If the team has ever touched App Store distribution there will also
+      be an `Apple Distribution:` certificate, sitting right beside it in
+      Keychain Access, carrying the same organization name and looking
+      equally correct. It is for the App Store and ad-hoc builds; a
+      direct-download app signed with it is rejected outright. The
+      bundler catches the mismatch — `certificate from APPLE_CERTIFICATE
+      "Apple Distribution: ..." does not match provided identity` — but
+      only after a full release build (2026-08-01: it did).
+      `security find-identity -v -p codesigning` lists every identity;
+      read the whole list, not the count.
 - [ ] **Back the `.p12` up before doing anything else.** The private key
       exists only in the login keychain until it is exported. Lose it and
       the same identity can never sign again — for Developer ID that means
@@ -85,6 +97,13 @@ point along this list.
 - [ ] Store private key + password in the password manager (plus a
       second-vault backup). **NEVER committed**; delete stray plaintext
       copies. Losing it strands every install on its version.
+- [ ] Set `TAURI_SIGNING_PRIVATE_KEY` **from the file, never from a
+      terminal window**: `pbcopy < ~/.tauri/kibitz-updater.key`. Copying
+      what the terminal displays picks up zsh's `%` end-of-partial-line
+      marker, and the build fails at bundle time with `failed to decode
+      base64 secret key: Invalid symbol 37` — symbol 37 being that `%`,
+      reported at its offset with no hint of where it came from
+      (2026-08-01: it did).
 - [ ] Paste the public key over the `TODO-UPDATER-PUBKEY` placeholder in
       `app/src-tauri/tauri.conf.json` → `plugins.updater.pubkey`; commit.
       (The Settings → Updates row stops saying "not configured" from the
