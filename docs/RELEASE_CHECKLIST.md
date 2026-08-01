@@ -26,6 +26,20 @@ point along this list.
 - [ ] Enroll the maintainer Apple ID in the Apple Developer Program
       (developer.apple.com/enroll, $99/yr; sole proprietor is fine).
       Note the 10-character **Team ID**.
+- [ ] **Install the Apple intermediate certificates FIRST**, from
+      https://www.apple.com/certificateauthority/ — the *Worldwide
+      Developer Relations* intermediate AND the *Developer ID* one.
+      Download, double-click, done.
+
+      Skipping this costs an hour and gives you no way to spend it well.
+      A Developer ID certificate that imports perfectly will still leave
+      `security find-identity -v -p codesigning` reporting
+      `0 valid identities found`, because without the intermediate the
+      chain to Apple's root is broken and an untrusted certificate is not
+      a valid identity. The message is accurate and names the wrong
+      layer: nothing in it mentions trust, the chain, or intermediates,
+      and the certificate is plainly right there in Keychain Access.
+      (2026-08-01: this is exactly what happened.)
 - [ ] Create a **Developer ID Application** certificate:
       Xcode → Settings → Accounts → Manage Certificates → “+” →
       Developer ID Application (or developer.apple.com/account →
