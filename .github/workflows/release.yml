@@ -31,26 +31,31 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The build matrix is GENERATED from .github/release-targets.json, which
+  # is also what the release is verified against. One declaration drives
+  # both, so a target cannot be built without being required, or required
+  # without being built.
+  plan:
+    name: Declared targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: |
+          set -euo pipefail
+          matrix=$(jq -c '{include: .targets}' .github/release-targets.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          jq -r '.targets[] | "  \(.label)  ->  \(.requires | join(", "))"' \
+            .github/release-targets.json >> "$GITHUB_STEP_SUMMARY"
+
   bundle:
     name: Bundle (${{ matrix.name }})
+    needs: plan
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # `bundles` is explicit per platform: tauri.conf's targets are
-          # the macOS ones, so Windows and Linux must name their own or a
-          # release quietly ships without them — which is how every
-          # release so far had no Windows build at all, while the tester
-          # workflow did (testbuild.yml, --bundles nsis,msi).
-          - name: macos-aarch64
-            os: macos-latest # Apple Silicon runner; arm64-first (docs/RELEASING.md)
-            bundles: app,dmg
-          - name: linux-x86_64
-            os: ubuntu-22.04
-            bundles: appimage,deb
-          - name: windows-x86_64
-            os: windows-latest
-            bundles: nsis,msi
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     # Every step here is bash; on the Windows runner that is git-bash.
     defaults:
@@ -158,13 +163,15 @@ jobs:
           # GITHUB_ENV — whichever of the two routes was configured.
           UPDATER: ${{ steps.gate.outputs.updater }}
           BUNDLES: ${{ matrix.bundles }}
+          RUST_TARGET: ${{ matrix.rust_target }}
         run: |
+          set -euo pipefail
+          rustup target add "$RUST_TARGET"
+          args=(--bundles "$BUNDLES" --target "$RUST_TARGET")
           if [ "$UPDATER" = "true" ]; then
-            npm run tauri build -- --bundles "$BUNDLES" \
-              --config '{"bundle":{"createUpdaterArtifacts":true}}'
-          else
-            npm run tauri build -- --bundles "$BUNDLES"
+            args+=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
           fi
+          npm run tauri build -- "${args[@]}"
 
       # Tauri notarizes and staples the .app, then builds the .dmg AROUND
       # the stapled app and stops there — the disk image itself is signed
@@ -177,7 +184,9 @@ jobs:
         if: runner.os == 'macOS' && steps.gate.outputs.applesign == 'true'
         run: |
           set -euo pipefail
-          dmg=$(find app/src-tauri/target/release/bundle/dmg -name '*.dmg' -maxdepth 1 | head -1)
+          # --target puts the bundle under target/<triple>/release/…, so
+          # search rather than assume the plain path.
+          dmg=$(find app/src-tauri/target -path '*/release/bundle/dmg/*.dmg' | head -1)
           if [ -z "$dmg" ]; then
             echo "::error::signing is on but no .dmg was produced"
             exit 1
@@ -198,7 +207,7 @@ jobs:
         if: runner.os == 'macOS' && steps.gate.outputs.applesign == 'true'
         run: |
           set -euo pipefail
-          dmg=$(find app/src-tauri/target/release/bundle/dmg -name '*.dmg' -maxdepth 1 | head -1)
+          dmg=$(find app/src-tauri/target -path '*/release/bundle/dmg/*.dmg' | head -1)
           xcrun stapler validate "$dmg"
           spctl -a -vvv -t open --context context:primary-signature "$dmg"
           hdiutil attach "$dmg" -nobrowse -readonly -mountpoint /tmp/kibitz-verify
@@ -211,11 +220,11 @@ jobs:
       - name: Collect bundles
         run: |
           mkdir -p dist-bundles
-          BUNDLE_DIR=app/src-tauri/target/release/bundle
+          BUNDLE_DIR=app/src-tauri/target
           # macOS: .dmg always; .app.tar.gz(.sig) exist only on signed builds.
           # Linux: .AppImage(+.sig) and .deb.  Windows: .msi and the NSIS
           # setup .exe, plus their updater signatures.
-          find "$BUNDLE_DIR" -maxdepth 2 -type f \
+          find "$BUNDLE_DIR" -type f -path '*/release/bundle/*' \
             \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
                -o -name '*.AppImage' -o -name '*.AppImage.sig' -o -name '*.deb' \
                -o -name '*.msi' -o -name '*.msi.sig' \
@@ -247,25 +256,23 @@ jobs:
       # green check that existed. So the release asserts what it is FOR —
       # one installer per platform we claim to support — and refuses to
       # publish a release that quietly drops one.
-      - name: Every supported platform is present
+      - name: Every declared target is present
         run: |
           set -euo pipefail
-          missing=""
-          for want in '*.dmg:macOS' '*.msi:Windows' '*.AppImage:Linux' '*.deb:Linux (deb)'; do
-            pat="${want%%:*}"; label="${want##*:}"
-            found=$(find dist -type f -name "$pat" | head -1)
+          missing=0
+          while IFS=$'\t' read -r label pattern; do
+            found=$(find dist -type f -name "$pattern" | head -1)
             if [ -z "$found" ]; then
-              missing="$missing $label($pat)"
+              echo "::error::$label: nothing matching '$pattern'. It is in \
+          .github/release-targets.json, so this release claims to support it and does \
+          not build it. Fix the target or drop the claim — do not publish the gap."
+              missing=1
             else
               echo "  ok  $label -> $(basename "$found")"
             fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::release is missing:$missing — a platform vanished from the \
-          bundle matrix. Fix the matrix rather than publishing a release that has no \
-          build for it."
-            exit 1
-          fi
+          done < <(jq -r '.targets[] | . as $t | $t.requires[] | [$t.label, .] | @tsv' \
+                     .github/release-targets.json)
+          [ "$missing" -eq 0 ]
 
       - name: Detect updater key
         id: gate

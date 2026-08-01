@@ -1,0 +1,56 @@
+{
+  "$comment": [
+    "THE declared support set. Every target Kibitz claims to support is a",
+    "row here, and this file — not the build matrix — decides what a",
+    "release must contain. The matrix is generated from it and the release",
+    "is verified against it, so a target cannot be built without being",
+    "required, or required without being built.",
+    "",
+    "Why it lives outside the workflow: on 2026-08-01 the matrix carried a",
+    "comment stating that every entry must name its own bundles, in a",
+    "matrix that had no Windows entry at all. The rule was correct and the",
+    "enumeration it described was incomplete, so it validated only the",
+    "members already present. A guard derived from the same list it is",
+    "meant to police repeats that. Adding a platform means adding it HERE,",
+    "and the pipeline follows.",
+    "",
+    "`requires` are globs matched against the collected artifacts; every",
+    "one must be present or the release refuses to publish. Architecture is",
+    "part of a target, not a detail of one: macOS ships two DMGs because an",
+    "Intel Mac cannot run the Apple Silicon build."
+  ],
+  "targets": [
+    {
+      "name": "macos-aarch64",
+      "label": "macOS · Apple Silicon",
+      "os": "macos-latest",
+      "bundles": "app,dmg",
+      "rust_target": "aarch64-apple-darwin",
+      "requires": ["*aarch64.dmg"]
+    },
+    {
+      "name": "macos-x86_64",
+      "label": "macOS · Intel",
+      "os": "macos-latest",
+      "bundles": "app,dmg",
+      "rust_target": "x86_64-apple-darwin",
+      "requires": ["*x64.dmg"]
+    },
+    {
+      "name": "linux-x86_64",
+      "label": "Linux · x86-64",
+      "os": "ubuntu-22.04",
+      "bundles": "appimage,deb",
+      "rust_target": "x86_64-unknown-linux-gnu",
+      "requires": ["*amd64.AppImage", "*amd64.deb"]
+    },
+    {
+      "name": "windows-x86_64",
+      "label": "Windows · 64-bit",
+      "os": "windows-latest",
+      "bundles": "nsis,msi",
+      "rust_target": "x86_64-pc-windows-msvc",
+      "requires": ["*x64_en-US.msi", "*x64-setup.exe"]
+    }
+  ]
+}
