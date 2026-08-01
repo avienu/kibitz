@@ -150,6 +150,48 @@ jobs:
             npm run tauri build
           fi
 
+      # Tauri notarizes and staples the .app, then builds the .dmg AROUND
+      # the stapled app and stops there — the disk image itself is signed
+      # but never submitted. Gatekeeper judges what the user double-clicks,
+      # and that is the .dmg: unnotarized, it is refused even online, since
+      # Apple has no record of its hash. Verified on v0.1.0-test2, which
+      # passed every app-level check and would still have warned every
+      # friend who downloaded it.
+      - name: Notarize and staple the disk image (macOS)
+        if: runner.os == 'macOS' && steps.gate.outputs.applesign == 'true'
+        run: |
+          set -euo pipefail
+          dmg=$(find app/src-tauri/target/release/bundle/dmg -name '*.dmg' -maxdepth 1 | head -1)
+          if [ -z "$dmg" ]; then
+            echo "::error::signing is on but no .dmg was produced"
+            exit 1
+          fi
+          if [ -n "${APPLE_API_KEY_PATH:-}" ]; then
+            xcrun notarytool submit "$dmg" --wait \
+              --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER"
+          else
+            xcrun notarytool submit "$dmg" --wait \
+              --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID"
+          fi
+          xcrun stapler staple "$dmg"
+
+      # Verify the artifact, not the exit code. Both checks are what a
+      # friend's Mac does on a first launch with no network: the ticket
+      # must be IN the file, and Gatekeeper must accept it from there.
+      - name: Verify the signed disk image (macOS)
+        if: runner.os == 'macOS' && steps.gate.outputs.applesign == 'true'
+        run: |
+          set -euo pipefail
+          dmg=$(find app/src-tauri/target/release/bundle/dmg -name '*.dmg' -maxdepth 1 | head -1)
+          xcrun stapler validate "$dmg"
+          spctl -a -vvv -t open --context context:primary-signature "$dmg"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint /tmp/kibitz-verify
+          app=$(find /tmp/kibitz-verify -maxdepth 1 -name '*.app' | head -1)
+          codesign -dv --verbose=4 "$app"
+          xcrun stapler validate "$app"
+          spctl -a -vvv -t install "$app"
+          hdiutil detach /tmp/kibitz-verify
+
       - name: Collect bundles
         run: |
           mkdir -p dist-bundles
