@@ -136,7 +136,13 @@ describe("triageSummary and captions", () => {
     expect(itemCaption("gap", item({ opponentSan: "c5" }))).toBe(
       "opponent played c5 — no card after it",
     );
-    expect(itemCaption("frontier", item({}))).toBe("your book ends here");
+    // A frontier's fen is the position AFTER the user's last carded move,
+    // so the side to move there is the opponent — the caption has to name
+    // the move the book ended on and whose turn it now is, or "ends here"
+    // reads as if the problem were the user's own move.
+    expect(itemCaption("frontier", item({ line: "1. e4 c5" }))).toBe(
+      "your book ends after 1... c5 — no card for anything White plays next",
+    );
   });
 
   it("never says '0 games' for a skipped color — it says why", () => {

@@ -333,6 +333,17 @@ export function numberedSan(fen: string, san: string): string {
   return fenStm(fen) === "w" ? `${moveNo}. ${san}` : `${moveNo}... ${san}`;
 }
 
+/** Number the user's last carded move of a frontier line. `item.fen` is
+ * the position AFTER it, so the side to move there is the OPPONENT, and
+ * the move number has already advanced when that side is White. */
+export function lastBookMoveLabel(item: TriageItem): string {
+  const san = lineSans(item.line).at(-1);
+  if (!san) return "the start";
+  const fields = item.fen.split(" ");
+  const moveNo = Number.parseInt(fields[5] ?? "1", 10) || 1;
+  return fields[1] === "b" ? `${moveNo}. ${san}` : `${moveNo - 1}... ${san}`;
+}
+
 /** Number the opponent move a gap records (`fen` is the position AFTER
  * it, user to move): after 1.d4 → "1. d4"; after 1.e4 c5 → "1... c5". */
 export function opponentMoveLabel(item: TriageItem): string {
@@ -409,6 +420,8 @@ export function itemCaption(kind: "deviation" | "gap" | "frontier", item: Triage
     case "gap":
       return `opponent played ${item.opponentSan ?? "?"} — no card after it`;
     case "frontier":
-      return "your book ends here";
+      return `your book ends after ${lastBookMoveLabel(item)} — no card for anything ${
+        fenStm(item.fen) === "w" ? "White" : "Black"
+      } plays next`;
   }
 }

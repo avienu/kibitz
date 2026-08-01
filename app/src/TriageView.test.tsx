@@ -151,7 +151,7 @@ describe("TriageLists", () => {
     ]);
     expect(container.textContent).toContain("book: Bb5 — played Bc4");
     expect(container.textContent).toContain("opponent played c5 — no card after it");
-    expect(container.textContent).toContain("your book ends here");
+    expect(container.textContent).toContain("your book ends after");
     // Frequency badge and rank order.
     const gapRows = [...container.querySelectorAll(".triage-row")].filter((r) =>
       r.textContent?.includes("opponent played"),
@@ -315,7 +315,7 @@ describe("TriageView — card-less color suggestion flow", () => {
       ),
     );
     // The automatic re-run lands on actual triage points.
-    await waitFor(() => expect(container.textContent).toContain("your book ends here"));
+    await waitFor(() => expect(container.textContent).toContain("your book ends after"));
     expect(container.textContent).not.toContain("No White repertoire yet");
   });
 
