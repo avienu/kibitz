@@ -589,7 +589,6 @@ pub fn triage_report(
     // — it is their real repertoire. Mark it and attach what they actually
     // play from there (inference rooted after the played move, over the
     // same cohort). Still a static walk — no engine (CLAUDE.md #6).
-    let mut theory: Option<HashSet<u64>> = None;
     for ((is_white, class, hash), agg) in aggs.iter_mut() {
         if *class != Class::Deviation {
             continue;
@@ -614,19 +613,10 @@ pub fn triage_report(
         // The panel names the dominant move, not whichever example
         // happened to aggregate first.
         agg.played_san = Some(dom_san.clone());
-        if theory.is_none() {
-            theory = Some(crate::fingerprint::theory_set(conn)?);
-        }
         let mut prefix = line_sans(&agg.line);
         prefix.push(dom_san);
         let games = if *is_white { &cohort.0 } else { &cohort.1 };
-        let mut lines = infer_lines_from(
-            &prefix,
-            *is_white,
-            games,
-            theory.as_ref().expect("just filled"),
-            &InferOptions::default(),
-        )?;
+        let mut lines = infer_lines_from(&prefix, *is_white, games, &InferOptions::default())?;
         name_lines(conn, &mut lines)?;
         agg.inferred = lines;
     }
@@ -952,24 +942,26 @@ fn score_pct(points: f64, scored: u32) -> f64 {
     }
 }
 
-/// Pure inference over decoded games: build the tree of in-book opening
-/// prefixes (a position is in book when its `theory` membership holds —
-/// the same bundled-dataset test the Opening Lab uses; the first move
-/// producing an out-of-book position ends a game's contribution), then
-/// emit every branch the games support. A line ends where the book ends,
-/// where support thins below `min_games`, or at the ply cap — and then
-/// always on a move of `user_is_white`'s own, since a repertoire line that
-/// stops on the opponent's move names no answer (see [`settled_answer`]).
-/// ECO naming is left to the caller. Rooted at the standard start; see
-/// [`infer_lines_from`] for an arbitrary root.
+/// A branch is worth its own row in the list only while it carries this
+/// share of the games at the root. Walked alongside the fully detailed
+/// pass, it keeps the main answer on screen — "vs 2.Bf4 you play 2...e6",
+/// 19 games — when what follows fans out into 3-game tails.
+const TRUNK_SHARE: u32 = 10;
+/// Pure inference over decoded games: build the tree of the opening
+/// prefixes the games actually repeat, then emit every branch they
+/// support. A line ends where support thins below `min_games` or at the
+/// ply cap — and then always on a move of `user_is_white`'s own, since a
+/// repertoire line that stops on the opponent's move names no answer (see
+/// [`settled_answer`]). What the games repeat is the only test: the
+/// bundled openings dataset names lines, it does not decide which of them
+/// are yours, so it is left to the caller for ECO naming alone. Rooted at
+/// the standard start; see [`infer_lines_from`] for an arbitrary root.
 pub fn infer_lines(
     user_is_white: bool,
     games: &[InferGame],
-    theory: &HashSet<u64>,
     opts: &InferOptions,
 ) -> Vec<InferredLine> {
-    infer_lines_from(&[], user_is_white, games, theory, opts)
-        .expect("an empty prefix always parses")
+    infer_lines_from(&[], user_is_white, games, opts).expect("an empty prefix always parses")
 }
 
 /// [`infer_lines`] rooted mid-line: `prefix` is the SAN path from the
@@ -986,7 +978,6 @@ pub fn infer_lines_from(
     prefix: &[String],
     user_is_white: bool,
     games: &[InferGame],
-    theory: &HashSet<u64>,
     opts: &InferOptions,
 ) -> anyhow::Result<Vec<InferredLine>> {
     let mut root = Board::default();
@@ -997,7 +988,7 @@ pub fn infer_lines_from(
         root.play(mv);
     }
 
-    // Trie over the games' in-book continuations (node 0 = the root).
+    // Trie over the games' continuations (node 0 = the root).
     let mut nodes: Vec<InferNode> = vec![InferNode::default()];
     for g in games {
         if g.moves.len() < prefix_moves.len() || g.moves[..prefix_moves.len()] != prefix_moves[..] {
@@ -1027,13 +1018,10 @@ pub fn infer_lines_from(
                 nodes[cur].points += p;
                 nodes[cur].scored += 1;
             }
-            // A move that leaves the book — or that hits the ply cap — is
-            // recorded and then ends this game's contribution. Recording it
-            // is what lets a line still close on the user's own move: their
-            // answer routinely leaves the named-openings dataset (1.d4 Nf6
-            // 2.Bf4 e6 has no ECO row and is 19 of 20 games).
-            nodes[cur].followable =
-                theory.contains(&position_hash(&board)) && i + 1 < opts.max_plies;
+            // The move that hits the ply cap is recorded and then ends this
+            // game's contribution. Recording it is what lets a line still
+            // close on the user's own move.
+            nodes[cur].followable = i + 1 < opts.max_plies;
             if !nodes[cur].followable {
                 break;
             }
@@ -1044,66 +1032,83 @@ pub fn infer_lines_from(
     // must not stop here when the answer is the user's to give.
     let user_to_move = |plies: usize| ((prefix_moves.len() + plies) % 2 == 0) == user_is_white;
 
-    // Walk the min-support-pruned trie; leaves are the inferred lines.
-    // Path entries carry their node so a trimmed line can report the stats
-    // of the position it actually ends on.
-    let mut out: Vec<InferredLine> = Vec::new();
-    let mut stack: Vec<Vec<(String, usize)>> = vec![Vec::new()];
-    while let Some(mut path) = stack.pop() {
-        let idx = path.last().map_or(0, |&(_, i)| i);
-        let followed: Vec<(String, usize)> = nodes[idx]
-            .children
-            .iter()
-            .filter(|(_, c)| nodes[*c].followable && nodes[*c].games >= opts.min_games)
-            .cloned()
-            .collect();
-        if !followed.is_empty() {
-            for (san, child) in followed {
-                let mut p = path.clone();
-                p.push((san, child));
-                stack.push(p);
+    // Walk the support-pruned trie; leaves are the inferred lines. Path
+    // entries carry their node so a trimmed line can report the stats of
+    // the position it actually ends on.
+    let walk = |floor: u32, out: &mut Vec<InferredLine>| {
+        let mut stack: Vec<Vec<(String, usize)>> = vec![Vec::new()];
+        while let Some(mut path) = stack.pop() {
+            let idx = path.last().map_or(0, |&(_, i)| i);
+            let followed: Vec<(String, usize)> = nodes[idx]
+                .children
+                .iter()
+                .filter(|(_, c)| nodes[*c].followable && nodes[*c].games >= floor)
+                .cloned()
+                .collect();
+            if !followed.is_empty() {
+                for (san, child) in followed {
+                    let mut p = path.clone();
+                    p.push((san, child));
+                    stack.push(p);
+                }
+                continue;
             }
-            continue;
-        }
-        // The bare-prefix fallback only exists for a rooted call.
-        let bare_root = path.is_empty() && !prefix.is_empty() && nodes[idx].games >= opts.min_games;
-        if path.is_empty() && !bare_root {
-            continue;
-        }
-        // A repertoire line names what the USER plays, so it has to end on
-        // one of their moves: stopping where it is their turn (…2.Bf4, and
-        // now what?) teaches nothing. Close it with the answer their games
-        // settle on, or fall back to the last move that was theirs.
-        if user_to_move(path.len()) {
-            match settled_answer(&nodes, idx, opts.min_games) {
-                Some(answer) => path.push(answer),
-                None => {
-                    path.pop();
-                    if path.is_empty() && prefix.is_empty() {
-                        continue; // nothing of the user's left to teach
+            // The bare-prefix fallback only exists for a rooted call.
+            let bare_root =
+                path.is_empty() && !prefix.is_empty() && nodes[idx].games >= opts.min_games;
+            if path.is_empty() && !bare_root {
+                continue;
+            }
+            // A repertoire line names what the USER plays, so it has to end
+            // on one of their moves: stopping where it is their turn (…2.Bf4,
+            // and now what?) teaches nothing. Close it with the answer their
+            // games settle on, or fall back to the last move that was theirs.
+            if user_to_move(path.len()) {
+                match settled_answer(&nodes, idx, opts.min_games) {
+                    Some(answer) => path.push(answer),
+                    None => {
+                        path.pop();
+                        if path.is_empty() && prefix.is_empty() {
+                            continue; // nothing of the user's left to teach
+                        }
                     }
                 }
             }
+            let end = path.last().map_or(0, |&(_, i)| i);
+            let mut sans = prefix.to_vec();
+            sans.extend(path.into_iter().map(|(san, _)| san));
+            out.push(InferredLine {
+                sans,
+                games: nodes[end].games,
+                score: score_pct(nodes[end].points, nodes[end].scored),
+                eco: None,
+                opening_name: None,
+            });
         }
-        let end = path.last().map_or(0, |&(_, i)| i);
-        let mut sans = prefix.to_vec();
-        sans.extend(path.into_iter().map(|(san, _)| san));
-        out.push(InferredLine {
-            sans,
-            games: nodes[end].games,
-            score: score_pct(nodes[end].points, nodes[end].scored),
-            eco: None,
-            opening_name: None,
-        });
+    };
+
+    // Two passes over the one trie. The trunk pass answers "what do you
+    // play against each of their real tries"; the detailed pass fills in
+    // the depth below those answers. Without the trunk pass a fanned-out
+    // opening spends the whole list on its own 3-game tails and its main
+    // line never appears; without the detailed pass the small branches the
+    // trunk floor prunes lose their coverage entirely.
+    let mut out: Vec<InferredLine> = Vec::new();
+    let trunk_floor = (nodes[0].games / TRUNK_SHARE).max(opts.min_games);
+    if trunk_floor > opts.min_games {
+        walk(trunk_floor, &mut out);
     }
+    walk(opts.min_games, &mut out);
     out.sort_by(|a, b| {
         b.games
             .cmp(&a.games)
             .then(a.sans.len().cmp(&b.sans.len()))
             .then(a.sans.cmp(&b.sans))
     });
-    // Sibling branches trimmed back to their shared last user move land on
-    // the same line, with the same stats — so equals sort adjacent.
+    // Both passes reach the same line wherever nothing below it clears the
+    // trunk floor, and sibling branches trimmed back to their shared last
+    // user move land on it too — always with the same stats, so equals
+    // sort adjacent.
     out.dedup_by(|a, b| a.sans == b.sans);
     out.truncate(opts.max_lines);
     Ok(out)
@@ -1209,11 +1214,10 @@ pub fn infer_repertoire(
     opts: &InferOptions,
 ) -> anyhow::Result<InferredRepertoire> {
     let is_white = parse_infer_color(color)?;
-    let theory = crate::fingerprint::theory_set(conn)?;
     let games = infer_cohort(conn, player, is_white, opts.max_games)?;
     let games_scanned = games.len() as u32;
 
-    let mut lines = infer_lines(is_white, &games, &theory, opts);
+    let mut lines = infer_lines(is_white, &games, opts);
     name_lines(conn, &mut lines)?;
 
     Ok(InferredRepertoire {
@@ -1237,7 +1241,6 @@ pub fn infer_from(
     opts: &InferOptions,
 ) -> anyhow::Result<InferredRepertoire> {
     let is_white = parse_infer_color(color)?;
-    let theory = crate::fingerprint::theory_set(conn)?;
     let games = infer_cohort(conn, player, is_white, opts.max_games)?;
 
     let mut board = Board::default();
@@ -1254,7 +1257,7 @@ pub fn infer_from(
         })
         .count() as u32;
 
-    let mut lines = infer_lines_from(prefix, is_white, &games, &theory, opts)?;
+    let mut lines = infer_lines_from(prefix, is_white, &games, opts)?;
     name_lines(conn, &mut lines)?;
 
     Ok(InferredRepertoire {
@@ -1690,22 +1693,6 @@ mod tests {
 
     // ---- repertoire inference ----
 
-    /// Theory set from explicit "book lines": every position after every
-    /// prefix of every line — the Opening Lab's test convention, fully
-    /// under test control.
-    fn theory_of(lines: &[&[&str]]) -> HashSet<u64> {
-        let mut set = HashSet::new();
-        for line in lines {
-            let mut board = Board::default();
-            for san in line.iter() {
-                let mv = crate::san::parse_san(&board, san).unwrap();
-                board.play(mv);
-                set.insert(position_hash(&board));
-            }
-        }
-        set
-    }
-
     fn infer_game(sans: &[&str], points: Option<f64>) -> InferGame {
         let (_, moves) = play_sans(sans);
         InferGame { moves, points }
@@ -1717,21 +1704,14 @@ mod tests {
 
     #[test]
     fn infer_lines_counts_scores_branches_and_prunes_by_support() {
-        let theory = theory_of(&[
-            &["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4"],
-            &["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"],
-            &["e4", "c5", "Nf3", "d6", "d4", "cxd4"],
-        ]);
         let games = vec![
-            // Ruy twice through 4.Ba4 (one with an off-book tail: 4...b5
-            // leaves the test theory, so nothing after Ba4 contributes).
+            // Ruy twice through 4.Ba4, once continuing 4...b5.
             infer_game(
                 &["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "b5"],
                 Some(1.0),
             ),
             infer_game(&["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4"], Some(0.5)),
-            // Berlin: 3...Nf6 is outside the test theory — the game's
-            // contribution ends after 3.Bb5.
+            // Berlin once: splits Black's reply to 3.Bb5 two ways.
             infer_game(&["e4", "e5", "Nf3", "Nc6", "Bb5", "Nf6"], Some(0.0)),
             // Italian once: below any min_games ≥ 2.
             infer_game(&["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"], Some(1.0)),
@@ -1739,7 +1719,7 @@ mod tests {
             infer_game(&["e4", "c5", "Nf3", "d6"], Some(1.0)),
             infer_game(&["e4", "c5", "Nf3", "d6"], Some(0.5)),
             infer_game(&["e4", "c5", "Nf3", "d6"], None),
-            // Entirely out of the test theory: contributes nothing.
+            // A single 1.d4 game: below any min_games ≥ 2.
             infer_game(&["d4", "d5"], Some(1.0)),
         ];
 
@@ -1748,7 +1728,7 @@ mod tests {
         // games end — and since they end on BLACK's ...d6, the line the
         // user gets back stops on their own 3.Nf3.
         let opts = InferOptions::default();
-        let lines = infer_lines(true, &games, &theory, &opts);
+        let lines = infer_lines(true, &games, &opts);
         assert_eq!(lines.len(), 2, "{lines:?}");
         assert_eq!(sans_of(&lines[0]), ["e4", "c5", "Nf3"]);
         assert_eq!(lines[0].games, 3);
@@ -1774,7 +1754,7 @@ mod tests {
             min_games: 2,
             ..InferOptions::default()
         };
-        let lines = infer_lines(true, &games, &theory, &opts2);
+        let lines = infer_lines(true, &games, &opts2);
         assert_eq!(lines.len(), 2);
         assert_eq!(sans_of(&lines[0]), ["e4", "c5", "Nf3"]);
         assert_eq!(
@@ -1789,13 +1769,17 @@ mod tests {
             min_games: 1,
             ..InferOptions::default()
         };
-        let lines = infer_lines(true, &games, &theory, &opts1);
-        assert_eq!(lines.len(), 3);
-        assert_eq!(sans_of(&lines[2]), ["e4", "e5", "Nf3", "Nc6", "Bc4"]);
+        let lines = infer_lines(true, &games, &opts1);
+        assert_eq!(lines.len(), 5, "{lines:?}");
+        assert_eq!(
+            sans_of(&lines[3]),
+            ["d4"],
+            "the lone 1.d4 game surfaces too"
+        );
+        assert_eq!(sans_of(&lines[4]), ["e4", "e5", "Nf3", "Nc6", "Bc4"]);
         let capped = infer_lines(
             true,
             &games,
-            &theory,
             &InferOptions {
                 min_games: 1,
                 max_lines: 2,
@@ -1811,7 +1795,6 @@ mod tests {
         let shallow = infer_lines(
             true,
             &games,
-            &theory,
             &InferOptions {
                 max_plies: 2,
                 ..InferOptions::default()
@@ -1824,7 +1807,7 @@ mod tests {
         );
 
         // No games at all: no lines, no panic.
-        assert!(infer_lines(true, &[], &theory, &opts).is_empty());
+        assert!(infer_lines(true, &[], &opts).is_empty());
     }
 
     /// Fixture games for the db-level inference: the user under two
@@ -1999,10 +1982,6 @@ mod tests {
 
     #[test]
     fn infer_lines_from_roots_filters_and_falls_back() {
-        let theory = theory_of(&[
-            &["e4", "c5", "Nf3", "d6", "d4", "cxd4"],
-            &["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4"],
-        ]);
         let games = vec![
             infer_game(&["e4", "c5", "Nf3", "d6"], Some(1.0)),
             infer_game(&["e4", "c5", "Nf3", "d6"], Some(0.0)),
@@ -2016,7 +1995,7 @@ mod tests {
         // line is FULL from the standard start (prefix + continuation) —
         // ending on White's 3.Nf3, since the games stop after ...d6 and
         // name no White answer to it.
-        let lines = infer_lines_from(&prefix, true, &games, &theory, &opts).unwrap();
+        let lines = infer_lines_from(&prefix, true, &games, &opts).unwrap();
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert_eq!(sans_of(&lines[0]), ["e4", "c5", "Nf3"]);
         assert_eq!((lines[0].games, lines[0].score), (3, 50.0));
@@ -2026,7 +2005,6 @@ mod tests {
             &prefix,
             true,
             &games,
-            &theory,
             &InferOptions {
                 max_plies: 1,
                 ..InferOptions::default()
@@ -2037,27 +2015,28 @@ mod tests {
 
         // An empty prefix is exactly infer_lines.
         assert_eq!(
-            infer_lines_from(&[], true, &games, &theory, &opts).unwrap(),
-            infer_lines(true, &games, &theory, &opts)
+            infer_lines_from(&[], true, &games, &opts).unwrap(),
+            infer_lines(true, &games, &opts)
         );
 
-        // No supported continuation but enough games at the root: the
-        // bare prefix comes back, closed with the move the games settle
-        // on — a bare "1. e4 c5" would hand White no move to make.
-        let short_theory = theory_of(&[&["e4", "c5"]]);
-        let bare = infer_lines_from(&prefix, true, &games, &short_theory, &opts).unwrap();
+        // No continuation at all, but enough games at a root that already
+        // ends on the user's move: the bare prefix comes back, since
+        // adopting it still covers the prefix moves.
+        let stops: Vec<InferGame> = (0..3)
+            .map(|_| infer_game(&["e4", "c5", "Nf3"], None))
+            .collect();
+        let root = vec!["e4".to_string(), "c5".to_string(), "Nf3".to_string()];
+        let bare = infer_lines_from(&root, true, &stops, &opts).unwrap();
         assert_eq!(bare.len(), 1, "{bare:?}");
         assert_eq!(sans_of(&bare[0]), ["e4", "c5", "Nf3"]);
         assert_eq!(bare[0].games, 3);
 
         // ...but never for an under-supported root, and a bad prefix is a
         // clean error, not a panic.
-        assert!(
-            infer_lines_from(&prefix, true, &games[..2], &short_theory, &opts)
-                .unwrap()
-                .is_empty()
-        );
-        assert!(infer_lines_from(&["zz".to_string()], true, &games, &theory, &opts).is_err());
+        assert!(infer_lines_from(&root, true, &stops[..2], &opts)
+            .unwrap()
+            .is_empty());
+        assert!(infer_lines_from(&["zz".to_string()], true, &games, &opts).is_err());
     }
 
     /// A Black repertoire line must name a BLACK move (2026-07-31 field
@@ -2066,31 +2045,24 @@ mod tests {
     /// stall on the opponent's move are covered here.
     #[test]
     fn inferred_lines_end_on_the_users_own_move() {
-        // 2.Bf4 is named; the answer 2...e6 is NOT in the dataset, which
-        // is what used to truncate the line (19 of 20 real games).
-        let theory = theory_of(&[
-            &["d4", "Nf6", "Bf4"],
-            &["d4", "Nf6", "Bg5", "Ne4"],
-            &["d4", "Nf6", "Bg5", "e6"],
-        ]);
         let games = vec![
             infer_game(&["d4", "Nf6", "Bf4", "e6"], Some(1.0)),
             infer_game(&["d4", "Nf6", "Bf4", "e6"], Some(0.0)),
             infer_game(&["d4", "Nf6", "Bf4", "e6"], Some(0.5)),
             infer_game(&["d4", "Nf6", "Bf4", "d5"], Some(1.0)),
-            // 2.Bg5: both answers stay in book, but neither reaches
-            // min_games — ...Ne4 still wins as the majority choice.
+            // 2.Bg5: neither answer reaches min_games — ...Ne4 still
+            // wins as the majority choice.
             infer_game(&["d4", "Nf6", "Bg5", "Ne4"], Some(1.0)),
             infer_game(&["d4", "Nf6", "Bg5", "Ne4"], Some(1.0)),
             infer_game(&["d4", "Nf6", "Bg5", "e6"], Some(0.0)),
         ];
         let opts = InferOptions::default();
-        let lines = infer_lines_from(&["d4".to_string()], false, &games, &theory, &opts).unwrap();
+        let lines = infer_lines_from(&["d4".to_string()], false, &games, &opts).unwrap();
 
         assert_eq!(
             sans_of(&lines[0]),
             ["d4", "Nf6", "Bf4", "e6"],
-            "the book ends at 2.Bf4, but Black's own answer still closes the line"
+            "White's replies to 2...e6 thin out, but Black's own answer still closes the line"
         );
         assert_eq!(
             (lines[0].games, lines[0].score),
@@ -2117,10 +2089,54 @@ mod tests {
             infer_game(&["d4", "Nf6", "Bg5", "Ne4"], Some(1.0)),
             infer_game(&["d4", "Nf6", "Bg5", "e6"], Some(0.0)),
         ];
-        let lines = infer_lines_from(&["d4".to_string()], false, &split, &theory, &opts).unwrap();
+        let lines = infer_lines_from(&["d4".to_string()], false, &split, &opts).unwrap();
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert_eq!(sans_of(&lines[0]), ["d4", "Nf6"]);
         assert_eq!(lines[0].games, 5);
+    }
+
+    /// The list must keep the main answer visible when the moves below it
+    /// fan out (2026-07-31): 20 games of "2.Bf4 e6" must not be pushed off
+    /// the list by its own 3-game tails.
+    #[test]
+    fn trunk_lines_survive_a_fanned_out_continuation() {
+        let mut games = Vec::new();
+        // 48 games meeting 2.Bf4 with 2...e6 — then White's third move
+        // fans out twelve ways, none of them a tenth of the cohort.
+        for w3 in [
+            "e3", "Nf3", "c3", "h3", "a3", "Nc3", "g3", "b3", "h4", "a4", "c4", "Nd2",
+        ] {
+            for _ in 0..4 {
+                games.push(infer_game(&["d4", "Nf6", "Bf4", "e6", w3, "c5"], Some(1.0)));
+            }
+        }
+        // A second, smaller try the trunk floor prunes: its coverage has to
+        // survive anyway, through the detailed pass.
+        for _ in 0..4 {
+            games.push(infer_game(&["d4", "Nf6", "Bg5", "Ne4"], Some(0.0)));
+        }
+        let opts = InferOptions {
+            max_lines: 6,
+            ..InferOptions::default()
+        };
+        let lines = infer_lines_from(&["d4".to_string()], false, &games, &opts).unwrap();
+
+        assert_eq!(
+            sans_of(&lines[0]),
+            ["d4", "Nf6", "Bf4", "e6"],
+            "the trunk leads the list: {lines:?}"
+        );
+        assert_eq!(lines[0].games, 48);
+        assert!(
+            lines
+                .iter()
+                .any(|l| sans_of(l) == ["d4", "Nf6", "Bg5", "Ne4"]),
+            "the branch under the trunk floor keeps its coverage: {lines:?}"
+        );
+        assert!(
+            lines[1..].iter().any(|l| l.sans.len() == 6),
+            "and the depth below the trunk still fills the list: {lines:?}"
+        );
     }
 
     // ---- declared-vs-played reality check (2026-07-30 field report) ----

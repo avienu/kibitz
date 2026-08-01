@@ -604,6 +604,45 @@ const fenAfter = (sans: string[]): string => {
   return r.game.fens[sans.length];
 };
 
+describe("TriageView — inferred lines read as trunk plus detail", () => {
+  it("indents a line that goes deeper into the one above and dims the shared moves", async () => {
+    vi.mocked(triageReport).mockResolvedValue(reportOf({ gamesSeen: 5 }, { gamesSeen: 1 }));
+    vi.mocked(triageInferRepertoire).mockResolvedValue({
+      player: "Infer, Ida",
+      color: "white",
+      gamesScanned: 20,
+      lines: [
+        {
+          sans: ["e4", "c5", "Nf3"],
+          games: 19,
+          score: 50,
+          eco: "B27",
+          openingName: "Sicilian Defense",
+        },
+        {
+          sans: ["e4", "c5", "Nf3", "d6", "d4"],
+          games: 4,
+          score: 50,
+          eco: null,
+          openingName: null,
+        },
+      ],
+    });
+    const { container } = renderAndRun();
+    await waitFor(() => expect(container.textContent).toContain("1. e4 c5 2. Nf3"));
+
+    const rows = container.querySelectorAll(".triage-infer-line");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].classList.contains("triage-infer-cont")).toBe(false);
+    expect(rows[1].classList.contains("triage-infer-cont")).toBe(true);
+    // The trunk's three moves are dimmed in the continuation; what is new
+    // (3...d6 4.d4) is not — and every token stays hoverable.
+    const dimmed = [...rows[1].querySelectorAll(".scrub-tok.shared")].map((t) => t.textContent);
+    expect(dimmed).toEqual(["1. e4", "c5", "2. Nf3"]);
+    expect(rows[0].querySelectorAll(".scrub-tok.shared")).toHaveLength(0);
+  });
+});
+
 describe("TriageView — hover-scrub line preview", () => {
   it("hovering an inferred line's second move drives the aside board; leave restores", async () => {
     vi.mocked(triageReport).mockResolvedValue(reportOf({ gamesSeen: 5 }, { gamesSeen: 1 }));

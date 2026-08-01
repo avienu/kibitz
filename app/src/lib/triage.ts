@@ -228,6 +228,30 @@ export function defaultTriageColor(r: TriageReport): "white" | "black" {
   return r.black.gamesSeen > r.white.gamesSeen ? "black" : "white";
 }
 
+/** How many opening moves each inferred line shares with the line it
+ * continues — 0 when it stands on its own. Inference returns the trunk
+ * ("vs 2.Bf4 you play 2...e6", 19 games) ahead of the deeper lines below
+ * it, so a continuation is any line an earlier one is a prefix of; the
+ * list draws it indented with those shared moves dimmed, and a fanned-out
+ * opening reads as one answer plus its detail instead of five near-copies.
+ * The longest matching trunk wins — the most specific one. */
+export function continuationDepths(lines: InferredLine[]): number[] {
+  return lines.map((l, i) => {
+    let shared = 0;
+    for (let j = 0; j < i; j += 1) {
+      const trunk = lines[j].sans;
+      if (
+        trunk.length > shared &&
+        trunk.length < l.sans.length &&
+        trunk.every((san, k) => san === l.sans[k])
+      ) {
+        shared = trunk.length;
+      }
+    }
+    return shared;
+  });
+}
+
 /** "6 games · 58.3% score · B90 Sicilian Defense" — the caption under an
  * inferred line. Only real data: an unnamed line omits the name part. */
 export function inferredLineLabel(l: InferredLine): string {

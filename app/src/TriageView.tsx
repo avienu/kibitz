@@ -23,6 +23,7 @@ import {
   defaultTriageColor,
   evalLabel,
   inBookGaps,
+  continuationDepths,
   inferredLineLabel,
   itemCaption,
   lineSans,
@@ -93,6 +94,74 @@ export function TriageLists({
       {section("deviation", "DEVIATIONS — YOU LEFT YOUR OWN BOOK", ct.deviations)}
       {section("gap", "GAPS — OPPONENT MOVES YOUR BOOK DOESN'T ANSWER", ct.gaps)}
       {section("frontier", "FRONTIERS — WHERE YOUR BOOK ENDS", ct.frontiers)}
+    </>
+  );
+}
+
+/** One inferred line: rank, scrubbable SAN, caption, Adopt. Lines that
+ * continue an earlier one sit indented under it with the shared opening
+ * moves dimmed — the list is a trunk plus its detail, not a wall of
+ * near-identical lines. */
+function InferLineRow({
+  line,
+  rank,
+  shared,
+  adopting,
+  onPreview,
+  onAdopt,
+}: {
+  line: InferredLine;
+  rank: number;
+  shared: number;
+  adopting: boolean;
+  onPreview: (p: ScrubPreview | null) => void;
+  onAdopt: () => void;
+}) {
+  return (
+    <div className={`triage-infer-line${shared > 0 ? " triage-infer-cont" : ""}`}>
+      <span className="triage-rank">{String(rank).padStart(2, "0")}</span>
+      <span className="triage-row-main">
+        <ScrubLine
+          className="triage-line"
+          sans={line.sans}
+          dimBefore={shared}
+          onPreview={onPreview}
+        />
+        <span className="triage-caption">{inferredLineLabel(line)}</span>
+      </span>
+      <button className="btn-secondary" disabled={adopting} onClick={onAdopt}>
+        Adopt
+      </button>
+    </div>
+  );
+}
+
+/** Render a whole inferred list, grouping continuations under trunks. */
+function InferLineList({
+  lines,
+  adopting,
+  onPreview,
+  onAdopt,
+}: {
+  lines: InferredLine[];
+  adopting: boolean;
+  onPreview: (p: ScrubPreview | null) => void;
+  onAdopt: (l: InferredLine) => void;
+}) {
+  const shared = continuationDepths(lines);
+  return (
+    <>
+      {lines.map((l, i) => (
+        <InferLineRow
+          key={l.sans.join(" ")}
+          line={l}
+          rank={i + 1}
+          shared={shared[i]}
+          adopting={adopting}
+          onPreview={onPreview}
+          onAdopt={() => onAdopt(l)}
+        />
+      ))}
     </>
   );
 }
@@ -593,7 +662,7 @@ export default function TriageView({
                     <div className="pf2-empty">
                       Walked {inferred.gamesScanned} {colorName(color)} game
                       {inferred.gamesScanned === 1 ? "" : "s"}, but no opening line repeats in
-                      enough of them to suggest (3+ games in book). Add lines from the Game view
+                      enough of them to suggest (3+ games). Add lines from the Game view
                       (&ldquo;→ repertoire&rdquo;) or import a PGN study instead.
                     </div>
                   )}
@@ -603,26 +672,12 @@ export default function TriageView({
                         No {colorName(color)} repertoire yet — but your games already show what
                         you play:
                       </div>
-                      {inferred.lines.map((l, i) => (
-                        <div className="triage-infer-line" key={l.sans.join(" ")}>
-                          <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
-                          <span className="triage-row-main">
-                            <ScrubLine
-                              className="triage-line"
-                              sans={l.sans}
-                              onPreview={setPreview}
-                            />
-                            <span className="triage-caption">{inferredLineLabel(l)}</span>
-                          </span>
-                          <button
-                            className="btn-secondary"
-                            disabled={adopting}
-                            onClick={() => void adoptInferred([l])}
-                          >
-                            Adopt
-                          </button>
-                        </div>
-                      ))}
+                      <InferLineList
+                        lines={inferred.lines}
+                        adopting={adopting}
+                        onPreview={setPreview}
+                        onAdopt={(l) => void adoptInferred([l])}
+                      />
                       <button
                         className="btn-primary"
                         disabled={adopting}
@@ -636,9 +691,10 @@ export default function TriageView({
                       </button>
                       <p className="triage-footnote">
                         Inferred from your {inferred.gamesScanned} most recent {colorName(color)}{" "}
-                        games: the tree of your in-book moves, following every branch at least 3
-                        games support. Adopting creates SRS cards from your moves and re-runs
-                        the triage automatically.
+                        games: the tree of the openings they repeat, following every branch at
+                        least 3 games support, each line ending on a move of yours. Indented
+                        lines go deeper into the line above them. Adopting creates SRS cards from
+                        your moves and re-runs the triage automatically.
                       </p>
                     </>
                   )}
@@ -648,26 +704,12 @@ export default function TriageView({
                   {realityItems.map((it) => (
                     <div className="triage-reality" key={it.fen}>
                       <div className="triage-infer-headline">{realityHeadline(it)}</div>
-                      {it.inferredLines.map((l, i) => (
-                        <div className="triage-infer-line" key={l.sans.join(" ")}>
-                          <span className="triage-rank">{String(i + 1).padStart(2, "0")}</span>
-                          <span className="triage-row-main">
-                            <ScrubLine
-                              className="triage-line"
-                              sans={l.sans}
-                              onPreview={setPreview}
-                            />
-                            <span className="triage-caption">{inferredLineLabel(l)}</span>
-                          </span>
-                          <button
-                            className="btn-secondary"
-                            disabled={adopting}
-                            onClick={() => void adoptPlayed([l])}
-                          >
-                            Adopt
-                          </button>
-                        </div>
-                      ))}
+                      <InferLineList
+                        lines={it.inferredLines}
+                        adopting={adopting}
+                        onPreview={setPreview}
+                        onAdopt={(l) => void adoptPlayed([l])}
+                      />
                       <div className="triage-reality-actions">
                         <button
                           className="btn-primary"
@@ -741,33 +783,18 @@ export default function TriageView({
                                 <div className="pf2-empty">
                                   Walked {holeInfer.inf.gamesScanned} game
                                   {holeInfer.inf.gamesScanned === 1 ? "" : "s"} here, but no line
-                                  repeats in enough of them to suggest (3+ games in book). Play
+                                  repeats in enough of them to suggest (3+ games). Play
                                   your answer on the board instead, or extend with the engine.
                                 </div>
                               )}
-                              {holeInfer.inf &&
-                                holeInfer.inf.lines.map((l, i) => (
-                                  <div className="triage-infer-line" key={l.sans.join(" ")}>
-                                    <span className="triage-rank">
-                                      {String(i + 1).padStart(2, "0")}
-                                    </span>
-                                    <span className="triage-row-main">
-                                      <ScrubLine
-                                        className="triage-line"
-                                        sans={l.sans}
-                                        onPreview={setPreview}
-                                      />
-                                      <span className="triage-caption">{inferredLineLabel(l)}</span>
-                                    </span>
-                                    <button
-                                      className="btn-secondary"
-                                      disabled={adopting}
-                                      onClick={() => void adoptInferred([l])}
-                                    >
-                                      Adopt
-                                    </button>
-                                  </div>
-                                ))}
+                              {holeInfer.inf && (
+                                <InferLineList
+                                  lines={holeInfer.inf.lines}
+                                  adopting={adopting}
+                                  onPreview={setPreview}
+                                  onAdopt={(l) => void adoptInferred([l])}
+                                />
+                              )}
                               {holeInfer.inf && holeInfer.inf.lines.length > 0 && (
                                 <button
                                   className="btn-primary"

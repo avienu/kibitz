@@ -5089,6 +5089,13 @@ button.mv-var-line:hover {
   margin-bottom: 6px;
   background: var(--panel);
 }
+/* A line that goes deeper into the one above it: stepped in, so the list
+   reads as your answer to each of their tries plus the detail below. */
+.triage-infer-cont {
+  width: calc(100% - 22px);
+  margin-left: 22px;
+  border-left: 2px solid var(--line);
+}
 
 /* ---- Hover-scrub line preview (2026-07-30 field request) ---------------- */
 .scrub-line {
@@ -5100,6 +5107,11 @@ button.mv-var-line:hover {
 }
 .scrub-tok {
   border-radius: 3px;
+}
+/* The part a continuation shares with its trunk: still readable and
+   still hoverable, just not where the eye lands first. */
+.scrub-tok.shared {
+  color: var(--dim);
 }
 .scrub-tok:hover,
 .scrub-tok.cur {

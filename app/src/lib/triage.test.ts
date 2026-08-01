@@ -5,6 +5,7 @@ import {
   defaultTriageColor,
   evalLabel,
   inBookGaps,
+  continuationDepths,
   inferredLineLabel,
   itemCaption,
   lineSans,
@@ -178,6 +179,41 @@ describe("defaultTriageColor", () => {
     expect(defaultTriageColor(report({ hasCards: true, gamesSeen: 1 }, { gamesSeen: 99 }))).toBe(
       "white",
     );
+  });
+});
+
+describe("continuationDepths", () => {
+  const l = (sans: string[], games: number): InferredLine => ({
+    sans,
+    games,
+    score: 50,
+    eco: null,
+    openingName: null,
+  });
+
+  it("marks lines that go deeper into an earlier one", () => {
+    const lines = [
+      l(["d4", "Nf6", "Bf4", "e6"], 19),
+      l(["d4", "Nf6", "Nc3", "d5"], 13),
+      l(["d4", "Nf6", "Bf4", "e6", "e3", "c5"], 4),
+    ];
+    expect(continuationDepths(lines)).toEqual([0, 0, 4]);
+  });
+
+  it("takes the longest trunk, and never a line's equal or a later one", () => {
+    const lines = [
+      l(["e4", "c5"], 30),
+      l(["e4", "c5", "Nf3", "d6"], 20),
+      l(["e4", "c5", "Nf3", "d6", "d4", "cxd4"], 10),
+      l(["e4", "e5"], 8),
+    ];
+    expect(continuationDepths(lines)).toEqual([0, 2, 4, 0]);
+  });
+
+  it("is empty-safe and ignores identical lines", () => {
+    expect(continuationDepths([])).toEqual([]);
+    const same = [l(["d4", "d5"], 5), l(["d4", "d5"], 5)];
+    expect(continuationDepths(same)).toEqual([0, 0]);
   });
 });
 

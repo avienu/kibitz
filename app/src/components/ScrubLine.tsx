@@ -63,9 +63,18 @@ interface ScrubLineProps {
   /** Preview sink; null = no preview (mouse left / cleared). */
   onPreview: (p: ScrubPreview | null) => void;
   className?: string;
+  /** Dim the first N moves: the part this line shares with the trunk it
+   * continues, so the eye lands on what is new. Still hoverable. */
+  dimBefore?: number;
 }
 
-export default function ScrubLine({ sans, startFen, onPreview, className }: ScrubLineProps) {
+export default function ScrubLine({
+  sans,
+  startFen,
+  onPreview,
+  className,
+  dimBefore = 0,
+}: ScrubLineProps) {
   // Latest-callback ref: hover handlers and the unmount cleanup never
   // capture a stale onPreview.
   const onPreviewRef = useRef(onPreview);
@@ -144,7 +153,9 @@ export default function ScrubLine({ sans, startFen, onPreview, className }: Scru
         <span key={i}>
           {i > 0 ? " " : ""}
           <span
-            className={`scrub-tok${kbPly === i + 1 ? " cur" : ""}`}
+            className={`scrub-tok${kbPly === i + 1 ? " cur" : ""}${
+              i < dimBefore ? " shared" : ""
+            }`}
             onMouseEnter={() => fire(i + 1)}
           >
             {t.text}
