@@ -352,6 +352,8 @@ explicit click *is* an explicit engine request:
 The database screen: filter bar, the games table, and the two
 database-wide batch actions.
 
+![The Database screen, filtered to one event: the filter bar, the games table with result, ECO and provenance columns, and the batch actions](/guide-shots/database.png)
+
 - **Header actions** — **Annotate database** and **Fresh analysis pass**.
   Both first show an **estimate-confirm dialog**: how many games are still
   uncovered, the estimated duration, and an "Estimate basis:" line quoting
@@ -415,6 +417,8 @@ affordance — there is nothing to cross-tabulate).
 
 Transposition-aware: counts merge every move order that reaches the
 position, and the header shows the **measured query time** in ms.
+
+![The Opening tree at the start position: every first move with its game count, win/draw/loss bar, average Elo and performance](/guide-shots/tree.png)
 
 - The **move line** across the top is your clicked-through line; click a
   crumb to rewind to it, **Back to start** to reset.
@@ -547,6 +551,8 @@ keeps Home's "no prep started for X yet" truthful.
 ## TRAIN views
 
 ### Openings SRS (Repertoire Trainer)
+
+![Openings SRS before a session: repertoires with their due counts, and the session panel showing due, done, lapses and new](/guide-shots/srs.png)
 
 Spaced-repetition review of your opening repertoires, scheduled with
 FSRS-4.5. Each card is a position where it is your colour's turn plus the
@@ -771,6 +777,8 @@ more move memorization — is the point when the verdict says middlegame.
 
 ### Tactics
 
+![A tactics puzzle with the WHY THIS PUZZLE panel naming the motif, where it came from in your profile, and the puzzle's rating](/guide-shots/tactics.png)
+
 Puzzle drills over the Lichess puzzle database. Layout: mode column |
 board | **WHY THIS PUZZLE** reasoning aside. No engine is involved —
 solving is checked against the stored solution line. The header shows
@@ -836,6 +844,8 @@ first 30 rated attempts, then K = 20); only rated, motif and weakness
 attempts move it.
 
 ### Endgames
+
+![The Endgames curriculum mid-tier: mastered drills ticked, one solved drill showing its clean streak toward mastery, and a drill in play graded against the tablebase](/guide-shots/endgames.png)
 
 A rating-tiered curriculum of classic theoretical positions, played out
 against the toughest defence available and **graded against tablebase

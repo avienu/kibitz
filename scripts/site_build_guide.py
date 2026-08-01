@@ -18,6 +18,7 @@ Usage: python3 scripts/site_build_guide.py [--check]
 from __future__ import annotations
 
 import html
+import shutil
 import re
 import sys
 from pathlib import Path
@@ -25,6 +26,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SRC = REPO / "docs" / "USER_GUIDE.md"
 OUT = REPO / "website" / "guide.html"
+# Screenshots live once, in the app's public/ (so the bundled app serves
+# them at /guide-shots/…), and are copied into the site at build time so
+# the same markdown src resolves for both readers without the images
+# being committed twice.
+SHOTS_SRC = REPO / "app" / "public" / "guide-shots"
+SHOTS_OUT = REPO / "website" / "guide-shots"
 
 # ---------------------------------------------------------------------------
 # Parsing — ported line-for-line from app/src/lib/markdown.ts.
@@ -271,6 +278,16 @@ def build() -> str:
     return PAGE.format(toc=toc_html, body=body)
 
 
+def copy_shots() -> None:
+    """Mirror app/public/guide-shots into website/ (git-ignored there)."""
+    if not SHOTS_SRC.is_dir():
+        return
+    SHOTS_OUT.mkdir(parents=True, exist_ok=True)
+    for src in sorted(SHOTS_SRC.iterdir()):
+        if src.is_file() and not src.name.startswith("."):
+            shutil.copy2(src, SHOTS_OUT / src.name)
+
+
 def main() -> int:
     page = build()
     if "--check" in sys.argv[1:]:
@@ -280,6 +297,7 @@ def main() -> int:
             return 1
         print(f"OK: {OUT} is up to date")
         return 0
+    copy_shots()
     OUT.write_text(page, encoding="utf-8")
     print(f"wrote {OUT}")
     return 0

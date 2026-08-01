@@ -165,6 +165,7 @@
 <h2 id="study-views">STUDY views</h2>
 <h3 id="database">Database</h3>
 <p>The database screen: filter bar, the games table, and the two database-wide batch actions.</p>
+<figure class="guide-figure"><img src="/guide-shots/database.png" alt="The Database screen, filtered to one event: the filter bar, the games table with result, ECO and provenance columns, and the batch actions" loading="lazy"><figcaption>The Database screen, filtered to one event: the filter bar, the games table with result, ECO and provenance columns, and the batch actions</figcaption></figure>
 <ul>
 <li><strong>Header actions</strong> — <strong>Annotate database</strong> and <strong>Fresh analysis pass</strong>. Both first show an <strong>estimate-confirm dialog</strong>: how many games are still uncovered, the estimated duration, and an "Estimate basis:" line quoting exactly how the estimate was derived (measured from your own completed jobs where possible, stated assumption otherwise). Jobs are resumable — pause anytime and the run picks up where it left off; already-covered games are skipped. <strong>Start</strong> enqueues the jobs *and* starts the worker.</li>
 <li><strong>Filter chips</strong> — all real: <strong>Player</strong> (substring on either name), <strong>Event</strong> (substring), <strong>From / To</strong> date bounds, <strong>ECO</strong> (prefix), <strong>Result</strong>, and <strong>Source</strong> (personal / twic / online / other). Date bounds accept <code>YYYY</code>, <code>YYYY.MM</code> or <code>YYYY.MM.DD</code>; PGN wildcard dates (<code>1992.??.??</code>) match any range they *could* fall in, and games with no date (or an unknown year) drop out whenever a date bound is set — they can never confirm the range. A malformed bound shows an inline hint and is simply not applied. The right edge shows the range readout ("1–50 of 121,438"). Filters, page, scroll position and the last-opened row <strong>survive leaving the screen</strong> — open a game, step through it, come back, and your search is exactly where you left it (a <strong>Clear</strong> chip resets; filters also survive an app restart).</li>
@@ -182,6 +183,7 @@
 </ul>
 <h3 id="opening-tree">Opening tree</h3>
 <p>Transposition-aware: counts merge every move order that reaches the position, and the header shows the <strong>measured query time</strong> in ms.</p>
+<figure class="guide-figure"><img src="/guide-shots/tree.png" alt="The Opening tree at the start position: every first move with its game count, win/draw/loss bar, average Elo and performance" loading="lazy"><figcaption>The Opening tree at the start position: every first move with its game count, win/draw/loss bar, average Elo and performance</figcaption></figure>
 <ul>
 <li>The <strong>move line</strong> across the top is your clicked-through line; click a crumb to rewind to it, <strong>Back to start</strong> to reset.</li>
 <li>The <strong>moves table</strong> — move, games, a stacked W/D/L bar (hover for exact counts), average Elo, and <strong>PERF</strong> shown as the performance rating's signed delta against the movers' average Elo (hover for both absolute numbers). Clicking a move descends the tree.</li>
@@ -226,6 +228,7 @@
 <hr>
 <h2 id="train-views">TRAIN views</h2>
 <h3 id="openings-srs-repertoire-trainer">Openings SRS (Repertoire Trainer)</h3>
+<figure class="guide-figure"><img src="/guide-shots/srs.png" alt="Openings SRS before a session: repertoires with their due counts, and the session panel showing due, done, lapses and new" loading="lazy"><figcaption>Openings SRS before a session: repertoires with their due counts, and the session panel showing due, done, lapses and new</figcaption></figure>
 <p>Spaced-repetition review of your opening repertoires, scheduled with FSRS-4.5. Each card is a position where it is your colour's turn plus the repertoire move you must know there. Layout: repertoire column | board | session aside.</p>
 <p>Building a repertoire:</p>
 <ul>
@@ -279,6 +282,7 @@
 <p><strong>Adopt</strong> puts the line into that color's repertoire from the branch position — your moves become SRS cards on their normal schedule.</p>
 <p><strong>Step 5 — structure homework.</strong> Your first-error positions in the verdict's killer structures, each deep-linking the game at the error ply with the eval swing ("+0.1 → −1.6"). Reviewing those moments — not more move memorization — is the point when the verdict says middlegame.</p>
 <h3 id="tactics">Tactics</h3>
+<figure class="guide-figure"><img src="/guide-shots/tactics.png" alt="A tactics puzzle with the WHY THIS PUZZLE panel naming the motif, where it came from in your profile, and the puzzle&#x27;s rating" loading="lazy"><figcaption>A tactics puzzle with the WHY THIS PUZZLE panel naming the motif, where it came from in your profile, and the puzzle&#x27;s rating</figcaption></figure>
 <p>Puzzle drills over the Lichess puzzle database. Layout: mode column | board | <strong>WHY THIS PUZZLE</strong> reasoning aside. No engine is involved — solving is checked against the stored solution line. The header shows puzzle count, your tactics rating and attempt count.</p>
 <p><strong>The five modes</strong> (mode column; badges are real numbers or absent):</p>
 <ul>
@@ -303,6 +307,7 @@
   import-puzzles lichess_db_puzzle.csv --min-popularity 50 --max-rows 100000</code></pre>
 <p>The rating is Elo-style against fixed puzzle ratings (K = 40 for your first 30 rated attempts, then K = 20); only rated, motif and weakness attempts move it.</p>
 <h3 id="endgames">Endgames</h3>
+<figure class="guide-figure"><img src="/guide-shots/endgames.png" alt="The Endgames curriculum mid-tier: mastered drills ticked, one solved drill showing its clean streak toward mastery, and a drill in play graded against the tablebase" loading="lazy"><figcaption>The Endgames curriculum mid-tier: mastered drills ticked, one solved drill showing its clean streak toward mastery, and a drill in play graded against the tablebase</figcaption></figure>
 <p>A rating-tiered curriculum of classic theoretical positions, played out against the toughest defence available and <strong>graded against tablebase truth, never an engine score</strong>. Layout: curriculum column | board | feedback aside.</p>
 <ul>
 <li><strong>Curriculum column</strong> — tiers (Essentials, up to ~1000 · Building technique, ~1000–1500 · Rook endings and tempo play, ~1500–1900) with mastered/total progress bars; the active tier expands to its drills (✓ = mastered, material like "KQvK", hover for the concept).</li>
