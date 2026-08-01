@@ -102,31 +102,46 @@
     <div class="container">
       <p class="kicker">Download</p>
       <h2>Get Kibitz</h2>
-      <p class="lede">Builds are published on GitHub Releases. Kibitz is free software
-      under the GPL-3.0.</p>
-      <div class="cta-row" style="margin-top: 22px;">
-        <a class="btn primary" href="https://github.com/avienu/kibitz/releases/latest">Latest release</a>
-        <a class="btn" href="https://github.com/avienu/kibitz/releases">All releases</a>
-      </div>
+      <p class="lede">Free software under the GPL-3.0. Pick your system — the
+      current build is <strong>v0.1.0-test4</strong>.</p>
+
       <div class="dl-grid">
         <div class="dl-card">
-          <h3>macOS</h3>
-          <p>Download the <code>.dmg</code>, drag Kibitz to Applications.</p>
-          <p>The first release is unsigned while Apple enrollment completes —
-          right-click the app → <strong>Open</strong> the first time you launch it.</p>
+          <h3>macOS · Apple Silicon</h3>
+          <p><a class="btn primary" href="https://github.com/avienu/kibitz/releases/download/v0.1.0-test4/Kibitz_0.1.0_aarch64.dmg">Download .dmg</a></p>
+          <p>Open it and drag Kibitz to Applications. Signed and notarized by
+          Apple, so it launches with no warning.</p>
+          <p><strong>Intel Macs are not supported yet</strong> — this build runs
+          only on M1 and later.</p>
         </div>
         <div class="dl-card">
-          <h3>Linux</h3>
-          <p><code>.AppImage</code>: make it executable (<code>chmod +x</code>) and run it.</p>
-          <p><code>.deb</code>: install with <code>sudo dpkg -i</code> on Debian and Ubuntu.</p>
+          <h3>Windows · 64-bit</h3>
+          <p><a class="btn primary" href="https://github.com/avienu/kibitz/releases/download/v0.1.0-test4/Kibitz_0.1.0_x64_en-US.msi">Download .msi</a></p>
+          <p>The usual installer. There is also a <code>-setup.exe</code> on the
+          release page if you prefer it.</p>
+          <p>Not yet signed: Windows will show <em>&ldquo;Windows protected your
+          PC&rdquo;</em>. Click <strong>More info → Run anyway</strong>. Signing is
+          in progress.</p>
+        </div>
+        <div class="dl-card">
+          <h3>Linux · x86-64</h3>
+          <p><a class="btn primary" href="https://github.com/avienu/kibitz/releases/download/v0.1.0-test4/Kibitz_0.1.0_amd64.AppImage">Download .AppImage</a></p>
+          <p>Make it executable (<code>chmod +x</code>) and run it — no install.</p>
+          <p>On Debian and Ubuntu the <code>.deb</code> on the release page
+          installs with <code>sudo dpkg -i</code>.</p>
         </div>
         <div class="dl-card">
           <h3>Build from source</h3>
           <p>Rust + Node are all you need. See
           <a href="https://github.com/avienu/kibitz#building-from-source">Building from
           source</a> in the README.</p>
+          <p>Kibitz uses <a href="https://stockfishchess.org/download/">Stockfish</a>
+          for analysis — install it separately and Kibitz will find it.</p>
         </div>
       </div>
+
+      <p class="lede" style="margin-top: 22px;">Every file, checksums and release
+      notes: <a href="https://github.com/avienu/kibitz/releases">all releases</a>.</p>
     </div>
   </section>
 
