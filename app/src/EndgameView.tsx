@@ -44,6 +44,7 @@ import {
   failureReason,
   isTerminal,
   nextDrillId,
+  drillMark,
   progressNote,
   statusLine,
   type EndgameModel,
@@ -73,10 +74,14 @@ export function FeedbackRows({ rows }: { rows: VerdictRow[] }) {
         <div key={r.index} className="eg-row">
           <span className="eg-no">{r.index}.</span>
           <span className="eg-san">{r.san}</span>
-          <span className={`eg-verdict v-${r.verdict}`}>{VERDICT_LABEL[r.verdict]}</span>
+          <span className={`eg-verdict v-${r.verdict}`}>
+            {VERDICT_LABEL[r.verdict]}
+          </span>
           <span className="eg-note">
             {r.note ||
-              (r.verdict === "slower" && r.dtzCost != null ? `DTZ +${r.dtzCost} plies.` : "")}
+              (r.verdict === "slower" && r.dtzCost != null
+                ? `DTZ +${r.dtzCost} plies.`
+                : "")}
           </span>
         </div>
       ))}
@@ -104,7 +109,9 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
         setError(null);
         setTierId((t) => t ?? o.tiers[0]?.id ?? null);
       })
-      .catch((e) => setError(`Endgames unavailable (open a database first): ${e}`));
+      .catch((e) =>
+        setError(`Endgames unavailable (open a database first): ${e}`),
+      );
   }, []);
   useEffect(loadOverview, [loadOverview]);
   useEffect(
@@ -127,10 +134,12 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
   }, []);
 
   // Promotion picker: defers pawn-to-last-rank drags to the overlay.
-  const moveHandlerRef = useRef<(orig: string, dest: string, promoRole?: PromoRole) => void>(
-    () => {},
+  const moveHandlerRef = useRef<
+    (orig: string, dest: string, promoRole?: PromoRole) => void
+  >(() => {});
+  const promo = usePromotionPicker((orig, dest, role) =>
+    moveHandlerRef.current(orig, dest, role),
   );
-  const promo = usePromotionPicker((orig, dest, role) => moveHandlerRef.current(orig, dest, role));
 
   const onBoardMove = useCallback(
     (orig: string, dest: string, promoRole?: PromoRole) => {
@@ -202,11 +211,14 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
   }, [play, onBoardMove]);
 
   const drillsOfTier = useCallback(
-    (tier: string): DrillInfo[] => (ov ? ov.drills.filter((d) => d.tier === tier) : []),
+    (tier: string): DrillInfo[] =>
+      ov ? ov.drills.filter((d) => d.tier === tier) : [],
     [ov],
   );
 
   const masteredTotal = ov ? ov.drills.filter((d) => d.mastered).length : 0;
+  const solvedTotal = ov ? ov.drills.filter((d) => d.solved > 0).length : 0;
+  const masteryStreak = ov?.masteryStreak ?? 2;
 
   /** Verification label — honest: TABLEBASE TRUTH only when the defender
    * actually probes the tablebase for this drill. */
@@ -243,8 +255,11 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
         title="Endgames"
         subtitle={
           ov
-            ? `Rating-tiered curriculum · ${ov.drills.length} drills · ${masteredTotal} mastered · ` +
-              (ov.tablebase.available ? "Syzygy tablebase truth" : "no tablebase found")
+            ? `Rating-tiered curriculum · ${ov.drills.length} drills · ${solvedTotal} solved · ` +
+              `${masteredTotal} mastered · ` +
+              (ov.tablebase.available
+                ? "Syzygy tablebase truth"
+                : "no tablebase found")
             : "Rating-tiered curriculum"
         }
       />
@@ -256,6 +271,10 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
           {ov?.tiers.map((t) => {
             const drills = drillsOfTier(t.id);
             const mastered = drills.filter((d) => d.mastered).length;
+            // Solved-at-least-once includes the mastered ones: it is the
+            // "I have done this" count, and it moves the first time a
+            // drill is finished rather than on the second clean solve.
+            const solved = drills.filter((d) => d.solved > 0).length;
             const complete = drills.length > 0 && mastered === drills.length;
             const active = t.id === tierId;
             return (
@@ -267,7 +286,11 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                 >
                   <span className="eg-tier-head">
                     <span className="eg-tier-name">{t.name}</span>
-                    <span className="eg-tier-count">
+                    <span
+                      className="eg-tier-count"
+                      title={`${solved} of ${drills.length} solved · ${mastered} mastered (${masteryStreak} clean solves each)`}
+                    >
+                      {solved > mastered ? `${solved} done · ` : ""}
                       {mastered} / {drills.length}
                     </span>
                   </span>
@@ -278,20 +301,37 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                 </button>
                 {active && (
                   <div className="eg-drills">
-                    {drills.map((d) => (
-                      <button
-                        key={d.id}
-                        className={`eg-drill${play?.started.drillId === d.id ? " cur" : ""}`}
-                        onClick={() => void start(d.id)}
-                        title={d.concept}
-                      >
-                        <span className="eg-drill-name">
-                          {d.mastered ? "✓ " : ""}
-                          {d.title}
-                        </span>
-                        <span className="eg-drill-meta">{d.material}</span>
-                      </button>
-                    ))}
+                    {drills.map((d) => {
+                      const m = drillMark(d, masteryStreak);
+                      return (
+                        <button
+                          key={d.id}
+                          className={`eg-drill eg-drill-${m.state}${
+                            play?.started.drillId === d.id ? " cur" : ""
+                          }`}
+                          onClick={() => void start(d.id)}
+                          title={`${d.concept} — ${m.label}`}
+                        >
+                          <span className="eg-drill-name">
+                            {m.mark && (
+                              <span
+                                className="eg-drill-mark"
+                                aria-label={m.label}
+                              >
+                                {m.mark}{" "}
+                              </span>
+                            )}
+                            {d.title}
+                          </span>
+                          <span className="eg-drill-meta">
+                            {m.state === "solved"
+                              ? `${d.cleanStreak}/${masteryStreak} · `
+                              : ""}
+                            {d.material}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -304,7 +344,9 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
           {play ? (
             <>
               <div className="eg-meta">
-                <span className="eg-meta-title">{play.started.title.toUpperCase()}</span>
+                <span className="eg-meta-title">
+                  {play.started.title.toUpperCase()}
+                </span>
                 <span className="flex-spacer" />
                 {verification && (
                   <span className={`eg-tb${verification.good ? " good" : ""}`}>
@@ -327,11 +369,14 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
               {/* Unmissable turn/status line — the loop's heartbeat. */}
               {status && !isTerminal(play) && (
                 <div className={`eg-status s-${status.tone}`} role="status">
-                  {status.tone === "wait" && <span className="eg-status-dot" aria-hidden />}
+                  {status.tone === "wait" && (
+                    <span className="eg-status-dot" aria-hidden />
+                  )}
                   <span className="eg-status-text">{status.text}</span>
                   {play.phase === "userTurn" && (
                     <span className="eg-status-hint">
-                      Play on until the drill ends — every move is graded in the aside.
+                      Play on until the drill ends — every move is graded in the
+                      aside.
                     </span>
                   )}
                 </div>
@@ -350,7 +395,9 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                       : ""}
                   </p>
                   {failWhy && (
-                    <p className="eg-terminal-why">Where it went wrong: {failWhy}</p>
+                    <p className="eg-terminal-why">
+                      Where it went wrong: {failWhy}
+                    </p>
                   )}
                   <div className="eg-terminal-actions">
                     <button
@@ -360,7 +407,10 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                       Retry drill
                     </button>
                     {nextId && (
-                      <button className="btn-secondary" onClick={() => startNext(nextId)}>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => startNext(nextId)}
+                      >
                         Next drill →
                       </button>
                     )}
@@ -379,10 +429,16 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                   <button className="btn-secondary" onClick={restart}>
                     Restart
                   </button>
-                  <button className="btn-secondary" onClick={() => setShowIdea((s) => !s)}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowIdea((s) => !s)}
+                  >
                     {showIdea ? "Hide the idea" : "Show the idea"}
                   </button>
-                  <button className="btn-secondary" onClick={() => void giveUp()}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => void giveUp()}
+                  >
                     Give up
                   </button>
                 </div>
@@ -402,9 +458,10 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
                 {ov ? "Pick a drill from the curriculum" : "No database open"}
               </div>
               <p className="srs-start-prose">
-                You play the side to move against the toughest defence available — tablebase
-                replies where the piece count is covered, a deterministic heuristic otherwise. No
-                engine anywhere in this flow.
+                You play the side to move against the toughest defence available
+                — tablebase replies where the piece count is covered, a
+                deterministic heuristic otherwise. No engine anywhere in this
+                flow.
               </p>
               {ov && !ov.tablebase.available && (
                 <p className="eg-tb-missing">{ov.tablebase.note}</p>
@@ -420,14 +477,17 @@ export default function EndgameView({ treatment }: EndgameViewProps) {
             <FeedbackRows rows={play.rows} />
           ) : (
             <p className="eg-note-empty">
-              {play ? "Play a move — every move gets a graded row here." : "No drill running."}
+              {play
+                ? "Play a move — every move gets a graded row here."
+                : "No drill running."}
             </p>
           )}
           <p className="eg-closing">
             Every move is graded against the tablebase, never an engine score:{" "}
-            <b>still winning</b>, <b>throws the win</b>, or <b>slower but winning</b> with the DTZ
-            cost. Moves outside tablebase coverage are marked <b>unverified</b> and graded only at
-            terminal positions.
+            <b>still winning</b>, <b>throws the win</b>, or{" "}
+            <b>slower but winning</b> with the DTZ cost. Moves outside tablebase
+            coverage are marked <b>unverified</b> and graded only at terminal
+            positions.
           </p>
         </aside>
       </div>

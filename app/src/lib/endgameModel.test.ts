@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { DrillProgress, MoveResponse, StartedDrill, VerdictRow } from "./endgame";
+import type {
+  DrillProgress,
+  MoveResponse,
+  StartedDrill,
+  VerdictRow,
+} from "./endgame";
 import {
   applyGiveUp,
   applyMoveResponse,
@@ -9,6 +14,7 @@ import {
   failureReason,
   isTerminal,
   nextDrillId,
+  drillMark,
   progressNote,
   statusLine,
 } from "./endgameModel";
@@ -24,7 +30,12 @@ const STARTED: StartedDrill = {
   opponentTablebase: true,
 };
 
-const row = (index: number, san: string, verdict: VerdictRow["verdict"], note = ""): VerdictRow => ({
+const row = (
+  index: number,
+  san: string,
+  verdict: VerdictRow["verdict"],
+  note = "",
+): VerdictRow => ({
   index,
   san,
   verdict,
@@ -56,7 +67,10 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
     expect(canMove(m)).toBe(true);
     expect(m.fen).toBe(STARTED.fen);
     expect(m.rows).toHaveLength(0);
-    expect(statusLine(m)).toEqual({ tone: "play", text: "Your move — win with White." });
+    expect(statusLine(m)).toEqual({
+      tone: "play",
+      text: "Your move — win with White.",
+    });
   });
 
   it("a continuing move parks the reply, then commit returns the turn to the user", () => {
@@ -66,7 +80,10 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
     expect(canMove(m1)).toBe(false);
     expect(m1.fen).toBe(STEP_CONTINUES.fenAfterUser);
     expect(m1.rows.map((r) => r.verdict)).toEqual(["winning", "tablebase"]);
-    expect(statusLine(m1)).toEqual({ tone: "wait", text: "Defender is thinking…" });
+    expect(statusLine(m1)).toEqual({
+      tone: "wait",
+      text: "Defender is thinking…",
+    });
     // The beat lands: defender's move on the board, USER CAN MOVE AGAIN.
     const m2 = commitReply(m1);
     expect(m2.phase).toBe("userTurn");
@@ -94,7 +111,10 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
     expect(m.phase).toBe("solved");
     expect(isTerminal(m)).toBe(true);
     expect(canMove(m)).toBe(false);
-    expect(statusLine(m)).toEqual({ tone: "good", text: "Solved — Checkmate!" });
+    expect(statusLine(m)).toEqual({
+      tone: "good",
+      text: "Solved — Checkmate!",
+    });
     expect(progressNote(m, 2)).toBe("Clean streak 1/2.");
   });
 
@@ -103,7 +123,14 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
       fenAfterUser: "3k4/2Q5/3K4/8/8/8/8/8 b - - 1 1",
       opponent: null,
       fenAfterOpponent: null,
-      rows: [row(1, "Qc7+??", "throws", "Throws away the win: the position is now drawn.")],
+      rows: [
+        row(
+          1,
+          "Qc7+??",
+          "throws",
+          "Throws away the win: the position is now drawn.",
+        ),
+      ],
       outcome: { solved: false, detail: "That move throws away the win." },
       progress: { ...PROGRESS, cleanStreak: 0 },
     };
@@ -119,7 +146,10 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
     const stalemated: MoveResponse = {
       ...STEP_CONTINUES,
       rows: [row(1, "Qb6", "throws", "Stalemate."), row(2, "Kd8", "tablebase")],
-      outcome: { solved: false, detail: "Only a draw (stalemate) — the position was winning." },
+      outcome: {
+        solved: false,
+        detail: "Only a draw (stalemate) — the position was winning.",
+      },
       progress: { ...PROGRESS, cleanStreak: 0 },
     };
     const m1 = applyMoveResponse(beginDrill(STARTED), "c5b6", stalemated);
@@ -132,7 +162,10 @@ describe("endgame drill state machine (userTurn → replying → userTurn → te
 
   it("give up fails the drill from either live phase; commit is a no-op after", () => {
     const live = applyMoveResponse(beginDrill(STARTED), "c5c5", STEP_CONTINUES);
-    const conceded = applyGiveUp(commitReply(live), { ...PROGRESS, cleanStreak: 0 });
+    const conceded = applyGiveUp(commitReply(live), {
+      ...PROGRESS,
+      cleanStreak: 0,
+    });
     expect(conceded.phase).toBe("failed");
     expect(conceded.outcome?.detail).toBe("Gave up.");
     expect(failureReason(conceded)).toBeNull(); // no THROWS row — nothing to blame
@@ -165,5 +198,51 @@ describe("next-drill affordance", () => {
   it("returns null for unknown or solitary drills", () => {
     expect(nextDrillId(order, "zz")).toBeNull();
     expect(nextDrillId([{ id: "a", mastered: false }], "a")).toBeNull();
+  });
+});
+
+describe("drillMark — the curriculum list has to show a finished drill", () => {
+  const d = (over: Partial<Parameters<typeof drillMark>[0]> = {}) => ({
+    attempts: 0,
+    solved: 0,
+    cleanStreak: 0,
+    mastered: false,
+    ...over,
+  });
+
+  it("marks a mastered drill done", () => {
+    const m = drillMark(
+      d({ attempts: 3, solved: 3, cleanStreak: 2, mastered: true }),
+      2,
+    );
+    expect([m.state, m.mark]).toEqual(["mastered", "✓"]);
+    expect(m.label).toBe("Mastered · solved 3×");
+  });
+
+  it("distinguishes solved-once from mastered, and says what is left", () => {
+    const m = drillMark(d({ attempts: 1, solved: 1, cleanStreak: 1 }), 2);
+    expect([m.state, m.mark]).toEqual(["solved", "◍"]);
+    expect(m.label).toBe(
+      "Solved 1× · clean streak 1/2 — 1 more in a row to master",
+    );
+  });
+
+  it("a solve after a failure has a broken streak but still counts as done", () => {
+    // cleanStreak 0 with solved > 0: the drill HAS been finished before,
+    // which is exactly the state that used to render as untouched.
+    const m = drillMark(d({ attempts: 4, solved: 2, cleanStreak: 0 }), 2);
+    expect(m.state).toBe("solved");
+    expect(m.label).toBe(
+      "Solved 2× · clean streak 0/2 — 2 more in a row to master",
+    );
+  });
+
+  it("separates tried-but-never-solved from untouched", () => {
+    expect(drillMark(d({ attempts: 2 }), 2).state).toBe("tried");
+    expect(drillMark(d({ attempts: 2 }), 2).label).toBe(
+      "Tried 2× · not solved yet",
+    );
+    expect(drillMark(d(), 2).state).toBe("new");
+    expect(drillMark(d(), 2).mark).toBe("");
   });
 });

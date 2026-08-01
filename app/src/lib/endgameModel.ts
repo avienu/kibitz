@@ -134,7 +134,10 @@ export function commitReply(m: EndgameModel): EndgameModel {
 }
 
 /** Concede: terminal failed state with the recorded progress. */
-export function applyGiveUp(m: EndgameModel, progress: DrillProgress): EndgameModel {
+export function applyGiveUp(
+  m: EndgameModel,
+  progress: DrillProgress,
+): EndgameModel {
   if (isTerminal(m)) return m;
   return {
     ...m,
@@ -166,10 +169,66 @@ export function statusLine(m: EndgameModel): StatusLine {
     case "replying":
       return { tone: "wait", text: "Defender is thinking…" };
     case "solved":
-      return { tone: "good", text: `Solved — ${m.outcome?.detail ?? ""}`.trim() };
+      return {
+        tone: "good",
+        text: `Solved — ${m.outcome?.detail ?? ""}`.trim(),
+      };
     case "failed":
-      return { tone: "bad", text: `Failed — ${m.outcome?.detail ?? ""}`.trim() };
+      return {
+        tone: "bad",
+        text: `Failed — ${m.outcome?.detail ?? ""}`.trim(),
+      };
   }
+}
+
+/** How far a drill has got, for the curriculum list. Mastery takes
+ * `masteryStreak` consecutive clean solves, so "solved it" and "mastered
+ * it" are different states — showing only the second means finishing a
+ * drill changes nothing on screen, which reads as the app not having
+ * noticed (2026-08-01 field report). */
+export type DrillState = "mastered" | "solved" | "tried" | "new";
+
+export interface DrillMark {
+  state: DrillState;
+  /** Leading glyph for the row ("" for an untouched drill). */
+  mark: string;
+  /** Tooltip/aria text — always the real counts, never a guess. */
+  label: string;
+}
+
+export function drillMark(
+  d: {
+    attempts: number;
+    solved: number;
+    cleanStreak: number;
+    mastered: boolean;
+  },
+  masteryStreak: number,
+): DrillMark {
+  if (d.mastered) {
+    return {
+      state: "mastered",
+      mark: "✓",
+      label: `Mastered · solved ${d.solved}×`,
+    };
+  }
+  if (d.solved > 0) {
+    return {
+      state: "solved",
+      mark: "◍",
+      label:
+        `Solved ${d.solved}× · clean streak ${d.cleanStreak}/${masteryStreak}` +
+        ` — ${Math.max(1, masteryStreak - d.cleanStreak)} more in a row to master`,
+    };
+  }
+  if (d.attempts > 0) {
+    return {
+      state: "tried",
+      mark: "·",
+      label: `Tried ${d.attempts}× · not solved yet`,
+    };
+  }
+  return { state: "new", mark: "", label: "Not attempted" };
 }
 
 /** Mastery/streak note for the terminal panel ("" before any progress). */
@@ -177,7 +236,8 @@ export function progressNote(m: EndgameModel, masteryStreak: number): string {
   const p = m.progress;
   if (!p) return "";
   if (p.mastered) return "Drill mastered.";
-  if (p.cleanStreak > 0) return `Clean streak ${p.cleanStreak}/${masteryStreak}.`;
+  if (p.cleanStreak > 0)
+    return `Clean streak ${p.cleanStreak}/${masteryStreak}.`;
   return "";
 }
 
@@ -189,7 +249,9 @@ export function failureReason(m: EndgameModel): string | null {
   for (let i = m.rows.length - 1; i >= 0; i--) {
     const r = m.rows[i];
     if (r.verdict === "throws") {
-      return r.note ? `${r.san} — ${r.note}` : `${r.san} threw the result away.`;
+      return r.note
+        ? `${r.san} — ${r.note}`
+        : `${r.san} threw the result away.`;
     }
   }
   return null;

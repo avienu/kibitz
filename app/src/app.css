@@ -3254,6 +3254,27 @@ button.strip-nudge:hover:not(:disabled) {
   font: 500 12px/1.35 "Public Sans", sans-serif;
   color: var(--dim);
 }
+/* Three states, three weights: mastered reads as done, solved-once reads
+   as under way (mastery wants a second clean solve), tried reads as
+   touched. An untouched drill carries no mark at all. */
+.eg-drill-mark {
+  font-variant-numeric: tabular-nums;
+}
+.eg-drill-mastered .eg-drill-name {
+  color: var(--good, var(--accent));
+}
+.eg-drill-mastered .eg-drill-mark {
+  color: var(--good, var(--accent));
+}
+.eg-drill-solved .eg-drill-name {
+  color: var(--tx);
+}
+.eg-drill-solved .eg-drill-mark {
+  color: var(--accent);
+}
+.eg-drill-tried .eg-drill-mark {
+  color: var(--dim);
+}
 .eg-drill.cur .eg-drill-name {
   color: var(--tx);
 }
