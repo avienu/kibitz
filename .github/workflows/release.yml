@@ -37,11 +37,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `bundles` is explicit per platform: tauri.conf's targets are
+          # the macOS ones, so Windows and Linux must name their own or a
+          # release quietly ships without them — which is how every
+          # release so far had no Windows build at all, while the tester
+          # workflow did (testbuild.yml, --bundles nsis,msi).
           - name: macos-aarch64
             os: macos-latest # Apple Silicon runner; arm64-first (docs/RELEASING.md)
+            bundles: app,dmg
           - name: linux-x86_64
             os: ubuntu-22.04
+            bundles: appimage,deb
+          - name: windows-x86_64
+            os: windows-latest
+            bundles: nsis,msi
     runs-on: ${{ matrix.os }}
+    # Every step here is bash; on the Windows runner that is git-bash.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Install Tauri system dependencies (Linux)
@@ -143,11 +157,13 @@ jobs:
           # Notarization credentials come from the prepare step via
           # GITHUB_ENV — whichever of the two routes was configured.
           UPDATER: ${{ steps.gate.outputs.updater }}
+          BUNDLES: ${{ matrix.bundles }}
         run: |
           if [ "$UPDATER" = "true" ]; then
-            npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":true}}'
+            npm run tauri build -- --bundles "$BUNDLES" \
+              --config '{"bundle":{"createUpdaterArtifacts":true}}'
           else
-            npm run tauri build
+            npm run tauri build -- --bundles "$BUNDLES"
           fi
 
       # Tauri notarizes and staples the .app, then builds the .dmg AROUND
@@ -197,10 +213,13 @@ jobs:
           mkdir -p dist-bundles
           BUNDLE_DIR=app/src-tauri/target/release/bundle
           # macOS: .dmg always; .app.tar.gz(.sig) exist only on signed builds.
-          # Linux: .AppImage(+.sig) and .deb.
+          # Linux: .AppImage(+.sig) and .deb.  Windows: .msi and the NSIS
+          # setup .exe, plus their updater signatures.
           find "$BUNDLE_DIR" -maxdepth 2 -type f \
             \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
-               -o -name '*.AppImage' -o -name '*.AppImage.sig' -o -name '*.deb' \) \
+               -o -name '*.AppImage' -o -name '*.AppImage.sig' -o -name '*.deb' \
+               -o -name '*.msi' -o -name '*.msi.sig' \
+               -o -name '*-setup.exe' -o -name '*-setup.exe.sig' \) \
             -exec cp {} dist-bundles/ \;
           ls -la dist-bundles
 
