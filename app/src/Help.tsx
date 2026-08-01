@@ -30,11 +30,15 @@ interface HelpProps {
 const SECTION_META: Record<string, string> = {
   "Kibitz User Guide": "EVERY SURFACE · ESC CLOSES HELP",
   "The window at a glance": "SHELL · RAIL NAVIGATION · STATUS STRIP",
-  "The Game view": "GAME VIEW · ← → ↑ ↓ · F FLIP · E EXPLAIN · CLI: kibitz-cli export-pgn",
+  "The Game view":
+    "GAME VIEW · ← → ↑ ↓ · F FLIP · E EXPLAIN · CLI: kibitz-cli export-pgn",
   "STUDY views": "DATABASE · TREE · SEARCH · CLI: kibitz-cli find-fen",
-  "COACH views": "EXPLAIN · PROFILE · PREP · CLI: kibitz-cli explain / profile / fingerprint",
-  "TRAIN views": "OPENINGS SRS · 1–4 GRADE · ⏎ SUBMIT · CLI: kibitz-cli import-repertoire",
-  "DATA IN / OUT views": "IMPORT · TWIC · SYNCS · JOBS · CLI: kibitz-cli import-pgn / run-jobs",
+  "COACH views":
+    "EXPLAIN · PROFILE · PREP · CLI: kibitz-cli explain / profile / fingerprint",
+  "TRAIN views":
+    "OPENINGS SRS · 1–4 GRADE · ⏎ SUBMIT · CLI: kibitz-cli import-repertoire",
+  "DATA IN / OUT views":
+    "IMPORT · TWIC · SYNCS · JOBS · CLI: kibitz-cli import-pgn / run-jobs",
   "Status strip": "ALWAYS VISIBLE · ENGINE DOT · BATCH PROGRESS",
   Settings: "RAIL FOOTER",
   "Deep links": "URL HASH · #game=…&ply=…",
@@ -88,6 +92,13 @@ function BlockView({ block }: { block: Block }) {
       ));
       return block.ordered ? <ol>{items}</ol> : <ul>{items}</ul>;
     }
+    case "figure":
+      return (
+        <figure className="help-figure">
+          <img src={block.src} alt={block.alt} loading="lazy" />
+          <figcaption>{block.alt}</figcaption>
+        </figure>
+      );
     case "rule":
       return <hr />;
   }
@@ -114,7 +125,9 @@ export default function Help({ onClose, onReplayTour }: HelpProps) {
           <div className="header-title-row">
             <span className="header-title">Help</span>
           </div>
-          <div className="header-meta">Rendered user guide · every surface and CLI command</div>
+          <div className="header-meta">
+            Rendered user guide · every surface and CLI command
+          </div>
         </div>
         <div className="header-actions">
           {onReplayTour && (
@@ -148,7 +161,9 @@ export default function Help({ onClose, onReplayTour }: HelpProps) {
             <article className="help-article">
               <h2 className="help-title">{section.title}</h2>
               {SECTION_META[section.title] && (
-                <div className="help-subline">{SECTION_META[section.title]}</div>
+                <div className="help-subline">
+                  {SECTION_META[section.title]}
+                </div>
               )}
               {section.blocks.map((b, i) => (
                 <BlockView key={i} block={b} />
@@ -166,8 +181,9 @@ export default function Help({ onClose, onReplayTour }: HelpProps) {
               <span className="tour-count">{TOUR_STEPS.length} cards</span>
             </div>
             <p className="tour-body">
-              One card per rail group — what lives in <b>Study</b>, <b>Coach</b>, <b>Train</b> and{" "}
-              <b>Data in / out</b>, and where Settings and this guide sit.
+              One card per rail group — what lives in <b>Study</b>, <b>Coach</b>
+              , <b>Train</b> and <b>Data in / out</b>, and where Settings and
+              this guide sit.
             </p>
             {onReplayTour && (
               <div className="tour-actions">
@@ -178,9 +194,9 @@ export default function Help({ onClose, onReplayTour }: HelpProps) {
             )}
           </div>
           <p className="tour-rail-note">
-            The tour anchors to the rail groups, one card per group, and never covers the thing it
-            is pointing at. It runs once on first launch and can be replayed from here at any
-            time.
+            The tour anchors to the rail groups, one card per group, and never
+            covers the thing it is pointing at. It runs once on first launch and
+            can be replayed from here at any time.
           </p>
         </aside>
       </div>

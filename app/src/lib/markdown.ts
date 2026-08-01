@@ -19,6 +19,10 @@ export type Block =
   | { kind: "para"; spans: InlineSpan[] }
   | { kind: "code"; text: string }
   | { kind: "list"; ordered: boolean; items: InlineSpan[][] }
+  /** A line that is exactly `![alt](src)` — a screenshot with its caption.
+   * Block-level only: an image inside a sentence would have to reflow with
+   * the text, and the guide never wants one. */
+  | { kind: "figure"; src: string; alt: string }
   | { kind: "rule" };
 
 /** Split text into plain / `code` / **bold** spans (no nesting). */
@@ -56,7 +60,10 @@ export interface GuideSection {
  * section. Blocks before any heading land in a leading section titled
  * `leadTitle` (only emitted when such blocks exist).
  */
-export function splitSections(blocks: Block[], leadTitle = "Overview"): GuideSection[] {
+export function splitSections(
+  blocks: Block[],
+  leadTitle = "Overview",
+): GuideSection[] {
   const sections: GuideSection[] = [];
   let cur: GuideSection | null = null;
   for (const b of blocks) {
@@ -75,6 +82,10 @@ export function splitSections(blocks: Block[], leadTitle = "Overview"): GuideSec
 }
 
 const HEADING = /^(#{1,4})\s+(.*)$/;
+/** `![alt](src)` alone on a line. Alt text is required — it is both the
+ * caption and what a screen reader gets, and a screenshot with neither is
+ * decoration the guide should not be carrying. */
+const FIGURE = /^!\[([^\]]+)\]\(([^)\s]+)\)\s*$/;
 const UL_ITEM = /^-\s+(.*)$/;
 const OL_ITEM = /^\d+\.\s+(.*)$/;
 
@@ -124,6 +135,12 @@ export function parseMarkdown(src: string): Block[] {
       blocks.push({ kind: "code", text: buf.join("\n") });
       continue;
     }
+    const fig = FIGURE.exec(line);
+    if (fig) {
+      blocks.push({ kind: "figure", alt: fig[1], src: fig[2] });
+      i++;
+      continue;
+    }
     if (/^---+\s*$/.test(line)) {
       blocks.push({ kind: "rule" });
       i++;
@@ -131,7 +148,11 @@ export function parseMarkdown(src: string): Block[] {
     }
     const h = HEADING.exec(line);
     if (h) {
-      blocks.push({ kind: "heading", level: h[1].length, spans: parseInline(h[2]) });
+      blocks.push({
+        kind: "heading",
+        level: h[1].length,
+        spans: parseInline(h[2]),
+      });
       i++;
       continue;
     }

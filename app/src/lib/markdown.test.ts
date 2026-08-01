@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseInline, parseMarkdown, spanText, splitSections } from "./markdown";
+import {
+  parseInline,
+  parseMarkdown,
+  spanText,
+  splitSections,
+} from "./markdown";
 
 describe("parseInline", () => {
   it("passes plain text through", () => {
@@ -32,8 +37,12 @@ describe("parseMarkdown", () => {
   });
 
   it("parses fenced code blocks verbatim", () => {
-    const blocks = parseMarkdown("```\ncargo run -- --db x.sqlite stats\n```\n");
-    expect(blocks).toEqual([{ kind: "code", text: "cargo run -- --db x.sqlite stats" }]);
+    const blocks = parseMarkdown(
+      "```\ncargo run -- --db x.sqlite stats\n```\n",
+    );
+    expect(blocks).toEqual([
+      { kind: "code", text: "cargo run -- --db x.sqlite stats" },
+    ]);
   });
 
   it("parses lists with hanging-indent continuations", () => {
@@ -50,7 +59,11 @@ describe("parseMarkdown", () => {
   it("parses ordered lists separately from unordered", () => {
     const blocks = parseMarkdown("1. one\n2. two\n\n- bullet\n");
     expect(blocks).toEqual([
-      { kind: "list", ordered: true, items: [[{ text: "one" }], [{ text: "two" }]] },
+      {
+        kind: "list",
+        ordered: true,
+        items: [[{ text: "one" }], [{ text: "two" }]],
+      },
       { kind: "list", ordered: false, items: [[{ text: "bullet" }]] },
     ]);
   });
@@ -87,9 +100,16 @@ describe("splitSections (Help TOC, round 2)", () => {
     ]);
     // h3 stays inside its section; the section heading itself is excluded.
     const game = sections[1];
-    expect(game.blocks[0]).toEqual({ kind: "para", spans: [{ text: "Body prose." }] });
-    expect(game.blocks.some((b) => b.kind === "heading" && b.level === 3)).toBe(true);
-    expect(game.blocks.some((b) => b.kind === "heading" && b.level <= 2)).toBe(false);
+    expect(game.blocks[0]).toEqual({
+      kind: "para",
+      spans: [{ text: "Body prose." }],
+    });
+    expect(game.blocks.some((b) => b.kind === "heading" && b.level === 3)).toBe(
+      true,
+    );
+    expect(game.blocks.some((b) => b.kind === "heading" && b.level <= 2)).toBe(
+      false,
+    );
     // Code blocks land in their section (the CLI card).
     expect(sections[2].blocks).toEqual([
       { kind: "code", text: "kibitz-cli --db x.sqlite stats" },
@@ -97,12 +117,37 @@ describe("splitSections (Help TOC, round 2)", () => {
   });
 
   it("collects blocks before any heading under the lead title", () => {
-    const sections = splitSections(parseMarkdown("plain intro\n\n## A\n\nbody\n"), "Overview");
+    const sections = splitSections(
+      parseMarkdown("plain intro\n\n## A\n\nbody\n"),
+      "Overview",
+    );
     expect(sections.map((s) => s.title)).toEqual(["Overview", "A"]);
     expect(sections[0].blocks).toHaveLength(1);
   });
 
   it("spanText flattens spans for TOC labels", () => {
     expect(spanText([{ text: "a " }, { text: "b", bold: true }])).toBe("a b");
+  });
+});
+
+describe("figures — the guide carries screenshots", () => {
+  it("parses a lone ![alt](src) line as a figure block", () => {
+    const b = parseMarkdown("![The database screen](assets/shots/db.png)");
+    expect(b).toEqual([
+      {
+        kind: "figure",
+        alt: "The database screen",
+        src: "assets/shots/db.png",
+      },
+    ]);
+  });
+
+  it("leaves an image inside a sentence as text — figures are block-level", () => {
+    const b = parseMarkdown("see ![x](a.png) here");
+    expect(b[0].kind).toBe("para");
+  });
+
+  it("requires alt text: it is the caption and the screen-reader text", () => {
+    expect(parseMarkdown("![](a.png)")[0].kind).toBe("para");
   });
 });

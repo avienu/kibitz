@@ -31,6 +31,10 @@ OUT = REPO / "website" / "guide.html"
 # ---------------------------------------------------------------------------
 
 HEADING = re.compile(r"^(#{1,4})\s+(.*)$")
+# Mirrors FIGURE in app/src/lib/markdown.ts — the two renderers parse the
+# same guide and must agree, or the app shows raw markdown where the site
+# shows a screenshot.
+FIGURE = re.compile(r"^!\[([^\]]+)\]\(([^)\s]+)\)\s*$")
 UL_ITEM = re.compile(r"^-\s+(.*)$")
 OL_ITEM = re.compile(r"^\d+\.\s+(.*)$")
 RULE = re.compile(r"^---+\s*$")
@@ -102,6 +106,11 @@ def parse_markdown(src: str) -> list[dict]:
                 i += 1
             i += 1  # closing fence (or EOF)
             blocks.append({"kind": "code", "text": "\n".join(buf)})
+            continue
+        fig = FIGURE.match(line)
+        if fig:
+            blocks.append({"kind": "figure", "alt": fig.group(1), "src": fig.group(2)})
+            i += 1
             continue
         if RULE.match(line):
             blocks.append({"kind": "rule"})
@@ -192,6 +201,15 @@ def render_blocks(blocks: list[dict]) -> tuple[str, list[tuple[str, str]]]:
             tag = "ol" if b["ordered"] else "ul"
             items = "\n".join(f"<li>{render_spans(it)}</li>" for it in b["items"])
             out.append(f"<{tag}>\n{items}\n</{tag}>")
+        elif kind == "figure":
+            alt = html.escape(b["alt"], quote=True)
+            src = html.escape(b["src"], quote=True)
+            out.append(
+                f'<figure class="guide-figure">'
+                f'<img src="{src}" alt="{alt}" loading="lazy">'
+                f"<figcaption>{alt}</figcaption>"
+                f"</figure>"
+            )
         elif kind == "rule":
             out.append("<hr>")
     return "\n".join(out), toc

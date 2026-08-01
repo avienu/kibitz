@@ -5301,3 +5301,24 @@ button.mv-var-line:hover {
 .linklike:hover {
   text-decoration: underline;
 }
+
+/* ---- guide screenshots (Help) ----------------------------------------
+   A figure is evidence, not decoration: full width of the prose column,
+   framed like a panel so it reads as a picture of the app rather than a
+   part of the page, with the alt text doubling as the caption. */
+.help-figure {
+  margin: 18px 0;
+}
+.help-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.help-figure figcaption {
+  margin-top: 6px;
+  font: 400 12px/1.5 var(--font-ui);
+  color: var(--dim);
+}

@@ -436,3 +436,19 @@ a:hover { text-decoration: underline; }
   border-top: 1px solid var(--line);
   margin: 28px 0;
 }
+
+/* ---- guide screenshots ---- */
+.guide-figure { margin: 22px 0; }
+.guide-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.guide-figure figcaption {
+  margin-top: 8px;
+  font: 400 12.5px/1.6 var(--sans);
+  color: var(--dim);
+}
