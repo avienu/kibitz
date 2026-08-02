@@ -8,7 +8,11 @@
  */
 
 import { whitePovCp, type AnalysisRow } from "./analyses";
-import { DEFAULT_INTENSITY, type Evidence, type EvidenceArrow } from "./evidence";
+import {
+  DEFAULT_INTENSITY,
+  type Evidence,
+  type EvidenceArrow,
+} from "./evidence";
 
 /* ------------------------------------------------------------------ */
 /* The explanation contract (backend: kibitz_core::record::Explanation,
@@ -79,7 +83,9 @@ export interface ExplanationJson {
 }
 
 /** Fill the omitted-when-empty arrays so downstream code never branches. */
-export function normalizeEvidence(e: EvidenceJson | null | undefined): Evidence {
+export function normalizeEvidence(
+  e: EvidenceJson | null | undefined,
+): Evidence {
   return {
     alerts: e?.alerts ?? [],
     attackers: e?.attackers ?? [],
@@ -104,7 +110,6 @@ export function unionEvidence(blocks: ExplanationBlockJson[]): Evidence {
   }
   return out;
 }
-
 
 /**
  * Block indices hidden by the summary-first rule (design round 3 change
@@ -159,7 +164,8 @@ export function deriveEvidence(
   if (hoverSentence !== null) {
     const block = explanation.blocks[hoverSentence];
     if (block) return normalizeEvidence(block.evidence);
-    const suggestion = explanation.suggestions?.[hoverSentence - explanation.blocks.length];
+    const suggestion =
+      explanation.suggestions?.[hoverSentence - explanation.blocks.length];
     if (suggestion) return normalizeEvidence(suggestion.evidence);
   }
   // The no-hover union ALWAYS covers every finding (design round 3
@@ -170,9 +176,7 @@ export function deriveEvidence(
 
 /** "PressureBackwardPawn" -> "pressure backward pawn", for chip tooltips. */
 export function humanizeHintToken(token: string): string {
-  return token
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .toLowerCase();
+  return token.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
 }
 
 /** Tooltip text for a suggestion chip: served plans, denial flagged. */
@@ -188,7 +192,10 @@ export function deriveIntensity(hoverSentence: number | null): number {
 }
 
 /** Does this block's evidence reference `square` (marks or arrows)? */
-export function blockReferencesSquare(block: ExplanationBlockJson, square: string): boolean {
+export function blockReferencesSquare(
+  block: ExplanationBlockJson,
+  square: string,
+): boolean {
   const e = normalizeEvidence(block.evidence);
   return (
     e.alerts.includes(square) ||
@@ -259,9 +266,13 @@ export type GameViewAction =
   /** A new game was installed: jump to `ply`, drop transient state. */
   | { type: "gameLoaded"; ply: number; plyCount: number };
 
-const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+const clamp = (n: number, lo: number, hi: number) =>
+  Math.max(lo, Math.min(hi, n));
 
-export function reduceGameView(state: GameViewState, action: GameViewAction): GameViewState {
+export function reduceGameView(
+  state: GameViewState,
+  action: GameViewAction,
+): GameViewState {
   switch (action.type) {
     case "setFlipped":
       return { ...state, flipped: action.flipped };
@@ -282,10 +293,13 @@ export function reduceGameView(state: GameViewState, action: GameViewAction): Ga
     case "selectSquare":
       return {
         ...state,
-        selectedSquare: state.selectedSquare === action.square ? null : action.square,
+        selectedSquare:
+          state.selectedSquare === action.square ? null : action.square,
       };
     case "clearSelection":
-      return state.selectedSquare === null ? state : { ...state, selectedSquare: null };
+      return state.selectedSquare === null
+        ? state
+        : { ...state, selectedSquare: null };
     case "setVoice":
       return { ...state, voice: action.voice };
     case "setAnnotationMode":
@@ -311,19 +325,38 @@ export function chooseResumePly(savedPly: number, plyCount: number): number {
   return Math.max(0, savedPly);
 }
 
+/**
+ * Which way to face the board when opening a game (2026-08-02 field
+ * report: "if I'm one of the players it should always start with my side
+ * towards me"). True = Black at the bottom.
+ *
+ * `mine` is every name form the user's identity resolves to — chess.com
+ * and Lichess handles included, since a game's players are recorded under
+ * whatever handle played it, not under the canonical name. Matching is
+ * case-insensitive and trimmed for the same reason.
+ *
+ * Playing BOTH sides (an engine game against yourself, or a name collision)
+ * is not a preference — it falls back to White, as does a game the user is
+ * not in.
+ */
+export function openingOrientation(
+  white: string,
+  black: string,
+  mine: readonly string[],
+): boolean {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const set = new Set(mine.map(norm));
+  const isWhite = set.has(norm(white));
+  const isBlack = set.has(norm(black));
+  return isBlack && !isWhite;
+}
+
 /* ------------------------------------------------------------------ */
 /* Keyboard map (README §Interactions & Behavior)                      */
 /* ------------------------------------------------------------------ */
 
 export type GameKeyAction =
-  | "next"
-  | "prev"
-  | "fwd5"
-  | "back5"
-  | "start"
-  | "end"
-  | "flip"
-  | "explain";
+  "next" | "prev" | "fwd5" | "back5" | "start" | "end" | "flip" | "explain";
 
 export interface KeyboardOpts {
   /** True when a text input / textarea / contenteditable has focus. */
@@ -338,10 +371,17 @@ export interface EditableTargetLike {
   isContentEditable?: boolean;
 }
 
-export function isEditableTarget(t: EditableTargetLike | null | undefined): boolean {
+export function isEditableTarget(
+  t: EditableTargetLike | null | undefined,
+): boolean {
   if (!t) return false;
   const tag = (t.tagName ?? "").toUpperCase();
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable === true;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    t.isContentEditable === true
+  );
 }
 
 /**
@@ -349,7 +389,10 @@ export function isEditableTarget(t: EditableTargetLike | null | undefined): bool
  * game view — but never while a text input is focused, and never with a
  * modifier held.
  */
-export function keyboardAction(key: string, opts: KeyboardOpts = {}): GameKeyAction | null {
+export function keyboardAction(
+  key: string,
+  opts: KeyboardOpts = {},
+): GameKeyAction | null {
   if (opts.editable || opts.modifier) return null;
   switch (key) {
     case "ArrowRight":
@@ -388,7 +431,10 @@ export const MATE_SENTINEL_CP = 9500;
 
 /** Pick the row the eval bar shows for a ply: fresh beats legacy; within
  * a kind the first row wins (`game_analyses` orders newest first). */
-export function selectPlyAnalysis(rows: AnalysisRow[], ply: number): AnalysisRow | null {
+export function selectPlyAnalysis(
+  rows: AnalysisRow[],
+  ply: number,
+): AnalysisRow | null {
   let legacy: AnalysisRow | null = null;
   for (const r of rows) {
     if (r.ply !== ply) continue;
@@ -434,7 +480,10 @@ export function evalSourceLabel(row: AnalysisRow): string {
  * `mate` (signed, White POV; from an explanation readout when known)
  * supplies the mate distance the analyses table can't store.
  */
-export function evalBarView(row: AnalysisRow | null, mate?: number | null): EvalBarView {
+export function evalBarView(
+  row: AnalysisRow | null,
+  mate?: number | null,
+): EvalBarView {
   if (mate != null && mate !== 0) {
     const winner = mate > 0 ? "white" : "black";
     return {
@@ -445,7 +494,13 @@ export function evalBarView(row: AnalysisRow | null, mate?: number | null): Eval
       tooltip: row ? evalSourceLabel(row) : "no analysis",
     };
   }
-  if (!row) return { state: "no-data", fillPct: null, readout: "—", tooltip: "no analysis" };
+  if (!row)
+    return {
+      state: "no-data",
+      fillPct: null,
+      readout: "—",
+      tooltip: "no analysis",
+    };
   const cp = whitePovCp(row.kind, row.ply, row.evalCp);
   if (Math.abs(cp) >= MATE_SENTINEL_CP) {
     const winner = cp > 0 ? "white" : "black";
@@ -506,7 +561,10 @@ export function fitBoardSize(
 ): number {
   const avail = Math.min(availW, availH);
   let size = Math.floor(avail / 8) * 8;
-  while (size > MIN_BOARD_SIZE && size + boardOverhead(size, treatment) > avail) {
+  while (
+    size > MIN_BOARD_SIZE &&
+    size + boardOverhead(size, treatment) > avail
+  ) {
     size -= 8;
   }
   return Math.max(MIN_BOARD_SIZE, size);

@@ -927,8 +927,17 @@ fn coach_voice_overlays_and_neutral_stays_plain() {
     let coach = verbalize_voiced(&record, Voice::Coach);
     let neutral = verbalize_voiced(&record, Voice::Neutral);
     assert_ne!(coach, neutral);
-    assert!(coach.contains("overworked"), "coach alt lead: {coach}");
-    assert!(!neutral.contains("overworked"), "coach leak: {neutral}");
+    // A phrase only the coach lead uses. "overloaded"/"comes out ahead"
+    // would not do: both appear in the shared follow-on sentences, which
+    // are voice-independent and must stay that way.
+    assert!(
+        coach.contains("They can just take"),
+        "coach alt lead: {coach}"
+    );
+    assert!(
+        !neutral.contains("They can just take"),
+        "coach leak: {neutral}"
+    );
     // Both voices ground the same facts: same squares mentioned.
     assert_eq!(squares_in(&coach), squares_in(&neutral));
     // The default voice IS Coach.

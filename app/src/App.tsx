@@ -3,7 +3,14 @@
  * (header + view + status strip). The game view is the centrepiece;
  * every other capability keeps a rail home. The old tab bar is gone.
  */
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { Chess, normalizeMove } from "chessops/chess";
 import { chessgroundDests } from "chessops/compat";
 import { parseFen } from "chessops/fen";
@@ -17,7 +24,10 @@ import HomeView from "./HomeView";
 import OpeningLabView from "./OpeningLabView";
 import OpeningTreeView from "./OpeningTreeView";
 import PositionSearchView from "./PositionSearchView";
-import FirstRunOverlay, { markFirstRunSeen, shouldShowFirstRun } from "./FirstRunOverlay";
+import FirstRunOverlay, {
+  markFirstRunSeen,
+  shouldShowFirstRun,
+} from "./FirstRunOverlay";
 import GameView from "./GameView";
 import Help from "./Help";
 import ImportView from "./ImportView";
@@ -35,7 +45,10 @@ import TriageView from "./TriageView";
 import NavRail from "./shell/NavRail";
 import StatusStrip from "./shell/StatusStrip";
 import type { AnalysisRow } from "./lib/analyses";
-import { getSavedAnnotationDisplay, saveAnnotationDisplay } from "./lib/annotationDisplay";
+import {
+  getSavedAnnotationDisplay,
+  saveAnnotationDisplay,
+} from "./lib/annotationDisplay";
 import {
   explainPosition,
   fetchDbSummary,
@@ -46,6 +59,8 @@ import {
   getSavedDbPath,
   getSavedVoice,
   autoLinkIdentities,
+  identityGroup,
+  selfPlayerGet,
   cachedProfile,
   jobsStatus,
   lastDatabase,
@@ -65,10 +80,16 @@ import {
   type DbSummary,
   type GameDetail,
   type JobsStatus,
+  type NameForm,
   type PlayerProfile,
   type TrainSummary,
 } from "./lib/db";
-import { getSavedEnginePath, getSavedNodes, getSavedTbDir, setTablebaseDir } from "./lib/engine";
+import {
+  getSavedEnginePath,
+  getSavedNodes,
+  getSavedTbDir,
+  setTablebaseDir,
+} from "./lib/engine";
 import { onEngineDone, onEngineInfo } from "./lib/engine";
 import {
   failVerification,
@@ -95,6 +116,7 @@ import {
   chooseResumePly,
   isEditableTarget,
   keyboardAction,
+  openingOrientation,
   railCollapsed,
   reduceGameView,
   type EditableTargetLike,
@@ -113,9 +135,20 @@ import {
 import type { PromoRole } from "./lib/promotion";
 import type { RepertoireMark } from "./lib/repMarks";
 import { viewKeyHints, type ViewId, type ViewParams } from "./lib/shell";
-import { dbScreenState, hydrateDbScreenState, subscribeDbScreenState } from "./lib/dbScreenState";
-import { hasDeepLinkOverride, parseSession, serializeSession } from "./lib/session";
-import { tacticsState as fetchTacticsState, type TacticsState } from "./lib/tactics";
+import {
+  dbScreenState,
+  hydrateDbScreenState,
+  subscribeDbScreenState,
+} from "./lib/dbScreenState";
+import {
+  hasDeepLinkOverride,
+  parseSession,
+  serializeSession,
+} from "./lib/session";
+import {
+  tacticsState as fetchTacticsState,
+  type TacticsState,
+} from "./lib/tactics";
 import { insertVariation, type JsonToken } from "./lib/tokens";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -131,7 +164,10 @@ function initialGameView(): GameViewState {
     selectedSquare: null,
     voice: getSavedVoice(),
     annotationMode: getSavedAnnotationDisplay(),
-    boardTreatment: localStorage.getItem(TREATMENT_KEY) === "instrument" ? "instrument" : "walnut",
+    boardTreatment:
+      localStorage.getItem(TREATMENT_KEY) === "instrument"
+        ? "instrument"
+        : "walnut",
     theme: localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
     flipped: false,
   };
@@ -196,12 +232,18 @@ export default function App() {
   const [repMarks, setRepMarks] = useState<RepertoireMark[]>([]);
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
 
-  const [explainOn, setExplainOn] = useState(() => localStorage.getItem(EXPLAIN_KEY) !== "off");
-  const [explanations, setExplanations] = useState<Map<number, ExplanationJson>>(new Map());
+  const [explainOn, setExplainOn] = useState(
+    () => localStorage.getItem(EXPLAIN_KEY) !== "off",
+  );
+  const [explanations, setExplanations] = useState<
+    Map<number, ExplanationJson>
+  >(new Map());
   const [explaining, setExplaining] = useState(false);
   /** Chip-verification state per ply (run 11): entries are FEN-stamped
    * so stale round-trips from ply-stepping or game switches drop. */
-  const [verifications, setVerifications] = useState<Map<number, VerificationState>>(new Map());
+  const [verifications, setVerifications] = useState<
+    Map<number, VerificationState>
+  >(new Map());
 
   const [dbSummary, setDbSummary] = useState<DbSummary | null>(null);
   const [trainSum, setTrainSum] = useState<TrainSummary | null>(null);
@@ -266,8 +308,12 @@ export default function App() {
 
   /* ---- shell data: db auto-open, badges, jobs polling ---- */
   const refreshCounts = useCallback(() => {
-    trainSummary().then(setTrainSum).catch(() => setTrainSum(null));
-    fetchTacticsState().then(setTacticsSt).catch(() => setTacticsSt(null));
+    trainSummary()
+      .then(setTrainSum)
+      .catch(() => setTrainSum(null));
+    fetchTacticsState()
+      .then(setTacticsSt)
+      .catch(() => setTacticsSt(null));
   }, []);
 
   useEffect(() => {
@@ -276,7 +322,9 @@ export default function App() {
     // fallback), then land where the user was — screen, database-screen
     // filters, and the open game at its exact ply and orientation.
     // A #db=/#game=/#screen= deep link overrides restore (not persisted).
-    const dbOverride = new URLSearchParams(window.location.hash.slice(1)).get("db");
+    const dbOverride = new URLSearchParams(window.location.hash.slice(1)).get(
+      "db",
+    );
     const deepLinked = hasDeepLinkOverride(window.location.hash);
     // Engine manager (run 10): a user-configured Syzygy dir is stored
     // frontend-side; push it so drills see it before Settings is opened.
@@ -332,7 +380,8 @@ export default function App() {
       if (session.view === "game") {
         const lg = await lastGameGet().catch(() => null);
         // Exact restore: the saved ply, not the resume heuristic.
-        if (lg) await loadDbGameAtRef.current(lg.gameId, lg.ply, lg.flipped, false);
+        if (lg)
+          await loadDbGameAtRef.current(lg.gameId, lg.ply, lg.flipped, false);
         else setView("home");
       } else {
         setView(session.view);
@@ -406,7 +455,9 @@ export default function App() {
   useEffect(() => {
     if (!dbSummary) return;
     const refreshBadges = () =>
-      railNetBadges().then(setNetBadges).catch(() => setNetBadges(null));
+      railNetBadges()
+        .then(setNetBadges)
+        .catch(() => setNetBadges(null));
     const refreshDbCounts = () =>
       fetchDbSummary()
         .then((s) => {
@@ -446,16 +497,23 @@ export default function App() {
   }, []);
 
   /* ---- game loading ---- */
-  const applyGame = useCallback((g: LoadedGame, label: string, warning?: string, atPly = 0) => {
-    setGame(g);
-    dispatch({ type: "gameLoaded", ply: clampPly(atPly, g), plyCount: g.sans.length });
-    setStatus(label + (warning ? ` ${warning}` : ""));
-    setExplanations(new Map());
-    setVerifications(new Map());
-    setRevealedQuiet(new Set());
-    setPendingVar(null);
-    setPreview(null);
-  }, []);
+  const applyGame = useCallback(
+    (g: LoadedGame, label: string, warning?: string, atPly = 0) => {
+      setGame(g);
+      dispatch({
+        type: "gameLoaded",
+        ply: clampPly(atPly, g),
+        plyCount: g.sans.length,
+      });
+      setStatus(label + (warning ? ` ${warning}` : ""));
+      setExplanations(new Map());
+      setVerifications(new Map());
+      setRevealedQuiet(new Set());
+      setPendingVar(null);
+      setPreview(null);
+    },
+    [],
+  );
 
   const doLoad = useCallback(
     (text: string) => {
@@ -470,11 +528,35 @@ export default function App() {
       setAnnot(null);
       setAnalysisRows([]);
       setRepMarks([]); // pasted PGN has no db identity — no marks
-      applyGame(res.game, `${w} — ${b}, ${res.game.sans.length} plies.`, res.warning);
+      applyGame(
+        res.game,
+        `${w} — ${b}, ${res.game.sans.length} plies.`,
+        res.warning,
+      );
       setView("game");
     },
     [applyGame],
   );
+
+  /** Every name form the user's identity resolves to — chess.com and
+   * Lichess handles included. Drives which way a game opens. */
+  const [myNames, setMyNames] = useState<string[]>([]);
+  useEffect(() => {
+    let stale = false;
+    void selfPlayerGet()
+      .then(async (self) => {
+        if (!self || stale) return;
+        const group = await identityGroup(self).catch(() => [] as NameForm[]);
+        if (stale) return;
+        setMyNames(group.length > 0 ? group.map((n) => n.name) : [self]);
+      })
+      .catch(() => {}); // orientation is a nicety; never fail an open over it
+    return () => {
+      stale = true;
+    };
+  }, []);
+  const myNamesRef = useRef(myNames);
+  myNamesRef.current = myNames;
 
   const loadDbGame = useCallback(
     (detail: GameDetail, atPly = 0) => {
@@ -507,6 +589,16 @@ export default function App() {
         atPly,
       );
       setView("game");
+      // Face the board the way the user played it. A resume overrides
+      // this immediately afterwards with the orientation they left.
+      dispatch({
+        type: "setFlipped",
+        flipped: openingOrientation(
+          detail.white,
+          detail.black,
+          myNamesRef.current,
+        ),
+      });
       const req = ++tokenReqRef.current;
       getGameTokens(detail.id)
         .then((gt) => {
@@ -538,13 +630,21 @@ export default function App() {
   );
 
   const loadDbGameAt = useCallback(
-    async (gameId: number, atPly: number, flipped?: boolean, resume = false) => {
+    async (
+      gameId: number,
+      atPly: number,
+      flipped?: boolean,
+      resume = false,
+    ) => {
       try {
         const detail = await getGame(gameId);
         // Resuming a game whose last-touched ply IS the end (every
         // reviewed game) opens at the start instead (audit #12); the
         // flipped orientation is still restored below.
-        loadDbGame(detail, resume ? chooseResumePly(atPly, detail.sans.length) : atPly);
+        loadDbGame(
+          detail,
+          resume ? chooseResumePly(atPly, detail.sans.length) : atPly,
+        );
         // Resume restores the board orientation you left the game in.
         if (flipped !== undefined) dispatch({ type: "setFlipped", flipped });
       } catch (e) {
@@ -568,13 +668,15 @@ export default function App() {
     if ([...h.keys()].length === 0) return;
     hashApplied.current = true;
     const theme = h.get("theme");
-    if (theme === "light" || theme === "dark") dispatch({ type: "setTheme", theme });
+    if (theme === "light" || theme === "dark")
+      dispatch({ type: "setTheme", theme });
     const treatment = h.get("treatment");
     if (treatment === "walnut" || treatment === "instrument") {
       dispatch({ type: "setTreatment", treatment });
     }
     const voice = h.get("voice");
-    if (voice === "coach" || voice === "neutral") dispatch({ type: "setVoice", voice });
+    if (voice === "coach" || voice === "neutral")
+      dispatch({ type: "setVoice", voice });
     // screen=home|database|tree|search|profile|prep|tactics|srs|endgames|
     // settings|help ("srs" is the rail's Openings SRS = view id "train";
     // "help" opens the overlay). A game=… link below still wins.
@@ -664,7 +766,8 @@ export default function App() {
   const exitPreview = useCallback(() => setPreview(null), []);
   /** GameView's dispatch: main-game navigation also exits the preview. */
   const gvDispatch = useCallback((a: GameViewAction) => {
-    if (a.type === "step" || a.type === "setPly" || a.type === "gameLoaded") setPreview(null);
+    if (a.type === "step" || a.type === "setPly" || a.type === "gameLoaded")
+      setPreview(null);
     dispatch(a);
   }, []);
 
@@ -675,7 +778,9 @@ export default function App() {
   const [revealedQuiet, setRevealedQuiet] = useState<Set<number>>(new Set());
   const fetched = explainOn ? (explanations.get(gv.ply) ?? null) : null;
   const currentExplanation =
-    fetched && (fetched.tag !== "QUIET POSITION" || revealedQuiet.has(gv.ply)) ? fetched : null;
+    fetched && (fetched.tag !== "QUIET POSITION" || revealedQuiet.has(gv.ply))
+      ? fetched
+      : null;
   const explainedPlies = useMemo(
     () => [...explanations.keys()].sort((a, b) => a - b),
     [explanations],
@@ -722,7 +827,8 @@ export default function App() {
       game ? game.fens[0] : undefined,
     )
       .then((res) => {
-        if (!stale) setExplanations((m) => new Map(m).set(ply, res.explanation));
+        if (!stale)
+          setExplanations((m) => new Map(m).set(ply, res.explanation));
       })
       .catch(() => {});
     return () => {
@@ -743,7 +849,9 @@ export default function App() {
     if (!needsVerification(explanation) || verifications.has(gv.ply)) return;
     const ply = gv.ply;
     const requestFen = fen;
-    setVerifications((m) => new Map(m).set(ply, { kind: "running", fen: requestFen }));
+    setVerifications((m) =>
+      new Map(m).set(ply, { kind: "running", fen: requestFen }),
+    );
     verifySuggestions(requestFen, getSavedEnginePath() || undefined)
       .then((res) => {
         // The response's own FEN stamp guards against staleness — a
@@ -767,10 +875,12 @@ export default function App() {
   }, [explainOn, explanations, verifications, gv.ply, fen, preview]);
 
   /* ---- board move input (annotatable db games → variations) ---- */
-  const boardMoveRef = useRef<(orig: string, dest: string, promoRole?: PromoRole) => void>(
-    () => {},
+  const boardMoveRef = useRef<
+    (orig: string, dest: string, promoRole?: PromoRole) => void
+  >(() => {});
+  const promo = usePromotionPicker((orig, dest, role) =>
+    boardMoveRef.current(orig, dest, role),
   );
-  const promo = usePromotionPicker((orig, dest, role) => boardMoveRef.current(orig, dest, role));
 
   const handleBoardMove = useCallback(
     (orig: string, dest: string, promoRole?: PromoRole) => {
@@ -784,7 +894,10 @@ export default function App() {
       const from = parseSquare(orig);
       const to = parseSquare(dest);
       if (from === undefined || to === undefined) return;
-      const promotion = pos.board.get(from)?.role === "pawn" && promoRole ? promoRole : undefined;
+      const promotion =
+        pos.board.get(from)?.role === "pawn" && promoRole
+          ? promoRole
+          : undefined;
       const move = normalizeMove(pos, { from, to, promotion });
       if (!pos.isLegal(move)) return;
       const san = makeSan(pos, move);
@@ -793,10 +906,13 @@ export default function App() {
         return;
       }
       if (gv.ply >= game.sans.length) {
-        setStatus("End of the mainline — a board move can only vary an existing move.");
+        setStatus(
+          "End of the mainline — a board move can only vary an existing move.",
+        );
         return;
       }
-      const num = pos.turn === "white" ? `${pos.fullmoves}.` : `${pos.fullmoves}...`;
+      const num =
+        pos.turn === "white" ? `${pos.fullmoves}.` : `${pos.fullmoves}...`;
       setPendingVar({ ply: gv.ply + 1, san, label: `${num} ${san}` });
     },
     [game, annot, gv.ply, step, promo],
@@ -810,13 +926,22 @@ export default function App() {
     const p = Chess.fromSetup(setup.unwrap());
     if (p.isErr) return undefined;
     const pos = p.unwrap();
-    return { color: pos.turn, dests: chessgroundDests(pos), onMove: handleBoardMove };
+    return {
+      color: pos.turn,
+      dests: chessgroundDests(pos),
+      onMove: handleBoardMove,
+    };
   }, [game, annot, fen, handleBoardMove]);
 
   const acceptPendingVar = useCallback(() => {
     if (!pendingVar) return;
     setAnnot((a) =>
-      a ? { ...a, tokens: insertVariation(a.tokens, pendingVar.ply, [pendingVar.san]) } : a,
+      a
+        ? {
+            ...a,
+            tokens: insertVariation(a.tokens, pendingVar.ply, [pendingVar.san]),
+          }
+        : a,
     );
     setPendingVar(null);
   }, [pendingVar]);
@@ -944,7 +1069,11 @@ export default function App() {
   }, []);
 
   const batchProgress = useMemo(() => {
-    if (!jobs?.workerActive || batchTotalRef.current === null || batchTotalRef.current === 0) {
+    if (
+      !jobs?.workerActive ||
+      batchTotalRef.current === null ||
+      batchTotalRef.current === 0
+    ) {
       return null;
     }
     const remaining = jobs.pending + jobs.running;
@@ -999,7 +1128,9 @@ export default function App() {
             batchFraction={batchProgress?.fraction ?? null}
             netProgress={netProg}
             onNavigate={navigate}
-            onOpenGame={(id, ply, flipped) => void loadDbGameAt(id, ply, flipped, true)}
+            onOpenGame={(id, ply, flipped) =>
+              void loadDbGameAt(id, ply, flipped, true)
+            }
           />
         );
       case "database":
@@ -1053,7 +1184,9 @@ export default function App() {
           />
         );
       case "train":
-        return <TrainView onSummary={setTrainSum} treatment={gv.boardTreatment} />;
+        return (
+          <TrainView onSummary={setTrainSum} treatment={gv.boardTreatment} />
+        );
       case "triage":
         return (
           <TriageView
@@ -1108,9 +1241,13 @@ export default function App() {
             voice={gv.voice}
             onVoice={(v) => dispatch({ type: "setVoice", voice: v })}
             annotationMode={gv.annotationMode}
-            onAnnotationMode={(m) => dispatch({ type: "setAnnotationMode", mode: m })}
+            onAnnotationMode={(m) =>
+              dispatch({ type: "setAnnotationMode", mode: m })
+            }
             treatment={gv.boardTreatment}
-            onTreatment={(t) => dispatch({ type: "setTreatment", treatment: t })}
+            onTreatment={(t) =>
+              dispatch({ type: "setTreatment", treatment: t })
+            }
             theme={gv.theme}
             onTheme={(t) => dispatch({ type: "setTheme", theme: t })}
           />
@@ -1148,7 +1285,8 @@ export default function App() {
                 ? {
                     tokens: annot.tokens,
                     narrations: annot.narrations,
-                    onChange: (tokens) => setAnnot((a) => (a ? { ...a, tokens } : a)),
+                    onChange: (tokens) =>
+                      setAnnot((a) => (a ? { ...a, tokens } : a)),
                     dirty: annot.tokens !== annot.saved,
                     saving,
                     onSave: () => void saveAnnotations(),

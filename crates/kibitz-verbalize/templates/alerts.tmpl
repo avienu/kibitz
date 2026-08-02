@@ -13,9 +13,14 @@ alert.Undefended.low = {subject} is undefended at the moment, which is worth kee
 alert.Undefended.loose = {subject} has been left without a defender — worth keeping an eye on.
 alert.Undefended.attacked-and-undefended = {subject} hangs — nobody defends it.
 
-alert.InadequatelyDefended.high = {subject} cannot be adequately defended.
-alert.InadequatelyDefended.medium = {subject} is under pressure — its defense is stretched thin.
-alert.InadequatelyDefended.low = {subject} is slightly short of defenders.
+# The detector fires on a POSITIVE static exchange: the capture sequence
+# on this square wins material. That is a threat to be answered, not a
+# remark about defensive density — say what is at stake and what answers
+# it (2026-08-02 field report: "it's calling for defense? More like it's
+# being attacked").
+alert.InadequatelyDefended.high = Taking {subject} wins material outright — move it, defend it, or take the attacker.
+alert.InadequatelyDefended.medium = {subject} can be taken for less than it is worth — move it, add a defender, or capture the attacker.
+alert.InadequatelyDefended.low = The exchange on {subject} comes out slightly in the attacker's favour as it stands.
 
 # Pure overload alerts (the subject is itself the overworked defender).
 alert.overloaded = {subject} is overloaded — it is the only piece defending {defenders}.

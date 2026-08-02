@@ -16,6 +16,7 @@ import {
   keyboardAction,
   MIN_BOARD_SIZE,
   normalizeEvidence,
+  openingOrientation,
   railCollapsed,
   reduceGameView,
   selectionNote,
@@ -28,7 +29,9 @@ import {
   type GameViewState,
 } from "./gameView";
 
-const block = (over: Partial<ExplanationBlockJson> = {}): ExplanationBlockJson => ({
+const block = (
+  over: Partial<ExplanationBlockJson> = {},
+): ExplanationBlockJson => ({
   kind: "alert",
   text: { coach: "c", neutral: "n" },
   evidence: {},
@@ -43,8 +46,17 @@ const explanation = (blocks: ExplanationBlockJson[]): ExplanationJson => ({
 });
 
 describe("evidence derivation (README §State Management)", () => {
-  const b0 = block({ evidence: { alerts: ["d7"], attackers: ["b5"], arrows: [{ from: "b5", to: "d7", kind: "attacker" }] } });
-  const b1 = block({ kind: "imbalance", evidence: { imbalance: ["e8", "d7"] } });
+  const b0 = block({
+    evidence: {
+      alerts: ["d7"],
+      attackers: ["b5"],
+      arrows: [{ from: "b5", to: "d7", kind: "attacker" }],
+    },
+  });
+  const b1 = block({
+    kind: "imbalance",
+    evidence: { imbalance: ["e8", "d7"] },
+  });
   const expl = explanation([b0, b1]);
 
   it("normalizes omitted wire arrays (serde skips empty vecs)", () => {
@@ -85,7 +97,9 @@ describe("evidence derivation (README §State Management)", () => {
     // It can never collide with suggestion indexing (blocks.length + j).
     expect(COACH_HOVER_INDEX).toBeLessThan(0);
     // Preview still suppresses everything (audit #4).
-    expect(deriveEvidence(expl, COACH_HOVER_INDEX, { previewing: true })).toBeNull();
+    expect(
+      deriveEvidence(expl, COACH_HOVER_INDEX, { previewing: true }),
+    ).toBeNull();
   });
 
   it("run 10: indices past the blocks isolate suggestion chips", () => {
@@ -98,7 +112,10 @@ describe("evidence derivation (README §State Management)", () => {
           score: 3,
           serving: ["BlockadeThenPressure"],
           prophylactic: false,
-          evidence: { key: ["d4"], arrows: [{ from: "f3", to: "d4", kind: "key" }] },
+          evidence: {
+            key: ["d4"],
+            arrows: [{ from: "f3", to: "d4", kind: "key" }],
+          },
         },
       ],
     };
@@ -153,7 +170,12 @@ describe("evidence derivation (README §State Management)", () => {
       block({ evidence: { alerts: ["a1"] } }),
       block({ evidence: { alerts: ["b2"] } }),
       block({ evidence: { alerts: ["c3"] } }),
-      block({ evidence: { alerts: ["d4"], arrows: [{ from: "a1", to: "d4", kind: "attacker" }] } }),
+      block({
+        evidence: {
+          alerts: ["d4"],
+          arrows: [{ from: "a1", to: "d4", kind: "attacker" }],
+        },
+      }),
       block({ kind: "imbalance", evidence: { imbalance: ["e5"] } }),
       block({ kind: "plan", evidence: { key: ["f6"] } }),
     ];
@@ -180,7 +202,9 @@ describe("evidence derivation (README §State Management)", () => {
     expect(deriveEvidence(expl, null, { previewing: true })).toBeNull();
     expect(deriveEvidence(expl, 0, { previewing: true })).toBeNull();
     // Preview off keeps the normal union.
-    expect(deriveEvidence(expl, null, { previewing: false })!.alerts).toEqual(["d7"]);
+    expect(deriveEvidence(expl, null, { previewing: false })!.alerts).toEqual([
+      "d7",
+    ]);
   });
 
   it("intensity: 1.0 hovered, 0.44 baseline", () => {
@@ -191,7 +215,9 @@ describe("evidence derivation (README §State Management)", () => {
 });
 
 describe("prose filtering by selected square", () => {
-  const referencing = block({ evidence: { arrows: [{ from: "b5", to: "d7", kind: "attacker" }] } });
+  const referencing = block({
+    evidence: { arrows: [{ from: "b5", to: "d7", kind: "attacker" }] },
+  });
   const other = block({ evidence: { imbalance: ["a1"] } });
 
   it("references via any evidence array or arrow endpoint", () => {
@@ -230,17 +256,28 @@ describe("reduceGameView", () => {
     expect(s.ply).toBe(15);
     expect(s.hoverSentence).toBeNull();
     expect(s.selectedSquare).toBeNull();
-    expect(reduceGameView(base, { type: "step", delta: -99, plyCount: 33 }).ply).toBe(0);
-    expect(reduceGameView(base, { type: "step", delta: 99, plyCount: 33 }).ply).toBe(33);
+    expect(
+      reduceGameView(base, { type: "step", delta: -99, plyCount: 33 }).ply,
+    ).toBe(0);
+    expect(
+      reduceGameView(base, { type: "step", delta: 99, plyCount: 33 }).ply,
+    ).toBe(33);
   });
 
   it("setPly clears transient state too", () => {
     const s = reduceGameView(base, { type: "setPly", ply: 3, plyCount: 33 });
-    expect(s).toMatchObject({ ply: 3, hoverSentence: null, selectedSquare: null });
+    expect(s).toMatchObject({
+      ply: 3,
+      hoverSentence: null,
+      selectedSquare: null,
+    });
   });
 
   it("square selection toggles on repeat click", () => {
-    const cleared = reduceGameView(base, { type: "selectSquare", square: "d7" });
+    const cleared = reduceGameView(base, {
+      type: "selectSquare",
+      square: "d7",
+    });
     expect(cleared.selectedSquare).toBeNull();
     const moved = reduceGameView(base, { type: "selectSquare", square: "e4" });
     expect(moved.selectedSquare).toBe("e4");
@@ -248,13 +285,19 @@ describe("reduceGameView", () => {
 
   it("flip toggles; voice/mode/theme/treatment set", () => {
     expect(reduceGameView(base, { type: "toggleFlip" }).flipped).toBe(true);
-    expect(reduceGameView(base, { type: "setVoice", voice: "neutral" }).voice).toBe("neutral");
-    expect(reduceGameView(base, { type: "setAnnotationMode", mode: "hover" }).annotationMode).toBe(
-      "hover",
-    );
-    expect(reduceGameView(base, { type: "setTheme", theme: "light" }).theme).toBe("light");
     expect(
-      reduceGameView(base, { type: "setTreatment", treatment: "instrument" }).boardTreatment,
+      reduceGameView(base, { type: "setVoice", voice: "neutral" }).voice,
+    ).toBe("neutral");
+    expect(
+      reduceGameView(base, { type: "setAnnotationMode", mode: "hover" })
+        .annotationMode,
+    ).toBe("hover");
+    expect(
+      reduceGameView(base, { type: "setTheme", theme: "light" }).theme,
+    ).toBe("light");
+    expect(
+      reduceGameView(base, { type: "setTreatment", treatment: "instrument" })
+        .boardTreatment,
     ).toBe("instrument");
   });
 });
@@ -283,7 +326,9 @@ describe("keyboard map (README §Interactions)", () => {
     expect(isEditableTarget({ tagName: "TEXTAREA" })).toBe(true);
     expect(isEditableTarget({ tagName: "INPUT" })).toBe(true);
     expect(isEditableTarget({ tagName: "SELECT" })).toBe(true);
-    expect(isEditableTarget({ tagName: "DIV", isContentEditable: true })).toBe(true);
+    expect(isEditableTarget({ tagName: "DIV", isContentEditable: true })).toBe(
+      true,
+    );
     expect(isEditableTarget({ tagName: "BUTTON" })).toBe(false);
     expect(isEditableTarget(null)).toBe(false);
   });
@@ -303,7 +348,12 @@ describe("eval bar state derivation (deliverable 2a)", () => {
 
   it("no analysis: empty track, muted dash, never a fake 0.0", () => {
     const v = evalBarView(null);
-    expect(v).toEqual({ state: "no-data", fillPct: null, readout: "—", tooltip: "no analysis" });
+    expect(v).toEqual({
+      state: "no-data",
+      fillPct: null,
+      readout: "—",
+      tooltip: "no analysis",
+    });
   });
 
   it("cp: fill = clamp(6, 50 + pawns×9, 94), readout ±N.N", () => {
@@ -325,14 +375,24 @@ describe("eval bar state derivation (deliverable 2a)", () => {
 
   it("mate sentinel (±10000 fresh cp) pins the bar to the winner", () => {
     const w = evalBarView(row({ evalCp: 10_000, ply: 4 }));
-    expect(w).toMatchObject({ state: "mate", fillPct: 94, winner: "white", readout: "#" });
+    expect(w).toMatchObject({
+      state: "mate",
+      fillPct: 94,
+      winner: "white",
+      readout: "#",
+    });
     const b = evalBarView(row({ evalCp: 10_000, ply: 5 })); // stm POV → Black winning
     expect(b).toMatchObject({ state: "mate", fillPct: 6, winner: "black" });
   });
 
   it("explicit mate distance (from an explanation readout) shows #N", () => {
     const v = evalBarView(row({}), -3);
-    expect(v).toMatchObject({ state: "mate", fillPct: 6, winner: "black", readout: "#3" });
+    expect(v).toMatchObject({
+      state: "mate",
+      fillPct: 6,
+      winner: "black",
+      readout: "#3",
+    });
   });
 
   it("fresh beats legacy at the same ply; first row wins within a kind", () => {
@@ -354,9 +414,11 @@ describe("eval bar state derivation (deliverable 2a)", () => {
     expect(evalSourceLabel(row({ depth: null, nodes: 2_000_000 }))).toBe(
       "Stockfish 18 · nodes 2,000,000 (fresh)",
     );
-    expect(evalSourceLabel(row({ kind: "legacy-import", engine: "Deep Rybka 4 2011" }))).toBe(
-      "legacy import · Deep Rybka 4 2011",
-    );
+    expect(
+      evalSourceLabel(
+        row({ kind: "legacy-import", engine: "Deep Rybka 4 2011" }),
+      ),
+    ).toBe("legacy import · Deep Rybka 4 2011");
   });
 });
 
@@ -365,10 +427,14 @@ describe("resize snapping (deliverable 2c)", () => {
     const s = fitBoardSize(760, 900, "walnut");
     expect(s % 8).toBe(0);
     // Walnut chrome ≈ size×0.108; the snapped board + chrome must fit.
-    expect(s + Math.round(s * 0.028) * 2 + Math.round(s * 0.052)).toBeLessThanOrEqual(760);
+    expect(
+      s + Math.round(s * 0.028) * 2 + Math.round(s * 0.052),
+    ).toBeLessThanOrEqual(760);
     // And the next size up must NOT fit.
     const n = s + 8;
-    expect(n + Math.round(n * 0.028) * 2 + Math.round(n * 0.052)).toBeGreaterThan(760);
+    expect(
+      n + Math.round(n * 0.028) * 2 + Math.round(n * 0.052),
+    ).toBeGreaterThan(760);
   });
 
   it("656 design size fits its design column", () => {
@@ -387,5 +453,36 @@ describe("resize snapping (deliverable 2c)", () => {
   it("rail collapses below 1280", () => {
     expect(railCollapsed(1279)).toBe(true);
     expect(railCollapsed(1280)).toBe(false);
+  });
+});
+
+describe("openingOrientation — my side faces me", () => {
+  const mine = ["O'Connor, Shawn", "sounix", "avienu"];
+
+  it("flips when I am Black", () => {
+    expect(openingOrientation("apolojune09", "sounix", mine)).toBe(true);
+  });
+
+  it("does not flip when I am White", () => {
+    expect(openingOrientation("sounix", "apolojune09", mine)).toBe(false);
+  });
+
+  it("matches any handle the identity resolves to, case-insensitively", () => {
+    expect(openingOrientation("x", "SOUNIX", mine)).toBe(true);
+    expect(openingOrientation("x", " avienu ", mine)).toBe(true);
+  });
+
+  it("leaves a game I am not in as White", () => {
+    expect(openingOrientation("Carlsen,M", "Nepomniachtchi,I", mine)).toBe(
+      false,
+    );
+  });
+
+  it("falls back to White when both sides match — that is not a preference", () => {
+    expect(openingOrientation("sounix", "avienu", mine)).toBe(false);
+  });
+
+  it("is safe with no identity at all", () => {
+    expect(openingOrientation("a", "b", [])).toBe(false);
   });
 });
