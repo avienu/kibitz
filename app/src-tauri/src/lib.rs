@@ -317,6 +317,7 @@ pub fn run() {
             netops::sync_accounts,
             netops::sync_set_username,
             netops::sync_run,
+            netops::sync_history,
             netops::net_progress,
             netops::net_cancel,
             netops::rail_net_badges,

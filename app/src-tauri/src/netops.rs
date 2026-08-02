@@ -675,7 +675,32 @@ pub async fn twic_auto_sync_check(
     };
     spawn_net_worker(&worker, initial, move |stop, progress| {
         let conn = worker_conn(&db_path)?;
-        twic_auto_worker_impl(&conn, &net::UreqFetcher, guess, cap, progress, stop)
+        // Log the pass whatever it finds. "Checked, nothing new" is the
+        // evidence the schedule is alive; without a row it is
+        // indistinguishable from never having run.
+        let started = now_utc(&conn);
+        let run = net::sync_run_start(&conn, "twic", "auto", &started).ok();
+        let result = twic_auto_worker_impl(&conn, &net::UreqFetcher, guess, cap, progress, stop);
+        if let Some(id) = run {
+            let at = now_utc(&conn);
+            let detail = net::meta_get(&conn, META_AUTO_LAST)
+                .ok()
+                .flatten()
+                .and_then(|j| serde_json::from_str::<serde_json::Value>(&j).ok())
+                .and_then(|v| v["text"].as_str().map(str::to_string));
+            let err = result.as_ref().err().cloned();
+            let _ = net::sync_run_finish(
+                &conn,
+                id,
+                &at,
+                0,
+                0,
+                0,
+                detail.as_deref(),
+                err.as_deref(),
+            );
+        }
+        result
     })?;
     Ok(true)
 }
@@ -795,11 +820,29 @@ pub async fn sync_set_username(
     })
 }
 
+/// Recent sync attempts, newest first — the answer to "has it actually
+/// been downloading anything?". Includes automatic passes that found
+/// nothing, which is the case a last-outcome field cannot express.
+#[tauri::command]
+pub async fn sync_history(
+    state: State<'_, DbState>,
+    service: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<net::SyncRun>, String> {
+    let limit = limit.unwrap_or(20).clamp(1, 200);
+    with_conn(&state, |conn| {
+        net::sync_runs(conn, service.as_deref(), limit).map_err(|e| e.to_string())
+    })
+}
+
 /// Run one account sync on the background worker using the existing
 /// kibitz-db client (strictly serial; the clients resume incrementally
 /// from their own per-username meta cursors). FICS requires `year`
 /// (optionally `month`) — there is no incremental cursor for it. The
-/// result (or the error) is persisted as the service's last report.
+/// result (or the error) is persisted as the service's last report, and
+/// the run is recorded in `sync_runs`. `trigger` is "auto" when a
+/// schedule started it; anything else is a person pressing the button —
+/// the distinction the log exists to make.
 #[tauri::command]
 pub async fn sync_run(
     state: State<'_, DbState>,
@@ -808,7 +851,13 @@ pub async fn sync_run(
     username: String,
     year: Option<u16>,
     month: Option<u8>,
+    trigger: Option<String>,
 ) -> Result<(), String> {
+    let trigger = if trigger.as_deref() == Some("auto") {
+        "auto".to_string()
+    } else {
+        "manual".to_string()
+    };
     check_service(&service)?;
     let username = username.trim().to_string();
     if username.is_empty() {
@@ -845,10 +894,27 @@ pub async fn sync_run(
     spawn_net_worker(&worker, initial, move |stop, progress| {
         let conn = worker_conn(&db_path)?;
         let fetcher = net::UreqFetcher;
+        let started = now_utc(&conn);
+        let run = net::sync_run_start(&conn, &service, &trigger, &started).ok();
         let outcome = run_service_sync(
             &conn, &fetcher, &service, &username, year, month, stop, progress,
         );
         let at = now_utc(&conn);
+        if let Some(id) = run {
+            let num = |v: &serde_json::Value, k: &str| v[k].as_i64().unwrap_or(0);
+            let (imported, dups, failed, err) = match &outcome {
+                Ok(r) => (
+                    num(r, "gamesImported"),
+                    num(r, "duplicatesSkipped"),
+                    num(r, "gamesFailed"),
+                    None,
+                ),
+                Err(e) => (0, 0, 0, Some(e.clone())),
+            };
+            let _ = net::sync_run_finish(
+                &conn, id, &at, imported, dups, failed, None, err.as_deref(),
+            );
+        }
         let report = match &outcome {
             Ok(report) => {
                 let mut r = report.clone();

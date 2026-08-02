@@ -208,6 +208,103 @@ pub fn fetch_with_retry(
 }
 
 /// Read a value from the `meta` table (`None` if the key is absent).
+/// One recorded sync attempt. A run that found nothing is still a run:
+/// the whole point of the log is telling "checked, nothing new" apart
+/// from "never checked".
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRun {
+    pub id: i64,
+    pub service: String,
+    /// "manual" | "auto".
+    pub trigger: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub games_imported: i64,
+    pub duplicates_skipped: i64,
+    pub games_failed: i64,
+    pub detail: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Open a run row the moment work starts, so a sync that crashes or is
+/// killed still leaves a trace with no `finished_at`.
+pub fn sync_run_start(
+    conn: &Connection,
+    service: &str,
+    trigger: &str,
+    started_at: &str,
+) -> rusqlite::Result<i64> {
+    conn.execute(
+        "INSERT INTO sync_runs (service, trigger, started_at) VALUES (?1, ?2, ?3)",
+        rusqlite::params![service, trigger, started_at],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// Close a run with its counts, a human summary, or an error.
+#[allow(clippy::too_many_arguments)] // one call site per field; a struct adds noise
+pub fn sync_run_finish(
+    conn: &Connection,
+    id: i64,
+    finished_at: &str,
+    imported: i64,
+    duplicates: i64,
+    failed: i64,
+    detail: Option<&str>,
+    error: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sync_runs SET finished_at = ?2, games_imported = ?3,
+             duplicates_skipped = ?4, games_failed = ?5, detail = ?6, error = ?7
+         WHERE id = ?1",
+        rusqlite::params![id, finished_at, imported, duplicates, failed, detail, error],
+    )?;
+    Ok(())
+}
+
+/// Most recent runs, newest first. `service` None = every service.
+pub fn sync_runs(
+    conn: &Connection,
+    service: Option<&str>,
+    limit: u32,
+) -> rusqlite::Result<Vec<SyncRun>> {
+    let sql = "SELECT id, service, trigger, started_at, finished_at, games_imported,
+                      duplicates_skipped, games_failed, detail, error
+               FROM sync_runs
+               WHERE (?1 IS NULL OR service = ?1)
+               ORDER BY id DESC LIMIT ?2";
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(rusqlite::params![service, limit], |r| {
+        Ok(SyncRun {
+            id: r.get(0)?,
+            service: r.get(1)?,
+            trigger: r.get(2)?,
+            started_at: r.get(3)?,
+            finished_at: r.get(4)?,
+            games_imported: r.get(5)?,
+            duplicates_skipped: r.get(6)?,
+            games_failed: r.get(7)?,
+            detail: r.get(8)?,
+            error: r.get(9)?,
+        })
+    })?;
+    rows.collect()
+}
+
+/// When a service last COMPLETED a run without error — the anchor an
+/// interval schedule counts from. None = never.
+pub fn last_successful_sync(conn: &Connection, service: &str) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT finished_at FROM sync_runs
+         WHERE service = ?1 AND error IS NULL AND finished_at IS NOT NULL
+         ORDER BY id DESC LIMIT 1",
+        [service],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
 pub fn meta_get(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
     conn.query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
         .optional()
@@ -221,4 +318,98 @@ pub fn meta_set(conn: &Connection, key: &str, value: &str) -> rusqlite::Result<(
         [key, value],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod sync_run_tests {
+    use super::*;
+
+    fn db() -> (tempfile::TempDir, Connection) {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(&dir.path().join("t.sqlite")).unwrap();
+        (dir, conn)
+    }
+
+    #[test]
+    fn a_run_that_found_nothing_is_still_recorded() {
+        let (_d, conn) = db();
+        let id = sync_run_start(&conn, "twic", "auto", "2026-08-02 01:00:00").unwrap();
+        sync_run_finish(
+            &conn,
+            id,
+            "2026-08-02 01:00:09",
+            0,
+            0,
+            0,
+            Some("up to date — TWIC 1655 is the newest published issue"),
+            None,
+        )
+        .unwrap();
+
+        let runs = sync_runs(&conn, None, 10).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].trigger, "auto");
+        assert_eq!(runs[0].games_imported, 0);
+        assert!(runs[0].detail.as_deref().unwrap().contains("up to date"));
+        assert!(runs[0].error.is_none());
+        // The point of the row: this counts as a successful check, so an
+        // interval schedule starts counting from here.
+        assert_eq!(
+            last_successful_sync(&conn, "twic").unwrap().as_deref(),
+            Some("2026-08-02 01:00:09")
+        );
+    }
+
+    #[test]
+    fn a_failure_is_history_too_and_does_not_reset_the_schedule() {
+        let (_d, conn) = db();
+        let ok = sync_run_start(&conn, "chesscom", "manual", "2026-08-01 00:00:00").unwrap();
+        sync_run_finish(&conn, ok, "2026-08-01 00:01:00", 12, 3, 0, None, None).unwrap();
+        let bad = sync_run_start(&conn, "chesscom", "auto", "2026-08-02 00:00:00").unwrap();
+        sync_run_finish(
+            &conn,
+            bad,
+            "2026-08-02 00:00:05",
+            0,
+            0,
+            0,
+            None,
+            Some("429"),
+        )
+        .unwrap();
+
+        let runs = sync_runs(&conn, Some("chesscom"), 10).unwrap();
+        assert_eq!(runs.len(), 2, "the failure is kept");
+        assert_eq!(runs[0].error.as_deref(), Some("429"));
+        assert_eq!(
+            last_successful_sync(&conn, "chesscom").unwrap().as_deref(),
+            Some("2026-08-01 00:01:00"),
+            "a failed attempt must not look like a completed one"
+        );
+    }
+
+    #[test]
+    fn an_unfinished_run_leaves_a_trace_and_is_not_a_success() {
+        let (_d, conn) = db();
+        sync_run_start(&conn, "lichess", "manual", "2026-08-02 10:00:00").unwrap();
+        let runs = sync_runs(&conn, Some("lichess"), 10).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert!(runs[0].finished_at.is_none(), "killed mid-run");
+        assert!(last_successful_sync(&conn, "lichess").unwrap().is_none());
+    }
+
+    #[test]
+    fn history_is_newest_first_and_filterable_by_service() {
+        let (_d, conn) = db();
+        for (svc, at) in [("twic", "1"), ("chesscom", "2"), ("twic", "3")] {
+            let id = sync_run_start(&conn, svc, "auto", at).unwrap();
+            sync_run_finish(&conn, id, at, 0, 0, 0, None, None).unwrap();
+        }
+        let all = sync_runs(&conn, None, 10).unwrap();
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0].started_at, "3", "newest first");
+        let twic = sync_runs(&conn, Some("twic"), 10).unwrap();
+        assert_eq!(twic.len(), 2);
+        assert!(twic.iter().all(|r| r.service == "twic"));
+    }
 }
