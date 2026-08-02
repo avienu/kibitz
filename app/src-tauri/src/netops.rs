@@ -564,12 +564,38 @@ pub(crate) fn auto_sync_plan(
     latest_imported: u32,
     imported: &std::collections::HashSet<u32>,
     cap: usize,
+    oldest_imported: Option<u32>,
 ) -> Vec<u32> {
-    (latest_imported + 1..=newest_published)
+    // New issues first: the current week is what a user is waiting for.
+    let mut plan: Vec<u32> = (latest_imported + 1..=newest_published)
         .rev()
         .filter(|i| !imported.contains(i))
         .take(cap)
-        .collect()
+        .collect();
+    if plan.len() >= cap {
+        return plan;
+    }
+    // Then spend what is left of the cap filling gaps BEHIND the newest
+    // import, newest first (2026-08-02 field report: "what about all the
+    // old ones, I don't have all of them downloaded yet — why isn't it
+    // synchronizing them?"). Auto-sync used to stop at the first line
+    // above, so a database with 91 of 1655 issues stayed at 91 forever
+    // while reporting itself up to date, which is true only of the front
+    // edge and useless to someone with 645 holes behind it.
+    //
+    // Still capped per pass: TWIC's hosting is donation-funded, and the
+    // point is to converge over many runs, not to pull a decade of
+    // archives in one. `oldest_imported` bounds the walk so the backfill
+    // stops at the user's own archive rather than marching to issue 1.
+    let floor = oldest_imported.unwrap_or(latest_imported);
+    if floor < latest_imported {
+        let older = (floor..latest_imported)
+            .rev()
+            .filter(|i| !imported.contains(i))
+            .take(cap - plan.len());
+        plan.extend(older);
+    }
+    plan
 }
 
 /// One auto-sync pass on the worker thread: probe the newest published
@@ -603,7 +629,8 @@ fn twic_auto_worker_impl(
         .into_iter()
         .map(|(issue, _)| issue)
         .collect();
-    let plan = auto_sync_plan(newest, latest_imported, &imported, cap);
+    let oldest_imported = imported.iter().copied().min();
+    let plan = auto_sync_plan(newest, latest_imported, &imported, cap, oldest_imported);
     if plan.is_empty() {
         update_progress(progress, |p| {
             p.detail = format!("up to date — TWIC {newest} is the newest published issue");
@@ -689,16 +716,8 @@ pub async fn twic_auto_sync_check(
                 .and_then(|j| serde_json::from_str::<serde_json::Value>(&j).ok())
                 .and_then(|v| v["text"].as_str().map(str::to_string));
             let err = result.as_ref().err().cloned();
-            let _ = net::sync_run_finish(
-                &conn,
-                id,
-                &at,
-                0,
-                0,
-                0,
-                detail.as_deref(),
-                err.as_deref(),
-            );
+            let _ =
+                net::sync_run_finish(&conn, id, &at, 0, 0, 0, detail.as_deref(), err.as_deref());
         }
         result
     })?;
@@ -911,9 +930,8 @@ pub async fn sync_run(
                 ),
                 Err(e) => (0, 0, 0, Some(e.clone())),
             };
-            let _ = net::sync_run_finish(
-                &conn, id, &at, imported, dups, failed, None, err.as_deref(),
-            );
+            let _ =
+                net::sync_run_finish(&conn, id, &at, imported, dups, failed, None, err.as_deref());
         }
         let report = match &outcome {
             Ok(report) => {
@@ -1279,26 +1297,61 @@ mod tests {
     }
 
     #[test]
-    fn auto_sync_plan_is_newest_first_capped_and_never_backfills() {
+    fn auto_sync_plan_puts_new_issues_first_and_caps_the_pass() {
         use std::collections::HashSet;
         let imported: HashSet<u32> = [1600].into_iter().collect();
         // 10 unpublished-locally issues, cap 5: the NEWEST five, descending.
         assert_eq!(
-            auto_sync_plan(1610, 1600, &imported, 5),
+            auto_sync_plan(1610, 1600, &imported, 5, None),
             vec![1610, 1609, 1608, 1607, 1606]
         );
         // Issues at or below the newest import are backfill — manual only.
         let imported: HashSet<u32> = [1595, 1600].into_iter().collect();
-        assert_eq!(auto_sync_plan(1602, 1600, &imported, 5), vec![1602, 1601]);
+        assert_eq!(
+            auto_sync_plan(1602, 1600, &imported, 5, None),
+            vec![1602, 1601]
+        );
         // Already-imported issues inside the window are skipped, cap holds.
         let imported: HashSet<u32> = [1600, 1609].into_iter().collect();
         assert_eq!(
-            auto_sync_plan(1610, 1600, &imported, 5),
+            auto_sync_plan(1610, 1600, &imported, 5, None),
             vec![1610, 1608, 1607, 1606, 1605]
         );
         // Fully caught up -> empty plan.
         let imported: HashSet<u32> = [1610].into_iter().collect();
-        assert_eq!(auto_sync_plan(1610, 1610, &imported, 5), Vec::<u32>::new());
+        assert_eq!(
+            auto_sync_plan(1610, 1610, &imported, 5, None),
+            Vec::<u32>::new()
+        );
+    }
+
+    /// A database with holes behind its newest issue used to sit there
+    /// reporting itself up to date (2026-08-02: 91 issues of 1655, 645
+    /// gaps, auto-sync fetching nothing).
+    #[test]
+    fn auto_sync_backfills_gaps_behind_the_newest_import() {
+        let imported: std::collections::HashSet<u32> = [1600, 1598, 1500].into_iter().collect();
+
+        // Nothing new published: the whole cap goes to the gaps, newest
+        // first, and never below the user's own oldest issue.
+        let plan = auto_sync_plan(1600, 1600, &imported, 4, Some(1500));
+        assert_eq!(plan, vec![1599, 1597, 1596, 1595]);
+
+        // New issues still come FIRST and are never displaced by backfill.
+        let plan = auto_sync_plan(1603, 1600, &imported, 4, Some(1500));
+        assert_eq!(plan, vec![1603, 1602, 1601, 1599]);
+
+        // A full cap of new issues leaves nothing for the backfill.
+        let plan = auto_sync_plan(1610, 1600, &imported, 3, Some(1500));
+        assert_eq!(plan, vec![1610, 1609, 1608]);
+
+        // A complete archive asks for nothing.
+        let full: std::collections::HashSet<u32> = (1500..=1600).collect();
+        assert!(auto_sync_plan(1600, 1600, &full, 5, Some(1500)).is_empty());
+
+        // Without an oldest issue there is no floor to walk back to, so
+        // the behaviour is exactly what it was before.
+        assert!(auto_sync_plan(1600, 1600, &imported, 5, None).is_empty());
     }
 
     #[test]

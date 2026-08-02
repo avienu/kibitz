@@ -124,8 +124,14 @@ mod tests {
         assert_eq!(got.moved.len(), 2, "{got:?}");
         assert!(got.kept.is_empty());
         assert_eq!(std::fs::read(new.join("kibitz.sqlite")).unwrap(), b"db");
-        assert_eq!(std::fs::read(new.join("kibitz.sqlite-wal")).unwrap(), b"wal");
-        assert!(!legacy.exists(), "the emptied legacy directory is tidied away");
+        assert_eq!(
+            std::fs::read(new.join("kibitz.sqlite-wal")).unwrap(),
+            b"wal"
+        );
+        assert!(
+            !legacy.exists(),
+            "the emptied legacy directory is tidied away"
+        );
     }
 
     #[test]
@@ -150,7 +156,10 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let new = root.path().join("org.kibitzchess.kibitz");
         assert!(adopt_legacy(&new).is_empty());
-        assert!(!new.exists(), "no legacy data means no directory is created");
+        assert!(
+            !new.exists(),
+            "no legacy data means no directory is created"
+        );
 
         // Running under the old identifier: the target IS the legacy dir.
         let legacy = root.path().join(LEGACY_IDENTIFIER);
