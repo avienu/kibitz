@@ -102,6 +102,11 @@ import {
   netStripProgress,
   railNetBadges,
   twicAutoSyncCheck,
+  syncAccounts,
+  syncDueNow,
+  syncRun,
+  SYNC_TICK_MS,
+  type SyncService,
   type NetBadges,
   type NetProgress,
 } from "./lib/net";
@@ -338,8 +343,8 @@ export default function App() {
       getNarrationVoice()
         .then((v) => dispatch({ type: "setVoice", voice: v }))
         .catch(() => {});
-      // TWIC auto-download hook: quietly syncs NEW issues only when the
-      // user enabled the toggle (netops.rs; no-op otherwise).
+      // TWIC auto-download hook: new issues first, then the gaps behind
+      // them, only when the user enabled the toggle (netops.rs).
       twicAutoSyncCheck().catch(() => {});
       // Hydrate the last-built self profile ("why isn't that saving?" —
       // it was; nothing read it back). Also doubles as the stale-backend
@@ -537,6 +542,36 @@ export default function App() {
     },
     [applyGame],
   );
+
+  // Account sync schedules. A desktop app has no background daemon, so
+  // "every N hours" means while Kibitz is running and the UI says so.
+  // The tick is cheap — one query — and does nothing while the network
+  // worker is busy, so it can never queue behind a manual sync.
+  useEffect(() => {
+    if (!dbSummary) return;
+    let stale = false;
+    const tick = async () => {
+      if (stale) return;
+      const due = await syncDueNow().catch(() => [] as SyncService[]);
+      for (const service of due) {
+        if (stale) return;
+        const accounts = await syncAccounts().catch(() => null);
+        const username = accounts?.[service]?.username ?? null;
+        if (!username) continue;
+        // One at a time: the next tick picks up whatever is still due.
+        await syncRun(service, username, undefined, undefined, "auto").catch(
+          () => {},
+        );
+        break;
+      }
+    };
+    void tick();
+    const t = setInterval(() => void tick(), SYNC_TICK_MS);
+    return () => {
+      stale = true;
+      clearInterval(t);
+    };
+  }, [dbSummary]);
 
   /** Every name form the user's identity resolves to — chess.com and
    * Lichess handles included. Drives which way a game opens. */

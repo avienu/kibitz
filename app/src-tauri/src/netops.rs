@@ -27,6 +27,106 @@ use kibitz_db::twic;
 
 use crate::browse::{with_conn, DbState};
 
+/// Meta key holding a service's auto-sync schedule: "off", "launch", or
+/// an interval in hours ("6", "24"). Absent = off.
+fn auto_key(service: &str) -> String {
+    format!("sync_auto_{service}")
+}
+
+/// A service's schedule, as stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Schedule {
+    Off,
+    /// Once per app launch, at database open.
+    Launch,
+    /// At launch and then every N hours WHILE KIBITZ IS RUNNING. A
+    /// desktop app has no background daemon: promising "every 6 hours" of
+    /// a closed app would be a lie, so the UI says "while running" and
+    /// this is what that means.
+    EveryHours(u32),
+}
+
+impl Schedule {
+    pub(crate) fn parse(raw: Option<&str>) -> Self {
+        match raw.map(str::trim) {
+            None | Some("") | Some("off") => Schedule::Off,
+            Some("launch") => Schedule::Launch,
+            Some(n) => n
+                .parse::<u32>()
+                .ok()
+                .filter(|h| *h > 0)
+                .map(Schedule::EveryHours)
+                .unwrap_or(Schedule::Off),
+        }
+    }
+
+    pub(crate) fn as_str(self) -> String {
+        match self {
+            Schedule::Off => "off".to_string(),
+            Schedule::Launch => "launch".to_string(),
+            Schedule::EveryHours(h) => h.to_string(),
+        }
+    }
+}
+
+/// Is `service` due for an automatic sync? `ran_this_launch` is the
+/// per-launch latch (a webview reload must not re-arm it), `last_success`
+/// the last completed run, `now` the current UTC timestamp.
+///
+/// Never having synced is always due: that is the case where a username
+/// is configured and nothing has ever happened, which is exactly the
+/// state Lichess was in.
+pub(crate) fn sync_due(
+    schedule: Schedule,
+    ran_this_launch: bool,
+    last_success: Option<&str>,
+    now: &str,
+) -> bool {
+    match schedule {
+        Schedule::Off => false,
+        Schedule::Launch => !ran_this_launch,
+        Schedule::EveryHours(h) => {
+            let Some(last) = last_success else {
+                return true;
+            };
+            match hours_between(last, now) {
+                Some(elapsed) => elapsed >= f64::from(h),
+                // An unparseable timestamp must not wedge the schedule
+                // permanently; treat it as due and let the run rewrite it.
+                None => true,
+            }
+        }
+    }
+}
+
+/// Hours between two "YYYY-MM-DD HH:MM:SS" UTC stamps, or None if either
+/// is malformed. Calendar-free: these are the app's own `datetime('now')`
+/// values, always UTC and always this format.
+fn hours_between(from: &str, to: &str) -> Option<f64> {
+    let secs = |s: &str| -> Option<i64> {
+        let (date, time) = s.trim().split_once(' ')?;
+        let d: Vec<i64> = date.split('-').map(|p| p.parse().ok()).collect::<Option<_>>()?;
+        let t: Vec<i64> = time.split(':').map(|p| p.parse().ok()).collect::<Option<_>>()?;
+        if d.len() != 3 || t.len() != 3 {
+            return None;
+        }
+        // Days since a fixed epoch via the civil-from-days inverse; only
+        // differences are ever used, so the epoch choice is immaterial.
+        let (y, m, day) = (d[0], d[1], d[2]);
+        let y2 = if m <= 2 { y - 1 } else { y };
+        let era = if y2 >= 0 { y2 } else { y2 - 399 } / 400;
+        let yoe = y2 - era * 400;
+        let mp = (m + 9) % 12;
+        let doy = (153 * mp + 2) / 5 + day - 1;
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        let days = era * 146_097 + doe;
+        Some(days * 86_400 + t[0] * 3_600 + t[1] * 60 + t[2])
+    };
+    let a = secs(from)?;
+    let b = secs(to)?;
+    Some((b - a) as f64 / 3_600.0)
+}
+
 /// Meta key: "1" when TWIC auto-download of new issues is enabled.
 const META_AUTO_SYNC: &str = "twic_auto_sync";
 /// Meta key: "1" once the user acknowledged the TWIC first-run notice.
@@ -69,6 +169,10 @@ pub struct NetWorker {
     /// re-armed the "max 5 per launch" allowance and one session imported
     /// 13+ issues (audit #3). Lives in the app process, not the webview.
     pub auto_sync_ran: Arc<AtomicBool>,
+    /// Per-LAUNCH latch for the account schedules, one entry per service
+    /// that has already had an automatic run. Same reason as the TWIC
+    /// flag above: a webview reload must not re-arm "once per launch".
+    pub auto_ran: Arc<Mutex<std::collections::HashSet<String>>>,
     /// Waiting jobs (label + work), drained strictly serially by the one
     /// worker thread — pressing Sync during a TWIC download QUEUES it
     /// instead of rejecting the click (run-9 field report).
@@ -839,6 +943,71 @@ pub async fn sync_set_username(
     })
 }
 
+/// Read/write a service's auto-sync schedule.
+#[tauri::command]
+pub async fn sync_schedule_get(state: State<'_, DbState>, service: String) -> Result<String, String> {
+    check_service(&service)?;
+    with_conn(&state, |conn| {
+        Ok(Schedule::parse(
+            net::meta_get(conn, &auto_key(&service))
+                .map_err(|e| e.to_string())?
+                .as_deref(),
+        )
+        .as_str())
+    })
+}
+
+#[tauri::command]
+pub async fn sync_schedule_set(
+    state: State<'_, DbState>,
+    service: String,
+    schedule: String,
+) -> Result<String, String> {
+    check_service(&service)?;
+    let parsed = Schedule::parse(Some(&schedule));
+    with_conn(&state, |conn| {
+        net::meta_set(conn, &auto_key(&service), &parsed.as_str()).map_err(|e| e.to_string())?;
+        Ok(parsed.as_str())
+    })
+}
+
+/// Services that are due right now: a username is configured, a schedule
+/// says so, and the worker is free. The caller runs them one at a time —
+/// the network worker is strictly serial and a queue of syncs behind a
+/// user's manual action would be worse than not running at all.
+#[tauri::command]
+pub async fn sync_due_now(
+    state: State<'_, DbState>,
+    worker: State<'_, NetWorker>,
+) -> Result<Vec<String>, String> {
+    if worker.active.load(Ordering::SeqCst) {
+        return Ok(Vec::new());
+    }
+    with_conn(&state, |conn| {
+        let now = now_utc(conn);
+        let mut due = Vec::new();
+        for service in ["lichess", "chesscom"] {
+            let schedule = Schedule::parse(
+                net::meta_get(conn, &auto_key(service))
+                    .map_err(|e| e.to_string())?
+                    .as_deref(),
+            );
+            let username = net::meta_get(conn, &format!("sync_user_{service}"))
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            if username.trim().is_empty() {
+                continue;
+            }
+            let last = net::last_successful_sync(conn, service).map_err(|e| e.to_string())?;
+            let ran = worker.auto_ran.lock().is_ok_and(|r| r.contains(service));
+            if sync_due(schedule, ran, last.as_deref(), &now) {
+                due.push(service.to_string());
+            }
+        }
+        Ok(due)
+    })
+}
+
 /// Recent sync attempts, newest first — the answer to "has it actually
 /// been downloading anything?". Includes automatic passes that found
 /// nothing, which is the case a last-outcome field cannot express.
@@ -891,6 +1060,15 @@ pub async fn sync_run(
     with_conn(&state, |conn| {
         sync_set_username_impl(conn, &service, &username)
     })?;
+    if trigger == "auto" {
+        // Latch BEFORE spawning: a "once per launch" schedule must not
+        // re-arm because two ticks raced, and a failed run still counts as
+        // this launch's attempt (the interval schedules retry on their own
+        // clock, which last_successful_sync anchors).
+        if let Ok(mut ran) = worker.auto_ran.lock() {
+            ran.insert(service.clone());
+        }
+    }
     let db_path = open_db_path(&state)?;
 
     let service_label = match service.as_str() {
@@ -1323,6 +1501,72 @@ mod tests {
             auto_sync_plan(1610, 1610, &imported, 5, None),
             Vec::<u32>::new()
         );
+    }
+
+    #[test]
+    fn schedule_round_trips_and_rejects_nonsense() {
+        assert_eq!(Schedule::parse(None), Schedule::Off);
+        assert_eq!(Schedule::parse(Some("")), Schedule::Off);
+        assert_eq!(Schedule::parse(Some("off")), Schedule::Off);
+        assert_eq!(Schedule::parse(Some("launch")), Schedule::Launch);
+        assert_eq!(Schedule::parse(Some("6")), Schedule::EveryHours(6));
+        // Zero hours would be a busy loop against someone else's server.
+        assert_eq!(Schedule::parse(Some("0")), Schedule::Off);
+        assert_eq!(Schedule::parse(Some("banana")), Schedule::Off);
+        for s in [Schedule::Off, Schedule::Launch, Schedule::EveryHours(24)] {
+            assert_eq!(Schedule::parse(Some(&s.as_str())), s);
+        }
+    }
+
+    #[test]
+    fn sync_due_respects_the_launch_latch_and_the_interval() {
+        let now = "2026-08-02 12:00:00";
+        // Off is off, whatever the history says.
+        assert!(!sync_due(Schedule::Off, false, None, now));
+
+        // Launch: once, then not again until the next launch.
+        assert!(sync_due(Schedule::Launch, false, Some("2026-08-02 11:59:00"), now));
+        assert!(!sync_due(Schedule::Launch, true, None, now));
+
+        // Interval counts from the last SUCCESS.
+        assert!(!sync_due(
+            Schedule::EveryHours(6),
+            true,
+            Some("2026-08-02 08:00:00"),
+            now
+        ));
+        assert!(sync_due(
+            Schedule::EveryHours(6),
+            true,
+            Some("2026-08-02 05:59:00"),
+            now
+        ));
+        // Exactly on the boundary is due.
+        assert!(sync_due(
+            Schedule::EveryHours(6),
+            true,
+            Some("2026-08-02 06:00:00"),
+            now
+        ));
+
+        // Never synced is always due — the Lichess case: a username
+        // configured and nothing has ever run.
+        assert!(sync_due(Schedule::EveryHours(24), true, None, now));
+
+        // A corrupt timestamp must not wedge the schedule forever.
+        assert!(sync_due(Schedule::EveryHours(6), true, Some("not a date"), now));
+    }
+
+    #[test]
+    fn hours_between_spans_days_months_and_years() {
+        let h = |a: &str, b: &str| hours_between(a, b).unwrap();
+        assert!((h("2026-08-02 00:00:00", "2026-08-02 06:30:00") - 6.5).abs() < 1e-9);
+        assert!((h("2026-07-31 23:00:00", "2026-08-01 01:00:00") - 2.0).abs() < 1e-9);
+        assert!((h("2025-12-31 23:00:00", "2026-01-01 00:00:00") - 1.0).abs() < 1e-9);
+        // Leap day, and the maintainer's real gap: 2026-07-29 -> 2026-08-02.
+        assert!((h("2024-02-28 12:00:00", "2024-03-01 12:00:00") - 48.0).abs() < 1e-9);
+        assert!((h("2026-07-29 04:01:08", "2026-08-02 04:01:08") - 96.0).abs() < 1e-9);
+        assert!(hours_between("bad", "2026-08-02 00:00:00").is_none());
     }
 
     /// A database with holes behind its newest issue used to sit there

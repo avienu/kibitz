@@ -103,7 +103,10 @@ export function syncAccounts(): Promise<SyncAccounts> {
   return invoke<SyncAccounts>("sync_accounts");
 }
 
-export function syncSetUsername(service: SyncService, username: string): Promise<void> {
+export function syncSetUsername(
+  service: SyncService,
+  username: string,
+): Promise<void> {
   return invoke<void>("sync_set_username", { service, username });
 }
 
@@ -113,8 +116,82 @@ export function syncRun(
   username: string,
   year?: number,
   month?: number,
+  trigger?: "manual" | "auto",
 ): Promise<void> {
-  return invoke<void>("sync_run", { service, username, year, month });
+  return invoke<void>("sync_run", { service, username, year, month, trigger });
+}
+
+/* ---- schedules and history ---- */
+
+/** "off" | "launch" | an interval in hours ("6", "24"). */
+export type SyncSchedule = string;
+
+export const SCHEDULE_CHOICES: { value: SyncSchedule; label: string }[] = [
+  { value: "off", label: "Only when I press Sync" },
+  { value: "launch", label: "When Kibitz starts" },
+  { value: "6", label: "Every 6 hours while Kibitz is running" },
+  { value: "24", label: "Every 24 hours while Kibitz is running" },
+];
+
+export function syncScheduleGet(service: SyncService): Promise<SyncSchedule> {
+  return invoke<SyncSchedule>("sync_schedule_get", { service });
+}
+
+export function syncScheduleSet(
+  service: SyncService,
+  schedule: SyncSchedule,
+): Promise<SyncSchedule> {
+  return invoke<SyncSchedule>("sync_schedule_set", { service, schedule });
+}
+
+/** How often the app asks whether a scheduled sync is due. The check is
+ * one query and does nothing while the worker is busy, so this is about
+ * responsiveness after an interval elapses, not about polling cost. */
+export const SYNC_TICK_MS = 10 * 60 * 1000;
+
+/** Services whose schedule says they are due right now (empty while a
+ * network job is already running — the worker is strictly serial). */
+export function syncDueNow(): Promise<SyncService[]> {
+  return invoke<SyncService[]>("sync_due_now");
+}
+
+export interface SyncRun {
+  id: number;
+  service: string;
+  /** "manual" | "auto". */
+  trigger: string;
+  startedAt: string;
+  finishedAt: string | null;
+  gamesImported: number;
+  duplicatesSkipped: number;
+  gamesFailed: number;
+  detail: string | null;
+  error: string | null;
+}
+
+export function syncHistory(
+  service?: string,
+  limit?: number,
+): Promise<SyncRun[]> {
+  return invoke<SyncRun[]>("sync_history", { service, limit });
+}
+
+/** One history row as a line: what ran, when, and what it did. An
+ * automatic pass that imported nothing still reads as a real event —
+ * that is the whole point of keeping it. */
+export function syncRunLine(r: SyncRun, zone?: string): string {
+  const when = utcDateTimeLocal(r.startedAt, zone);
+  const how = r.trigger === "auto" ? "automatic" : "manual";
+  if (r.error) return `${when} · ${how} · failed: ${r.error}`;
+  if (!r.finishedAt) return `${when} · ${how} · interrupted`;
+  if (r.detail) return `${when} · ${how} · ${r.detail}`;
+  if (r.gamesImported === 0 && r.gamesFailed === 0) {
+    return `${when} · ${how} · nothing new`;
+  }
+  const bits = [`${r.gamesImported} imported`];
+  if (r.duplicatesSkipped > 0) bits.push(`${r.duplicatesSkipped} already had`);
+  if (r.gamesFailed > 0) bits.push(`${r.gamesFailed} failed`);
+  return `${when} · ${how} · ${bits.join(" · ")}`;
 }
 
 /* ---- worker progress / cancel / badges ---- */
@@ -164,11 +241,16 @@ export function missingIssues(rows: readonly TwicCatalogRow[]): number[] {
  * the card states what it has done. Null only when there is truly
  * nothing to say (no report AND no imported games).
  */
-export function idleLine(account: ServiceAccount | null, zone?: string): string | null {
+export function idleLine(
+  account: ServiceAccount | null,
+  zone?: string,
+): string | null {
   if (!account) return null;
   const at = account.lastReport?.at;
   if (!at && account.gamesTotal === 0) return null;
-  const when = at ? `Last synced ${utcDateTimeLocal(at, zone)}` : "No sync recorded";
+  const when = at
+    ? `Last synced ${utcDateTimeLocal(at, zone)}`
+    : "No sync recorded";
   const total = account.gamesTotal.toLocaleString("en-US");
   return `${when} · ${total} game${account.gamesTotal === 1 ? "" : "s"} imported total`;
 }
@@ -177,7 +259,10 @@ export function idleLine(account: ServiceAccount | null, zone?: string): string 
  * timestamp lives on the idle line ([`idleLine`]); this line carries the
  * per-run counts. A failure keeps its own timestamp, rendered in the
  * user's local time (audit #10). `zone` is test injection only. */
-export function formatReport(report: SyncReport | null, zone?: string): string | null {
+export function formatReport(
+  report: SyncReport | null,
+  zone?: string,
+): string | null {
   if (!report) return null;
   if (report.error) {
     const at = report.at ? utcDateTimeLocal(report.at, zone) : "unknown time";
@@ -186,7 +271,8 @@ export function formatReport(report: SyncReport | null, zone?: string): string |
   let s =
     `Last run: ${report.gamesImported ?? 0} imported · ` +
     `${report.duplicatesSkipped ?? 0} duplicates · ${report.gamesFailed ?? 0} failed`;
-  if (report.monthsFetched !== undefined) s += ` · ${report.monthsFetched} month(s)`;
+  if (report.monthsFetched !== undefined)
+    s += ` · ${report.monthsFetched} month(s)`;
   if (report.year !== undefined) {
     s += ` · ${report.year}${report.month ? `-${String(report.month).padStart(2, "0")}` : ""}`;
   }
