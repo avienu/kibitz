@@ -4,7 +4,14 @@
  * Moves). Owns the prose⇄board linkage wiring; all derivations live in
  * lib/gameView.ts.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties } from "react";
 import Board, { type BoardMovable } from "./Board";
 import EvalBar from "./EvalBar";
@@ -22,11 +29,21 @@ import {
   type JobsStatus,
 } from "./lib/db";
 import { repGlyphsByPly, type RepertoireMark } from "./lib/repMarks";
-import { analyzeLive, getSavedEnginePath, onEngineInfo, stopAnalysis } from "./lib/engine";
+import {
+  analyzeLive,
+  getSavedEnginePath,
+  onEngineInfo,
+  stopAnalysis,
+} from "./lib/engine";
 import { formatScore, summarizeInfo, type EngineInfo } from "./lib/engineView";
 import { boardGeometry } from "./lib/evidence";
 import { liveInitial, liveReduce, type LiveEvent } from "./lib/liveAnalysis";
-import { numberSanLine, uciPvToSan, PV_DISPLAY_PLIES, PV_INSERT_PLIES } from "./lib/pv";
+import {
+  numberSanLine,
+  uciPvToSan,
+  PV_DISPLAY_PLIES,
+  PV_INSERT_PLIES,
+} from "./lib/pv";
 import type { VariationPreview } from "./lib/preview";
 import {
   COACH_HOVER_INDEX,
@@ -40,7 +57,12 @@ import {
 } from "./lib/gameView";
 import type { LoadedGame } from "./lib/game";
 import type { VerificationState } from "./lib/verifyChips";
-import { gameEngines, movesRows, movesRowsFromSans, type MovesRow } from "./lib/movesView";
+import {
+  gameEngines,
+  movesRows,
+  movesRowsFromSans,
+  type MovesRow,
+} from "./lib/movesView";
 import { buildAnnView, insertVariation } from "./lib/tokens";
 import { crosstableEligible } from "./lib/crosstable";
 
@@ -98,7 +120,11 @@ function squarePos(square: string, flipped: boolean): CSSProperties {
 }
 
 /** Square name from a click position inside the grid overlay. */
-function squareAt(xFrac: number, yFrac: number, flipped: boolean): string | null {
+function squareAt(
+  xFrac: number,
+  yFrac: number,
+  flipped: boolean,
+): string | null {
   if (xFrac < 0 || xFrac >= 1 || yFrac < 0 || yFrac >= 1) return null;
   let file = Math.floor(xFrac * 8);
   let rank = 7 - Math.floor(yFrac * 8);
@@ -141,6 +167,8 @@ export default function GameView({
   onCrosstable,
 }: GameViewProps) {
   const colRef = useRef<HTMLDivElement | null>(null);
+  /** The box the board is fitted to: everything the strips leave behind. */
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const [boardSize, setBoardSize] = useState(656);
 
   /* ---- live analysis (run-8): explicit toggle, go-infinite, hard stop ---- */
@@ -151,7 +179,10 @@ export default function GameView({
   // sign (audit 2026-07 #5) and produce an illegal SAN line. Stamping
   // client-side with "the fen we are currently searching" is NOT enough:
   // infos from a just-stopped search keep streaming after a restart.
-  const [liveInfo, setLiveInfo] = useState<{ info: EngineInfo; fen: string } | null>(null);
+  const [liveInfo, setLiveInfo] = useState<{
+    info: EngineInfo;
+    fen: string;
+  } | null>(null);
   const liveRef = useRef(live);
   liveRef.current = live;
   const liveDispatch = useCallback((event: LiveEvent) => {
@@ -191,9 +222,13 @@ export default function GameView({
 
   // Info for the SHOWN position only (see the stamped-fen note above).
   const liveCur = liveInfo && liveInfo.fen === fen ? liveInfo.info : null;
-  const pvSans = useMemo(() => (liveCur?.pv ? uciPvToSan(fen, liveCur.pv) : []), [liveCur, fen]);
+  const pvSans = useMemo(
+    () => (liveCur?.pv ? uciPvToSan(fen, liveCur.pv) : []),
+    [liveCur, fen],
+  );
   const pvLineShort = useMemo(
-    () => (pvSans.length > 0 ? numberSanLine(fen, pvSans, PV_DISPLAY_PLIES) : ""),
+    () =>
+      pvSans.length > 0 ? numberSanLine(fen, pvSans, PV_DISPLAY_PLIES) : "",
     [fen, pvSans],
   );
   const pvLineFull = useMemo(
@@ -205,12 +240,20 @@ export default function GameView({
   // Disabled while previewing a variation (the PV belongs to the preview
   // position, not to any mainline ply).
   const canAddPv =
-    editing !== null && pvSans.length > 0 && gv.ply < plyCount && preview === null;
+    editing !== null &&
+    pvSans.length > 0 &&
+    gv.ply < plyCount &&
+    preview === null;
   const addPvAsVariation = () => {
     if (!editing || !liveCur || !canAddPv) return;
     const tag = `ENGINE${liveCur.depth !== undefined ? ` d${liveCur.depth}` : ""} ${formatScore(liveCur, fen)}`;
     editing.onChange(
-      insertVariation(editing.tokens, gv.ply + 1, pvSans.slice(0, PV_INSERT_PLIES), tag),
+      insertVariation(
+        editing.tokens,
+        gv.ply + 1,
+        pvSans.slice(0, PV_INSERT_PLIES),
+        tag,
+      ),
     );
     onStatus(
       `Engine line added as a variation of ${game?.sans[gv.ply] ?? "the next move"} — Save to keep it.`,
@@ -281,7 +324,10 @@ export default function GameView({
   // finishes between App's 3s polls, so results always appear.
   useEffect(() => {
     if (!gameBatch || gameBatch.done || !batchJobs) return;
-    if (!batchJobs.workerActive && batchJobs.pending + batchJobs.running === 0) {
+    if (
+      !batchJobs.workerActive &&
+      batchJobs.pending + batchJobs.running === 0
+    ) {
       setGameBatch({ ...gameBatch, done: true });
       onReload();
     }
@@ -294,13 +340,21 @@ export default function GameView({
   // A different game loaded: the row's context is gone.
   useEffect(() => setGameBatch(null), [gameId]);
 
-  const batchRemaining = batchJobs ? batchJobs.pending + batchJobs.running : null;
+  const batchRemaining = batchJobs
+    ? batchJobs.pending + batchJobs.running
+    : null;
   const batchFraction =
     gameBatch === null
       ? 0
       : gameBatch.done || gameBatch.total === 0
         ? 1
-        : Math.max(0, Math.min(1, 1 - (batchRemaining ?? gameBatch.total) / gameBatch.total));
+        : Math.max(
+            0,
+            Math.min(
+              1,
+              1 - (batchRemaining ?? gameBatch.total) / gameBatch.total,
+            ),
+          );
 
   const doPauseBatch = async () => {
     setPausing(true);
@@ -320,14 +374,22 @@ export default function GameView({
 
   // Resize (deliverable 2c): the board column absorbs extra width; the
   // board snaps to the largest multiple of 8 that fits (min 496).
+  //
+  // Measure the STAGE — the flex child that owns whatever vertical space
+  // is left once the strips and controls have taken theirs. The previous
+  // version measured the whole column and subtracted a fixed 120px for
+  // its chrome, which is right only when none of the conditional rows
+  // (live analysis, preview pill, variation offer) is showing. With one
+  // up, the board was sized for more room than existed and `overflow:
+  // hidden` cropped it — read as the board changing size while stepping
+  // (2026-08-02 field report). The strip row now also reserves its
+  // height, so the stage is the same box whether a strip is up or not.
   useLayoutEffect(() => {
-    const el = colRef.current;
+    const el = stageRef.current;
     if (!el) return;
     const measure = () => {
       const r = el.getBoundingClientRect();
-      // Horizontal: column padding (26×2) + eval bar (~46px incl. gap).
-      // Vertical: padding (22×2) + gaps (18×2) + move-controls row (~40px).
-      setBoardSize(fitBoardSize(r.width - 52 - 46, r.height - 120, gv.boardTreatment));
+      setBoardSize(fitBoardSize(r.width - 46, r.height, gv.boardTreatment));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -366,7 +428,11 @@ export default function GameView({
       const el = gridOverlayRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      const sq = squareAt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, gv.flipped);
+      const sq = squareAt(
+        (e.clientX - r.left) / r.width,
+        (e.clientY - r.top) / r.height,
+        gv.flipped,
+      );
       if (sq) dispatch({ type: "selectSquare", square: sq });
     },
     [dispatch, gv.flipped],
@@ -376,7 +442,12 @@ export default function GameView({
     if (editing && game) {
       const view = buildAnnView(game.fens[0], editing.tokens);
       if (!view.error || view.items.length > 0) {
-        return movesRows(view, game.fens[0], gameEngines(analysisRows), editing.narrations);
+        return movesRows(
+          view,
+          game.fens[0],
+          gameEngines(analysisRows),
+          editing.narrations,
+        );
       }
     }
     return game ? movesRowsFromSans(game.sans, game.fens[0]) : [];
@@ -388,7 +459,10 @@ export default function GameView({
     () => (repMarks.length > 0 ? repGlyphsByPly(repMarks) : null),
     [repMarks],
   );
-  const evalRow = useMemo(() => selectPlyAnalysis(analysisRows, gv.ply), [analysisRows, gv.ply]);
+  const evalRow = useMemo(
+    () => selectPlyAnalysis(analysisRows, gv.ply),
+    [analysisRows, gv.ply],
+  );
   // Mate distance for the eval bar, when the current explanation knows it.
   const mate = explanation?.eval?.mate ?? null;
 
@@ -396,10 +470,14 @@ export default function GameView({
   const setPly = (ply: number) => dispatch({ type: "setPly", ply, plyCount });
 
   const headers = game?.headers ?? {};
-  const title = game ? `${headers["White"] ?? "?"} — ${headers["Black"] ?? "?"}` : "No game loaded";
+  const title = game
+    ? `${headers["White"] ?? "?"} — ${headers["Black"] ?? "?"}`
+    : "No game loaded";
   const meta = game
     ? [
-        [headers["Site"], headers["Date"]?.slice(0, 4)].filter(Boolean).join(", "),
+        [headers["Site"], headers["Date"]?.slice(0, 4)]
+          .filter(Boolean)
+          .join(", "),
         // "Philidor Defence, C41" when the db resolved the opening name.
         [headers["Opening"], headers["ECO"]].filter(Boolean).join(", "),
         `${game.sans.length} plies`,
@@ -427,10 +505,10 @@ export default function GameView({
         onStatus(
           s.screensFired > 0
             ? `Narrations regenerated (${s.commentsAdded} comments over ` +
-              `${s.positionsAnalyzed} positions) — all ${s.screensFired} tactical ` +
-              `screens were already engine-verified, so nothing changed visibly.`
+                `${s.positionsAnalyzed} positions) — all ${s.screensFired} tactical ` +
+                `screens were already engine-verified, so nothing changed visibly.`
             : `Annotated: ${s.positionsAnalyzed} positions, ${s.commentsAdded} comments — ` +
-              `no tactical screens fired, nothing for the engine to confirm.`,
+                `no tactical screens fired, nothing for the engine to confirm.`,
         );
       }
     } catch (e) {
@@ -445,7 +523,9 @@ export default function GameView({
     try {
       const n = await reanalyzeGame(gameId);
       if (n === 0) {
-        onStatus("Nothing to enqueue — every position is already queued or freshly analyzed.");
+        onStatus(
+          "Nothing to enqueue — every position is already queued or freshly analyzed.",
+        );
         return;
       }
       const joined = await startGameBatch("reanalyze", n);
@@ -476,7 +556,9 @@ export default function GameView({
         <div className="header-title-block">
           <div className="header-title-row">
             <span className="header-title">{title}</span>
-            {game && <span className="header-result">{headers["Result"] ?? ""}</span>}
+            {game && (
+              <span className="header-result">{headers["Result"] ?? ""}</span>
+            )}
           </div>
           <div className="header-meta">{meta}</div>
           {game && crosstableEligible(headers["Event"]) && (
@@ -518,7 +600,11 @@ export default function GameView({
           >
             Re-analyze
           </button>
-          <button className="btn" onClick={() => void doExport()} disabled={gameId === null}>
+          <button
+            className="btn"
+            onClick={() => void doExport()}
+            disabled={gameId === null}
+          >
             Export PGN
           </button>
         </div>
@@ -532,7 +618,10 @@ export default function GameView({
             {gameBatch.positions === 1 ? "" : "s"}
           </span>
           <span className="inline-job-track">
-            <span className="inline-job-fill" style={{ width: `${Math.round(batchFraction * 100)}%` }} />
+            <span
+              className="inline-job-fill"
+              style={{ width: `${Math.round(batchFraction * 100)}%` }}
+            />
           </span>
           <span className="inline-job-detail">
             {gameBatch.done
@@ -540,14 +629,24 @@ export default function GameView({
               : `${Math.round(batchFraction * 100)}% · ${Math.max(
                   0,
                   gameBatch.total - (batchRemaining ?? gameBatch.total),
-                ).toLocaleString("en-US")} / ${gameBatch.total.toLocaleString("en-US")} jobs`}
+                ).toLocaleString(
+                  "en-US",
+                )} / ${gameBatch.total.toLocaleString("en-US")} jobs`}
           </span>
           {gameBatch.done ? (
-            <button className="btn-ghost" onClick={() => setGameBatch(null)} title="Dismiss">
+            <button
+              className="btn-ghost"
+              onClick={() => setGameBatch(null)}
+              title="Dismiss"
+            >
               ✕
             </button>
           ) : (
-            <button className="btn-ghost" onClick={() => void doPauseBatch()} disabled={pausing}>
+            <button
+              className="btn-ghost"
+              onClick={() => void doPauseBatch()}
+              disabled={pausing}
+            >
               {pausing ? "Pausing…" : "Pause"}
             </button>
           )}
@@ -556,46 +655,48 @@ export default function GameView({
 
       <div className="game-main">
         <div className="board-column" ref={colRef}>
-          <div className="board-row">
-            <EvalBar
-              row={preview ? null : evalRow}
-              mate={preview ? null : mate}
-              height={boardSize}
-            />
-            <div className="board-wrap" onClick={onBoardClick}>
-              <Board
-                fen={fen}
-                lastMove={lastMove}
-                movable={movable}
-                orientation={gv.flipped ? "black" : "white"}
-                treatment={gv.boardTreatment}
-                size={boardSize}
-                evidence={evidence}
-                intensity={intensity}
+          <div className="board-stage" ref={stageRef}>
+            <div className="board-row">
+              <EvalBar
+                row={preview ? null : evalRow}
+                mate={preview ? null : mate}
+                height={boardSize}
               />
-              {/* Selection ring overlay — aligned to the grid, above it. */}
-              <div
-                ref={gridOverlayRef}
-                className="board-sel-overlay"
-                style={
-                  {
-                    top: gridOffset.top,
-                    left: gridOffset.left,
-                    width: geo.size,
-                    height: geo.size,
-                    "--sb-cell": `${geo.cell}px`,
-                  } as CSSProperties
-                }
-                aria-hidden
-              >
-                {gv.selectedSquare && !preview && (
-                  <div
-                    className="kibitz-mark kibitz-mark-selected"
-                    style={squarePos(gv.selectedSquare, gv.flipped)}
-                  />
-                )}
+              <div className="board-wrap" onClick={onBoardClick}>
+                <Board
+                  fen={fen}
+                  lastMove={lastMove}
+                  movable={movable}
+                  orientation={gv.flipped ? "black" : "white"}
+                  treatment={gv.boardTreatment}
+                  size={boardSize}
+                  evidence={evidence}
+                  intensity={intensity}
+                />
+                {/* Selection ring overlay — aligned to the grid, above it. */}
+                <div
+                  ref={gridOverlayRef}
+                  className="board-sel-overlay"
+                  style={
+                    {
+                      top: gridOffset.top,
+                      left: gridOffset.left,
+                      width: geo.size,
+                      height: geo.size,
+                      "--sb-cell": `${geo.cell}px`,
+                    } as CSSProperties
+                  }
+                  aria-hidden
+                >
+                  {gv.selectedSquare && !preview && (
+                    <div
+                      className="kibitz-mark kibitz-mark-selected"
+                      style={squarePos(gv.selectedSquare, gv.flipped)}
+                    />
+                  )}
+                </div>
+                {promoElement}
               </div>
-              {promoElement}
             </div>
           </div>
 
@@ -622,7 +723,11 @@ export default function GameView({
               <span className="ply-pill">
                 move {preview.at} / {preview.sans.length}
               </span>
-              <button className="btn preview-exit" onClick={onExitPreview} title="Esc also exits">
+              <button
+                className="btn preview-exit"
+                onClick={onExitPreview}
+                title="Esc also exits"
+              >
                 ← Back to game
               </button>
             </div>
@@ -630,13 +735,20 @@ export default function GameView({
 
           <div className="move-controls">
             <span className="btn-group">
-              <button onClick={() => setPly(0)} disabled={!game || gv.ply === 0} title="Start (Home)">
+              <button
+                onClick={() => setPly(0)}
+                disabled={!game || gv.ply === 0}
+                title="Start (Home)"
+              >
                 |◀
               </button>
               <button onClick={() => step(-1)} disabled={!game || gv.ply === 0}>
                 ◀ Prev
               </button>
-              <button onClick={() => step(1)} disabled={!game || gv.ply >= plyCount}>
+              <button
+                onClick={() => step(1)}
+                disabled={!game || gv.ply >= plyCount}
+              >
                 Next ▶
               </button>
               <button
@@ -650,7 +762,10 @@ export default function GameView({
             <span className="ply-pill">
               ply {gv.ply} / {plyCount}
             </span>
-            <button className="btn" onClick={() => dispatch({ type: "toggleFlip" })}>
+            <button
+              className="btn"
+              onClick={() => dispatch({ type: "toggleFlip" })}
+            >
               Flip
             </button>
             <button
@@ -660,7 +775,9 @@ export default function GameView({
             >
               {live.on ? "■ Live analysis" : "Live analysis"}
             </button>
-            <span className="kbd-hint">← → step · ↑ ↓ jump 5 · f flip · e explain</span>
+            <span className="kbd-hint">
+              ← → step · ↑ ↓ jump 5 · f flip · e explain
+            </span>
           </div>
 
           {live.on && (
@@ -668,7 +785,9 @@ export default function GameView({
               <span className="live-dot" aria-hidden />
               {liveCur ? (
                 <>
-                  <span className="live-score">{formatScore(liveCur, fen)}</span>
+                  <span className="live-score">
+                    {formatScore(liveCur, fen)}
+                  </span>
                   {liveCur.depth !== undefined && (
                     <span className="live-depth">d{liveCur.depth}</span>
                   )}
@@ -710,7 +829,8 @@ export default function GameView({
           {pendingVar && (
             <div className="var-offer">
               <span>
-                Add {pendingVar.label} as a variation of {game?.sans[pendingVar.ply - 1]}?
+                Add {pendingVar.label} as a variation of{" "}
+                {game?.sans[pendingVar.ply - 1]}?
               </span>
               <button className="btn" onClick={onAcceptVar}>
                 Add as variation
@@ -725,8 +845,9 @@ export default function GameView({
         <div className="right-pane">
           {explainOn && preview && (
             <div className="preview-note">
-              Variation preview — the explanation and eval bar track the main game and are
-              paused. <button onClick={onExitPreview}>Back to game</button>
+              Variation preview — the explanation and eval bar track the main
+              game and are paused.{" "}
+              <button onClick={onExitPreview}>Back to game</button>
             </div>
           )}
           {explainOn && !preview && (
@@ -737,7 +858,9 @@ export default function GameView({
               voice={gv.voice}
               onVoice={(v) => dispatch({ type: "setVoice", voice: v })}
               hoverSentence={gv.hoverSentence}
-              onHoverSentence={(i) => dispatch({ type: "hoverSentence", index: i })}
+              onHoverSentence={(i) =>
+                dispatch({ type: "hoverSentence", index: i })
+              }
               selectedSquare={gv.selectedSquare}
               onExplain={onExplain}
               explainedPlies={explainedPlies}
@@ -752,7 +875,9 @@ export default function GameView({
             currentPly={gv.ply}
             evals={evalsMap}
             annotationMode={gv.annotationMode}
-            onAnnotationMode={(m) => dispatch({ type: "setAnnotationMode", mode: m })}
+            onAnnotationMode={(m) =>
+              dispatch({ type: "setAnnotationMode", mode: m })
+            }
             onSelectPly={setPly}
             editing={editing}
             repGlyphs={repGlyphs}
@@ -775,10 +900,15 @@ export default function GameView({
           {game && game.sans.length > 0 && (
             <div className="rep-footer">
               <span title="Adds the moves up to the current ply (whole game at ply 0) as training cards">
-                {gv.ply > 0 ? `Line (first ${gv.ply} plies)` : "Mainline"} → repertoire:
+                {gv.ply > 0 ? `Line (first ${gv.ply} plies)` : "Mainline"} →
+                repertoire:
               </span>
-              <button onClick={() => onAddToRepertoire("white")}>as White</button>
-              <button onClick={() => onAddToRepertoire("black")}>as Black</button>
+              <button onClick={() => onAddToRepertoire("white")}>
+                as White
+              </button>
+              <button onClick={() => onAddToRepertoire("black")}>
+                as Black
+              </button>
             </div>
           )}
         </div>

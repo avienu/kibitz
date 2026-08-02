@@ -340,6 +340,17 @@ textarea {
   padding: 22px 26px;
   overflow: hidden;
 }
+/* The box the board is fitted to. It owns the space the strips below it
+   do not, so the board is sized to what actually exists rather than to a
+   guess — and can never be cropped by `overflow: hidden` on the column. */
+.board-stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .board-row {
   display: flex;
   gap: 16px;
