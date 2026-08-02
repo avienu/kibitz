@@ -983,29 +983,45 @@ pub async fn sync_due_now(
     if worker.active.load(Ordering::SeqCst) {
         return Ok(Vec::new());
     }
+    let ran: std::collections::HashSet<String> = worker
+        .auto_ran
+        .lock()
+        .map(|r| r.clone())
+        .unwrap_or_default();
     with_conn(&state, |conn| {
         let now = now_utc(conn);
-        let mut due = Vec::new();
-        for service in ["lichess", "chesscom"] {
-            let schedule = Schedule::parse(
-                net::meta_get(conn, &auto_key(service))
-                    .map_err(|e| e.to_string())?
-                    .as_deref(),
-            );
-            let username = net::meta_get(conn, &format!("sync_user_{service}"))
-                .map_err(|e| e.to_string())?
-                .unwrap_or_default();
-            if username.trim().is_empty() {
-                continue;
-            }
-            let last = net::last_successful_sync(conn, service).map_err(|e| e.to_string())?;
-            let ran = worker.auto_ran.lock().is_ok_and(|r| r.contains(service));
-            if sync_due(schedule, ran, last.as_deref(), &now) {
-                due.push(service.to_string());
-            }
-        }
-        Ok(due)
+        due_services(conn, &ran, &now)
     })
+}
+
+/// The due-selection itself, over a connection — so the path a user never
+/// reaches through the UI is still exercised against a real database.
+pub(crate) fn due_services(
+    conn: &Connection,
+    ran: &std::collections::HashSet<String>,
+    now: &str,
+) -> Result<Vec<String>, String> {
+    let mut due = Vec::new();
+    for service in ["lichess", "chesscom"] {
+        let schedule = Schedule::parse(
+            net::meta_get(conn, &auto_key(service))
+                .map_err(|e| e.to_string())?
+                .as_deref(),
+        );
+        let username = net::meta_get(conn, &format!("sync_user_{service}"))
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default();
+        // A schedule without a username is not a sync waiting to happen,
+        // it is an unconfigured account.
+        if username.trim().is_empty() {
+            continue;
+        }
+        let last = net::last_successful_sync(conn, service).map_err(|e| e.to_string())?;
+        if sync_due(schedule, ran.contains(service), last.as_deref(), now) {
+            due.push(service.to_string());
+        }
+    }
+    Ok(due)
 }
 
 /// Recent sync attempts, newest first — the answer to "has it actually
@@ -1501,6 +1517,88 @@ mod tests {
             auto_sync_plan(1610, 1610, &imported, 5, None),
             Vec::<u32>::new()
         );
+    }
+
+    /// The whole loop against a real database, because the scheduler is
+    /// otherwise a path no user can reach yet: schedule set -> due -> run
+    /// recorded -> not due -> interval elapses -> due again.
+    #[test]
+    fn the_schedule_loop_runs_end_to_end_on_a_real_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = kibitz_db::db::open(&dir.path().join("t.sqlite")).unwrap();
+        let none = std::collections::HashSet::new();
+
+        // A configured username with no schedule is not due.
+        sync_set_username_impl(&conn, "lichess", "avienu").unwrap();
+        assert!(due_services(&conn, &none, "2026-08-02 12:00:00")
+            .unwrap()
+            .is_empty());
+
+        // Scheduled and NEVER synced: due. This is the branch that would
+        // otherwise be true in principle and unreached in practice — the
+        // real Lichess account has been in exactly this state.
+        kibitz_db::net::meta_set(&conn, &auto_key("lichess"), "6").unwrap();
+        assert_eq!(
+            due_services(&conn, &none, "2026-08-02 12:00:00").unwrap(),
+            vec!["lichess".to_string()]
+        );
+
+        // A run lands in the log; the interval is now measured from it.
+        let id =
+            kibitz_db::net::sync_run_start(&conn, "lichess", "auto", "2026-08-02 12:00:00").unwrap();
+        kibitz_db::net::sync_run_finish(&conn, id, "2026-08-02 12:00:30", 7, 0, 0, None, None)
+            .unwrap();
+        let logged = kibitz_db::net::sync_runs(&conn, Some("lichess"), 5).unwrap();
+        assert_eq!(logged.len(), 1);
+        assert_eq!(logged[0].trigger, "auto");
+        assert_eq!(logged[0].games_imported, 7);
+
+        // Five hours later: not due. Six: due.
+        assert!(due_services(&conn, &none, "2026-08-02 17:00:00")
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            due_services(&conn, &none, "2026-08-02 18:00:30").unwrap(),
+            vec!["lichess".to_string()]
+        );
+
+        // A FAILED run does not reset the clock — still due.
+        let bad =
+            kibitz_db::net::sync_run_start(&conn, "lichess", "auto", "2026-08-02 18:00:31").unwrap();
+        kibitz_db::net::sync_run_finish(
+            &conn,
+            bad,
+            "2026-08-02 18:00:32",
+            0,
+            0,
+            0,
+            None,
+            Some("429"),
+        )
+        .unwrap();
+        assert_eq!(
+            due_services(&conn, &none, "2026-08-02 18:01:00").unwrap(),
+            vec!["lichess".to_string()],
+            "a failure must not look like a completed check"
+        );
+
+        // A username-less service with a schedule stays out of the list.
+        kibitz_db::net::meta_set(&conn, &auto_key("chesscom"), "launch").unwrap();
+        assert_eq!(
+            due_services(&conn, &none, "2026-08-02 18:01:00").unwrap(),
+            vec!["lichess".to_string()]
+        );
+
+        // The per-launch latch removes a "launch" service once it has run.
+        sync_set_username_impl(&conn, "chesscom", "sounix").unwrap();
+        let mut ran = std::collections::HashSet::new();
+        assert!(due_services(&conn, &ran, "2026-08-02 18:01:00")
+            .unwrap()
+            .contains(&"chesscom".to_string()));
+        ran.insert("chesscom".to_string());
+        assert!(!due_services(&conn, &ran, "2026-08-02 18:01:00")
+            .unwrap()
+            .contains(&"chesscom".to_string()));
     }
 
     #[test]
