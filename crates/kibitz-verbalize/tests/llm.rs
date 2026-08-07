@@ -75,6 +75,7 @@ fn fixture_record() -> FeatureRecord {
         }],
         composite_plans: vec![],
         maneuvers: vec![],
+        schemes: vec![],
         engine: None,
         provenance: Provenance {
             generator: "kibitz-core".into(),

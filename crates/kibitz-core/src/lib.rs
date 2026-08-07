@@ -11,6 +11,7 @@ pub mod plans;
 pub mod prose_gate;
 pub mod record;
 pub mod route;
+pub mod scheme;
 pub mod see;
 pub mod suggest;
 pub mod wsui;
@@ -42,6 +43,7 @@ pub fn analyze(board: &cozy_chess::Board) -> record::FeatureRecord {
     let imbalances = imbalance::assess(board);
     let composite_plans = plans::synthesize(&imbalances);
     let maneuvers = route::extract(board, &imbalances);
+    let schemes = scheme::synthesize(&maneuvers, &composite_plans);
     record::FeatureRecord {
         schema_version: record::SCHEMA_VERSION,
         fen: board.to_string(),
@@ -51,6 +53,7 @@ pub fn analyze(board: &cozy_chess::Board) -> record::FeatureRecord {
         imbalances,
         composite_plans,
         maneuvers,
+        schemes,
         engine: None,
         provenance: record::FeatureRecord::provenance_now(),
     }

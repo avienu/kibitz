@@ -173,6 +173,49 @@ expression: record
       "favors": "white"
     }
   ],
+  "schemes": [
+    {
+      "target": "d5",
+      "favors": "white",
+      "steps": [
+        {
+          "kind": "clear",
+          "squares": [
+            "f6"
+          ],
+          "moves": 0
+        },
+        {
+          "kind": "maneuver",
+          "squares": [
+            "c3",
+            "d5"
+          ],
+          "moves": 1
+        },
+        {
+          "kind": "maneuver",
+          "squares": [
+            "f1",
+            "c4",
+            "d5"
+          ],
+          "moves": 2
+        },
+        {
+          "kind": "exploit",
+          "hint": "PressureBackwardPawn",
+          "squares": [
+            "d6",
+            "d5",
+            "c3"
+          ],
+          "moves": 0
+        }
+      ],
+      "horizon": 1
+    }
+  ],
   "engine": null,
   "provenance": {
     "generator": "kibitz-core",

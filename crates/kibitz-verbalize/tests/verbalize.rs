@@ -45,6 +45,7 @@ fn base_record(fen: &str, phase: Phase) -> FeatureRecord {
         imbalances: vec![],
         composite_plans: vec![],
         maneuvers: vec![],
+        schemes: vec![],
         engine: None,
         provenance: provenance(),
     }

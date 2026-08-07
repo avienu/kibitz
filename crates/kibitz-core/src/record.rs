@@ -189,6 +189,43 @@ pub struct CompositePlan {
     pub favors: Favors,
 }
 
+/// One stage of a [`Scheme`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SchemeStep {
+    /// What kind of work this stage is: "clear" | "maneuver" | "exploit".
+    /// The narrator keys templates off this plus `hint`.
+    pub kind: String,
+    /// The plan-hint token this stage came from, where it had one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub squares: Vec<String>,
+    /// Rough cost of the stage in moves; 0 when it is a standing idea
+    /// rather than a countable sequence.
+    pub moves: u8,
+}
+
+/// A plan as a SEQUENCE with prerequisites (schema v4).
+///
+/// [`CompositePlan`] answers a spatial question — what converges on this
+/// square. A scheme answers the ordering question the books actually
+/// teach: trade the defenders of d5 FIRST, then land the knight, then
+/// press the weakness behind it (Jeremy Silman, How to Reassess Your
+/// Chess, ex. 60; the shape is Nimzowitsch's restrain-blockade-destroy).
+///
+/// Only emitted where there is genuine sequence — a plan with one stage
+/// is already fully described by its [`CompositePlan`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Scheme {
+    /// The square the whole sequence is about.
+    pub target: String,
+    pub favors: Favors,
+    /// Stages in the order they must be played.
+    pub steps: Vec<SchemeStep>,
+    /// Total move cost of the sequence.
+    pub horizon: u8,
+}
+
 /// One string per narration voice (schema v3). The UI never synthesizes
 /// prose: both voices arrive pre-rendered so the voice toggle is instant
 /// and provably shows the same facts.
@@ -356,6 +393,9 @@ pub struct FeatureRecord {
     /// Piece reroutes as ordered sequences, shortest first (schema v4).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub maneuvers: Vec<Maneuver>,
+    /// Multi-stage plans with prerequisites, best first (schema v4).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub schemes: Vec<Scheme>,
     pub engine: Option<EngineEval>,
     pub provenance: Provenance,
 }
@@ -420,6 +460,7 @@ mod tests {
             }],
             composite_plans: vec![],
             maneuvers: vec![],
+            schemes: vec![],
             engine: None,
             provenance: Provenance {
                 generator: "kibitz-core".into(),
