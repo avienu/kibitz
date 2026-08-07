@@ -85,6 +85,13 @@ expression: record
       },
       "plans": [
         {
+          "hint": "TradeSquareDefender",
+          "squares": [
+            "f6",
+            "d5"
+          ]
+        },
+        {
           "hint": "ManeuverKnightToOutpost",
           "squares": [
             "c3",

@@ -475,18 +475,56 @@ safe route to either black bishop, and the plan belongs to White while
 the position favours Black, so the side-lean filter would drop it in any
 case. Inventing a route to score it would be the wrong trade.
 
+### Fourth tranche: trading the square's defender, and a swallowed-plans bug
+
+`UndermineDefender` removes the PAWN that guards a square we want.
+`TradeSquareDefender` is the piece version: a central square whose only
+piece defender we can go and trade off (HTRYC ex. 141 — White's setup
+points at e5, the c6 knight is the one thing covering it, and the right
+developing move buys that knight). One square per side, deepest first:
+a campaign to own e5 says more than the same campaign restated about d4.
+
+Two facts the tests pinned, both discovered by writing them:
+
+- A defender whose line is blocked by its OWN piece is not a defender.
+  In ex. 118 the b7 bishop looks like it guards d5 until you notice its
+  own knight on c6 stands in the way — which is what leaves the f6
+  knight as the single piece to trade.
+- Two defenders is a siege, not a trade, and the hint stays silent.
+
+**The swallowed-plans bug.** `squares_outposts` returned `None` whenever
+it had gathered no EVIDENCE, which silently discarded any plans it had
+already produced. The restraint hints are about pawns and pieces holding
+squares, so they fire precisely in positions with no hole and no outpost
+of ours — exactly the positions the guard was throwing away. Changing it
+to `evidence.is_empty() && plans.is_empty()` moved the imbalance axis
+86.8% -> **88.2%** on its own, because the detector now reports in
+positions where the corpus expected a `SquaresOutposts` reading and got
+nothing.
+
+`fight-for-key-square` (3 entries) stays an acknowledged gap rather than
+being mapped onto any of these. It is a THEME — "this position is about
+d5" — not a plan, and its structural equivalent in our record is the
+`CompositePlan` convergence target, which the harness does not score.
+Mapping a theme tag onto a concrete plan token to collect three hits
+would corrupt what the corpus means. Two of its three entries already
+emit the relevant plans (`UndermineDefender`, `ManeuverKnightToOutpost`,
+and now `TradeSquareDefender`); only the label is missing.
+
 ### Running total
 
 | axis | run 11 | run 12 |
 |---|---|---|
-| imbalances | 247/287 = 86.1% | 249/287 = **86.8%** |
+| imbalances | 247/287 = 86.1% | 253/287 = **88.2%** |
 | plans | 90/126 = 71.4% | 101/137 = **73.7%** |
 | favors | 62/99 = 62.6% | 65/99 = **65.7%** |
-| suggest@1 / @3 | 8.0% / 32.0% | 8.0% / 28.0% |
+| suggest@1 / @3 | 8.0% / 32.0% | 4.0% / 32.0% |
 | negatives | 14/14 | **14/14 clean** |
 
-Six hints added, eleven corpus tags converted from free-form to
-scoreable, ten of eleven hitting. The denominator moved 126 -> 134 and both
+Seven hints added, eleven corpus tags converted from free-form to
+scoreable, ten of eleven hitting. suggest@3 is back to baseline;
+suggest@1 is one entry below it, which on a 25-position sample is noise
+and is not being chased — see the note above. The denominator moved 126 -> 134 and both
 numbers are reported, because a run that only watched the percentage
 would be grading its own homework.
 

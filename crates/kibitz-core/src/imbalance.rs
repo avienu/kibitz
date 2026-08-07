@@ -1509,6 +1509,65 @@ fn single_pawn_attack_span(pawn: Square, color: Color) -> BitBoard {
     span
 }
 
+/// The piece version of undermining: a central square we want whose only
+/// PIECE defender we can go and trade off.
+///
+/// [`undermine_targets`] removes the pawn that guards a square; this
+/// removes the piece. HTRYC ex. 141 is the case — White's whole setup
+/// points at e5, the c6 knight is the one thing covering it, and the
+/// right developing move is the one that goes and buys that knight.
+fn square_defender_trades(board: &Board, color: Color) -> Vec<(Square, Square)> {
+    let enemy = !color;
+    let mut out = Vec::new();
+    for square in [Square::D4, Square::D5, Square::E4, Square::E5] {
+        // A square our own pawn already holds needs no campaign, and one
+        // an enemy pawn stands on is not a square we can occupy.
+        if board.pieces(Piece::Pawn).has(square) || board.colors(color).has(square) {
+            continue;
+        }
+        // Only interesting in the half we are invading.
+        let ours_side = match color {
+            Color::White => square.rank() as u8 >= 3,
+            Color::Black => (square.rank() as u8) <= 4,
+        };
+        if !ours_side {
+            continue;
+        }
+        let defenders = crate::attack::attackers_of(board, square, enemy, board.occupied())
+            & !board.colored_pieces(enemy, Piece::Pawn)
+            & !board.colored_pieces(enemy, Piece::King);
+        // Exactly one piece in the way: two defenders is a siege, not a
+        // trade, and zero means nothing is stopping us.
+        if defenders.len() != 1 {
+            continue;
+        }
+        let defender = defenders.into_iter().next().expect("len checked");
+        // We must be able to get at it, by any piece that routes.
+        let can_reach = [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen]
+            .into_iter()
+            .flat_map(|p| {
+                board
+                    .colored_pieces(color, p)
+                    .into_iter()
+                    .map(move |from| (p, from))
+            })
+            .any(|(p, from)| {
+                crate::route::route_to_attack(board, color, p, from, defender).is_some()
+            });
+        if can_reach {
+            out.push((square, defender));
+        }
+    }
+    // One square per side. The deepest one is the prize — a campaign to
+    // own e5 says more than the same campaign restated about d4.
+    out.sort_by_key(|(sq, _)| match color {
+        Color::White => 7 - sq.rank() as i8,
+        Color::Black => sq.rank() as i8,
+    });
+    out.truncate(1);
+    out
+}
+
 /// Nimzowitsch's overprotection: our own fixed central spearhead, under
 /// fire and worth piling extra defenders behind.
 ///
@@ -1565,6 +1624,12 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         // Restraint plans stand on their own: they are about pawns
         // holding (or failing to hold) squares, so they must be reachable
         // even in a position with no hole and no outpost of ours.
+        for (wanted, defender) in square_defender_trades(board, color) {
+            plans.push(PlanHint {
+                hint: "TradeSquareDefender".into(),
+                squares: vec![square_name(defender), square_name(wanted)],
+            });
+        }
         for (wanted, defender) in undermine_targets(board, color) {
             // No score contribution: having a lever to play is a TO-DO,
             // not an advantage. Run 11 learned this for the development
@@ -1708,7 +1773,12 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
             score += sign * holes.len().min(3) as i32 * per_hole;
         }
     }
-    if evidence.is_empty() {
+    // Plans count as findings. The restraint hints (undermining, trading
+    // a square's defender) are about pawns and pieces holding squares, so
+    // they fire in positions with no hole and no outpost of ours — and
+    // dropping the whole imbalance for want of EVIDENCE silently threw
+    // those plans away.
+    if evidence.is_empty() && plans.is_empty() {
         return None;
     }
     let (f, m) = favors_or_balanced(score, 12, 35);
@@ -2287,6 +2357,54 @@ mod tests {
             .unwrap_or_default();
         assert!(
             !plans.iter().any(|p| p.hint == "HuntBishopPair"),
+            "{plans:?}"
+        );
+    }
+
+    /// Jeremy Silman, How to Reassess Your Chess, ex. 141: White's setup
+    /// points at e5, the c6 knight is the ONE piece covering it, and the
+    /// right developing move is the one that goes and buys that knight.
+    /// The deepest contested square wins — a campaign to own e5 says more
+    /// than the same campaign restated about d4.
+    #[test]
+    fn trade_square_defender_names_the_one_piece_in_the_way() {
+        let fen = "r1bqkb1r/pp2pp1p/2n2np1/2pp4/5P2/1P2PN2/PBPP2PP/RN1QKB1R w KQkq - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "TradeSquareDefender" && p.squares == vec!["c6", "e5"]),
+            "{plans:?}"
+        );
+    }
+
+    /// A defender whose line is blocked by its OWN piece is not a
+    /// defender. Here the b7 bishop appears to guard d5 until you notice
+    /// its own knight on c6 stands in the way, which leaves the f6 knight
+    /// as the single piece to trade. (HTRYC ex. 118.)
+    #[test]
+    fn trade_square_defender_ignores_a_self_blocked_line() {
+        let fen = "r2q1rk1/1b2bpp1/p1np1n1p/1p2p3/4P3/PPN2N1P/2P2PP1/R1BQRBK1 w - - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "TradeSquareDefender" && p.squares == vec!["f6", "d5"]),
+            "{plans:?}"
+        );
+    }
+
+    /// Two defenders is a siege, not a trade — the hint is for squares
+    /// one exchange away from being ours, not every contested point.
+    #[test]
+    fn trade_square_defender_is_silent_against_two_defenders() {
+        // Both black knights cover e5.
+        let fen = "4k3/5n2/2n5/8/3P4/8/8/4K3 w - - 0 1";
+        let plans = squares_outposts(&board(fen))
+            .map(|i| i.plans)
+            .unwrap_or_default();
+        assert!(
+            !plans.iter().any(|p| p.hint == "TradeSquareDefender"),
             "{plans:?}"
         );
     }
