@@ -180,13 +180,18 @@ expression: record
       "steps": [
         {
           "kind": "clear",
+          "agent": "c1",
+          "via": [
+            "g5"
+          ],
           "squares": [
             "f6"
           ],
-          "moves": 0
+          "moves": 1
         },
         {
           "kind": "maneuver",
+          "agent": "c3",
           "squares": [
             "c3",
             "d5"
@@ -195,6 +200,10 @@ expression: record
         },
         {
           "kind": "maneuver",
+          "agent": "f1",
+          "via": [
+            "c4"
+          ],
           "squares": [
             "f1",
             "c4",
@@ -213,7 +222,7 @@ expression: record
           "moves": 0
         }
       ],
-      "horizon": 1
+      "horizon": 2
     }
   ],
   "engine": null,

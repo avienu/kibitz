@@ -43,7 +43,7 @@ pub fn analyze(board: &cozy_chess::Board) -> record::FeatureRecord {
     let imbalances = imbalance::assess(board);
     let composite_plans = plans::synthesize(&imbalances);
     let maneuvers = route::extract(board, &imbalances);
-    let schemes = scheme::synthesize(&maneuvers, &composite_plans);
+    let schemes = scheme::synthesize(board, &maneuvers, &composite_plans);
     record::FeatureRecord {
         schema_version: record::SCHEMA_VERSION,
         fen: board.to_string(),

@@ -12,7 +12,13 @@
 //! a single stage is already fully described by its `CompositePlan`, and
 //! wrapping it in ceremony would just be noise.
 
+use cozy_chess::{Board, Color, Piece, Square};
+
 use crate::record::{CompositePlan, Favors, Maneuver, Scheme, SchemeStep};
+
+fn parse_sq(s: &str) -> Option<Square> {
+    s.parse().ok()
+}
 
 /// Hints that describe cashing in on a square somebody already owns,
 /// rather than getting there. These belong AFTER the maneuver.
@@ -25,14 +31,54 @@ const EXPLOIT_HINTS: &[&str] = &[
     "OpenLinesTowardWeakKing",
 ];
 
+/// Who can get at `blocker`, and at what cost? Prefers a piece that is
+/// already bearing down on it, then the shortest route. Pieces listed in
+/// `reserved` are spoken for (they are the ones we mean to land on the
+/// target) and are only drafted as a last resort.
+fn find_clearer(
+    board: &Board,
+    color: Color,
+    blocker: Square,
+    reserved: &[Square],
+) -> Option<(Square, Vec<Square>, u8)> {
+    let mut best: Option<(Square, Vec<Square>, u8)> = None;
+    for piece in [Piece::Bishop, Piece::Knight, Piece::Rook, Piece::Queen] {
+        for from in board.colored_pieces(color, piece) {
+            let Some(r) = crate::route::route_to_attack(board, color, piece, from, blocker) else {
+                continue;
+            };
+            // Already attacking costs nothing; otherwise the walk.
+            let cost = if r.to == from { 0 } else { r.moves() };
+            // A reserved piece can do the job, but it is then spent and
+            // cannot also occupy the square — rank it behind everyone else.
+            let penalty = u8::from(reserved.contains(&from)) * 10;
+            let score = cost.saturating_add(penalty);
+            if best.as_ref().is_none_or(|(_, _, b)| score < *b) {
+                let via = if r.to == from {
+                    Vec::new()
+                } else {
+                    r.via.iter().copied().chain([r.to]).collect()
+                };
+                best = Some((from, via, score));
+            }
+        }
+    }
+    best.map(|(from, via, score)| (from, via, score % 10))
+}
+
 /// Build the ordered sequences implied by the maneuvers and the composite
 /// plans that share their target squares. Longest-horizon plans are not
 /// "best" — schemes are ranked by how much converging support they have,
 /// then by being cheap to start.
-pub fn synthesize(maneuvers: &[Maneuver], composites: &[CompositePlan]) -> Vec<Scheme> {
-    // One scheme per square, not per piece. When a knight and a bishop
-    // both want d5 they are ALTERNATIVE ways into one plan, and listing
-    // the plan twice reads as two ideas when there is only one.
+pub fn synthesize(
+    board: &Board,
+    maneuvers: &[Maneuver],
+    composites: &[CompositePlan],
+) -> Vec<Scheme> {
+    // One scheme per square, not per piece — but the pieces that want it
+    // are not merely alternatives. One of them may be the piece that
+    // trades the defender off so another can settle there unchallenged,
+    // which is a DIVISION OF LABOUR inside a single plan, not two plans.
     let mut order: Vec<(String, Favors)> = Vec::new();
     for m in maneuvers {
         let key = (m.to.clone(), m.favors);
@@ -60,24 +106,64 @@ pub fn synthesize(maneuvers: &[Maneuver], composites: &[CompositePlan]) -> Vec<S
                 }
             }
         }
+        // Who clears? The pieces that want the square are NOT merely
+        // alternative ways in: one of them may be the piece that removes
+        // the defender so another can settle unchallenged (Bg5xf6 then
+        // Nd5 — HTRYC ex. 60). A piece drafted to clear is spent, so it
+        // drops out of the ways-in list.
+        let side = match favors {
+            Favors::Black => Color::Black,
+            _ => Color::White,
+        };
+        let reserved: Vec<Square> = group.iter().filter_map(|m| parse_sq(&m.from)).collect();
+        let mut spent: Vec<String> = Vec::new();
+        let mut clear_agent: Option<(String, Vec<String>, u8)> = None;
+        if let Some(first) = blockers.first().and_then(|b| parse_sq(b)) {
+            // Only draft a reserved piece when another one is left to
+            // occupy the square; a lone piece cannot both trade and stay.
+            let reserve_ok = group.len() > 1;
+            let pool: Vec<Square> = if reserve_ok {
+                Vec::new()
+            } else {
+                reserved.clone()
+            };
+            if let Some((from, via, cost)) = find_clearer(board, side, first, &pool) {
+                let name = crate::record::square_name(from);
+                if reserved.contains(&from) {
+                    spent.push(name.clone());
+                }
+                clear_agent = Some((
+                    name,
+                    via.into_iter().map(crate::record::square_name).collect(),
+                    cost,
+                ));
+            }
+        }
         if !blockers.is_empty() {
+            let (agent, via, moves) = match clear_agent {
+                Some((a, v, c)) => (Some(a), v, c),
+                None => (None, Vec::new(), 0),
+            };
             steps.push(SchemeStep {
                 kind: "clear".into(),
                 hint: None,
+                agent,
+                via,
                 squares: blockers,
-                // Trading is a real move each, but how many depends on the
-                // opponent; claiming a precise count here would be a lie.
-                moves: 0,
+                moves,
             });
         }
 
-        // Stage 2 — the ways in, cheapest first.
-        let mut routes: Vec<&&Maneuver> = group.iter().collect();
+        // Stage 2 — the ways in, cheapest first, minus anyone spent.
+        let mut routes: Vec<&&Maneuver> =
+            group.iter().filter(|m| !spent.contains(&m.from)).collect();
         routes.sort_by_key(|m| m.moves);
         for m in &routes {
             steps.push(SchemeStep {
                 kind: "maneuver".into(),
                 hint: None,
+                agent: Some(m.from.clone()),
+                via: m.via.clone(),
                 squares: std::iter::once(m.from.clone())
                     .chain(m.via.iter().cloned())
                     .chain([m.to.clone()])
@@ -105,6 +191,8 @@ pub fn synthesize(maneuvers: &[Maneuver], composites: &[CompositePlan]) -> Vec<S
                 steps.push(SchemeStep {
                     kind: "exploit".into(),
                     hint: Some(hint.clone()),
+                    agent: None,
+                    via: Vec::new(),
                     squares: c.squares.clone(),
                     moves: 0,
                 });
@@ -116,9 +204,15 @@ pub fn synthesize(maneuvers: &[Maneuver], composites: &[CompositePlan]) -> Vec<S
         if seen_hints.is_empty() {
             continue;
         }
-        // Alternative routes are not additive: the horizon is the cheapest
-        // way in, not the sum of every way in.
-        let horizon = routes.first().map(|m| m.moves).unwrap_or(0);
+        // Alternative routes are not additive: the horizon is the cost of
+        // clearing plus the cheapest remaining way in, not the sum of
+        // every way in.
+        let clear_cost = steps
+            .iter()
+            .find(|s| s.kind == "clear")
+            .map(|s| s.moves)
+            .unwrap_or(0);
+        let horizon = clear_cost.saturating_add(routes.first().map(|m| m.moves).unwrap_or(0));
         out.push(Scheme {
             target,
             favors,
@@ -136,6 +230,14 @@ pub fn synthesize(maneuvers: &[Maneuver], composites: &[CompositePlan]) -> Vec<S
 mod tests {
     use super::*;
     use crate::record::ImbalanceKind;
+    use std::str::FromStr;
+
+    /// The Sveshnikov tabiya: White's c3-knight and f1-bishop both want
+    /// d5, and the f6 knight is the defender in the way.
+    fn sveshnikov() -> Board {
+        Board::from_str("r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7")
+            .expect("fen")
+    }
 
     fn maneuver(to: &str, blocked: &[&str]) -> Maneuver {
         Maneuver {
@@ -167,6 +269,7 @@ mod tests {
     #[test]
     fn prerequisites_come_before_the_maneuver() {
         let s = synthesize(
+            &sveshnikov(),
             &[maneuver("d5", &["f6"])],
             &[composite("d5", &["PressureBackwardPawn"], Favors::White)],
         );
@@ -181,6 +284,7 @@ mod tests {
     #[test]
     fn uncontested_destination_starts_with_the_maneuver() {
         let s = synthesize(
+            &sveshnikov(),
             &[maneuver("d5", &[])],
             &[composite("d5", &["PressureBackwardPawn"], Favors::White)],
         );
@@ -192,36 +296,46 @@ mod tests {
     /// Maneuver record already says everything there is to say.
     #[test]
     fn a_single_stage_is_not_a_scheme() {
-        assert!(synthesize(&[maneuver("d5", &[])], &[]).is_empty());
+        assert!(synthesize(&sveshnikov(), &[maneuver("d5", &[])], &[]).is_empty());
     }
 
-    /// A knight and a bishop that both want d5 are two ways into ONE
-    /// plan. Listing the plan twice reads as two ideas when there is one.
+    /// A knight and a bishop that both want d5 are one plan, not two —
+    /// and they are not interchangeable either. The f6 knight defends
+    /// d5, so somebody has to trade it off first, and the piece that
+    /// does that job is spent (Bg5xf6 then Nd5 — HTRYC ex. 60).
     #[test]
-    fn two_pieces_wanting_one_square_make_one_scheme() {
+    fn two_pieces_wanting_one_square_divide_the_labour() {
         let mut bishop = maneuver("d5", &["f6"]);
         bishop.piece = "bishop".into();
         bishop.from = "f1".into();
         bishop.via = vec!["c4".into()];
         bishop.moves = 2;
         let s = synthesize(
+            &sveshnikov(),
             &[maneuver("d5", &["f6"]), bishop],
             &[composite("d5", &["PressureBackwardPawn"], Favors::White)],
         );
-        assert_eq!(s.len(), 1, "{s:?}");
+        assert_eq!(s.len(), 1, "one square, one plan: {s:?}");
         let kinds: Vec<&str> = s[0].steps.iter().map(|x| x.kind.as_str()).collect();
         assert_eq!(kinds, vec!["clear", "maneuver", "maneuver", "exploit"]);
-        // The blocker is named once, not once per route.
-        assert_eq!(s[0].steps[0].squares, vec!["f6"]);
-        // Alternative routes are not additive: cheapest way in wins.
-        assert_eq!(s[0].horizon, 1);
-        assert_eq!(s[0].steps[1].moves, 1, "cheapest route listed first");
+        // The blocker is named once, not once per route, and a piece is
+        // named to go and get it rather than the step being a wish.
+        let clear = &s[0].steps[0];
+        assert_eq!(clear.squares, vec!["f6"]);
+        assert!(
+            clear.agent.is_some(),
+            "somebody must do the trading: {clear:?}"
+        );
+        // Horizon is clearing plus the cheapest remaining way in — the
+        // prerequisite is part of the plan's cost, not free.
+        assert_eq!(s[0].horizon, clear.moves + s[0].steps[1].moves);
     }
 
     /// The opponent's plan on our square is not our payoff.
     #[test]
     fn enemy_plans_on_the_same_square_are_not_our_payoff() {
         let s = synthesize(
+            &sveshnikov(),
             &[maneuver("d5", &[])],
             &[composite("d5", &["PressureBackwardPawn"], Favors::Black)],
         );
@@ -233,6 +347,7 @@ mod tests {
     #[test]
     fn only_exploit_hints_become_the_payoff() {
         let s = synthesize(
+            &sveshnikov(),
             &[maneuver("d5", &[])],
             &[composite("d5", &["ManeuverKnightToOutpost"], Favors::White)],
         );

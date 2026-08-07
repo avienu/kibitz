@@ -117,6 +117,36 @@ pub fn route_to(
     None
 }
 
+/// Shortest safe route for the piece on `from` to any square from which
+/// it would ATTACK `victim` — the "get at that defender" search.
+///
+/// Attack sets for knights, bishops, rooks and queens are symmetric, so
+/// the squares that attack `victim` are just the squares `piece` could
+/// step to *from* `victim`. Pawns and kings are excluded: a pawn's attack
+/// set is not symmetric, and marching the king at a defended piece is
+/// not a plan.
+pub fn route_to_attack(
+    board: &Board,
+    color: Color,
+    piece: Piece,
+    from: Square,
+    victim: Square,
+) -> Option<Route> {
+    if matches!(piece, Piece::Pawn | Piece::King) {
+        return None;
+    }
+    let occ = board.occupied() & !from.bitboard();
+    let posts = steps(piece, victim, occ) & !board.colors(color);
+    if posts.has(from) {
+        // Already bearing down on it: no journey needed.
+        return Some(Route {
+            via: Vec::new(),
+            to: from,
+        });
+    }
+    route_to(board, color, piece, from, posts, &|_| true)
+}
+
 /// Hints whose square list is an ordered route: `[origin, via.., target]`.
 const ROUTE_HINTS: &[&str] = &[
     "ManeuverKnightToOutpost",

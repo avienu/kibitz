@@ -198,6 +198,16 @@ pub struct SchemeStep {
     /// The plan-hint token this stage came from, where it had one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hint: Option<String>,
+    /// Our piece that carries out this stage, by its current square.
+    /// A "clear" stage without an agent means the defender has to go but
+    /// we have no piece able to get at it yet — say so, don't pretend.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    /// Route the agent takes to do its job (empty when already in place).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub via: Vec<String>,
+    /// For "clear", the enemy pieces to remove. For "maneuver", the full
+    /// route `[origin, via.., destination]`. For "exploit", the evidence.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub squares: Vec<String>,
     /// Rough cost of the stage in moves; 0 when it is a standing idea
