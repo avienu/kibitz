@@ -1250,6 +1250,143 @@ fn shelter_is_thin(board: &Board, side: Color) -> bool {
     shield <= 1
 }
 
+/// Nimzowitsch's undermining: an enemy PAWN whose job is to hold a square
+/// we want, which one of our own pawns can advance to attack.
+///
+/// The corpus asks for this twice under two names — "undermine-defender"
+/// (HTRYC ex. 140: White's whole setup exists to own d5, so he thrusts
+/// f4-f5 at the e6 pawn that covers it) and
+/// "undermine-knight-support-points" (ex. 80: dissolve the pawns those
+/// centralised knights are standing on). Both are the same rule, so both
+/// are the same detector: find the pawn doing the defending, then find
+/// the lever that gets at it.
+///
+/// The squares we want are the holes in the enemy camp plus the squares
+/// their minor pieces are actually sitting on.
+fn undermine_targets(board: &Board, color: Color) -> Vec<(Square, Square)> {
+    let enemy = !color;
+    let enemy_pawns = board.colored_pieces(enemy, Piece::Pawn);
+    // How fast can OUR pawns come to attack a given square?
+    let ours = crate::pawn_contact::evict_distance(board, color);
+    // The window where an outpost actually bites, occupancy aside.
+    let window = hole_mask_window(enemy);
+    let enemy_minors =
+        board.colored_pieces(enemy, Piece::Knight) | board.colored_pieces(enemy, Piece::Bishop);
+
+    // Per-pawn forward attack spans, so we can ask what the enemy would
+    // still cover if a given pawn were gone.
+    let spans: Vec<(Square, BitBoard)> = enemy_pawns
+        .into_iter()
+        .map(|p| (p, single_pawn_attack_span(p, enemy)))
+        .collect();
+
+    // Only CENTRAL squares are worth a pawn lever on their own account.
+    // Freeing b6 or g5 is technically true and strategically noise; a
+    // square an enemy PIECE is actually standing on is judged on the
+    // piece, not the file.
+    let central = File::C.bitboard() | File::D.bitboard() | File::E.bitboard() | File::F.bitboard();
+
+    let mut out: Vec<(Square, Square, u8)> = Vec::new();
+    for (pawn, _) in &spans {
+        let pawn = *pawn;
+        // A defender we already hit needs no plan; one we cannot reach in
+        // two pushes is a wish, not a lever.
+        if crate::pawn_contact::contested_within(&ours, pawn, 0)
+            || !crate::pawn_contact::contested_within(&ours, pawn, 2)
+        {
+            continue;
+        }
+        let without: BitBoard = spans
+            .iter()
+            .filter(|(q, _)| *q != pawn)
+            .fold(BitBoard::EMPTY, |acc, (_, sp)| acc | *sp);
+
+        // What does removing this pawn actually buy? Squares whose
+        // PERMANENT cover depends on it alone. This is the real test: a
+        // square that is already a hole needs no undermining, and one
+        // another pawn also covers is not freed by this lever.
+        // (HTRYC ex. 140: d5 is not a hole precisely BECAUSE e6 guards
+        // it — which is the whole reason to play f4-f5.)
+        let freed =
+            window & central & !without & single_pawn_attack_span(pawn, enemy) & !board.occupied();
+        // Plus the squares enemy minor pieces are standing on thanks to
+        // this pawn (ex. 80: dissolve the pawns the knights rest on).
+        let propped = enemy_minors & get_pawn_attacks(pawn, enemy);
+
+        if let Some(square) = (freed | propped).into_iter().next() {
+            out.push((square, pawn, ours[pawn as usize]));
+        }
+    }
+    // Cheapest levers first, and at most two per side: a list of every
+    // pawn we could theoretically poke at is not a plan.
+    out.sort_by_key(|(_, _, cost)| *cost);
+    out.truncate(2);
+    out.into_iter().map(|(sq, pawn, _)| (sq, pawn)).collect()
+}
+
+/// The rank/file window where an outpost in `camp_owner`'s camp bites,
+/// ignoring pawn cover and occupancy — the geometry half of [`hole_mask`].
+fn hole_mask_window(camp_owner: Color) -> BitBoard {
+    let half = match camp_owner {
+        Color::White => Rank::Third.bitboard() | Rank::Fourth.bitboard(),
+        Color::Black => Rank::Sixth.bitboard() | Rank::Fifth.bitboard(),
+    };
+    half & !(File::A.bitboard() | File::H.bitboard())
+}
+
+/// Squares one pawn attacks now or after any number of advances.
+fn single_pawn_attack_span(pawn: Square, color: Color) -> BitBoard {
+    let mut span = BitBoard::EMPTY;
+    let mut sq = pawn;
+    loop {
+        span |= get_pawn_attacks(sq, color);
+        let next = match color {
+            Color::White => sq.try_offset(0, 1),
+            Color::Black => sq.try_offset(0, -1),
+        };
+        match next {
+            Some(n) => sq = n,
+            None => break,
+        }
+    }
+    span
+}
+
+/// Nimzowitsch's overprotection: our own fixed central spearhead, under
+/// fire and worth piling extra defenders behind.
+///
+/// The point is prophylactic SURPLUS, so this deliberately does not wait
+/// for attackers to outnumber defenders — by then it is defence, not
+/// overprotection. Gated hard instead: the pawn must be an advanced
+/// central one that is FIXED (an enemy pawn blocks its advance, so it is
+/// a permanent strong point rather than a passing occupant) and somebody
+/// must actually be shooting at it. (The Amateur's Mind test at p. 321:
+/// a quiet rook move overprotecting the e5 spearhead.)
+fn overprotect_squares(board: &Board, color: Color) -> Vec<Square> {
+    let enemy = !color;
+    let fifth = match color {
+        Color::White => Rank::Fifth,
+        Color::Black => Rank::Fourth,
+    };
+    let central = File::C.bitboard() | File::D.bitboard() | File::E.bitboard() | File::F.bitboard();
+    let fwd: i8 = if color == Color::White { 1 } else { -1 };
+    let mut out = Vec::new();
+    for p in board.colored_pieces(color, Piece::Pawn) & fifth.bitboard() & central {
+        let Some(ahead) = p.try_offset(0, fwd) else {
+            continue;
+        };
+        if !board.colored_pieces(enemy, Piece::Pawn).has(ahead) {
+            continue; // not fixed: it can still advance, so it is not a POINT
+        }
+        let attackers = crate::attack::attackers_of(board, p, enemy, board.occupied());
+        if attackers.is_empty() {
+            continue; // nothing to protect it from yet
+        }
+        out.push(p);
+    }
+    out
+}
+
 /// 5. Squares & outposts (with the spec's BFS knight-route plan hint).
 pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
     let mut evidence = BTreeMap::new();
@@ -1267,6 +1404,38 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         let occupied_outposts = mask
             & (board.colored_pieces(color, Piece::Knight)
                 | board.colored_pieces(color, Piece::Bishop));
+
+        // Restraint plans stand on their own: they are about pawns
+        // holding (or failing to hold) squares, so they must be reachable
+        // even in a position with no hole and no outpost of ours.
+        for (wanted, defender) in undermine_targets(board, color) {
+            // No score contribution: having a lever to play is a TO-DO,
+            // not an advantage. Run 11 learned this for the development
+            // prior — a plan the side still has to execute poisons the
+            // who-is-better vote — and the same holds here.
+            plans.push(PlanHint {
+                hint: "UndermineDefender".into(),
+                squares: vec![square_name(defender), square_name(wanted)],
+            });
+        }
+        for point in overprotect_squares(board, color) {
+            plans.push(PlanHint {
+                hint: "OverprotectStrongPoint".into(),
+                squares: vec![square_name(point)],
+            });
+            evidence.insert(
+                format!(
+                    "strong_point_{}",
+                    if color == Color::White {
+                        "white"
+                    } else {
+                        "black"
+                    }
+                ),
+                json!(square_name(point)),
+            );
+        }
+
         if holes.is_empty() && occupied_outposts.is_empty() {
             continue;
         }
@@ -1809,6 +1978,73 @@ mod tests {
     /// Jeremy Silman, The Complete Book of Chess Strategy, p. 279, entry
     /// 'Trading Pieces': the e7 bishop buried behind the c5/d6/e5 chain
     /// wants to be traded or freed.
+    /// Jeremy Silman, How to Reassess Your Chess, ex. 140: White's whole
+    /// setup exists to own d5, and d5 is not a hole only because the e6
+    /// pawn guards it — so the plan is f4-f5, striking the guard.
+    #[test]
+    fn undermine_names_the_pawn_that_guards_the_square_we_want() {
+        let fen = "r2qkb1r/5ppp/p1bppn2/1p6/4PP2/1BN5/PPP3PP/R1BQ1RK1 w kq - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "UndermineDefender" && p.squares == vec!["e6", "d5"]),
+            "{plans:?}"
+        );
+    }
+
+    /// Ex. 80: the centralised knights rest on loose foundations, so the
+    /// plan names the PAWNS propping them up, not the knights.
+    #[test]
+    fn undermine_names_the_pawn_propping_an_enemy_piece() {
+        let fen = "r1r5/ppq2k2/2pp2pp/4nn2/1PPBB2P/6P1/P2Q1P2/1RR3K1 w - - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "UndermineDefender" && p.squares == vec!["d6", "e5"]),
+            "{plans:?}"
+        );
+        // Levering a rook's-file pawn to "free" a wing square is true and
+        // useless; only central squares justify a lever on their own.
+        assert!(
+            !plans
+                .iter()
+                .any(|p| p.hint == "UndermineDefender" && p.squares == vec!["a7", "b6"]),
+            "{plans:?}"
+        );
+    }
+
+    /// Jeremy Silman, The Amateur's Mind, p. 321 test 1: a quiet move
+    /// overprotecting the e5 spearhead. The pawn is fixed (e6 blocks it)
+    /// and under fire from the g7 bishop, which is the whole case for
+    /// piling more defenders behind it (Nimzowitsch).
+    #[test]
+    fn overprotect_names_the_fixed_central_spearhead() {
+        let fen = "r2q1rk1/p1p2pbp/b1p1p1p1/3pP3/3P1B2/2P2N2/PP1Q1PPP/R4RK1 w - - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "OverprotectStrongPoint" && p.squares == vec!["e5"]),
+            "{plans:?}"
+        );
+    }
+
+    /// A central pawn that can still advance is an occupant, not a strong
+    /// POINT — overprotection is for squares you mean to keep forever.
+    #[test]
+    fn overprotect_is_silent_when_the_pawn_can_still_advance() {
+        let fen = "rnbqkbnr/pppp1ppp/8/4p3/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3";
+        let plans = squares_outposts(&board(fen))
+            .map(|i| i.plans)
+            .unwrap_or_default();
+        assert!(
+            !plans.iter().any(|p| p.hint == "OverprotectStrongPoint"),
+            "{plans:?}"
+        );
+    }
+
     #[test]
     fn trade_or_activate_bad_bishop() {
         let b = board("rnbq1rk1/pp2bpnp/3p2pB/2pPp3/2P1P1P1/2N2N1P/PP1Q1P2/R3R1K1 b - - 0 1");

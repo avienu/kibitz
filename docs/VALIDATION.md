@@ -377,3 +377,72 @@ Reading the deltas honestly:
 - Queens are never "wanderers" (Morphy's Qd1-f3-b3 in the opera game is
   a maneuver with targets, not a misplay); repeated early queen moves
   are covered by the sortie rule alone.
+
+## Run 12 — maneuvers, schemes, and the first Nimzowitsch vocabulary
+
+### What changed
+
+Run 12 rebuilt the plan layer around SEQUENCE. `Maneuver` records name
+the piece, its route and its prerequisites; `Scheme` records order the
+stages (clear the guard, come in, cash in) and assign each stage an
+agent. Routing generalised off the knight, the hop ceiling went 3 -> 5,
+and waypoint safety became a timing test against
+`pawn_contact::evict_distance` rather than the current attack map.
+
+Two Nimzowitschian hints entered the vocabulary, both of which the
+corpus was already asking for in free-form tags:
+
+| hint | detection rule (static) | corpus tags converted |
+|---|---|---|
+| `UndermineDefender` | an enemy pawn whose forward attack span ALONE gives permanent cover to a central square in the outpost window, or which props up an enemy minor piece, and which one of our pawns can attack within two pushes. Cheapest two levers per side. | `undermine-defender`, `undermine-knight-support-points` |
+| `OverprotectStrongPoint` | our own pawn on the relative fifth, files c-f, FIXED by an enemy pawn on its advance square, and attacked at least once. Prophylactic surplus, so it deliberately does not wait for attackers to outnumber defenders. | `overprotect-strong-point` |
+
+### Measured (162 positions, no engine)
+
+| axis | run 11 | run 12 |
+|---|---|---|
+| imbalances | 247/287 = 86.1% | 248/287 = **86.4%** |
+| plans | 90/126 = 71.4% | 94/129 = **72.9%** |
+| alerts | 10/32 = 31.2% | 10/32 = 31.2% (untouched) |
+| favors | 62/99 = 62.6% | 65/99 = **65.7%** |
+| suggest@1 | 2/25 = 8.0% | 2/25 = 8.0% |
+| suggest@3 | 8/25 = 32.0% | 7/25 = **28.0%** |
+| negatives | 14/14 clean | **14/14 clean** |
+
+All three converted expectations hit, and the plans denominator grew
+126 -> 129 accordingly. Both numbers are reported deliberately: adding
+vocabulary raises the denominator, so a run that only chased the
+percentage would be gaming its own metric.
+
+### The suggest@3 regression, honestly
+
+am-325-2 (The Amateur's Mind, "claim the wing your space points at")
+expects `c5` and now gets `d5` in its place — our undermining lever
+against the c6 pawn outranks the book's space-claiming break. Both are
+real ideas; Silman's is better.
+
+It was not chased. One entry on a 25-position sample is 4%, the sample
+is too small to tune against, and contorting a detector to recover it
+is precisely the overfitting this harness exists to expose. The trade
+bought three plan hits on the axis actually being driven to 90%. The
+right fix is a bigger `best_moves` corpus across all four books, not a
+thumb on this scale.
+
+### Three bugs the new detectors exposed
+
+- **File clustering corrupts exact-square hints.** `plans::synthesize`
+  rewrites a cluster's target by file-level vote and pools every
+  member's squares into `CompositePlan::squares`, which downstream move
+  generation reads. A hint whose squares are a precise pair is not
+  merged by that, it is retargeted. `route::EXACT_DESTINATION_HINTS`
+  now holds the hints that must stay out of the vote; leaving
+  `UndermineDefender` in cost two book answers before this was found.
+- **Plan hints are to-dos, not edges.** Scoring the new hints into the
+  imbalance total dropped favors 65.7% -> 62.6%. Run 11 had already
+  learned this for the development prior; both new hints now contribute
+  plans and evidence but no score.
+- **Not every hint should generate moves.** `OverprotectStrongPoint`
+  maps to no candidates at all: nearly every quiet developing move adds
+  a defender to a central point, so generating from it buried real
+  answers under Rf1/Be2/Kf2. It is `EXPLANATORY_ONLY` in the suggester —
+  it explains why a quiet move is good without pretending to pick one.

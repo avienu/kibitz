@@ -79,6 +79,8 @@ const KNOWN_HINTS: &[&str] = &[
     "ManeuverKnightToOutpost",
     "ManeuverBishopToSupportPoint",
     "ManeuverRookToOpenFile",
+    "UndermineDefender",
+    "OverprotectStrongPoint",
     "PressureBackwardPawn",
     "BlockadeWhitePasser",
     "BlockadeBlackPasser",

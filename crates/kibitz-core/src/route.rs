@@ -154,8 +154,15 @@ const ROUTE_HINTS: &[&str] = &[
     "ManeuverRookToOpenFile",
 ];
 
-/// Route hints that own an EXACT destination and must not have it
-/// renamed by [`crate::plans`]'s file-level clustering.
+/// Hints that own EXACT squares and must not have them renamed or
+/// merged by [`crate::plans`]'s file-level clustering.
+///
+/// Clustering rewrites a plan's target to a file-level vote and pools
+/// every member's squares into `CompositePlan::squares`, which downstream
+/// move generation then reads. For a hint whose squares are a precise
+/// pair ("this guard, that square") or a precise route, that pooling is
+/// not a merge but a corruption — it silently retargets other hints in
+/// the same cluster.
 ///
 /// `ManeuverKnightToOutpost` is deliberately absent: it has clustered
 /// since run 5, its convergence story is the validated Sveshnikov golden,
@@ -164,8 +171,12 @@ const ROUTE_HINTS: &[&str] = &[
 /// narrated it as "Black: walk the bishop round to d2". Proper
 /// owner-aware convergence for these belongs to the sequencing layer,
 /// which has the board; file clustering does not.
-pub const EXACT_DESTINATION_HINTS: &[&str] =
-    &["ManeuverBishopToSupportPoint", "ManeuverRookToOpenFile"];
+pub const EXACT_DESTINATION_HINTS: &[&str] = &[
+    "ManeuverBishopToSupportPoint",
+    "ManeuverRookToOpenFile",
+    "UndermineDefender",
+    "OverprotectStrongPoint",
+];
 
 /// Why a route's destination is worth the trip, in evidence language.
 fn reason_for(hint: &str) -> &'static str {

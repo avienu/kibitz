@@ -118,12 +118,24 @@ fn color_favors(c: Color) -> Favors {
 /// All active plans, one entry per (hint, squares): imbalance hints first,
 /// then composite hints not already collected (composites are synthesized
 /// FROM imbalance hints, so this dedupe keeps each idea counted once).
+/// Hints that EXPLAIN rather than instruct. They must not enter the
+/// suggester's plan pool at all: they generate no moves of their own, and
+/// merely being counted shifts plan_strength, which reshuffles
+/// prophylactic ranking and displaces real answers (am-324-1 "b4" and
+/// am-325-2 "c5" were both lost that way). Same principle that keeps
+/// them out of the favors vote — a standing idea is not a claim about
+/// what to play this move.
+const EXPLANATORY_ONLY: &[&str] = &["OverprotectStrongPoint"];
+
 fn active_plans(record: &FeatureRecord) -> Vec<ActivePlan> {
     let mut out: Vec<ActivePlan> = Vec::new();
     let mut seen: BTreeSet<(String, Vec<String>)> = BTreeSet::new();
     let mut seen_tokens: BTreeSet<String> = BTreeSet::new();
     for imb in &record.imbalances {
         for plan in &imb.plans {
+            if EXPLANATORY_ONLY.contains(&plan.hint.as_str()) {
+                continue;
+            }
             if !seen.insert((plan.hint.clone(), plan.squares.clone())) {
                 continue;
             }
@@ -137,7 +149,7 @@ fn active_plans(record: &FeatureRecord) -> Vec<ActivePlan> {
     }
     for cp in &record.composite_plans {
         for hint in &cp.hints {
-            if seen_tokens.contains(hint) {
+            if EXPLANATORY_ONLY.contains(&hint.as_str()) || seen_tokens.contains(hint) {
                 continue;
             }
             seen_tokens.insert(hint.clone());
@@ -367,6 +379,34 @@ fn moves_for_hint(
                 }
             }
         }
+        // The lever: a pawn move that puts our pawn onto a square from
+        // which it attacks the guard. squares = [guard, square_we_want].
+        "UndermineDefender" => {
+            let Some(guard) = squares.first().and_then(|s| parse_sq(s)) else {
+                return out;
+            };
+            for &mv in legal {
+                if board.piece_on(mv.from) != Some(Piece::Pawn) {
+                    continue;
+                }
+                if !get_pawn_attacks(mv.to, side).has(guard) {
+                    continue;
+                }
+                // A lever that simply loses the pawn is not a plan.
+                if !is_safe(board, mv) {
+                    continue;
+                }
+                // PREPARE, not EXECUTE: knocking away a guard is groundwork
+                // for owning the square, not the plan being carried out.
+                out.push((mv, PREPARE));
+            }
+        }
+        // OverprotectStrongPoint deliberately generates NO candidates.
+        // Nimzowitsch's overprotection explains why a quiet move is good;
+        // it does not pick one. Nearly every developing move adds a
+        // defender to a central point, so mapping it to moves buried the
+        // real plan under Rf1/Be2/Kf2 noise and cost two book answers
+        // (am-324-1 b4, am-325-2 c5). The hint stays; the chips do not.
         "PressureBackwardPawn" | "PressureDoubledPawn" => {
             let Some(pawn) = enemy_pawn_among(board, side, squares) else {
                 return out;
