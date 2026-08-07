@@ -452,18 +452,41 @@ That in turn exposed a hole: a maneuver no scheme absorbed was never
 narrated at all, so the record could hold a plan the reader never heard
 about. Standalone maneuvers now get their own sentence.
 
+### Third tranche: hunting the bishop pair
+
+| hint | detection rule (static) | corpus tags converted |
+|---|---|---|
+| `HuntBishopPair` | the opponent holds two bishops, the centre is not closed, and one of our knights has a safe route (`route::route_to_attack`) to a square attacking one of them. Bishops still on their home square are excluded. | `win-bishop-pair`, `hunt-bishop-pair`, `trade-off-bishop-pair` |
+
+Alex Yermolinsky's point about the two bishops is that their value is an
+OPTION: the owner picks the moment to trade one for a knight. The plan
+on the other side of the board is to take that choice away. "Win the
+pair" and "trade the pair off" are the same ACTION seen from two
+scorelines — gain it, or deny it — so the corpus's three names are one
+hint.
+
+Excluding home-square bishops matters more than it sounds: without it
+the Sveshnikov tabiya proposed hunting Black's undeveloped c8 bishop on
+move seven, which its owner would have been glad to be rid of. A bishop
+still at home is not the one whose loss hurts.
+
+2 of the 3 entries hit. cbcs-218 misses honestly: no white knight has a
+safe route to either black bishop, and the plan belongs to White while
+the position favours Black, so the side-lean filter would drop it in any
+case. Inventing a route to score it would be the wrong trade.
+
 ### Running total
 
 | axis | run 11 | run 12 |
 |---|---|---|
-| imbalances | 247/287 = 86.1% | 248/287 = **86.4%** |
-| plans | 90/126 = 71.4% | 99/134 = **73.9%** |
+| imbalances | 247/287 = 86.1% | 249/287 = **86.8%** |
+| plans | 90/126 = 71.4% | 101/137 = **73.7%** |
 | favors | 62/99 = 62.6% | 65/99 = **65.7%** |
 | suggest@1 / @3 | 8.0% / 32.0% | 8.0% / 28.0% |
 | negatives | 14/14 | **14/14 clean** |
 
-Five hints added, eight corpus tags converted from free-form to
-scoreable, all eight hitting. The denominator moved 126 -> 134 and both
+Six hints added, eleven corpus tags converted from free-form to
+scoreable, ten of eleven hitting. The denominator moved 126 -> 134 and both
 numbers are reported, because a run that only watched the percentage
 would be grading its own homework.
 

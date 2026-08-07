@@ -138,6 +138,9 @@ fn front_span(color: Color, sq: Square) -> BitBoard {
 pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     let mut evidence = BTreeMap::new();
     let mut score = 0i32; // + favors White
+                          // Side-owned plans, filtered against the final lean (see
+                          // pawn_structure for the rationale).
+    let mut sided: Vec<(Color, PlanHint)> = Vec::new();
 
     let wb = board.colored_pieces(Color::White, Piece::Bishop).len() as i32;
     let wn = board.colored_pieces(Color::White, Piece::Knight).len() as i32;
@@ -171,6 +174,49 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
         score -= if closed { 10 } else { 35 };
     }
 
+    // Hunting the pair. Alex Yermolinsky's point about the two bishops is
+    // that their value is an OPTION: you get to choose the moment to
+    // trade one for a knight. The corollary is the plan on this side of
+    // the board — when the opponent holds the pair, go and buy one of
+    // their bishops with a knight.
+    //
+    // "Win the pair" and "trade the pair off" are the same ACTION seen
+    // from two scorelines (gain it, or deny it), so they are one hint.
+    // The corpus asks for it under both names plus a third.
+    for (color, theirs) in [(Color::White, bb), (Color::Black, wb)] {
+        if theirs < 2 || closed {
+            continue; // no pair to hunt, and in a closed position it is no prize
+        }
+        let enemy = !color;
+        let mut found: Option<(Square, Square)> = None;
+        // A bishop still sitting at home is not the one whose loss hurts,
+        // and its owner would often be glad to trade it. Hunt the one
+        // that is actually doing something.
+        let home = match enemy {
+            Color::White => Square::C1.bitboard() | Square::F1.bitboard(),
+            Color::Black => Square::C8.bitboard() | Square::F8.bitboard(),
+        };
+        'hunt: for knight in board.colored_pieces(color, Piece::Knight) {
+            for bishop in board.colored_pieces(enemy, Piece::Bishop) & !home {
+                if crate::route::route_to_attack(board, color, Piece::Knight, knight, bishop)
+                    .is_some()
+                {
+                    found = Some((knight, bishop));
+                    break 'hunt;
+                }
+            }
+        }
+        if let Some((knight, bishop)) = found {
+            sided.push((
+                color,
+                PlanHint {
+                    hint: "HuntBishopPair".into(),
+                    squares: vec![square_name(knight), square_name(bishop)],
+                },
+            ));
+        }
+    }
+
     // Bad bishops: hemmed in by own fixed central pawns on its color
     // complex (home-rank pawns excluded) AND actually immobile.
     let light = BitBoard(0x55AA_55AA_55AA_55AA);
@@ -189,9 +235,6 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
         }
     };
     let mut plans = Vec::new();
-    // Side-owned plans, filtered against the final lean (see
-    // pawn_structure for the rationale).
-    let mut sided: Vec<(Color, PlanHint)> = Vec::new();
     for (color, sign) in [(Color::White, 1i32), (Color::Black, -1i32)] {
         for b in board.colored_pieces(color, Piece::Bishop) {
             let complex = if light.has(b) { light } else { !light };
@@ -2213,6 +2256,37 @@ mod tests {
             !plans
                 .iter()
                 .any(|p| p.hint == "CreatePassedPawn" && p.squares == vec!["f3"]),
+            "{plans:?}"
+        );
+    }
+
+    /// Jeremy Silman, The Amateur's Mind, p. 326 test 1: decide which
+    /// imbalance you are playing for, and hunt the bishop pair. The
+    /// knight goes after the DEVELOPED bishop on e6.
+    #[test]
+    fn hunt_bishop_pair_goes_after_the_working_bishop() {
+        let fen = "r2qkbnr/pppn1ppp/3pb3/4p3/3PP3/2N2N2/PPP2PPP/R1BQKB1R w KQkq - 0 1";
+        let plans = minor_pieces(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "HuntBishopPair" && p.squares == vec!["c3", "e6"]),
+            "{plans:?}"
+        );
+    }
+
+    /// A bishop still on its home square is not the one whose loss hurts
+    /// — its owner is often glad to trade it — so hunting it is a
+    /// fantasy. On move seven of a Sveshnikov both black bishops are
+    /// home and the hint must stay silent.
+    #[test]
+    fn hunt_bishop_pair_ignores_bishops_still_at_home() {
+        let fen = "r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7";
+        let plans = minor_pieces(&board(fen))
+            .map(|i| i.plans)
+            .unwrap_or_default();
+        assert!(
+            !plans.iter().any(|p| p.hint == "HuntBishopPair"),
             "{plans:?}"
         );
     }

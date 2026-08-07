@@ -91,6 +91,7 @@ const KNOWN_HINTS: &[&str] = &[
     "OverprotectStrongPoint",
     "TakeOpposition",
     "CreatePassedPawn",
+    "HuntBishopPair",
     "PressureBackwardPawn",
     "BlockadeWhitePasser",
     "BlockadeBlackPasser",
