@@ -15,6 +15,7 @@ pub mod route;
 pub mod scheme;
 pub mod see;
 pub mod suggest;
+pub mod verdict;
 pub mod wsui;
 
 pub use cozy_chess;

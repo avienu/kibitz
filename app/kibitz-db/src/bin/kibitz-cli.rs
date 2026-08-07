@@ -167,6 +167,14 @@ enum Command {
     },
     /// Print database summary counts.
     Stats,
+    /// Fit the who-stands-better weights against decisive master games
+    /// in the local database. Reports holdout accuracy; changes nothing.
+    FavorsFit {
+        #[arg(long, default_value_t = 4000)]
+        samples: usize,
+        #[arg(long, default_value_t = 0xC0FFEE)]
+        seed: u64,
+    },
     /// Score the analyzer against a private book-trial corpus
     /// (testdata/private/book-trials). Path may be a file or directory.
     BookEval {
@@ -568,6 +576,9 @@ fn main() -> anyhow::Result<()> {
                 (st.imported + st.duplicates_skipped + st.filtered_out) as f64
                     / st.elapsed.as_secs_f64().max(1e-9)
             );
+        }
+        Command::FavorsFit { samples, seed } => {
+            kibitz_db::favorsfit::run(&conn, samples, seed)?;
         }
         Command::BookEval { path, verbose } => {
             let corpora = kibitz_db::bookeval::load(&path)?;

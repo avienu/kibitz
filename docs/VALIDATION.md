@@ -640,3 +640,66 @@ would be grading its own homework.
   a defender to a central point, so generating from it buried real
   answers under Rf1/Be2/Kf2. It is `EXPLANATORY_ONLY` in the suggester —
   it explains why a quiet move is good without pretending to pick one.
+
+## Favors refit (run 12) — fitted, not guessed
+
+The who-stands-better vote used ONE weight for every imbalance kind. A
+Minor lean in Development is not the same claim as a Minor lean in
+Material, and treating them alike was most of why this axis sat at 62.6%.
+
+The vote also lived inside the book-eval harness, which meant the product
+had no verdict of its own — the only "who is better" answer in the
+codebase existed to be scored. It now lives in
+`kibitz_core::verdict`, and the harness calls it.
+
+### Ground truth: game results, not engine evals
+
+A centipawn score answers "who is winning with perfect play from here".
+That is not the question Silman's verdicts answer. "Who has the easier
+game to play" is a practical claim, so the practical evidence is what
+actually happened when two strong players played it out: **middlegame
+positions sampled from decisive master games (both sides 2300+), labelled
+by who won.** Noisy at any single position, honest in aggregate, and with
+no engine anywhere in it.
+
+`kibitz-cli favors-fit` samples, splits 50/50 on a fixed seed, fits by
+coordinate ascent on TRAIN only, and scores the holdout once.
+
+### Result (seed 0xC0FFEE, 4000 positions from the maintainer's corpus)
+
+| kind | uniform | fitted |
+|---|---|---|
+| Material | 10 | **24** |
+| MinorPieces | 10 | **18** |
+| Space | 10 | 10 |
+| Initiative | 10 | 10 |
+| FilesDiagonals | 10 | **6** |
+| Development | 10 | **6** |
+| SquaresOutposts | 10 | **4** |
+| PawnStructure | 10 | **2** |
+
+| split | uniform | fitted |
+|---|---|---|
+| train | 57.9% | 67.2% |
+| **holdout** | **56.7%** | **63.1%** |
+
+Repeated on two further seeds: holdout gains of +7.9, +6.3 and +6.4
+points. `Material` lands on 24 every time and `SquaresOutposts` on 4;
+the middle of the table moves around, so only the ordering should be
+read as settled, not the exact numbers.
+
+### It transferred
+
+Applied to the book corpus — 99 expectations that were never part of the
+fit, judged by book prose rather than by results — **favors went
+65.7% -> 68.7%**. Two independent ground truths agreeing is much
+stronger evidence than either alone.
+
+### The uncomfortable finding
+
+`PawnStructure` fits at 2, the lowest of the eight. Silman weights pawn
+structure heavily, so either our detector carries little outcome signal
+at master level, or pawn structure genuinely predicts results weakly once
+material and piece quality are accounted for. This is recorded rather
+than explained away; it is a lead for the next detector pass, not a
+result to be proud of.

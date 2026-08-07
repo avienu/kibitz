@@ -320,20 +320,10 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
         if let Some(want) = e.expected.favors.as_deref() {
             if want != "balanced" {
                 r.favors.total += 1;
-                // Magnitude-weighted lean across detected imbalances.
-                let mut lean = 0i32;
-                for i in &record.imbalances {
-                    let w = match i.magnitude {
-                        kibitz_core::record::Magnitude::Minor => 1,
-                        kibitz_core::record::Magnitude::Clear => 2,
-                        kibitz_core::record::Magnitude::Winning => 4,
-                    };
-                    match i.favors {
-                        kibitz_core::record::Favors::White => lean += w,
-                        kibitz_core::record::Favors::Black => lean -= w,
-                        kibitz_core::record::Favors::Balanced => {}
-                    }
-                }
+                // The product's own verdict, not a harness-local vote:
+                // kibitz_core::verdict is what the app shows and what the
+                // fit in `favors-fit` tunes.
+                let lean = kibitz_core::verdict::lean(&record.imbalances);
                 let ours = if lean > 0 {
                     "white"
                 } else if lean < 0 {

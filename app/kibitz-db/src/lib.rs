@@ -14,6 +14,7 @@ pub mod edit;
 pub mod endgame;
 pub mod engine;
 pub mod export;
+pub mod favorsfit;
 pub mod fingerprint;
 pub mod hash;
 pub mod identity;
