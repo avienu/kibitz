@@ -511,18 +511,48 @@ would corrupt what the corpus means. Two of its three entries already
 emit the relevant plans (`UndermineDefender`, `ManeuverKnightToOutpost`,
 and now `TradeSquareDefender`); only the label is missing.
 
+### Fifth tranche: the best piece, and their best attacker
+
+| hint | detection rule (static) | corpus tags converted |
+|---|---|---|
+| `KeepBestPiece` | our minor standing in the enemy half on a square its own pawn defends. | `keep-best-piece` |
+| `TradeOffAttacker` | the enemy minor covering the most squares of our king's neighbourhood, provided we have a piece that can route to attack it. | `trade-attacker`, `trade-off-attackers` |
+
+The two `TradeOffAttacker` entries look unrelated until you name the
+piece: HTRYC ex. 130 trades White's light-squared bishop because it is
+the only real attacking plan, and ex. 218 gives up a prized bishop to
+remove a centralised knight. Both are "find their best attacker and take
+it off", so both are one hint. All three entries hit.
+
+The two hints are complements, and the Amateur's Mind position shows it:
+White gets `KeepBestPiece e5` and Black gets `TradeOffAttacker e5` for
+the same knight, which is exactly the argument going on in that
+position.
+
+### Narration: the scheme paragraph wins
+
+Adding these made the Sveshnikov say the same thing four times across
+two paragraphs — the scheme narrated "trade f6, then Nd5, then press
+d6", and the plan paragraph separately offered "reroute the knight
+there", "trade off the piece guarding it" and "walk the bishop round".
+
+Plan-level talk about a square a scheme already covers is now
+suppressed. The scheme states the whole campaign in order and states it
+better; loose sentences about its parts are padding. The record keeps
+everything (all of it still scores); only the prose is trimmed.
+
 ### Running total
 
 | axis | run 11 | run 12 |
 |---|---|---|
 | imbalances | 247/287 = 86.1% | 253/287 = **88.2%** |
-| plans | 90/126 = 71.4% | 101/137 = **73.7%** |
+| plans | 90/126 = 71.4% | 104/140 = **74.3%** |
 | favors | 62/99 = 62.6% | 65/99 = **65.7%** |
 | suggest@1 / @3 | 8.0% / 32.0% | 4.0% / 32.0% |
 | negatives | 14/14 | **14/14 clean** |
 
-Seven hints added, eleven corpus tags converted from free-form to
-scoreable, ten of eleven hitting. suggest@3 is back to baseline;
+Nine hints added, fourteen corpus tags converted from free-form to
+scoreable, thirteen of fourteen hitting. suggest@3 is back to baseline;
 suggest@1 is one entry below it, which on a 25-position sample is noise
 and is not being chased — see the note above. The denominator moved 126 -> 134 and both
 numbers are reported, because a run that only watched the percentage

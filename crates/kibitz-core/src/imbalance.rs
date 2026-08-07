@@ -1509,6 +1509,70 @@ fn single_pawn_attack_span(pawn: Square, color: Color) -> BitBoard {
     span
 }
 
+/// Our best minor: one standing in the enemy half on a square its own
+/// pawn defends. Silman's instruction in The Amateur's Mind p. 328 is to
+/// identify that piece and never trade it — the whole plan is built
+/// around keeping it where it is.
+fn best_piece(board: &Board, color: Color) -> Option<Square> {
+    let enemy = !color;
+    let own_pawns = board.colored_pieces(color, Piece::Pawn);
+    let enemy_half = match color {
+        Color::White => Rank::Fifth.bitboard() | Rank::Sixth.bitboard() | Rank::Seventh.bitboard(),
+        Color::Black => Rank::Fourth.bitboard() | Rank::Third.bitboard() | Rank::Second.bitboard(),
+    };
+    let minors =
+        board.colored_pieces(color, Piece::Knight) | board.colored_pieces(color, Piece::Bishop);
+    (minors & enemy_half)
+        .into_iter()
+        .find(|p| !(get_pawn_attacks(*p, enemy) & own_pawns).is_empty())
+}
+
+/// The enemy minor doing the most work against our king, if we can get at
+/// it to trade it off.
+///
+/// Two corpus entries want this and they look different until you name
+/// the piece: HTRYC ex. 130 trades White's light-squared bishop because
+/// it is the only real attacking plan, and ex. 218 gives up a prized
+/// bishop to remove a centralised knight. Both are "find their best
+/// attacker and take it off".
+fn attacker_to_trade(board: &Board, color: Color) -> Option<Square> {
+    let enemy = !color;
+    let king = board.king(color);
+    let zone = cozy_chess::get_king_moves(king) | king.bitboard();
+    let occ = board.occupied();
+    let minors =
+        board.colored_pieces(enemy, Piece::Knight) | board.colored_pieces(enemy, Piece::Bishop);
+
+    let mut best: Option<(Square, usize)> = None;
+    for m in minors {
+        // How much of the king's neighbourhood does this piece cover?
+        let hits = zone
+            .into_iter()
+            .filter(|sq| crate::attack::attackers_of(board, *sq, enemy, occ).has(m))
+            .count();
+        if hits == 0 {
+            continue;
+        }
+        // No point naming a piece we have no way of reaching.
+        let reachable = [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen]
+            .into_iter()
+            .flat_map(|p| {
+                board
+                    .colored_pieces(color, p)
+                    .into_iter()
+                    .map(move |from| (p, from))
+            })
+            .any(|(p, from)| crate::route::route_to_attack(board, color, p, from, m).is_some());
+        if !reachable {
+            continue;
+        }
+        if best.is_none_or(|(_, b)| hits > b) {
+            best = Some((m, hits));
+        }
+    }
+    best.map(|(m, _)| m)
+}
+
 /// The piece version of undermining: a central square we want whose only
 /// PIECE defender we can go and trade off.
 ///
@@ -1624,6 +1688,18 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         // Restraint plans stand on their own: they are about pawns
         // holding (or failing to hold) squares, so they must be reachable
         // even in a position with no hole and no outpost of ours.
+        if let Some(p) = best_piece(board, color) {
+            plans.push(PlanHint {
+                hint: "KeepBestPiece".into(),
+                squares: vec![square_name(p)],
+            });
+        }
+        if let Some(a) = attacker_to_trade(board, color) {
+            plans.push(PlanHint {
+                hint: "TradeOffAttacker".into(),
+                squares: vec![square_name(a)],
+            });
+        }
         for (wanted, defender) in square_defender_trades(board, color) {
             plans.push(PlanHint {
                 hint: "TradeSquareDefender".into(),
@@ -2405,6 +2481,50 @@ mod tests {
             .unwrap_or_default();
         assert!(
             !plans.iter().any(|p| p.hint == "TradeSquareDefender"),
+            "{plans:?}"
+        );
+    }
+
+    /// Jeremy Silman, The Amateur's Mind, p. 328 test 2: identify your
+    /// best piece and never trade it. Here that is the e5 knight, sitting
+    /// in the enemy half on a square its own d4 pawn defends.
+    #[test]
+    fn keep_best_piece_names_the_supported_minor() {
+        let fen = "r2qr1k1/pp2bppp/8/3nNb2/3P4/1P3B1P/3B1PP1/2RQR1K1 w - - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "KeepBestPiece" && p.squares == vec!["e5"]),
+            "{plans:?}"
+        );
+    }
+
+    /// Jeremy Silman, How to Reassess Your Chess, ex. 130: trading White's
+    /// light-squared bishop kills the only real attacking plan. The hint
+    /// names the piece doing the most work against our king.
+    #[test]
+    fn trade_off_attacker_names_the_bishop_aimed_at_the_king() {
+        let fen = "r2q1rk1/pb2npp1/1p1bpn1p/8/3P4/P1NBB2P/1P1QNPP1/2R2RK1 b - - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "TradeOffAttacker" && p.squares == vec!["d3"]),
+            "{plans:?}"
+        );
+    }
+
+    /// Ex. 218: the same idea wearing different clothes — give up a
+    /// prized bishop to remove the centralised knight.
+    #[test]
+    fn trade_off_attacker_names_the_centralised_knight() {
+        let fen = "4rrk1/pppbq1pp/2np4/8/2PNnB2/2PQ2P1/P3PPBP/R3R1K1 w - - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "TradeOffAttacker" && p.squares == vec!["e4"]),
             "{plans:?}"
         );
     }

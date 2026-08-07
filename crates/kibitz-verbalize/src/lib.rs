@@ -325,12 +325,16 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
     } else {
         &record.composite_plans[..]
     };
+    let covered = scheme_covered(record);
     for (i, cp) in composites.iter().take(2).enumerate() {
         if cp.supporting.len() < 2 {
             continue;
         }
         for h in &cp.hints {
             seen.insert(h.as_str());
+        }
+        if covered.contains(&cp.target) {
+            continue; // the scheme paragraph says this, in order
         }
         plan_sentences.push(render_composite(cp, i, voice));
     }
@@ -340,6 +344,9 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
         }
         for plan in &imbalance.plans {
             if eclipsed_by_sibling(&plan.hint, &imbalance.plans) {
+                continue;
+            }
+            if plan.squares.last().is_some_and(|sq| covered.contains(sq)) {
                 continue;
             }
             if seen.insert(plan.hint.as_str()) {
@@ -1414,6 +1421,18 @@ pub(crate) fn render_suggestions(
 
 /// Render one composite plan: index 0 is the unified lead, later indices
 /// the brief runner-up.
+/// Squares a scheme already narrates in full, for the side that owns it.
+///
+/// A scheme states the whole campaign in order — clear the guard, come
+/// in, cash in. Repeating its parts as loose plan sentences ("reroute
+/// the knight there", "trade off the piece guarding it", "walk the
+/// bishop round") tells the reader the same thing four times in two
+/// paragraphs. The long-term paragraph wins; the plan-level chatter
+/// about that square goes.
+pub(crate) fn scheme_covered(record: &FeatureRecord) -> std::collections::BTreeSet<String> {
+    record.schemes.iter().map(|s| s.target.clone()).collect()
+}
+
 /// True when a hint says the same thing as a sibling already being
 /// narrated. The RECORD keeps both — they score separately and mean
 /// subtly different things (own the majority vs. cash it into a passer) —

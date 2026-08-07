@@ -116,12 +116,16 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
     } else {
         &record.composite_plans[..]
     };
+    let covered = crate::scheme_covered(record);
     for (i, cp) in composites.iter().take(2).enumerate() {
         if cp.supporting.len() < 2 {
             continue;
         }
         for h in &cp.hints {
             consumed.insert(h.as_str());
+        }
+        if covered.contains(&cp.target) {
+            continue; // the scheme block says this, in order
         }
         blocks.push(ExplanationBlock {
             kind: BlockKind::Plan,
@@ -161,6 +165,9 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
     for imbalance in plan_sources {
         for plan in &imbalance.plans {
             if crate::eclipsed_by_sibling(&plan.hint, &imbalance.plans) {
+                continue;
+            }
+            if plan.squares.last().is_some_and(|sq| covered.contains(sq)) {
                 continue;
             }
             if !consumed.insert(plan.hint.as_str()) {
