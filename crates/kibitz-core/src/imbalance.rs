@@ -1509,6 +1509,54 @@ fn single_pawn_attack_span(pawn: Square, color: Color) -> BitBoard {
     span
 }
 
+/// Enemy pawns no enemy pawn can EVER defend, which we already bear down
+/// on. One test catches isolated, backward and front-doubled pawns
+/// alike: a pawn is permanently weak when it lies outside the forward
+/// attack span of every other pawn its owner has.
+///
+/// The existing PressureBackwardPawn and PressureDoubledPawn hints name
+/// two special cases with their own extra conditions; this is the
+/// general statement, and narration keeps only one of them.
+fn weak_pawn_targets(board: &Board, color: Color) -> Vec<Square> {
+    let enemy = !color;
+    let their_pawns = board.colored_pieces(enemy, Piece::Pawn);
+    let occ = board.occupied();
+    let home = match enemy {
+        Color::White => Rank::Second,
+        Color::Black => Rank::Seventh,
+    };
+    let mut out: Vec<Square> = Vec::new();
+    for pawn in their_pawns {
+        // A pawn still at home is not yet a weakness. Without this every
+        // rook pawn qualifies — g7 can never defend h7 either — and the
+        // hint would call an untouched shelter a target.
+        if pawn.rank() == home {
+            continue;
+        }
+        let covered_by_others = their_pawns
+            .into_iter()
+            .filter(|q| *q != pawn)
+            .any(|q| single_pawn_attack_span(q, enemy).has(pawn));
+        if covered_by_others {
+            continue;
+        }
+        // A weakness we cannot touch is not a target. Requiring an
+        // existing attacker keeps this to pawns actually under pressure
+        // rather than every structural blemish on the board.
+        if crate::attack::attackers_of(board, pawn, color, occ).is_empty() {
+            continue;
+        }
+        out.push(pawn);
+    }
+    // Deepest first — the one furthest into our reach is the real target.
+    out.sort_by_key(|p| match color {
+        Color::White => p.rank() as i8,
+        Color::Black => -(p.rank() as i8),
+    });
+    out.truncate(2);
+    out
+}
+
 /// Our best minor: one standing in the enemy half on a square its own
 /// pawn defends. Silman's instruction in The Amateur's Mind p. 328 is to
 /// identify that piece and never trade it — the whole plan is built
@@ -1688,6 +1736,12 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         // Restraint plans stand on their own: they are about pawns
         // holding (or failing to hold) squares, so they must be reachable
         // even in a position with no hole and no outpost of ours.
+        for pawn in weak_pawn_targets(board, color) {
+            plans.push(PlanHint {
+                hint: "TargetWeakPawn".into(),
+                squares: vec![square_name(pawn)],
+            });
+        }
         if let Some(p) = best_piece(board, color) {
             plans.push(PlanHint {
                 hint: "KeepBestPiece".into(),
@@ -2525,6 +2579,39 @@ mod tests {
             plans
                 .iter()
                 .any(|p| p.hint == "TradeOffAttacker" && p.squares == vec!["e4"]),
+            "{plans:?}"
+        );
+    }
+
+    /// Jeremy Silman, How to Reassess Your Chess, ex. 129: Black's
+    /// overextended queenside pawns are lasting targets. a6 can never be
+    /// defended by another black pawn, and White already bears on it.
+    #[test]
+    fn target_weak_pawn_names_the_overextended_pawn() {
+        let fen = "r3k2r/qb1nbppp/p3p3/P2n4/1p1P4/3B1N2/NP1BQPPP/R2R2K1 w kq - 0 1";
+        let plans = squares_outposts(&board(fen)).expect("imbalance").plans;
+        assert!(
+            plans
+                .iter()
+                .any(|p| p.hint == "TargetWeakPawn" && p.squares == vec!["a6"]),
+            "{plans:?}"
+        );
+    }
+
+    /// A pawn still on its home rank is not a weakness. Without that
+    /// bound every rook pawn qualifies — g7 can never defend h7 either —
+    /// and an untouched shelter gets called a target.
+    #[test]
+    fn target_weak_pawn_leaves_the_home_rank_alone() {
+        let fen = "r3kb1r/ppq2ppp/2n1pn2/2ppN3/3P2b1/1QP1P3/PP1N1PPP/R1B1KB1R w KQkq - 0 1";
+        let plans = squares_outposts(&board(fen))
+            .map(|i| i.plans)
+            .unwrap_or_default();
+        assert!(
+            !plans
+                .iter()
+                .any(|p| p.hint == "TargetWeakPawn"
+                    && p.squares.iter().any(|sq| sq.ends_with('7'))),
             "{plans:?}"
         );
     }

@@ -95,6 +95,7 @@ const KNOWN_HINTS: &[&str] = &[
     "TradeSquareDefender",
     "KeepBestPiece",
     "TradeOffAttacker",
+    "TargetWeakPawn",
     "PressureBackwardPawn",
     "BlockadeWhitePasser",
     "BlockadeBlackPasser",

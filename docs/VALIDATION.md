@@ -541,18 +541,48 @@ suppressed. The scheme states the whole campaign in order and states it
 better; loose sentences about its parts are padding. The record keeps
 everything (all of it still scores); only the prose is trimmed.
 
+### Sixth tranche: the general weak pawn
+
+| hint | detection rule (static) | corpus tags converted |
+|---|---|---|
+| `TargetWeakPawn` | an enemy pawn lying outside the forward attack span of every OTHER pawn its owner has, not still on its home rank, and already attacked by us. Deepest two. | `target-weak-pawns`, `pressure-weak-pawn`, `target-weak-pawn-on-half-open-file` |
+
+One test catches isolated, backward and front-doubled pawns alike: a
+pawn is permanently weak when no other pawn of its colour can ever come
+to defend it. `PressureBackwardPawn` and `PressureDoubledPawn` remain as
+the two special cases with their own extra conditions, and narration
+keeps only the specific one when both name the same pawn — "pile up on
+the backward d6 pawn" says strictly more than "pile up on a pawn nobody
+can defend".
+
+The home-rank bound is load-bearing. Without it every rook pawn
+qualifies (g7 can never defend h7 either) and the hint calls an
+untouched shelter a target — the first cut named h7 and f7 in positions
+where nothing was wrong with them.
+
+**2 of the 3 converted tags hit, and the headline percentage went DOWN**
+(74.3% -> 74.1%) while the absolute count went up (104 -> 106). That is
+the metric behaving correctly: three expectations we previously did not
+measure at all are now measured, and we fail one of them. am-325-1 wants
+a weak pawn on a file that is only half-open AFTER a capture Black has
+not made yet, which a static reading of the position cannot see.
+Converting only the tags that happened to pass would have shown a nicer
+number and meant nothing.
+
 ### Running total
 
 | axis | run 11 | run 12 |
 |---|---|---|
 | imbalances | 247/287 = 86.1% | 253/287 = **88.2%** |
-| plans | 90/126 = 71.4% | 104/140 = **74.3%** |
+| plans | 90/126 = 71.4% | 106/143 = **74.1%** |
 | favors | 62/99 = 62.6% | 65/99 = **65.7%** |
 | suggest@1 / @3 | 8.0% / 32.0% | 4.0% / 32.0% |
 | negatives | 14/14 | **14/14 clean** |
 
-Nine hints added, fourteen corpus tags converted from free-form to
-scoreable, thirteen of fourteen hitting. suggest@3 is back to baseline;
+Ten hints added, seventeen corpus tags converted from free-form to
+scoreable, fifteen of seventeen hitting. The plans percentage is up 2.7
+points on a denominator that grew 126 -> 143; the absolute count is up
+sixteen. suggest@3 is back to baseline;
 suggest@1 is one entry below it, which on a 25-position sample is noise
 and is not being chased — see the note above. The denominator moved 126 -> 134 and both
 numbers are reported, because a run that only watched the percentage

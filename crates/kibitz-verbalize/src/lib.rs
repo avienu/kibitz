@@ -1440,6 +1440,12 @@ pub(crate) fn scheme_covered(record: &FeatureRecord) -> std::collections::BTreeS
 /// padding, so the quieter one stays quiet.
 pub(crate) fn eclipsed_by_sibling(hint: &str, siblings: &[kibitz_core::record::PlanHint]) -> bool {
     match hint {
+        // The general weak-pawn statement yields to the specific one when
+        // both name the same pawn: "pile up on the backward d6 pawn" says
+        // strictly more than "pile up on a pawn nobody can defend".
+        "TargetWeakPawn" => siblings
+            .iter()
+            .any(|s| s.hint == "PressureBackwardPawn" || s.hint == "PressureDoubledPawn"),
         "CreatePassedPawn" => siblings
             .iter()
             .any(|s| s.hint == "AdvanceQueensideMajority" || s.hint == "AdvanceCentralMajority"),

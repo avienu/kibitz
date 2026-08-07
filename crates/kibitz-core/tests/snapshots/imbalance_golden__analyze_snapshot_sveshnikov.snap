@@ -85,6 +85,12 @@ expression: record
       },
       "plans": [
         {
+          "hint": "TargetWeakPawn",
+          "squares": [
+            "d6"
+          ]
+        },
+        {
           "hint": "TradeSquareDefender",
           "squares": [
             "f6",
