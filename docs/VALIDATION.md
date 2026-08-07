@@ -695,11 +695,63 @@ fit, judged by book prose rather than by results — **favors went
 65.7% -> 68.7%**. Two independent ground truths agreeing is much
 stronger evidence than either alone.
 
-### The uncomfortable finding
+### The uncomfortable finding, and its retraction
 
-`PawnStructure` fits at 2, the lowest of the eight. Silman weights pawn
-structure heavily, so either our detector carries little outcome signal
-at master level, or pawn structure genuinely predicts results weakly once
-material and piece quality are accounted for. This is recorded rather
-than explained away; it is a lead for the next detector pass, not a
-result to be proud of.
+`PawnStructure` fits at 2, the lowest of the eight. The first write-up of
+this said "either our detector carries little outcome signal at master
+level, or pawn structure genuinely predicts results weakly". **Both
+halves were wrong**, and per-kind diagnostics (`favors-fit` now reports
+them) say why:
+
+| kind | leans% | correct% | Minor | Clear+ |
+|---|---|---|---|---|
+| Material | 49.1% | 70.1% | 70.5% | 69.0% |
+| Initiative | 37.2% | 63.9% | 62.1% | **72.0%** |
+| PawnStructure | **64.3%** | 59.5% | 57.0% | **67.3%** |
+| FilesDiagonals | 44.3% | 57.8% | 56.3% | 64.6% |
+| Space | 42.8% | 57.0% | 56.2% | 62.3% |
+| MinorPieces | 30.2% | 56.5% | 56.4% | 57.8% |
+| SquaresOutposts | 46.0% | 54.5% | 53.8% | 64.7% |
+| Development | 4.5% | 54.4% | 53.6% | — |
+
+`PawnStructure` is the THIRD most accurate detector we have. It fits low
+because it leans **64.3% of the time** — more than anything else — at a
+nearly uniform Minor magnitude. A detector that almost always picks a
+side at modest accuracy is a persistent bias, not a discriminator, and
+coordinate ascent suppressed it for being loud rather than for being
+wrong. `SquaresOutposts` at 54.5% is the genuinely weak one.
+
+### What the split actually shows
+
+Every positional detector is **6-11 points more accurate when it commits
+to Clear than when it shrugs at Minor** (Minor clusters at 53-57%, Clear+
+at 62-72%). Material is the exception and is equally accurate at both —
+a pawn up is a pawn up. So the shipped 1 / 2 / 4 magnitude ladder is a
+guess, and the data says a committed reading is worth about 2.5 shrugs,
+not 2.
+
+### Two models, and why neither shipped
+
+| model | params | outcome holdout | book favors |
+|---|---|---|---|
+| shipped (8 weights, ladder 1/2/4) | 8 | 63.1% | **68.7%** |
+| free per-magnitude | 16 | 63.3% | — |
+| shared ladder (8 weights + one multiplier) | 9 | **64.3%** | 65.7% |
+
+The free 16-weight model gained nothing and produced `Development 30/30`
+on a detector that leans 4.5% of the time — coordinate ascent fitting
+noise. The 9-parameter model beats both on outcomes and loses on the
+book corpus.
+
+Neither difference is real. The book delta is **0.63 SE** on n=99; the
+outcome delta is **1.37 SE** on n=3000. The models are statistically
+indistinguishable and the numbers cannot arbitrate between them, so the
+shipped weights stay — a coin flip is not a reason to change what the
+product tells a user.
+
+What IS on solid ground is the measurement: the Minor/Clear split is
+computed over thousands of readings and is not close. Acting on it needs
+either a corpus that can separate two models this near, or a detector
+change that makes Minor readings rarer and sharper rather than a vote
+change that discounts them after the fact. The second is the better
+lead: `PawnStructure` leaning on two positions in three is the finding.

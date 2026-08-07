@@ -22,10 +22,19 @@ use rusqlite::Connection;
 
 /// One labelled position, reduced to what the vote actually sees.
 pub struct Sample {
-    /// Per-kind signed magnitude factor: + for White, - for Black.
-    pub features: [i32; 8],
+    /// Signed lean count per (kind, magnitude band): index `2k` is the
+    /// kind's Minor readings, `2k + 1` its Clear-or-better ones. Split
+    /// because they turned out to be different signals — every positional
+    /// detector is 6-11 points more accurate when it commits than when it
+    /// shrugs, while Material is equally accurate either way.
+    pub features: [i32; 16],
     /// +1 White won, -1 Black won.
     pub label: i32,
+}
+
+/// Feature index for a kind's Minor band; `+ 1` gives Clear-or-better.
+fn feat(kind: ImbalanceKind, magnitude: Magnitude) -> usize {
+    kind_index(kind) * 2 + usize::from(magnitude != Magnitude::Minor)
 }
 
 const KINDS: [ImbalanceKind; 8] = [
@@ -97,18 +106,17 @@ pub fn collect(conn: &Connection, want: usize, seed: u64) -> Result<Vec<Sample>>
             b.play(mv);
         }
         let record = kibitz_core::analyze(&b);
-        let mut features = [0i32; 8];
+        let mut features = [0i32; 16];
         for imb in &record.imbalances {
-            let f = match imb.magnitude {
-                Magnitude::Minor => 1,
-                Magnitude::Clear => 2,
-                Magnitude::Winning => 4,
-            };
-            features[kind_index(imb.kind)] += match imb.favors {
-                Favors::White => f,
-                Favors::Black => -f,
+            // The magnitude ladder is no longer baked in here: whether a
+            // Winning reading is worth twice a Clear one is something the
+            // fit should decide, not something the features should assume.
+            let sign = match imb.favors {
+                Favors::White => 1,
+                Favors::Black => -1,
                 Favors::Balanced => 0,
             };
+            features[feat(imb.kind, imb.magnitude)] += sign;
         }
         if features.iter().all(|f| *f == 0) {
             continue; // nothing to learn from a reading with no lean
@@ -124,7 +132,7 @@ pub fn collect(conn: &Connection, want: usize, seed: u64) -> Result<Vec<Sample>>
     Ok(out)
 }
 
-fn accuracy(samples: &[Sample], w: &[i32; 8]) -> f64 {
+fn accuracy(samples: &[Sample], w: &[i32; 16]) -> f64 {
     let hits = samples
         .iter()
         .filter(|s| {
@@ -141,13 +149,13 @@ fn accuracy(samples: &[Sample], w: &[i32; 8]) -> f64 {
 /// method: the objective is accuracy of a SIGN, which is not
 /// differentiable, and eight coordinates over a small grid is exhaustive
 /// enough to be honest about.
-pub fn fit(train: &[Sample]) -> [i32; 8] {
-    let mut w = [10i32; 8];
+pub fn fit(train: &[Sample]) -> [i32; 16] {
+    let mut w = [10i32; 16];
     let candidates = [0, 2, 4, 6, 8, 10, 14, 18, 24, 30];
     let mut best = accuracy(train, &w);
     for _pass in 0..6 {
         let mut improved = false;
-        for i in 0..8 {
+        for i in 0..16 {
             let keep = w[i];
             let mut best_v = keep;
             for &c in &candidates {
@@ -168,6 +176,128 @@ pub fn fit(train: &[Sample]) -> [i32; 8] {
     w
 }
 
+/// Per-kind diagnostics: how often does each detector lean at all, and
+/// when it does, is it right?
+///
+/// A fitted weight tells you what the vote should DO with a detector; it
+/// does not tell you why. A kind can end up near zero for three quite
+/// different reasons — it rarely leans, it leans at chance, or it leans
+/// backwards — and only the third is a bug in the detector. This
+/// separates them.
+fn diagnose(samples: &[Sample]) {
+    println!("\nper-kind diagnostics (n = {})", samples.len());
+    println!(
+        "  {:<16} {:>8} {:>10} {:>10}",
+        "kind", "leans%", "correct%", "mean|mag|"
+    );
+    for (i, k) in KINDS.iter().enumerate() {
+        let lean_of = |s: &Sample| s.features[i * 2] + s.features[i * 2 + 1];
+        let leaning: Vec<&Sample> = samples.iter().filter(|s| lean_of(s) != 0).collect();
+        if leaning.is_empty() {
+            println!(
+                "  {:<16} {:>8} {:>10} {:>10}",
+                format!("{k:?}"),
+                "0.0%",
+                "—",
+                "—"
+            );
+            continue;
+        }
+        let correct = leaning
+            .iter()
+            .filter(|s| lean_of(s).signum() == s.label)
+            .count();
+        let mean_mag: f64 =
+            leaning.iter().map(|s| lean_of(s).abs() as f64).sum::<f64>() / leaning.len() as f64;
+        println!(
+            "  {:<16} {:>7.1}% {:>9.1}% {:>10.2}",
+            format!("{k:?}"),
+            leaning.len() as f64 / samples.len() as f64 * 100.0,
+            correct as f64 / leaning.len() as f64 * 100.0,
+            mean_mag
+        );
+    }
+    // The decisive split. A detector whose Clear/Winning readings are much
+    // sharper than its Minor ones has a CALIBRATION problem, not a
+    // direction problem: it is right when it commits and noisy when it
+    // shrugs, and the fix is to stop shrugging out loud.
+    println!("\ncorrect% by magnitude (Minor / Clear+ )");
+    for (i, k) in KINDS.iter().enumerate() {
+        let acc = |band: usize| -> String {
+            let v: Vec<&Sample> = samples
+                .iter()
+                .filter(|s| s.features[i * 2 + band] != 0)
+                .collect();
+            if v.len() < 30 {
+                return format!("{:>12}", "—");
+            }
+            let c = v
+                .iter()
+                .filter(|s| s.features[i * 2 + band].signum() == s.label)
+                .count();
+            format!(
+                "{:>7.1}% (n={})",
+                c as f64 / v.len() as f64 * 100.0,
+                v.len()
+            )
+        };
+        println!("  {:<16} {}   {}", format!("{k:?}"), acc(0), acc(1));
+    }
+
+    println!("\n  leans%   = how often the detector picks a side at all");
+    println!("  correct% = of those, how often it picked the winner");
+    println!("             50% is a coin flip; BELOW 50% means it is inverted,");
+    println!("             which is a bug in the detector, not in the vote.");
+}
+
+/// Same eight per-kind weights, plus ONE shared multiplier for
+/// Clear-or-better readings.
+///
+/// The free 16-weight fit gained nothing on holdout (63.3% vs 63.1%) and
+/// produced weights that contradicted the diagnostics — Development at
+/// 30/30 on a detector that leans 4.5% of the time is coordinate ascent
+/// fitting noise. Nine parameters expresses the same real finding (a
+/// committed reading is worth more than a shrug) without inventing eight
+/// independent estimates the data cannot support.
+fn fit_shared_ladder(train: &[Sample]) -> ([i32; 16], i32) {
+    let mut best = ([0i32; 16], 10, 0.0f64);
+    for mult in [10, 15, 20, 25, 30, 40] {
+        let mut kind_w = [10i32; 8];
+        let expand = |kw: &[i32; 8], m: i32| {
+            let mut w = [0i32; 16];
+            for i in 0..8 {
+                w[i * 2] = kw[i];
+                w[i * 2 + 1] = kw[i] * m / 10;
+            }
+            w
+        };
+        let mut acc = accuracy(train, &expand(&kind_w, mult));
+        for _pass in 0..6 {
+            let mut improved = false;
+            for i in 0..8 {
+                let mut best_v = kind_w[i];
+                for c in [0, 2, 4, 6, 8, 10, 14, 18, 24, 30] {
+                    kind_w[i] = c;
+                    let a = accuracy(train, &expand(&kind_w, mult));
+                    if a > acc + 1e-9 {
+                        acc = a;
+                        best_v = c;
+                        improved = true;
+                    }
+                }
+                kind_w[i] = best_v;
+            }
+            if !improved {
+                break;
+            }
+        }
+        if acc > best.2 {
+            best = (expand(&kind_w, mult), mult, acc);
+        }
+    }
+    (best.0, best.1)
+}
+
 pub fn run(conn: &Connection, want: usize, seed: u64) -> Result<()> {
     let samples = collect(conn, want, seed)?;
     if samples.len() < 100 {
@@ -176,8 +306,16 @@ pub fn run(conn: &Connection, want: usize, seed: u64) -> Result<()> {
     // Fixed split, holdout scored once.
     let cut = samples.len() / 2;
     let (train, holdout) = samples.split_at(cut);
-    let baseline = [10i32; 8];
-    let fitted = fit(train);
+    // Baseline reproduces the shipped ladder: Minor 1, Clear+ 2, times a
+    // uniform per-kind 10 — so "fitted" is measured against what the vote
+    // did before, not against a straw man.
+    let mut baseline = [0i32; 16];
+    for i in 0..8 {
+        baseline[i * 2] = 10;
+        baseline[i * 2 + 1] = 20;
+    }
+    let fitted_free = fit(train);
+    let (fitted, mult) = fit_shared_ladder(train);
 
     println!(
         "samples: {} (train {}, holdout {})",
@@ -185,13 +323,15 @@ pub fn run(conn: &Connection, want: usize, seed: u64) -> Result<()> {
         train.len(),
         holdout.len()
     );
-    println!("\nweights");
+    println!("\nweights (minor / clear+)");
     for (i, k) in KINDS.iter().enumerate() {
         println!(
-            "  {:<16} {:>3}  (was {})",
+            "  {:<16} {:>3} / {:<3}   (was {} / {})",
             format!("{k:?}"),
-            fitted[i],
-            baseline[i]
+            fitted[i * 2],
+            fitted[i * 2 + 1],
+            baseline[i * 2],
+            baseline[i * 2 + 1]
         );
     }
     println!("\naccuracy vs game result");
@@ -201,10 +341,13 @@ pub fn run(conn: &Connection, want: usize, seed: u64) -> Result<()> {
         accuracy(train, &fitted) * 100.0
     );
     println!(
-        "  HOLDOUT  uniform {:.1}%   fitted {:.1}%",
+        "  HOLDOUT  uniform {:.1}%   free-16 {:.1}%   shared-ladder {:.1}%  (clear+ x{:.1})",
         accuracy(holdout, &baseline) * 100.0,
-        accuracy(holdout, &fitted) * 100.0
+        accuracy(holdout, &fitted_free) * 100.0,
+        accuracy(holdout, &fitted) * 100.0,
+        mult as f64 / 10.0
     );
+    diagnose(&samples);
     println!("\nPaste into kibitz_core::verdict::KIND_WEIGHT only if the HOLDOUT improved.");
     Ok(())
 }
