@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -310,6 +310,37 @@ pub struct Explanation {
     pub suggestions: Vec<SuggestionOut>,
 }
 
+/// A piece reroute as a SEQUENCE (schema v4): which piece, by which
+/// squares, to what home, how many moves it takes, and what has to be
+/// true first.
+///
+/// Before v4 a reroute was a [`PlanHint`] holding an unordered bag of
+/// squares — the origin was not even recorded, so nothing downstream
+/// could say WHICH piece was being rerouted. A long-term plan that
+/// cannot name its own piece is not a plan a human can follow.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Maneuver {
+    /// The piece being rerouted, e.g. "knight".
+    pub piece: String,
+    /// Where it stands now.
+    pub from: String,
+    /// Waypoints between `from` and `to`, in order (may be empty).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub via: Vec<String>,
+    /// The square it wants.
+    pub to: String,
+    /// Moves the route costs, counting the arrival (`via.len() + 1`).
+    pub moves: u8,
+    /// Why the destination is worth the trip, in evidence language
+    /// (e.g. "permanent_hole").
+    pub reason: String,
+    /// What must happen before the route is playable — squares that are
+    /// contested, defenders that must be traded. Empty means "start now".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_by: Vec<String>,
+    pub favors: Favors,
+}
+
 /// The universal contract: everything kibitz knows about one position.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FeatureRecord {
@@ -322,6 +353,9 @@ pub struct FeatureRecord {
     /// Synthesized composite plans, best first (schema v2).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub composite_plans: Vec<CompositePlan>,
+    /// Piece reroutes as ordered sequences, shortest first (schema v4).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub maneuvers: Vec<Maneuver>,
     pub engine: Option<EngineEval>,
     pub provenance: Provenance,
 }
@@ -385,6 +419,7 @@ mod tests {
                 }],
             }],
             composite_plans: vec![],
+            maneuvers: vec![],
             engine: None,
             provenance: Provenance {
                 generator: "kibitz-core".into(),
@@ -394,7 +429,7 @@ mod tests {
         let json = serde_json::to_string_pretty(&record).unwrap();
         // Spec-sketch spellings must hold exactly.
         for needle in [
-            "\"schema_version\": 3",
+            "\"schema_version\": 4",
             "\"side_to_move\": \"white\"",
             "\"phase\": \"middlegame\"",
             "\"kind\": \"InadequatelyDefended\"",

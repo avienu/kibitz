@@ -53,6 +53,12 @@ pub fn synthesize(imbalances: &[Imbalance]) -> Vec<CompositePlan> {
             if crate::development::is_prior_hint(&plan.hint) && plan.hint != "ClaimTheCenter" {
                 continue;
             }
+            // Reroutes that own an exact destination stay out of the
+            // file vote — see route::EXACT_DESTINATION_HINTS. They reach
+            // the user as first-class Maneuvers instead.
+            if crate::route::EXACT_DESTINATION_HINTS.contains(&plan.hint.as_str()) {
+                continue;
+            }
             // A hint's TARGET is its last square (routes end at the
             // destination; blockades name the stop square).
             let Some(target_file) = plan.squares.last().and_then(|s| file_of(s)) else {

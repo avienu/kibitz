@@ -5,10 +5,12 @@
 pub mod attack;
 pub mod development;
 pub mod imbalance;
+pub mod pawn_contact;
 pub mod perft;
 pub mod plans;
 pub mod prose_gate;
 pub mod record;
+pub mod route;
 pub mod see;
 pub mod suggest;
 pub mod wsui;
@@ -39,6 +41,7 @@ pub fn analyze_with_history(
 pub fn analyze(board: &cozy_chess::Board) -> record::FeatureRecord {
     let imbalances = imbalance::assess(board);
     let composite_plans = plans::synthesize(&imbalances);
+    let maneuvers = route::extract(board, &imbalances);
     record::FeatureRecord {
         schema_version: record::SCHEMA_VERSION,
         fen: board.to_string(),
@@ -47,6 +50,7 @@ pub fn analyze(board: &cozy_chess::Board) -> record::FeatureRecord {
         wsui: wsui::screen(board, &wsui::WsuiConfig::default()),
         imbalances,
         composite_plans,
+        maneuvers,
         engine: None,
         provenance: record::FeatureRecord::provenance_now(),
     }

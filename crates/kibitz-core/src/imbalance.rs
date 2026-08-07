@@ -1129,9 +1129,6 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
         let occ = board.occupied();
         for fname in &open {
             let file = File::index((fname.as_bytes()[0] - b'a') as usize);
-            if (rooks & file.bitboard()).is_empty() {
-                continue;
-            }
             let entry = Square::new(file, entry_rank);
             let enemy_cover = crate::attack::attackers_of(board, entry, !color, occ);
             let cheap_cover = enemy_cover
@@ -1139,12 +1136,39 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
                     | board.pieces(Piece::Knight)
                     | board.pieces(Piece::Bishop));
             let own_cover = crate::attack::attackers_of(board, entry, color, occ);
-            if cheap_cover.is_empty() && own_cover.len() >= enemy_cover.len() {
+            // An entry a pawn or minor covers is no entry at all (p. 225).
+            if !cheap_cover.is_empty() || own_cover.len() < enemy_cover.len() {
+                continue;
+            }
+            if !(rooks & file.bitboard()).is_empty() {
                 plans.push(PlanHint {
                     hint: "RookToSeventh".into(),
                     squares: vec![square_name(entry)],
                 });
+                continue;
             }
+            // No rook on the file yet: route one there. The file itself is
+            // the destination — a rook lift (Re1-e3-g3) and a plain swing
+            // are the same search (run 12).
+            let file_targets = file.bitboard() & !board.occupied();
+            let Some((rook, r)) = rooks
+                .into_iter()
+                .filter_map(|rk| {
+                    crate::route::route_to(board, color, Piece::Rook, rk, file_targets, &|_| true)
+                        .map(|r| (rk, r))
+                })
+                .min_by_key(|(_, r)| r.moves())
+            else {
+                continue;
+            };
+            plans.push(PlanHint {
+                hint: "ManeuverRookToOpenFile".into(),
+                squares: std::iter::once(rook)
+                    .chain(r.via.iter().copied())
+                    .chain([r.to])
+                    .map(square_name)
+                    .collect(),
+            });
         }
     }
 
@@ -1270,33 +1294,39 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
                     exploitable = true;
                 }
             } else if let Some((target, route)) = knight_route_to(board, color, n, holes) {
+                // The origin leads the square list: a reroute that does not
+                // name the piece being rerouted is not a plan a human can
+                // follow. (Consumers still read the DESTINATION as `.last()`.)
+                let moves = route.len() as i32 + 1;
                 plans.push(PlanHint {
                     hint: "ManeuverKnightToOutpost".into(),
-                    squares: route.into_iter().chain([target]).map(square_name).collect(),
+                    squares: std::iter::once(n)
+                        .chain(route)
+                        .chain([target])
+                        .map(square_name)
+                        .collect(),
                 });
-                // A route is a plan, not yet an edge: half a hole's worth.
-                score += sign * 4;
+                // A route is a plan, not yet an edge: half a hole's worth,
+                // and worth less the longer it takes — a five-move
+                // regrouping is a real idea but a weak claim about NOW.
+                score += sign * if moves <= 2 { 4 } else { 6 - moves.min(5) };
                 exploitable = true;
             }
         }
 
-        if !holes.is_empty() {
-            let key = if color == Color::White {
-                "holes_in_black_camp"
-            } else {
-                "holes_in_white_camp"
-            };
-            evidence.insert(key.into(), sq_list(holes));
-            // A hole is worth real points only when this side has a
-            // concrete way in (an outpost held or a knight route); holes
-            // nobody can reach are latent, near-noise.
-            let per_hole = if exploitable { 8 } else { 2 };
-            score += sign * holes.len().min(3) as i32 * per_hole;
+        // A bishop's support point is a hole its OWN pawn defends
+        // (Jeremy Silman, The Complete Book of Chess Strategy, pp. 276-277 —
+        // support points are not a knight's privilege).
+        let own_pawns = board.colored_pieces(color, Piece::Pawn);
+        let mut support_points = BitBoard::EMPTY;
+        for h in holes {
+            if !(get_pawn_attacks(h, enemy) & own_pawns).is_empty() {
+                support_points |= h.bitboard();
+            }
         }
         for b in board.colored_pieces(color, Piece::Bishop) {
             if mask.has(b) {
-                let pawn_backup =
-                    get_pawn_attacks(b, enemy) & board.colored_pieces(color, Piece::Pawn);
+                let pawn_backup = get_pawn_attacks(b, enemy) & own_pawns;
                 if !pawn_backup.is_empty() {
                     evidence.insert(
                         format!(
@@ -1310,8 +1340,46 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
                         json!(square_name(b)),
                     );
                     score += sign * 25;
+                    continue;
                 }
             }
+            // Not established: can it walk to a support point? Routing is
+            // not a knight's privilege either (run 12 — the corpus misses
+            // were full of bishop regroupings, docs/VALIDATION.md).
+            if support_points.is_empty() {
+                continue;
+            }
+            if let Some(r) =
+                crate::route::route_to(board, color, Piece::Bishop, b, support_points, &|_| true)
+            {
+                plans.push(PlanHint {
+                    hint: "ManeuverBishopToSupportPoint".into(),
+                    squares: std::iter::once(b)
+                        .chain(r.via.iter().copied())
+                        .chain([r.to])
+                        .map(square_name)
+                        .collect(),
+                });
+                let moves = r.moves() as i32;
+                score += sign * if moves <= 2 { 4 } else { 6 - moves.min(5) };
+                exploitable = true;
+            }
+        }
+
+        if !holes.is_empty() {
+            let key = if color == Color::White {
+                "holes_in_black_camp"
+            } else {
+                "holes_in_white_camp"
+            };
+            evidence.insert(key.into(), sq_list(holes));
+            // A hole is worth real points only when this side has a
+            // concrete way in: an outpost held, or a knight OR bishop with
+            // a route to one. Holes nobody can reach are latent, near-noise.
+            // This scoring must stay BELOW the routing loops that set
+            // `exploitable` — it reads their verdict.
+            let per_hole = if exploitable { 8 } else { 2 };
+            score += sign * holes.len().min(3) as i32 * per_hole;
         }
     }
     if evidence.is_empty() {
@@ -1327,8 +1395,19 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
     })
 }
 
-/// Simple BFS (spec): shortest knight path to any hole over squares that
-/// are not occupied by own pieces and not attacked by enemy pawns.
+/// How many knight moves a route may take. Three hops covers Nc3-e2-d4
+/// but not the classical regroupings the corpus keeps asking for
+/// (Nb1-d2-f1-g3-f5 is four); five is the practical ceiling, since beyond
+/// that a static route outlives the position it was computed in.
+const MAX_ROUTE_HOPS: u8 = 5;
+
+/// Shortest knight path to any hole over squares that are not occupied by
+/// own pieces, not out-gunned by enemy pieces, and — the timing test —
+/// not reachable by an enemy PAWN in the number of moves the knight needs
+/// to arrive. A waypoint no pawn attacks today is worthless if the pawn
+/// that evicts the knight arrives at the same time (Jeremy Silman,
+/// Complete Book of Chess Strategy p. 219: an outpost you can be kicked
+/// off is not an outpost). See [`crate::pawn_contact`].
 fn knight_route_to(
     board: &Board,
     color: Color,
@@ -1355,7 +1434,18 @@ fn knight_route_to(
             outgunned |= sq.bitboard();
         }
     }
-    let blocked = board.colors(color) | enemy_pawn_attacks | outgunned;
+    let blocked = board.colors(color) | outgunned;
+    // Waypoints are judged over time, not against the current attack map.
+    // A waypoint is TRANSIT, not a home: being kicked off it costs a tempo,
+    // not the plan — the route only dies if the pawn is already there when
+    // we arrive. We reach the square on our move `hop`, so a pawn needing
+    // `hop` of their moves arrives one tempo late and we simply continue.
+    // Hence strictly-less, not less-or-equal. (Destinations are held to the
+    // permanent hole test instead — they are squares we mean to STAY on.)
+    let enemy_evict = crate::pawn_contact::evict_distance(board, enemy);
+    let waypoint_ok = |sq: Square, hop: u8| {
+        hop == 0 || !crate::pawn_contact::contested_within(&enemy_evict, sq, hop - 1)
+    };
     // The DESTINATION hole may still be piece-contested by one unit — a
     // hole is permanent while piece cover is tradeable (Jeremy Silman,
     // How to Reassess Your Chess, ex. 60: trade away every defender of
@@ -1376,7 +1466,8 @@ fn knight_route_to(
     let mut prev: [Option<Square>; 64] = [None; 64];
     let mut seen = from.bitboard();
     let mut frontier = vec![from];
-    for _depth in 0..3 {
+    for depth in 0..MAX_ROUTE_HOPS {
+        let hop = depth + 1;
         let mut next_frontier = Vec::new();
         for &s in &frontier {
             for n in get_knight_moves(s) & !seen {
@@ -1393,7 +1484,7 @@ fn knight_route_to(
                     path.reverse();
                     return Some((n, path));
                 }
-                if blocked.has(n) {
+                if blocked.has(n) || !waypoint_ok(n, hop) {
                     continue;
                 }
                 prev[n as usize] = Some(s);

@@ -3,7 +3,7 @@ source: crates/kibitz-core/tests/imbalance_golden.rs
 expression: record
 ---
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "fen": "r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7",
   "side_to_move": "white",
   "phase": "opening",
@@ -87,6 +87,15 @@ expression: record
         {
           "hint": "ManeuverKnightToOutpost",
           "squares": [
+            "c3",
+            "d5"
+          ]
+        },
+        {
+          "hint": "ManeuverBishopToSupportPoint",
+          "squares": [
+            "f1",
+            "c4",
             "d5"
           ]
         }
@@ -115,7 +124,8 @@ expression: record
       ],
       "squares": [
         "d6",
-        "d5"
+        "d5",
+        "c3"
       ],
       "score": 2,
       "favors": "white"
@@ -133,6 +143,33 @@ expression: record
         "f6"
       ],
       "score": 1,
+      "favors": "white"
+    }
+  ],
+  "maneuvers": [
+    {
+      "piece": "knight",
+      "from": "c3",
+      "to": "d5",
+      "moves": 1,
+      "reason": "permanent_hole",
+      "blocked_by": [
+        "f6"
+      ],
+      "favors": "white"
+    },
+    {
+      "piece": "bishop",
+      "from": "f1",
+      "via": [
+        "c4"
+      ],
+      "to": "d5",
+      "moves": 2,
+      "reason": "support_point",
+      "blocked_by": [
+        "f6"
+      ],
       "favors": "white"
     }
   ],

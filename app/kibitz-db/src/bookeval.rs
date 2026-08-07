@@ -77,6 +77,8 @@ pub struct Expected {
 /// outside this list are vocabulary gaps, reported rather than scored.
 const KNOWN_HINTS: &[&str] = &[
     "ManeuverKnightToOutpost",
+    "ManeuverBishopToSupportPoint",
+    "ManeuverRookToOpenFile",
     "PressureBackwardPawn",
     "BlockadeWhitePasser",
     "BlockadeBlackPasser",
