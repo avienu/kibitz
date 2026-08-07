@@ -251,6 +251,12 @@ pub enum BlockKind {
     Alert,
     Imbalance,
     Plan,
+    /// A multi-stage plan read out in order (schema v4). Kept distinct
+    /// from `Plan` so the UI can group by HORIZON: tactics now, plans
+    /// next, schemes long-term. A tactical alert and a five-move
+    /// regrouping are not the same kind of advice and must not compete
+    /// for the same slot.
+    Scheme,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

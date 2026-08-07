@@ -12,8 +12,10 @@ import {
   selectionNote,
   sentenceOpacity,
   suggestionTitle,
+  BLOCK_HORIZON,
   type ExplainBlockKind,
   type ExplanationJson,
+  type Horizon,
   type Voice,
 } from "./lib/gameView";
 import { visibleChips, type VerificationState } from "./lib/verifyChips";
@@ -22,7 +24,15 @@ const KIND_LABEL: Record<ExplainBlockKind, string> = {
   alert: "TACTICAL ALERT",
   imbalance: "IMBALANCE",
   plan: "PLAN",
+  scheme: "LONG-TERM PLAN",
 };
+
+/** Section headings for the horizon groups, in reading order. */
+const HORIZON_ORDER: { horizon: Horizon; label: string }[] = [
+  { horizon: "now", label: "NOW" },
+  { horizon: "next", label: "NEXT" },
+  { horizon: "long", label: "LONG-TERM" },
+];
 
 interface ExplainPanelProps {
   explanation: ExplanationJson | null;
@@ -71,7 +81,10 @@ export default function ExplainPanel({
 
   const blocks = explanation?.blocks ?? [];
   const hidden = new Set(hiddenFindingIndices(blocks, findingsExpanded));
-  const moreCount = blocks.length > 1 ? blocks.length - 1 : 0;
+  // Count what is ACTUALLY hidden. Since run 12 the leading finding of
+  // each horizon survives collapse, so "n more" is no longer "all but
+  // the first" — deriving it from the hidden set keeps the label honest.
+  const moreCount = hiddenFindingIndices(blocks, false).length;
 
   // CONSIDER chips (run 11): statically-marked chips stay hidden until
   // the engine clears them; refuted chips disappear; the pending
@@ -122,23 +135,34 @@ export default function ExplainPanel({
           <>
             <div className="explain-body">
               <p className="explain-headline">{explanation.headline[voice]}</p>
-              {explanation.blocks.map((b, i) =>
-                hidden.has(i) ? null : (
-                  <div
-                    key={i}
-                    className={`sentence sentence-${b.kind}${hoverSentence === i ? " hovered" : ""}`}
-                    style={{ opacity: sentenceOpacity(b, selectedSquare) }}
-                    onMouseEnter={() => onHoverSentence(i)}
-                    onMouseLeave={() => onHoverSentence(null)}
-                  >
-                    <span className="sentence-dot" aria-hidden />
-                    <span className="sentence-main">
-                      <span className="sentence-kind">{KIND_LABEL[b.kind]}</span>
-                      <span className="sentence-prose">{b.text[voice]}</span>
-                    </span>
-                  </div>
-                ),
-              )}
+              {HORIZON_ORDER.map(({ horizon, label }) => {
+                const rows = explanation.blocks
+                  .map((b, i) => ({ b, i }))
+                  .filter(({ b, i }) => !hidden.has(i) && BLOCK_HORIZON[b.kind] === horizon);
+                // A horizon with nothing in it is not a heading — an empty
+                // "LONG-TERM" label reads as a promise the engine broke.
+                if (rows.length === 0) return null;
+                return (
+                  <section key={horizon} className={`horizon horizon-${horizon}`}>
+                    <h4 className="horizon-label">{label}</h4>
+                    {rows.map(({ b, i }) => (
+                      <div
+                        key={i}
+                        className={`sentence sentence-${b.kind}${hoverSentence === i ? " hovered" : ""}`}
+                        style={{ opacity: sentenceOpacity(b, selectedSquare) }}
+                        onMouseEnter={() => onHoverSentence(i)}
+                        onMouseLeave={() => onHoverSentence(null)}
+                      >
+                        <span className="sentence-dot" aria-hidden />
+                        <span className="sentence-main">
+                          <span className="sentence-kind">{KIND_LABEL[b.kind]}</span>
+                          <span className="sentence-prose">{b.text[voice]}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </section>
+                );
+              })}
               {chips.length > 0 && (
                 <div className="consider-block">
                   <span className="consider-label">CONSIDER</span>

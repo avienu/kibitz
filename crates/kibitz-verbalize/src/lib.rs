@@ -57,6 +57,11 @@ pub struct Sections {
     pub tactics: String,
     pub imbalances: String,
     pub plans: String,
+    /// The long-horizon paragraph (schema v4). Its own section, not more
+    /// plan sentences: a five-move regrouping and "a good plan is X" are
+    /// different kinds of advice and reading them as one paragraph is
+    /// how the long game gets lost in the noise.
+    pub schemes: String,
 }
 
 /// Narration voice (run-5 item 3). The voice is a template OVERLAY, not a
@@ -192,7 +197,11 @@ pub fn verbalize(record: &FeatureRecord) -> String {
 /// [`verbalize`] with an explicit [`Voice`].
 pub fn verbalize_voiced(record: &FeatureRecord, voice: Voice) -> String {
     let sections = verbalize_sections_voiced(record, voice);
-    if sections.tactics.is_empty() && sections.imbalances.is_empty() && sections.plans.is_empty() {
+    if sections.tactics.is_empty()
+        && sections.imbalances.is_empty()
+        && sections.plans.is_empty()
+        && sections.schemes.is_empty()
+    {
         return lookup_voiced(voice, &["empty"]).to_string();
     }
     let mut paragraphs: Vec<String> = Vec::new();
@@ -206,6 +215,9 @@ pub fn verbalize_voiced(record: &FeatureRecord, voice: Voice) -> String {
     }
     if !sections.plans.is_empty() {
         paragraphs.push(sections.plans);
+    }
+    if !sections.schemes.is_empty() {
+        paragraphs.push(sections.schemes);
     }
     paragraphs.join("\n\n")
 }
@@ -338,9 +350,19 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
         }
     }
 
+    let scheme_source: &[_] = if swing > 0 { &[] } else { &record.schemes[..] };
+    let scheme_sentences: Vec<String> = scheme_source
+        .iter()
+        .take(2)
+        .enumerate()
+        .map(|(i, sc)| render_scheme(sc, &record.fen, i, voice))
+        .filter(|s| !s.is_empty())
+        .collect();
+
     Sections {
         tactics,
         imbalances,
+        schemes: scheme_sentences.join(" "),
         plans: plan_sentences.join(" "),
     }
 }
@@ -1380,6 +1402,162 @@ pub(crate) fn render_suggestions(
 
 /// Render one composite plan: index 0 is the unified lead, later indices
 /// the brief runner-up.
+/// Render a [`Scheme`] as one ordered sentence: the prerequisite, the
+/// way in (with alternatives), and the payoff, in that order.
+///
+/// This is the long-horizon voice. Everything else the verbalizer says is
+/// about the position as it stands; a scheme is the only thing that says
+/// "and then", which is exactly what a plan is.
+pub(crate) fn render_scheme(
+    scheme: &kibitz_core::record::Scheme,
+    fen: &str,
+    index: usize,
+    voice: Voice,
+) -> String {
+    let board = crate::board::Board::from_fen(fen);
+    let piece_on = |sq: &str| -> String {
+        board
+            .piece_at(sq)
+            .map(|(_, kind)| lookup(&[kind.template_key()]).to_string())
+            .unwrap_or_else(|| lookup(&["piece.generic"]).to_string())
+    };
+
+    let mut clauses: Vec<String> = Vec::new();
+    let mut seen_maneuver = false;
+    for step in &scheme.steps {
+        let via = step.via.join("-");
+        match step.kind.as_str() {
+            "clear" => {
+                // Name the piece, not the square: "the knight on f6" is a
+                // thing you can go and trade; "the f6" is not English.
+                let named: Vec<String> = step
+                    .squares
+                    .iter()
+                    .map(|sq| {
+                        fill(
+                            lookup_voiced(voice, &["scheme.target_piece"]),
+                            &[("piece", &piece_on(sq)), ("square", sq)],
+                        )
+                    })
+                    .collect();
+                let targets = join_and(&named);
+                let text = match &step.agent {
+                    Some(agent) => {
+                        let via_clause = if step.via.is_empty() {
+                            String::new()
+                        } else {
+                            fill(
+                                lookup_voiced(voice, &["scheme.step.clear.via_clause"]),
+                                &[("via", &via)],
+                            )
+                        };
+                        fill(
+                            lookup_voiced(voice, &["scheme.step.clear.by"]),
+                            &[
+                                ("targets", &targets),
+                                ("piece", &piece_on(agent)),
+                                ("agent", agent),
+                                ("via_clause", &via_clause),
+                            ],
+                        )
+                    }
+                    // No agent means we cannot get at the defender. Say so
+                    // rather than issuing an instruction nobody can follow.
+                    None => fill(
+                        lookup_voiced(voice, &["scheme.step.clear.nobody"]),
+                        &[("targets", &targets)],
+                    ),
+                };
+                clauses.push(text);
+            }
+            "maneuver" => {
+                let route = step.squares.join("-");
+                let from = step.squares.first().cloned().unwrap_or_default();
+                let to = step.squares.last().cloned().unwrap_or_default();
+                let key = if seen_maneuver {
+                    "scheme.step.maneuver.alt"
+                } else {
+                    "scheme.step.maneuver"
+                };
+                seen_maneuver = true;
+                clauses.push(fill(
+                    lookup_voiced(voice, &[key]),
+                    &[
+                        ("piece", &piece_on(&from)),
+                        ("agent", &from),
+                        ("to", &to),
+                        ("route", &route),
+                    ],
+                ));
+            }
+            "exploit" => {
+                let Some(hint) = step.hint.as_deref() else {
+                    continue;
+                };
+                let plan = try_lookup_voiced(voice, &format!("plan.composite.clause.{hint}"))
+                    .map(str::to_string)
+                    .unwrap_or_else(|| humanize(hint));
+                clauses.push(fill(
+                    lookup_voiced(voice, &["scheme.step.exploit"]),
+                    &[("plan", &plan)],
+                ));
+            }
+            _ => {}
+        }
+    }
+    if clauses.is_empty() {
+        return String::new();
+    }
+
+    // Template values are trimmed by the store, so the separating space
+    // belongs here rather than in the data file.
+    let join = format!("{} ", lookup_voiced(voice, &["scheme.join"]));
+    let steps_text = clauses.join(&join);
+    let horizon_clause = if scheme.horizon > 0 {
+        format!(
+            " {}",
+            fill(
+                lookup_voiced(voice, &["scheme.horizon_clause"]),
+                &[("horizon", &moves_phrase(scheme.horizon))],
+            )
+        )
+    } else {
+        String::new()
+    };
+    let key = if index == 0 {
+        "scheme.lead"
+    } else {
+        "scheme.lead.more"
+    };
+    fill(
+        lookup_voiced(voice, &[key]),
+        &[
+            ("side", side_name_favors(scheme.favors)),
+            ("target", &scheme.target),
+            ("horizon_clause", &horizon_clause),
+            ("steps", &steps_text),
+        ],
+    )
+}
+
+/// "one move" / "four moves" — the horizon is an estimate, so it reads as
+/// words rather than pretending to be a measurement.
+fn moves_phrase(moves: u8) -> String {
+    let word = match moves {
+        1 => "one",
+        2 => "two",
+        3 => "three",
+        4 => "four",
+        5 => "five",
+        _ => return format!("{moves} moves"),
+    };
+    if moves == 1 {
+        format!("{word} move")
+    } else {
+        format!("{word} moves")
+    }
+}
+
 pub(crate) fn render_composite(
     cp: &kibitz_core::record::CompositePlan,
     index: usize,

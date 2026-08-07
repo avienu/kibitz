@@ -21,6 +21,7 @@ const SOURCES: &[&str] = &[
     include_str!("../templates/imbalances.tmpl"),
     include_str!("../templates/evidence.tmpl"),
     include_str!("../templates/plans.tmpl"),
+    include_str!("../templates/schemes.tmpl"),
     include_str!("../templates/coach.tmpl"),
 ];
 

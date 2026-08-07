@@ -5333,3 +5333,25 @@ button.mv-var-line:hover {
   font: 400 12px/1.5 var(--font-ui);
   color: var(--dim);
 }
+
+/* Horizon groups (run 12): tactics now, plans next, schemes long-term.
+   The long game must be visible when the position is quiet, which is
+   exactly when it matters, so it gets its own heading rather than
+   queueing behind whatever is urgent. */
+.horizon {
+  margin-block: 0.35rem 0;
+}
+.horizon-label {
+  margin: 0.5rem 0 0.15rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.horizon:first-of-type .horizon-label {
+  margin-top: 0.15rem;
+}
+.sentence-scheme .sentence-dot {
+  background: var(--accent, currentColor);
+}

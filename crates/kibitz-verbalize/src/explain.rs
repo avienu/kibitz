@@ -132,6 +132,26 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
             evidence: composite_evidence(cp),
         });
     }
+    // --- Scheme blocks: the long-horizon voice, after the plans and
+    // suppressed under the same tactical gate. A five-move regrouping
+    // must never crowd out a tactic, but it must also survive the
+    // position being quiet, which is exactly when it matters. ---
+    let schemes: &[_] = if swing > 0 { &[] } else { &record.schemes[..] };
+    for (i, scheme) in schemes.iter().take(2).enumerate() {
+        let coach = crate::render_scheme(scheme, &record.fen, i, Voice::Coach);
+        if coach.is_empty() {
+            continue;
+        }
+        blocks.push(ExplanationBlock {
+            kind: BlockKind::Scheme,
+            text: VoiceText {
+                coach,
+                neutral: crate::render_scheme(scheme, &record.fen, i, Voice::Neutral),
+            },
+            evidence: scheme_evidence(scheme),
+        });
+    }
+
     let mut plan_index = blocks.iter().filter(|b| b.kind == BlockKind::Plan).count();
     let plan_sources: Vec<&Imbalance> = if swing > 0 {
         Vec::new()
@@ -349,6 +369,49 @@ fn collect_squares(value: &serde_json::Value, out: &mut Vec<String>) {
 fn is_square(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 2 && (b'a'..=b'h').contains(&b[0]) && (b'1'..=b'8').contains(&b[1])
+}
+
+/// A scheme's overlay: the destination as the key square, the enemy
+/// pieces that must go as alert rings, and one arrow per hop of every
+/// route in it.
+fn scheme_evidence(scheme: &kibitz_core::record::Scheme) -> Evidence {
+    let mut evidence = Evidence {
+        key: vec![scheme.target.clone()],
+        ..Evidence::default()
+    };
+    for step in &scheme.steps {
+        match step.kind.as_str() {
+            "clear" => {
+                evidence.alerts.extend(step.squares.iter().cloned());
+                let hops: Vec<&String> = step.via.iter().collect();
+                if let (Some(agent), Some(first)) = (step.agent.as_ref(), hops.first()) {
+                    evidence.arrows.push(EvidenceArrow {
+                        from: agent.clone(),
+                        to: (*first).clone(),
+                        kind: ArrowKind::Key,
+                    });
+                }
+                for pair in hops.windows(2) {
+                    evidence.arrows.push(EvidenceArrow {
+                        from: pair[0].clone(),
+                        to: pair[1].clone(),
+                        kind: ArrowKind::Key,
+                    });
+                }
+            }
+            "maneuver" => {
+                for pair in step.squares.windows(2) {
+                    evidence.arrows.push(EvidenceArrow {
+                        from: pair[0].clone(),
+                        to: pair[1].clone(),
+                        kind: ArrowKind::Key,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    evidence
 }
 
 fn composite_evidence(cp: &CompositePlan) -> Evidence {

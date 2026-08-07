@@ -1188,3 +1188,37 @@ fn confirmed_tactic_gates_positional_prose() {
         "alert blocks only"
     );
 }
+
+/// The long game reads as a SEQUENCE in both voices: the prerequisite
+/// first, the way in second, the payoff last. The Sveshnikov tabiya's
+/// answer is its own main line — Bg5 to trade the f6 defender, then Nd5,
+/// then press the backward d6 pawn.
+#[test]
+fn schemes_narrate_the_sequence_in_order_in_both_voices() {
+    let board: kibitz_core::cozy_chess::Board =
+        "r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7"
+            .parse()
+            .expect("fen");
+    let record = kibitz_core::analyze(&board);
+    assert!(!record.schemes.is_empty(), "expected a scheme on d5");
+
+    for voice in [
+        kibitz_verbalize::Voice::Coach,
+        kibitz_verbalize::Voice::Neutral,
+    ] {
+        let text = kibitz_verbalize::verbalize_voiced(&record, voice);
+        let clear = text.find("f6").expect("names the defender in the way");
+        let land = text.find("c3-d5").expect("names the route in");
+        assert!(
+            clear < land,
+            "the prerequisite must come first ({voice:?}):\n{text}"
+        );
+        // The piece doing the clearing is named, not left as a wish.
+        assert!(
+            text.contains("c1"),
+            "names the clearing piece ({voice:?}):\n{text}"
+        );
+        // No template placeholder survived into user-visible prose.
+        assert!(!text.contains('{'), "unfilled slot ({voice:?}):\n{text}");
+    }
+}

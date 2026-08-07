@@ -1,0 +1,32 @@
+# schemes.tmpl — multi-stage plans read out IN ORDER (record schema v4).
+#
+# A scheme is the long-horizon voice: not "a good plan is X" but "here is
+# the sequence, and here is what has to happen first". Slots:
+#   {side}    "White" / "Black"
+#   {target}  the square the whole plan is about
+#   {horizon} total moves, e.g. "about four moves"
+#   {steps}   the stages, already joined
+# Step slots: {piece} {agent} {to} {route} {targets} {via_clause}
+
+scheme.lead = The long-term plan for {side} is {target}{horizon_clause} — {steps}.
+scheme.lead.more = {side} also has a longer idea around {target}{horizon_clause} — {steps}.
+scheme.horizon_clause = (about {horizon})
+# The store trims values, so the separating space is added in code.
+scheme.join = ;
+
+# Stage 1 — clear the way.
+scheme.step.clear = first the {targets} must be traded off
+# How a blocker is named: the piece, not a bare square.
+scheme.target_piece = {piece} on {square}
+scheme.step.clear.by = first trade off the {targets} — the {piece} on {agent} can go and get it{via_clause}
+scheme.step.clear.via_clause = , via {via}
+
+# Stage 2 — the way in. The first is the plan; the rest are alternatives.
+scheme.step.maneuver = then walk the {piece} to {to} ({route})
+scheme.step.maneuver.alt = or the {piece} from {agent} instead ({route})
+
+# Stage 3 — what the square is for. Falls back to the plan.* wording.
+scheme.step.exploit = and with that settled, {plan}
+
+# Nothing has to happen first, but somebody still has to be able to.
+scheme.step.clear.nobody = the {targets} would have to go first, and nothing of ours can get at it yet

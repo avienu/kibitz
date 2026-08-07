@@ -59,13 +59,16 @@ function renderPanel(overrides: Partial<Parameters<typeof ExplainPanel>[0]> = {}
 afterEach(cleanup);
 
 describe("summary first", () => {
-  it("renders only the first finding; the rest sit behind the foot expander", () => {
+  it("renders the leading finding of each horizon; the rest sit behind the foot expander", () => {
     const { container, props } = renderPanel();
     expect(container.textContent).toContain("first finding");
+    // Same horizon as the alert (NOW) — the alert already speaks for it.
     expect(container.textContent).not.toContain("second finding");
-    expect(container.textContent).not.toContain("third finding");
+    // Run 12: the plan leads its own horizon, so collapsing no longer
+    // buries it. Advice about the future must survive the summary.
+    expect(container.textContent).toContain("third finding");
     const expander = container.querySelector(".explain-expander")!;
-    expect(expander.textContent).toBe("▾ 2 more findings — evidence is already on the board");
+    expect(expander.textContent).toBe("▾ 1 more finding — evidence is already on the board");
     fireEvent.click(expander);
     expect(props.onToggleFindings).toHaveBeenCalled();
   });
@@ -116,5 +119,43 @@ describe("pinned foot meta", () => {
     expect(meta.textContent).toContain("d7");
     // One element, no nested rows — the nowrap/ellipsis contract.
     expect(container.querySelectorAll(".explain-meta").length).toBe(1);
+  });
+});
+
+/**
+ * Run 12: blocks are grouped by HORIZON, not listed flat. A tactic and a
+ * five-move regrouping are different sorts of advice, and the long game
+ * has to stay visible instead of queueing behind whatever is urgent.
+ */
+describe("horizon grouping", () => {
+  const WITH_SCHEME: ExplanationJson = {
+    ...EXPL,
+    blocks: [
+      ...EXPL.blocks,
+      {
+        kind: "scheme",
+        text: { coach: "the long game", neutral: "the long game" },
+        evidence: { key: ["d5"] },
+      },
+    ],
+  };
+
+  it("heads each horizon and orders them now, next, long-term", () => {
+    const { container } = renderPanel({ explanation: WITH_SCHEME, collapsed: false });
+    const labels = [...container.querySelectorAll(".horizon-label")].map((n) => n.textContent);
+    expect(labels).toEqual(["NOW", "NEXT", "LONG-TERM"]);
+  });
+
+  it("omits a horizon with nothing in it rather than promising an empty section", () => {
+    const { container } = renderPanel({ explanation: EXPL, collapsed: false });
+    const labels = [...container.querySelectorAll(".horizon-label")].map((n) => n.textContent);
+    expect(labels).not.toContain("LONG-TERM");
+  });
+
+  it("puts the scheme in the long-term group", () => {
+    const { container } = renderPanel({ explanation: WITH_SCHEME, collapsed: false });
+    const long = container.querySelector(".horizon-long");
+    expect(long?.textContent).toContain("the long game");
+    expect(container.querySelector(".horizon-now")?.textContent).not.toContain("the long game");
   });
 });

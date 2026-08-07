@@ -24,7 +24,22 @@ export interface VoiceText {
   neutral: string;
 }
 
-export type ExplainBlockKind = "alert" | "imbalance" | "plan";
+export type ExplainBlockKind = "alert" | "imbalance" | "plan" | "scheme";
+
+/**
+ * Blocks are grouped by HORIZON, not by kind. A tactic on the board and a
+ * five-move regrouping are different sorts of advice, and letting them
+ * compete for one list is how the long game gets buried under whatever is
+ * urgent (maintainer, run 12: "I don't see LONG TERM plans").
+ */
+export type Horizon = "now" | "next" | "long";
+
+export const BLOCK_HORIZON: Record<ExplainBlockKind, Horizon> = {
+  alert: "now",
+  imbalance: "now",
+  plan: "next",
+  scheme: "long",
+};
 
 /** Wire evidence: every array may be absent (serde skips empty vecs). */
 export interface EvidenceJson {
@@ -123,7 +138,20 @@ export function hiddenFindingIndices(
   expanded: boolean,
 ): number[] {
   if (expanded) return [];
-  return blocks.map((_, i) => i).filter((i) => i > 0);
+  // Summary mode keeps the LEADING finding of each horizon, not just the
+  // first block overall (run 12). Collapsing to one line buried the long
+  // game behind whatever was most urgent, which is the exact complaint
+  // the horizon split exists to answer — a long-term plan that only
+  // appears once you expand is a long-term plan nobody reads.
+  const leading = new Set<Horizon>();
+  const shown = new Set<number>();
+  blocks.forEach((b, i) => {
+    const horizon = BLOCK_HORIZON[b.kind];
+    if (leading.has(horizon)) return;
+    leading.add(horizon);
+    shown.add(i);
+  });
+  return blocks.map((_, i) => i).filter((i) => !shown.has(i));
 }
 
 /** Options for [`deriveEvidence`]. */

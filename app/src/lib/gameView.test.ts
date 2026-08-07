@@ -179,9 +179,11 @@ describe("evidence derivation (README §State Management)", () => {
       block({ kind: "imbalance", evidence: { imbalance: ["e5"] } }),
       block({ kind: "plan", evidence: { key: ["f6"] } }),
     ];
-    // Summary-first (round-3 change note): everything after the first
-    // finding hides until expanded; a single finding never gets a toggle.
-    expect(hiddenFindingIndices(blocks, false)).toEqual([1, 2, 3, 4, 5]);
+    // Summary-first (round-3 change note), per HORIZON since run 12: the
+    // leading finding of each group survives collapse, so the four alerts
+    // reduce to one but the imbalance (now) is already covered by it and
+    // the plan (next) keeps its own line. Everything else hides.
+    expect(hiddenFindingIndices(blocks, false)).toEqual([1, 2, 3, 4]);
     expect(hiddenFindingIndices(blocks, true)).toEqual([]);
     expect(hiddenFindingIndices(blocks.slice(0, 1), false)).toEqual([]);
 
