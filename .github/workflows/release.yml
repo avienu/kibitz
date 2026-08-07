@@ -40,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.read.outputs.matrix }}
+      winsign: ${{ steps.winsign.outputs.winsign }}
     steps:
       - uses: actions/checkout@v4
       - id: read
@@ -49,6 +50,28 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           jq -r '.targets[] | "  \(.label)  ->  \(.requires | join(", "))"' \
             .github/release-targets.json >> "$GITHUB_STEP_SUMMARY"
+      # Whether Windows signing is configured has to be decided ONCE, here,
+      # and carried downstream. The `secrets` context is not available in a
+      # job-level `if:`, and more importantly the publish guard must know
+      # whether an unsigned binary is an expected state or a broken one.
+      - id: winsign
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "${AZURE_CLIENT_ID:-}" ]; then
+            echo "winsign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "winsign=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Windows code signing: NOT CONFIGURED"
+              echo
+              echo "AZURE_CLIENT_ID is absent, so the signing job will not run and the"
+              echo "Windows .msi and setup .exe will ship **unsigned**. Every friend who"
+              echo "downloads them sees a SmartScreen warning. This is a green run: that"
+              echo "is exactly why it is written here rather than left to inference."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   bundle:
     name: Bundle (${{ matrix.name }})
@@ -238,10 +261,110 @@ jobs:
           path: dist-bundles/*
           if-no-files-found: error
 
+  # Windows signing runs as its own job for one reason: the federated
+  # credential's subject is `repo:avienu/kibitz:environment:release`, and
+  # that claim only appears in the OIDC token when the JOB declares the
+  # environment. Putting it on `bundle` would gate every platform behind an
+  # approval; putting it here gates exactly the step that needs it.
+  #
+  # A tag subject was the alternative and does not work: wildcards are not
+  # allowed in the plain subject field, so `refs/tags/v0.1.0` would not
+  # authenticate v0.1.1 and every release would need a new credential.
+  sign-windows:
+    name: Sign Windows bundles
+    needs: [plan, bundle]
+    if: needs.plan.outputs.winsign == 'true'
+    runs-on: windows-latest
+    environment: release
+    # Job-level permissions REPLACE the workflow defaults, so `contents`
+    # is restated. Without `id-token: write` no OIDC token is minted at
+    # all, and azure/login fails in a way that reads like a bad credential
+    # rather than a missing permission — check this first if login fails.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: kibitz-windows-x86_64
+          path: dist-bundles
+
+      - name: Azure login (OIDC, no stored secret)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Artifact Signing mints a short-lived certificate per signing. There
+      # is deliberately nothing here that caches or pins one: a thumbprint
+      # check against a cert that is meant to rotate is a bug that fails
+      # the day it rotates, not a safeguard.
+      - name: Sign the .msi and the setup .exe
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: https://eus.codesigning.azure.net/
+          signing-account-name: TemeculaChessCodeSigning
+          certificate-profile-name: kibitz-signing
+          files-folder: dist-bundles
+          files-folder-filter: msi,exe
+          files-folder-recurse: false
+
+      # Verify the ARTIFACT, not the exit code of the step above — the same
+      # rule the macOS path already follows. A signing step that silently
+      # no-ops produces an unsigned binary that ships, and the first symptom
+      # is a friend's SmartScreen warning rather than a red build.
+      - name: Verify the signatures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem -Path dist-bundles\* -Include *.msi, *.exe
+          # Two artifacts are signed separately, so finding neither — or
+          # only one, after a rename — must fail rather than pass quietly.
+          if ($files.Count -lt 2) {
+            Write-Host "::error::expected a .msi and a setup .exe to verify, found $($files.Count). A bundle rename would look exactly like this."
+            exit 1
+          }
+          $bad = 0
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            if ($sig.Status -ne 'Valid') {
+              Write-Host "::error::VERIFICATION FAILED for $($f.Name): status '$($sig.Status)'. Signing reported success and produced a binary Windows will not trust. This is not an auth problem — the credential worked."
+              $bad++
+            } else {
+              Write-Host "  ok  $($f.Name)"
+              Write-Host "      signed by $($sig.SignerCertificate.Subject)"
+            }
+          }
+          if ($bad -gt 0) { exit 1 }
+          "### Windows code signing: OK" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "$($files.Count) artifacts signed and verified valid." >> $env:GITHUB_STEP_SUMMARY
+
+      # Overwrite the unsigned upload in place, so nothing downstream has to
+      # know which of two artifact names is the real one.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kibitz-windows-x86_64
+          path: dist-bundles/*
+          overwrite: true
+          if-no-files-found: error
+
   release:
     name: Draft GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: bundle
+    # `needs` includes a job that is SKIPPED when signing is unconfigured,
+    # which would otherwise skip this one too. So the condition is spelled
+    # out rather than reached for with always(): bundle must have SUCCEEDED
+    # — a failed build must never publish — while sign-windows may either
+    # have succeeded or been skipped. A FAILED signing job stops the
+    # release, which is the whole point.
+    if: >-
+      ${{ !cancelled()
+      && startsWith(github.ref, 'refs/tags/v')
+      && needs.bundle.result == 'success'
+      && (needs['sign-windows'].result == 'success'
+          || needs['sign-windows'].result == 'skipped') }}
+    needs: [plan, bundle, sign-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -274,6 +397,72 @@ jobs:
                      .github/release-targets.json)
           [ "$missing" -eq 0 ]
 
+      # Presence is not integrity. The guard above checks that a file
+      # matching the pattern exists, which is a check that READS as
+      # coverage while saying nothing about whether Windows will trust it —
+      # the same family of mistake as a matrix that required no Windows
+      # target at all. So the signature is asserted here, from the JSON
+      # rather than a hardcoded list, and it cannot be reopened by adding a
+      # target or reordering jobs.
+      - name: Windows bundles carry a valid signature
+        id: winverify
+        env:
+          EXPECTED: ${{ needs.plan.outputs.winsign }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osslsigncode
+
+          patterns=$(jq -r '.targets[] | select(.os | startswith("windows"))
+                              | .requires[]' .github/release-targets.json)
+          if [ -z "$patterns" ]; then
+            echo "  no Windows target declared; nothing to verify"
+            echo "signed=n/a" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          unsigned=0
+          checked=0
+          for pattern in $patterns; do
+            while IFS= read -r f; do
+              checked=$((checked + 1))
+              # osslsigncode exits non-zero on an unsigned file, so the
+              # pipeline is allowed to fail and the OUTPUT is judged.
+              set +e
+              out=$(osslsigncode verify -in "$f" 2>&1)
+              set -e
+              if printf '%s' "$out" | grep -q "Signature verification: ok"; then
+                echo "  ok  $(basename "$f") — signature verifies"
+              else
+                echo "  UNSIGNED  $(basename "$f")"
+                unsigned=$((unsigned + 1))
+              fi
+            done < <(find dist -type f -name "$pattern")
+          done
+
+          if [ "$checked" -eq 0 ]; then
+            echo "::error::a Windows target is declared but no artifact matched it here. \
+          The presence guard should have caught this first; that it did not means the two \
+          guards disagree, which is worse than either failing."
+            exit 1
+          fi
+
+          if [ "$unsigned" -eq 0 ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "signed=false" >> "$GITHUB_OUTPUT"
+          if [ "$EXPECTED" = "true" ]; then
+            echo "::error::Windows signing IS configured and $unsigned artifact(s) are \
+          still unsigned. Either the signing job did not run for this release, or it ran \
+          and did not sign what got published. Do not publish this — a binary that was \
+          supposed to be signed and is not is worse than one nobody promised to sign."
+            exit 1
+          fi
+          echo "::warning::Windows artifacts are UNSIGNED (signing is not configured). \
+          Allowed, and the release notes will say so in as many words."
+
       - name: Detect updater key
         id: gate
         env:
@@ -297,12 +486,23 @@ jobs:
           {
             echo "Kibitz $VERSION."
             echo
+            # Two independent facts, stated independently. Keying the
+            # signing banner off the UPDATER key was its own quiet lie: a
+            # build could hold the updater key, ship unsigned Windows
+            # binaries, and still announce "Signed bundles".
             if [ "${{ steps.gate.outputs.updater }}" = "true" ]; then
-              echo "Signed bundles with updater feed (latest.json)."
+              echo "Auto-update feed included (latest.json)."
             else
-              echo "> **UNSIGNED pre-release artifacts.** Built without code signing or"
-              echo "> notarization (no signing secrets configured). macOS Gatekeeper will"
-              echo "> warn; there is no auto-update feed for this build. See docs/RELEASING.md."
+              echo "> No auto-update feed for this build (updater key absent)."
+              echo
+            fi
+            if [ "${{ steps.winverify.outputs.signed }}" = "false" ]; then
+              echo "> **The Windows installers in this release are UNSIGNED.** Windows"
+              echo "> SmartScreen will warn on first run and name no publisher. This build"
+              echo "> was produced without Artifact Signing configured. See docs/RELEASING.md."
+            elif [ "${{ steps.winverify.outputs.signed }}" = "true" ]; then
+              echo "Windows installers are signed by Shawn O'Connor Enterprises, Inc."
+              echo "and their signatures were verified before publishing."
             fi
             echo
             echo "_Draft — replace this stub with the matching CHANGELOG.md section before publishing (docs/RELEASE_CHECKLIST.md)._"
