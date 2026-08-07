@@ -105,8 +105,14 @@ pub(crate) fn sync_due(
 fn hours_between(from: &str, to: &str) -> Option<f64> {
     let secs = |s: &str| -> Option<i64> {
         let (date, time) = s.trim().split_once(' ')?;
-        let d: Vec<i64> = date.split('-').map(|p| p.parse().ok()).collect::<Option<_>>()?;
-        let t: Vec<i64> = time.split(':').map(|p| p.parse().ok()).collect::<Option<_>>()?;
+        let d: Vec<i64> = date
+            .split('-')
+            .map(|p| p.parse().ok())
+            .collect::<Option<_>>()?;
+        let t: Vec<i64> = time
+            .split(':')
+            .map(|p| p.parse().ok())
+            .collect::<Option<_>>()?;
         if d.len() != 3 || t.len() != 3 {
             return None;
         }
@@ -435,13 +441,24 @@ pub async fn twic_ack_notice(state: State<'_, DbState>) -> Result<(), String> {
 /// cooperative `stop` flag between issues. A 404 issue is reported and
 /// the rest continue (auto-sync runs newest first from a probe-confirmed
 /// frontier, so "caught up" is decided before this runs, not by a 404).
+/// What one TWIC pass actually did. The counts used to die inside the
+/// worker, so the sync log recorded `0 imported` for a pass that pulled
+/// 10,321 games — a log that lies is worse than no log.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TwicTally {
+    pub issues: u32,
+    pub games: u64,
+    pub unavailable: u32,
+}
+
 fn twic_worker_impl(
     conn: &Connection,
     fetcher: &dyn Fetcher,
     issues: &[u32],
     progress: &Mutex<Option<NetProgress>>,
     stop: &AtomicBool,
-) -> Result<(), String> {
+    sleep: &mut dyn FnMut(std::time::Duration),
+) -> Result<TwicTally, String> {
     let total = issues.len() as u32;
     let mut imported: u32 = 0;
     let mut games: u64 = 0;
@@ -452,6 +469,16 @@ fn twic_worker_impl(
         if stop.load(Ordering::SeqCst) {
             cancelled = true;
             break;
+        }
+        // Pace the pass: TWIC's hosting is donation-funded, and back-to-back
+        // multi-megabyte fetches are the rude way to converge. The gap is
+        // skipped before the first issue and interruptible via `stop`.
+        if i > 0 {
+            sleep(BACKFILL_PACE);
+            if stop.load(Ordering::SeqCst) {
+                cancelled = true;
+                break;
+            }
         }
         update_progress(progress, |p| {
             p.done = i as u32;
@@ -497,7 +524,11 @@ fn twic_worker_impl(
         p.done = imported + unavailable;
         p.detail = summary;
     });
-    Ok(())
+    Ok(TwicTally {
+        issues: imported,
+        games,
+        unavailable,
+    })
 }
 
 /// Enqueue a network job. Strictly serial: if the worker is idle the job
@@ -640,7 +671,15 @@ pub async fn twic_download(
     };
     spawn_net_worker(&worker, initial, move |stop, progress| {
         let conn = worker_conn(&db_path)?;
-        twic_worker_impl(&conn, &net::UreqFetcher, &todo, progress, stop)
+        twic_worker_impl(
+            &conn,
+            &net::UreqFetcher,
+            &todo,
+            progress,
+            stop,
+            &mut std::thread::sleep,
+        )
+        .map(|_| ())
     })?;
     Ok(count)
 }
@@ -663,11 +702,28 @@ pub(crate) fn should_auto_sync(conn: &Connection, already_ran: bool) -> Result<b
 /// capped at `cap`, and never older than the newest import — backfilling
 /// older gaps stays a manual action on the TWIC screen ("Download all
 /// missing" / checkbox selection).
+/// Issues one pass will backfill behind the front edge. The old behaviour
+/// spent whatever was left of the 5-issue front-edge cap, so a database
+/// with 632 holes needed ~127 app launches to converge — that is not
+/// convergence, it is a rounding error. Politeness toward TWIC's
+/// donation-funded hosting is enforced by PACING (see [`BACKFILL_PACE`]),
+/// which is the honest lever: a count cap throttles nothing if the issues
+/// are fetched back-to-back.
+pub(crate) const BACKFILL_CAP: usize = 50;
+
+/// Minimum gap between two backfill downloads in one pass.
+pub(crate) const BACKFILL_PACE: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// `cap` budgets the FRONT EDGE and `backfill_cap` the gaps behind it —
+/// two independent budgets, because the current week must never wait
+/// behind a decade of archive, and the archive must not be rationed to
+/// whatever the front edge happens to leave over.
 pub(crate) fn auto_sync_plan(
     newest_published: u32,
     latest_imported: u32,
     imported: &std::collections::HashSet<u32>,
     cap: usize,
+    backfill_cap: usize,
     oldest_imported: Option<u32>,
 ) -> Vec<u32> {
     // New issues first: the current week is what a user is waiting for.
@@ -676,27 +732,24 @@ pub(crate) fn auto_sync_plan(
         .filter(|i| !imported.contains(i))
         .take(cap)
         .collect();
-    if plan.len() >= cap {
-        return plan;
-    }
-    // Then spend what is left of the cap filling gaps BEHIND the newest
-    // import, newest first (2026-08-02 field report: "what about all the
-    // old ones, I don't have all of them downloaded yet — why isn't it
-    // synchronizing them?"). Auto-sync used to stop at the first line
-    // above, so a database with 91 of 1655 issues stayed at 91 forever
-    // while reporting itself up to date, which is true only of the front
-    // edge and useless to someone with 645 holes behind it.
+    // Then fill gaps BEHIND the newest import, newest first (2026-08-02
+    // field report: "what about all the old ones, I don't have all of them
+    // downloaded yet — why isn't it synchronizing them?").
     //
-    // Still capped per pass: TWIC's hosting is donation-funded, and the
-    // point is to converge over many runs, not to pull a decade of
-    // archives in one. `oldest_imported` bounds the walk so the backfill
-    // stops at the user's own archive rather than marching to issue 1.
+    // The backfill has its OWN budget. It used to spend only what the
+    // front edge left over, which meant a busy week starved it entirely
+    // and a database with 632 holes needed ~127 app launches to converge.
+    // Politeness toward TWIC's donation-funded hosting is enforced by
+    // pacing the downloads in time (BACKFILL_PACE), not by a count that
+    // throttles nothing when the fetches run back-to-back anyway.
+    // `oldest_imported` bounds the walk so the backfill stops at the
+    // user's own archive rather than marching to issue 1.
     let floor = oldest_imported.unwrap_or(latest_imported);
     if floor < latest_imported {
         let older = (floor..latest_imported)
             .rev()
             .filter(|i| !imported.contains(i))
-            .take(cap - plan.len());
+            .take(backfill_cap);
         plan.extend(older);
     }
     plan
@@ -712,7 +765,8 @@ fn twic_auto_worker_impl(
     cap: usize,
     progress: &Mutex<Option<NetProgress>>,
     stop: &AtomicBool,
-) -> Result<(), String> {
+    sleep: &mut dyn FnMut(std::time::Duration),
+) -> Result<TwicTally, String> {
     let latest_imported = twic::latest_imported(conn)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "auto-sync needs at least one imported issue to resume from".to_string())?;
@@ -724,17 +778,29 @@ fn twic_auto_worker_impl(
             p.detail = "no published issue found".to_string();
         });
         auto_last_set(conn, "checked — no published issue found");
-        return Ok(());
+        return Ok(TwicTally::default());
     };
     net::meta_set(conn, META_LATEST_KNOWN, &newest.to_string()).map_err(|e| e.to_string())?;
 
-    let imported: std::collections::HashSet<u32> = twic::imported_issues(conn)
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .map(|(issue, _)| issue)
+    let rows = twic::imported_issues(conn).map_err(|e| e.to_string())?;
+    // An issue recorded with ZERO games is a hole that looks filled: the
+    // plan skips anything in `imported`, so such a row masks its own gap
+    // forever (the user's database carried two — 955 and 1654). Treat it
+    // as missing so the next pass retries it.
+    let imported: std::collections::HashSet<u32> = rows
+        .iter()
+        .filter(|(_, games)| *games > 0)
+        .map(|(issue, _)| *issue)
         .collect();
-    let oldest_imported = imported.iter().copied().min();
-    let plan = auto_sync_plan(newest, latest_imported, &imported, cap, oldest_imported);
+    let oldest_imported = rows.iter().map(|(issue, _)| *issue).min();
+    let plan = auto_sync_plan(
+        newest,
+        latest_imported,
+        &imported,
+        cap,
+        BACKFILL_CAP,
+        oldest_imported,
+    );
     if plan.is_empty() {
         update_progress(progress, |p| {
             p.detail = format!("up to date — TWIC {newest} is the newest published issue");
@@ -743,7 +809,7 @@ fn twic_auto_worker_impl(
             conn,
             &format!("up to date — TWIC {newest} is the newest published issue"),
         );
-        return Ok(());
+        return Ok(TwicTally::default());
     }
     update_progress(progress, |p| {
         p.total = plan.len() as u32;
@@ -755,7 +821,7 @@ fn twic_auto_worker_impl(
     });
     // Explicit-selection mode (stop_at_404 = false): the plan runs newest
     // first, so a 404 on one issue must not abandon the older ones.
-    let result = twic_worker_impl(conn, fetcher, &plan, progress, stop);
+    let result = twic_worker_impl(conn, fetcher, &plan, progress, stop, sleep);
     let lo = plan.iter().min().copied().unwrap_or(newest);
     let hi = plan.iter().max().copied().unwrap_or(newest);
     let span = if lo == hi {
@@ -764,7 +830,23 @@ fn twic_auto_worker_impl(
         format!("TWIC {lo}–{hi}")
     };
     match &result {
-        Ok(()) => auto_last_set(conn, &format!("imported {span} (newest first)")),
+        // Report what was IMPORTED, not what was considered: the old text
+        // named the whole planned span whatever the pass achieved.
+        Ok(t) => auto_last_set(
+            conn,
+            &format!(
+                "imported {} issue{} · {} game{} from {span}{}",
+                t.issues,
+                if t.issues == 1 { "" } else { "s" },
+                t.games,
+                if t.games == 1 { "" } else { "s" },
+                if t.unavailable > 0 {
+                    format!(" · {} not available", t.unavailable)
+                } else {
+                    String::new()
+                }
+            ),
+        ),
         Err(e) => auto_last_set(conn, &format!("failed on {span}: {e}")),
     }
     result
@@ -811,7 +893,15 @@ pub async fn twic_auto_sync_check(
         // indistinguishable from never having run.
         let started = now_utc(&conn);
         let run = net::sync_run_start(&conn, "twic", "auto", &started).ok();
-        let result = twic_auto_worker_impl(&conn, &net::UreqFetcher, guess, cap, progress, stop);
+        let result = twic_auto_worker_impl(
+            &conn,
+            &net::UreqFetcher,
+            guess,
+            cap,
+            progress,
+            stop,
+            &mut std::thread::sleep,
+        );
         if let Some(id) = run {
             let at = now_utc(&conn);
             let detail = net::meta_get(&conn, META_AUTO_LAST)
@@ -820,10 +910,19 @@ pub async fn twic_auto_sync_check(
                 .and_then(|j| serde_json::from_str::<serde_json::Value>(&j).ok())
                 .and_then(|v| v["text"].as_str().map(str::to_string));
             let err = result.as_ref().err().cloned();
-            let _ =
-                net::sync_run_finish(&conn, id, &at, 0, 0, 0, detail.as_deref(), err.as_deref());
+            let tally = result.as_ref().ok().copied().unwrap_or_default();
+            let _ = net::sync_run_finish(
+                &conn,
+                id,
+                &at,
+                tally.games as i64,
+                0,
+                tally.unavailable as i64,
+                detail.as_deref(),
+                err.as_deref(),
+            );
         }
-        result
+        result.map(|_| ())
     })?;
     Ok(true)
 }
@@ -945,7 +1044,10 @@ pub async fn sync_set_username(
 
 /// Read/write a service's auto-sync schedule.
 #[tauri::command]
-pub async fn sync_schedule_get(state: State<'_, DbState>, service: String) -> Result<String, String> {
+pub async fn sync_schedule_get(
+    state: State<'_, DbState>,
+    service: String,
+) -> Result<String, String> {
     check_service(&service)?;
     with_conn(&state, |conn| {
         Ok(Schedule::parse(
@@ -1427,7 +1529,15 @@ mod tests {
             error: None,
         }));
         let stop = AtomicBool::new(false);
-        twic_worker_impl(&conn, &fetcher, &[1500, 1501, 1502], &progress, &stop).unwrap();
+        twic_worker_impl(
+            &conn,
+            &fetcher,
+            &[1500, 1501, 1502],
+            &progress,
+            &stop,
+            &mut |_| {},
+        )
+        .unwrap();
 
         assert_eq!(
             fetcher.log.borrow().as_slice(),
@@ -1468,7 +1578,15 @@ mod tests {
             error: None,
         }));
         let stop = AtomicBool::new(true); // cancelled before the first issue
-        twic_worker_impl(&conn, &fetcher, &[1500, 1501], &progress, &stop).unwrap();
+        twic_worker_impl(
+            &conn,
+            &fetcher,
+            &[1500, 1501],
+            &progress,
+            &stop,
+            &mut |_| {},
+        )
+        .unwrap();
         assert!(fetcher.log.borrow().is_empty(), "no request after cancel");
         let p = progress.lock().unwrap().clone().unwrap();
         assert!(p.detail.contains("cancelled"), "{}", p.detail);
@@ -1496,25 +1614,25 @@ mod tests {
         let imported: HashSet<u32> = [1600].into_iter().collect();
         // 10 unpublished-locally issues, cap 5: the NEWEST five, descending.
         assert_eq!(
-            auto_sync_plan(1610, 1600, &imported, 5, None),
+            auto_sync_plan(1610, 1600, &imported, 5, 0, None),
             vec![1610, 1609, 1608, 1607, 1606]
         );
         // Issues at or below the newest import are backfill — manual only.
         let imported: HashSet<u32> = [1595, 1600].into_iter().collect();
         assert_eq!(
-            auto_sync_plan(1602, 1600, &imported, 5, None),
+            auto_sync_plan(1602, 1600, &imported, 5, 0, None),
             vec![1602, 1601]
         );
         // Already-imported issues inside the window are skipped, cap holds.
         let imported: HashSet<u32> = [1600, 1609].into_iter().collect();
         assert_eq!(
-            auto_sync_plan(1610, 1600, &imported, 5, None),
+            auto_sync_plan(1610, 1600, &imported, 5, 0, None),
             vec![1610, 1608, 1607, 1606, 1605]
         );
         // Fully caught up -> empty plan.
         let imported: HashSet<u32> = [1610].into_iter().collect();
         assert_eq!(
-            auto_sync_plan(1610, 1610, &imported, 5, None),
+            auto_sync_plan(1610, 1610, &imported, 5, 0, None),
             Vec::<u32>::new()
         );
     }
@@ -1544,8 +1662,8 @@ mod tests {
         );
 
         // A run lands in the log; the interval is now measured from it.
-        let id =
-            kibitz_db::net::sync_run_start(&conn, "lichess", "auto", "2026-08-02 12:00:00").unwrap();
+        let id = kibitz_db::net::sync_run_start(&conn, "lichess", "auto", "2026-08-02 12:00:00")
+            .unwrap();
         kibitz_db::net::sync_run_finish(&conn, id, "2026-08-02 12:00:30", 7, 0, 0, None, None)
             .unwrap();
         let logged = kibitz_db::net::sync_runs(&conn, Some("lichess"), 5).unwrap();
@@ -1563,8 +1681,8 @@ mod tests {
         );
 
         // A FAILED run does not reset the clock — still due.
-        let bad =
-            kibitz_db::net::sync_run_start(&conn, "lichess", "auto", "2026-08-02 18:00:31").unwrap();
+        let bad = kibitz_db::net::sync_run_start(&conn, "lichess", "auto", "2026-08-02 18:00:31")
+            .unwrap();
         kibitz_db::net::sync_run_finish(
             &conn,
             bad,
@@ -1623,7 +1741,12 @@ mod tests {
         assert!(!sync_due(Schedule::Off, false, None, now));
 
         // Launch: once, then not again until the next launch.
-        assert!(sync_due(Schedule::Launch, false, Some("2026-08-02 11:59:00"), now));
+        assert!(sync_due(
+            Schedule::Launch,
+            false,
+            Some("2026-08-02 11:59:00"),
+            now
+        ));
         assert!(!sync_due(Schedule::Launch, true, None, now));
 
         // Interval counts from the last SUCCESS.
@@ -1652,7 +1775,12 @@ mod tests {
         assert!(sync_due(Schedule::EveryHours(24), true, None, now));
 
         // A corrupt timestamp must not wedge the schedule forever.
-        assert!(sync_due(Schedule::EveryHours(6), true, Some("not a date"), now));
+        assert!(sync_due(
+            Schedule::EveryHours(6),
+            true,
+            Some("not a date"),
+            now
+        ));
     }
 
     #[test]
@@ -1676,24 +1804,26 @@ mod tests {
 
         // Nothing new published: the whole cap goes to the gaps, newest
         // first, and never below the user's own oldest issue.
-        let plan = auto_sync_plan(1600, 1600, &imported, 4, Some(1500));
+        let plan = auto_sync_plan(1600, 1600, &imported, 4, 4, Some(1500));
         assert_eq!(plan, vec![1599, 1597, 1596, 1595]);
 
         // New issues still come FIRST and are never displaced by backfill.
-        let plan = auto_sync_plan(1603, 1600, &imported, 4, Some(1500));
+        let plan = auto_sync_plan(1603, 1600, &imported, 4, 1, Some(1500));
         assert_eq!(plan, vec![1603, 1602, 1601, 1599]);
 
-        // A full cap of new issues leaves nothing for the backfill.
-        let plan = auto_sync_plan(1610, 1600, &imported, 3, Some(1500));
-        assert_eq!(plan, vec![1610, 1609, 1608]);
+        // A full front edge no longer starves the backfill: the two
+        // budgets are independent (run 12 — the old behaviour is why a
+        // database with 632 holes needed ~127 launches to converge).
+        let plan = auto_sync_plan(1610, 1600, &imported, 3, 2, Some(1500));
+        assert_eq!(plan, vec![1610, 1609, 1608, 1599, 1597]);
 
         // A complete archive asks for nothing.
         let full: std::collections::HashSet<u32> = (1500..=1600).collect();
-        assert!(auto_sync_plan(1600, 1600, &full, 5, Some(1500)).is_empty());
+        assert!(auto_sync_plan(1600, 1600, &full, 5, 5, Some(1500)).is_empty());
 
         // Without an oldest issue there is no floor to walk back to, so
         // the behaviour is exactly what it was before.
-        assert!(auto_sync_plan(1600, 1600, &imported, 5, None).is_empty());
+        assert!(auto_sync_plan(1600, 1600, &imported, 5, 5, None).is_empty());
     }
 
     #[test]
@@ -1715,7 +1845,7 @@ mod tests {
             error: None,
         }));
         let stop = AtomicBool::new(false);
-        twic_auto_worker_impl(&conn, &fetcher, 1505, 5, &progress, &stop).unwrap();
+        twic_auto_worker_impl(&conn, &fetcher, 1505, 5, &progress, &stop, &mut |_| {}).unwrap();
 
         // Probe from the guess (1505): forward until 1511 404s, then the
         // download plan runs NEWEST FIRST — 1510 down to 1506, cap 5.
@@ -1767,7 +1897,7 @@ mod tests {
             error: None,
         }));
         let stop = AtomicBool::new(false);
-        twic_auto_worker_impl(&conn, &fetcher, 1500, 5, &progress, &stop).unwrap();
+        twic_auto_worker_impl(&conn, &fetcher, 1500, 5, &progress, &stop, &mut |_| {}).unwrap();
         assert_eq!(twic::imported_issues(&conn).unwrap().len(), 1);
         let p = progress.lock().unwrap().clone().unwrap();
         assert!(p.detail.contains("up to date"), "{}", p.detail);
