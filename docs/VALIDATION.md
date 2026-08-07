@@ -428,6 +428,45 @@ bought three plan hits on the axis actually being driven to 90%. The
 right fix is a bigger `best_moves` corpus across all four books, not a
 thumb on this scale.
 
+### Second tranche: passers and the opposition
+
+| hint | detection rule (static) | corpus tags converted |
+|---|---|---|
+| `CreatePassedPawn` | a file group (a-c / d-e / f-h) where we out-number them AND occupy at least as many distinct FILES (a crippled 4-v-3 with a doubled pawn is three healthy pawns against three), with at least one pawn able to advance. Not in the opening: a majority is an asset from move one, but "go and make a passer" is only a plan once it can be executed. | `create-passed-pawn` |
+| `TakeOpposition` | bare kings and pawns only; the side to move has a king step after which the file gap AND rank gap to the enemy king are both even. | `take-opposition` |
+
+The parity rule is why `TakeOpposition` is one test rather than three:
+direct (0,2), diagonal (2,2), distant (0,4) and the off-line rectangle
+(4,2) are the same statement. HTRYC ex. 22 (Kh1 vs Ka5, answer Kg1) is
+on no shared line at all and a line-based test cannot see it.
+
+**`TakeOpposition` is a `Maneuver`, not a `PlanHint`.** A plan hint has
+no owner field, so it inherits the parent imbalance's favoured side —
+and opposition belongs to whoever is TO MOVE, which is a fact of the
+position rather than a judgement about who stands better. Forcing it
+through the side-lean filter would have narrated Black's Ke7 as White's
+plan. `Maneuver` carries an owner, so it goes there, and `bookeval` now
+reads maneuver reasons as plan tokens.
+
+That in turn exposed a hole: a maneuver no scheme absorbed was never
+narrated at all, so the record could hold a plan the reader never heard
+about. Standalone maneuvers now get their own sentence.
+
+### Running total
+
+| axis | run 11 | run 12 |
+|---|---|---|
+| imbalances | 247/287 = 86.1% | 248/287 = **86.4%** |
+| plans | 90/126 = 71.4% | 99/134 = **73.9%** |
+| favors | 62/99 = 62.6% | 65/99 = **65.7%** |
+| suggest@1 / @3 | 8.0% / 32.0% | 8.0% / 28.0% |
+| negatives | 14/14 | **14/14 clean** |
+
+Five hints added, eight corpus tags converted from free-form to
+scoreable, all eight hitting. The denominator moved 126 -> 134 and both
+numbers are reported, because a run that only watched the percentage
+would be grading its own homework.
+
 ### Three bugs the new detectors exposed
 
 - **File clustering corrupts exact-square hints.** `plans::synthesize`

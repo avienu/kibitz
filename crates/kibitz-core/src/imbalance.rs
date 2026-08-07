@@ -393,6 +393,52 @@ fn holes_in_camp(board: &Board, camp_owner: Color) -> BitBoard {
     hole_mask(board, camp_owner) & !board.occupied()
 }
 
+/// Two kings hold the opposition when the file gap AND the rank gap
+/// between them are both EVEN — direct (0,2), diagonal (2,2), distant
+/// (0,4), and the off-line rectangle (4,2) are all the same statement.
+/// Whoever is NOT to move holds it.
+fn in_opposition(a: Square, b: Square) -> bool {
+    let df = (a.file() as i8 - b.file() as i8).abs();
+    let dr = (a.rank() as i8 - b.rank() as i8).abs();
+    df % 2 == 0 && dr % 2 == 0 && (df != 0 || dr != 0)
+}
+
+/// The king move that seizes the opposition, if the side to move has one.
+///
+/// Deliberately NOT a `PlanHint`. A plan hint has no owner field, so it
+/// inherits the parent imbalance's favored side — and opposition belongs
+/// to whoever is to move, which is a fact of the position rather than a
+/// judgement about who stands better. Routed through `Maneuver` (which
+/// does carry an owner) so it can never be narrated for the wrong player.
+///
+/// Gated to positions with nothing but kings and pawns: opposition is a
+/// real idea there and noise everywhere else, and this keeps the hint out
+/// of every middlegame where two kings happen to sit on even parity.
+/// (Jeremy Silman, How to Reassess Your Chess, exs. 20 and 22.)
+pub(crate) fn opposition_move(board: &Board) -> Option<(Color, Square)> {
+    for piece in [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen] {
+        if !board.pieces(piece).is_empty() {
+            return None;
+        }
+    }
+    let side = board.side_to_move();
+    let ours = board.king(side);
+    let theirs = board.king(!side);
+    // Already holding it with the opponent to move is not a plan; taking
+    // it when it is OUR move is.
+    for to in cozy_chess::get_king_moves(ours) & !board.colors(side) {
+        // Kings may never touch, and the square must not be defended by
+        // the enemy king.
+        if chebyshev(to, theirs) <= 1 {
+            continue;
+        }
+        if in_opposition(to, theirs) {
+            return Some((side, to));
+        }
+    }
+    None
+}
+
 /// 2. Pawn structure.
 pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
     let mut evidence = BTreeMap::new();
@@ -840,6 +886,74 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             .map(|p| ((b'a' + p.file() as u8) as char).to_string())
             .collect();
         evidence.insert("locked_files".into(), json!(files));
+    }
+
+    // A majority that can actually MAKE a passer. The existing
+    // Advance*Majority hints say to push it; this names the point of
+    // pushing it, which is what the corpus asks for
+    // ("create-passed-pawn", HTRYC exs. 27, 126 and 183).
+    // Not in the opening: a majority is an ASSET from move one, but
+    // "go and make a passer" only becomes a plan once the pieces are out
+    // and it can actually be executed. Announcing it on move seven of a
+    // Sveshnikov is true and useless.
+    for (group, files) in (phase(board) != crate::record::Phase::Opening)
+        .then_some([
+            ("queenside", [File::A, File::B, File::C].as_slice()),
+            ("center", [File::D, File::E].as_slice()),
+            ("kingside", [File::F, File::G, File::H].as_slice()),
+        ])
+        .into_iter()
+        .flatten()
+    {
+        let mask = files
+            .iter()
+            .fold(BitBoard::EMPTY, |acc, f| acc | f.bitboard());
+        for color in [Color::White, Color::Black] {
+            let ours = board.colored_pieces(color, Piece::Pawn) & mask;
+            let theirs = board.colored_pieces(!color, Piece::Pawn) & mask;
+            if ours.len() <= theirs.len() {
+                continue;
+            }
+            // A CRIPPLED majority makes no passer: 4-v-3 with a doubled
+            // pawn is three healthy pawns against three. Count files, not
+            // just pawns.
+            let files_of = |bb: BitBoard| {
+                bb.into_iter()
+                    .map(|p| p.file() as u8)
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+            };
+            if files_of(ours) < files_of(theirs) {
+                continue;
+            }
+            // Somebody in the group has to be able to move.
+            let fwd: i8 = if color == Color::White { 1 } else { -1 };
+            let Some(candidate) = ours.into_iter().find(|p| {
+                p.try_offset(0, fwd)
+                    .is_some_and(|a| !board.occupied().has(a))
+            }) else {
+                continue;
+            };
+            evidence.insert(
+                format!(
+                    "healthy_majority_{}_{}",
+                    group,
+                    if color == Color::White {
+                        "white"
+                    } else {
+                        "black"
+                    }
+                ),
+                json!(ours.len()),
+            );
+            sided.push((
+                color,
+                PlanHint {
+                    hint: "CreatePassedPawn".into(),
+                    squares: vec![square_name(candidate)],
+                },
+            ));
+        }
     }
 
     if evidence.is_empty() && plans.is_empty() && sided.is_empty() {
@@ -2041,6 +2155,64 @@ mod tests {
             .unwrap_or_default();
         assert!(
             !plans.iter().any(|p| p.hint == "OverprotectStrongPoint"),
+            "{plans:?}"
+        );
+    }
+
+    /// Jeremy Silman, How to Reassess Your Chess, ex. 20: Black draws
+    /// only by grabbing the DISTANT opposition (Ke7), not by walking at
+    /// the pawn. The owner is the side to move, which is why this rides
+    /// on Maneuver rather than a PlanHint.
+    #[test]
+    fn opposition_finds_the_distant_king_step() {
+        let b = board("4k3/8/8/8/8/8/4P3/4K3 b - - 0 1");
+        let (color, to) = opposition_move(&b).expect("an opposition move");
+        assert_eq!(color, Color::Black);
+        assert_eq!(square_name(to), "e7");
+    }
+
+    /// Ex. 22: the kings share no file, rank or diagonal, and Kg1 is
+    /// still the move — the parity rule covers the rectangle case that a
+    /// line-based test cannot see.
+    #[test]
+    fn opposition_handles_the_off_line_rectangle() {
+        let b = board("8/8/8/k7/8/8/8/7K w - - 0 1");
+        let (color, to) = opposition_move(&b).expect("an opposition move");
+        assert_eq!(color, Color::White);
+        assert_eq!(square_name(to), "g1");
+    }
+
+    /// Opposition is the whole game in a bare king ending and noise
+    /// anywhere else, so the detector stays silent while pieces remain.
+    #[test]
+    fn opposition_is_silent_while_pieces_remain() {
+        let b = board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        assert!(opposition_move(&b).is_none());
+    }
+
+    /// Jeremy Silman, How to Reassess Your Chess, ex. 27: the queenside
+    /// majority is the point of the squeeze.
+    #[test]
+    fn healthy_majority_promises_a_passer() {
+        let fen = "r4rk1/pb1p1ppp/1p2pn2/8/1PPP4/P1N2P2/3K2PP/R4B1R b - - 0 1";
+        let plans = pawn_structure(&board(fen)).expect("imbalance").plans;
+        assert!(has(&plans, "CreatePassedPawn"), "{plans:?}");
+    }
+
+    /// A crippled majority makes no passer: four against three with a
+    /// doubled pawn is three healthy pawns against three, so the hint
+    /// counts FILES, not just bodies.
+    #[test]
+    fn crippled_majority_promises_nothing() {
+        // White f2/f3/g2/h2 (four pawns, three files) vs black f7/g7/h7.
+        let fen = "4k3/5ppp/8/8/8/5P2/5PPP/4K3 w - - 0 1";
+        let plans = pawn_structure(&board(fen))
+            .map(|i| i.plans)
+            .unwrap_or_default();
+        assert!(
+            !plans
+                .iter()
+                .any(|p| p.hint == "CreatePassedPawn" && p.squares == vec!["f3"]),
             "{plans:?}"
         );
     }

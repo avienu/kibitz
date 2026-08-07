@@ -160,6 +160,9 @@ pub fn explain(record: &FeatureRecord) -> Explanation {
     };
     for imbalance in plan_sources {
         for plan in &imbalance.plans {
+            if crate::eclipsed_by_sibling(&plan.hint, &imbalance.plans) {
+                continue;
+            }
             if !consumed.insert(plan.hint.as_str()) {
                 continue;
             }

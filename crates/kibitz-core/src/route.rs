@@ -258,6 +258,24 @@ pub fn extract(
             });
         }
     }
+    // The opposition king-step: an owner-bearing record because the side
+    // to move owns it, not the side the position favours.
+    if let Some((color, to)) = crate::imbalance::opposition_move(board) {
+        let from = board.king(color);
+        out.push(crate::record::Maneuver {
+            piece: "king".into(),
+            from: crate::record::square_name(from),
+            via: Vec::new(),
+            to: crate::record::square_name(to),
+            moves: 1,
+            reason: "opposition".into(),
+            blocked_by: Vec::new(),
+            favors: match color {
+                Color::White => crate::record::Favors::White,
+                Color::Black => crate::record::Favors::Black,
+            },
+        });
+    }
     out.sort_by_key(|m| m.moves);
     out
 }

@@ -339,6 +339,9 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
             break; // tactics on the board: plan talk waits for the verdict
         }
         for plan in &imbalance.plans {
+            if eclipsed_by_sibling(&plan.hint, &imbalance.plans) {
+                continue;
+            }
             if seen.insert(plan.hint.as_str()) {
                 plan_sentences.push(render_plan(
                     plan,
@@ -351,13 +354,22 @@ pub fn verbalize_sections_voiced(record: &FeatureRecord, voice: Voice) -> Sectio
     }
 
     let scheme_source: &[_] = if swing > 0 { &[] } else { &record.schemes[..] };
-    let scheme_sentences: Vec<String> = scheme_source
+    let mut scheme_sentences: Vec<String> = scheme_source
         .iter()
         .take(2)
         .enumerate()
         .map(|(i, sc)| render_scheme(sc, &record.fen, i, voice))
         .filter(|s| !s.is_empty())
         .collect();
+    // Maneuvers no scheme absorbed still get said.
+    if swing == 0 {
+        for m in record.maneuvers.iter().take(2) {
+            if record.schemes.iter().any(|sc| sc.target == m.to) {
+                continue;
+            }
+            scheme_sentences.push(render_maneuver(m, voice));
+        }
+    }
 
     Sections {
         tactics,
@@ -1402,6 +1414,47 @@ pub(crate) fn render_suggestions(
 
 /// Render one composite plan: index 0 is the unified lead, later indices
 /// the brief runner-up.
+/// True when a hint says the same thing as a sibling already being
+/// narrated. The RECORD keeps both — they score separately and mean
+/// subtly different things (own the majority vs. cash it into a passer) —
+/// but prose that makes the same point three sentences running reads as
+/// padding, so the quieter one stays quiet.
+pub(crate) fn eclipsed_by_sibling(hint: &str, siblings: &[kibitz_core::record::PlanHint]) -> bool {
+    match hint {
+        "CreatePassedPawn" => siblings
+            .iter()
+            .any(|s| s.hint == "AdvanceQueensideMajority" || s.hint == "AdvanceCentralMajority"),
+        _ => false,
+    }
+}
+
+/// Render a standalone [`Maneuver`] — one no scheme picked up. Without
+/// this a record can hold a plan the reader never hears about, which is
+/// how the opposition (a Maneuver by design, since it belongs to the side
+/// to move rather than the side who stands better) would go unsaid.
+pub(crate) fn render_maneuver(m: &kibitz_core::record::Maneuver, voice: Voice) -> String {
+    let route: Vec<String> = std::iter::once(m.from.clone())
+        .chain(m.via.iter().cloned())
+        .chain([m.to.clone()])
+        .collect();
+    let clause = fill(
+        lookup_voiced(
+            voice,
+            &[&format!("maneuver.{}", m.reason), "maneuver.generic"],
+        ),
+        &[
+            ("piece", &m.piece),
+            ("from", &m.from),
+            ("to", &m.to),
+            ("route", &route.join("-")),
+        ],
+    );
+    fill(
+        lookup_voiced(voice, &["maneuver.lead"]),
+        &[("side", side_name_favors(m.favors)), ("clause", &clause)],
+    )
+}
+
 /// Render a [`Scheme`] as one ordered sentence: the prerequisite, the
 /// way in (with alternatives), and the payoff, in that order.
 ///

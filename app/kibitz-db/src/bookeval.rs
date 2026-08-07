@@ -75,12 +75,22 @@ pub struct Expected {
 
 /// Known PlanHint tokens the engine can emit today. Expected plan tags
 /// outside this list are vocabulary gaps, reported rather than scored.
+/// Plan token a `Maneuver::reason` stands for, where it has one.
+fn maneuver_token(reason: &str) -> Option<&'static str> {
+    match reason {
+        "opposition" => Some("TakeOpposition"),
+        _ => None,
+    }
+}
+
 const KNOWN_HINTS: &[&str] = &[
     "ManeuverKnightToOutpost",
     "ManeuverBishopToSupportPoint",
     "ManeuverRookToOpenFile",
     "UndermineDefender",
     "OverprotectStrongPoint",
+    "TakeOpposition",
+    "CreatePassedPawn",
     "PressureBackwardPawn",
     "BlockadeWhitePasser",
     "BlockadeBlackPasser",
@@ -210,6 +220,15 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
                 .iter()
                 .flat_map(|i| i.plans.iter().map(|p| p.hint.clone())),
         );
+        // Maneuvers are plans too. A reroute that carries its own owner
+        // (opposition, which belongs to the side to move) is emitted as a
+        // Maneuver rather than a PlanHint precisely so it cannot be
+        // misattributed — the harness has to look there as well.
+        for m in &record.maneuvers {
+            if let Some(token) = maneuver_token(&m.reason) {
+                detected_hints.push(token.to_string());
+            }
+        }
         for want in &e.expected.plan_tags {
             if KNOWN_HINTS.contains(&want.as_str()) {
                 r.plans.total += 1;
