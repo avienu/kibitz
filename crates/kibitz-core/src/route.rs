@@ -180,6 +180,7 @@ pub const EXACT_DESTINATION_HINTS: &[&str] = &[
     "KeepBestPiece",
     "TradeOffAttacker",
     "TargetWeakPawn",
+    "AttackWhereYouAreStronger",
 ];
 
 /// Why a route's destination is worth the trip, in evidence language.

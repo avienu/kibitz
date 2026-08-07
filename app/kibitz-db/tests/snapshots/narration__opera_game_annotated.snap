@@ -1,6 +1,5 @@
 ---
 source: app/kibitz-db/tests/narration.rs
-assertion_line: 92
 expression: pgn
 ---
 [Event "?"]
@@ -59,25 +58,26 @@ queenside majority — those pawns outnumber their opposition and they know it.}
 no safe square left. It is attacked by White's bishop on b5 but defended only by
 Black's knight on f6, the queen on e7 and the king on e8.} 12. O-O-O {White's
 king is feeling a draft around c1 — the shelter is thinner than it would like.
-The d-file in front of the king is wide open.} 12... Rd8 13. Rxd7 {White's heavy
-pieces have the open lines to themselves. The d-file is open. The b- and c-files
-are half-open for Black. White has a rook on the seventh rank. Meanwhile, White
-is asking the questions; the opponent is stuck finding answers. Here is what
-White should be dreaming about: the rook dreams of the seventh rank, where every
-enemy pawn lives at its mercy (key squares: d7). Another dream for White: the
-enemy king is feeling the draft — open a line and let the heavy pieces through
-(key squares: d7). Another dream for White: double the heavy pieces on the open
-file and make it their private highway.} 13... Rxd7 {Black is ahead on material.
-Black is three pawns up.} 14. Rd1 {Black's rook on d7 costs material if it is
-taken — move it, add a defender, or capture the attacker. It is attacked by
-White's rook on d1 and the bishop on b5 but defended only by Black's knight on
-f6, the queen on e7 and the king on e8. A capture sequence here wins about two
-pawns.} 14... Qe6 15. Bxd7+ {They can just take Black's queen on e6 and come out
-ahead. Move it, back it up, or remove the attacker. The attack from White's
-queen on b3 and the bishop on d7 is met only by Black's pawn on f7. If the
-captures start, the attacker comes out ahead by roughly a queen. Meanwhile,
-Black's queen on e6 is trapped — the cage is shut, and there is no safe square
-left.} 15... Nxd7 16. Qb8+ {White's queen on b8 hangs — it stands under attack
-with no friend in sight. It is under attack from Black's knight on d7.} 16...
-Nxb8 {Black has won enough material to decide the game; the rest is care and
-technique. Black has a piece for two pawns.} 17. Rd8# 1-0
+The d-file in front of the king is wide open.} 12... Rd8 13. Rxd7 {White's
+initiative has become a stampede — every move arrives with a new demand.
+Meanwhile, White's heavy pieces have the open lines to themselves. The d-file is
+open. The b- and c-files are half-open for Black. White has a rook on the
+seventh rank. Here is what White should be dreaming about: the rook dreams of
+the seventh rank, where every enemy pawn lives at its mercy (key squares: d7).
+Another dream for White: the enemy king is feeling the draft — open a line and
+let the heavy pieces through (key squares: d7). Another dream for White: double
+the heavy pieces on the open file and make it their private highway.} 13... Rxd7
+{Black is ahead on material. Black is three pawns up.} 14. Rd1 {Black's rook on
+d7 costs material if it is taken — move it, add a defender, or capture the
+attacker. It is attacked by White's rook on d1 and the bishop on b5 but defended
+only by Black's knight on f6, the queen on e7 and the king on e8. A capture
+sequence here wins about two pawns.} 14... Qe6 15. Bxd7+ {They can just take
+Black's queen on e6 and come out ahead. Move it, back it up, or remove the
+attacker. The attack from White's queen on b3 and the bishop on d7 is met only
+by Black's pawn on f7. If the captures start, the attacker comes out ahead by
+roughly a queen. Meanwhile, Black's queen on e6 is trapped — the cage is shut,
+and there is no safe square left.} 15... Nxd7 16. Qb8+ {White's queen on b8
+hangs — it stands under attack with no friend in sight. It is under attack
+from Black's knight on d7.} 16... Nxb8 {Black has won enough material to decide
+the game; the rest is care and technique. Black has a piece for two pawns.} 17.
+Rd8# 1-0

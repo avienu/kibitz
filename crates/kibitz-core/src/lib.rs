@@ -4,6 +4,7 @@
 
 pub mod attack;
 pub mod development;
+pub mod force;
 pub mod imbalance;
 pub mod pawn_contact;
 pub mod perft;

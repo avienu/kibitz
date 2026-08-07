@@ -1509,6 +1509,22 @@ fn single_pawn_attack_span(pawn: Square, color: Color) -> BitBoard {
     span
 }
 
+/// The sector where we out-gun them, when it is the one their king lives
+/// in. Attack where you are strong is old advice; the point here is that
+/// "strong" means force that can ARRIVE, not material on a scoresheet.
+///
+/// Being down material globally while owning the quarter of the board
+/// the game is being decided in is a perfectly good trade — which is
+/// what the corpus means by "activity over material" and "seize the key
+/// moment" (HTRYC exs. 36 and 166).
+fn attacking_sector(board: &Board, color: Color) -> Option<crate::force::Sector> {
+    let enemy_king = board.king(!color);
+    let theirs = crate::force::Sector::of(enemy_king);
+    // A whole minor piece of surplus, in the sector that matters.
+    let (sector, _) = crate::force::strongest_sector(board, color, 300)?;
+    (sector == theirs).then_some(sector)
+}
+
 /// Enemy pawns no enemy pawn can EVER defend, which we already bear down
 /// on. One test catches isolated, backward and front-doubled pawns
 /// alike: a pawn is permanently weak when it lies outside the forward
@@ -1736,6 +1752,24 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         // Restraint plans stand on their own: they are about pawns
         // holding (or failing to hold) squares, so they must be reachable
         // even in a position with no hole and no outpost of ours.
+        if let Some(sector) = attacking_sector(board, color) {
+            evidence.insert(
+                format!(
+                    "local_force_{}_{}",
+                    sector.name(),
+                    if color == Color::White {
+                        "white"
+                    } else {
+                        "black"
+                    }
+                ),
+                json!(crate::force::force_in(board, color, sector)),
+            );
+            plans.push(PlanHint {
+                hint: "AttackWhereYouAreStronger".into(),
+                squares: vec![square_name(board.king(!color))],
+            });
+        }
         for pawn in weak_pawn_targets(board, color) {
             plans.push(PlanHint {
                 hint: "TargetWeakPawn".into(),
@@ -2153,10 +2187,34 @@ pub fn initiative(board: &Board) -> Option<Imbalance> {
     } else {
         (theirs, ours)
     };
-    let diff = (w - b) * 15;
+    let mut diff = (w - b) * 15;
     let mut evidence = BTreeMap::new();
     evidence.insert("white_forcing_moves".into(), json!(w));
     evidence.insert("black_forcing_moves".into(), json!(b));
+    // Effective force where the enemy king lives. Material is a
+    // board-wide sum and that is a lie once the game has a location: a
+    // rook four moves from the fight is not defending anything. Owning
+    // the sector the enemy king sits in is an initiative, and it is the
+    // thing that can justify being down material elsewhere.
+    for (color, sign) in [(Color::White, 1i32), (Color::Black, -1)] {
+        let sector = crate::force::Sector::of(board.king(!color));
+        let margin = crate::force::force_in(board, color, sector)
+            - crate::force::force_in(board, !color, sector);
+        if margin >= 300 {
+            evidence.insert(
+                format!(
+                    "local_force_margin_{}",
+                    if color == Color::White {
+                        "white"
+                    } else {
+                        "black"
+                    }
+                ),
+                json!(margin),
+            );
+            diff += sign * (margin / 10).min(60);
+        }
+    }
     // A two-forcing-move edge is worth NAMING but not worth a side-lean:
     // report it as Balanced/Minor; a three-move edge picks a side as
     // before (recall tuning against the book corpus, run 8.5).

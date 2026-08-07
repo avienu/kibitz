@@ -125,7 +125,7 @@ fn color_favors(c: Color) -> Favors {
 /// am-325-2 "c5" were both lost that way). Same principle that keeps
 /// them out of the favors vote — a standing idea is not a claim about
 /// what to play this move.
-const EXPLANATORY_ONLY: &[&str] = &["OverprotectStrongPoint"];
+const EXPLANATORY_ONLY: &[&str] = &["OverprotectStrongPoint", "AttackWhereYouAreStronger"];
 
 fn active_plans(record: &FeatureRecord) -> Vec<ActivePlan> {
     let mut out: Vec<ActivePlan> = Vec::new();

@@ -569,17 +569,51 @@ not made yet, which a static reading of the position cannot see.
 Converting only the tags that happened to pass would have shown a nicer
 number and meant nothing.
 
+### Seventh tranche: effective force (maintainer's insight)
+
+Material is a board-wide sum, and that is a lie the moment the game has
+a location. A rook on a8 that needs four moves to reach the kingside
+contributes nothing to a fight happening at h2 — "almost like nothing",
+in the maintainer's phrase. Being down material globally is a perfectly
+good trade for owning the quarter of the board the game is decided in.
+
+`crates/kibitz-core/src/force.rs` splits the board into three sectors by
+file and weights every piece by how many moves it needs to arrive:
+in-sector counts full, two moves two-thirds, three moves a third, and a
+piece with no safe route counts zero. The routing search is the same one
+the maneuver layer uses, so blockers and safety are already handled —
+force that cannot arrive is not force, which is the whole point. Kings
+are excluded: the king is what the fight is about, not a unit of it.
+
+Feeding the local-force margin into the initiative lean moved
+**imbalances 88.2% -> 90.9%**, the first axis to clear the 90% target.
+`initiative` now reports in positions where it previously had nothing to
+say, which is exactly where the corpus expected an `Initiative` reading.
+
+It also fixed the Opera Game. At move 13 the annotation now reads
+"White's initiative has become a stampede" while the material line still
+says Black is three pawns up — which is what every human annotator says
+about that game, and what the engine structurally could not say before.
+
+Two honest notes. The `AttackWhereYouAreStronger` hint that came out of
+the same module converts NO corpus tags: `activity-over-material` and
+`seize-key-moment` turn out to be about TIMING (strike now, while their
+pieces hang) rather than sector force, so they stay gaps. And the favors
+axis did not move — the local-force term is small against a
+magnitude-weighted vote across every imbalance, and that axis needs the
+method change (outcomes plus evals, train/holdout), not another term.
+
 ### Running total
 
 | axis | run 11 | run 12 |
 |---|---|---|
-| imbalances | 247/287 = 86.1% | 253/287 = **88.2%** |
+| imbalances | 247/287 = 86.1% | 261/287 = **90.9%** |
 | plans | 90/126 = 71.4% | 106/143 = **74.1%** |
 | favors | 62/99 = 62.6% | 65/99 = **65.7%** |
 | suggest@1 / @3 | 8.0% / 32.0% | 4.0% / 32.0% |
 | negatives | 14/14 | **14/14 clean** |
 
-Ten hints added, seventeen corpus tags converted from free-form to
+Eleven hints added, seventeen corpus tags converted from free-form to
 scoreable, fifteen of seventeen hitting. The plans percentage is up 2.7
 points on a denominator that grew 126 -> 143; the absolute count is up
 sixteen. suggest@3 is back to baseline;
