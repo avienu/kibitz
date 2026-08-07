@@ -5,6 +5,60 @@ numbered work runs (full detail with verification numbers in
 `RUN_REPORT.md`); 0.1.0 is the first tagged release and collects them,
 newest first.
 
+## Unreleased
+
+### Run 12 — long-term plans, and Windows signing
+
+The engine could describe a position well and advise on it badly. It held
+a taxonomy of imbalances, and a taxonomy cannot say "first trade the
+defender, then land the knight, then press the weakness behind it" — the
+order is the lesson. This run gave plans a shape.
+
+- **Maneuvers** (record schema v4): a reroute is now an ordered record —
+  piece, origin, waypoints, destination, cost, prerequisites. Previously
+  it was a bag of squares that did not even record which piece was
+  moving.
+- **Schemes**: plans as sequences with prerequisites, one per square, and
+  the pieces that want a square divide the labour rather than duplicating
+  it — one may trade the defender off so another can settle there. The
+  Sveshnikov now reports its own main line: Bc1-g5 to trade the f6
+  knight, then Nc3-d5, then press the backward d6 pawn.
+- **Routing generalised** off the knight to bishops, rooks, queens and
+  kings, hop ceiling 3 → 5, with waypoint safety judged over TIME against
+  a new pawn-contact distance map rather than the current attack map.
+- **Effective force**: material weighted by how many moves it needs to
+  reach the sector in question, because a rook four moves from the fight
+  is not defending anything. This is what finally lets the Opera Game be
+  annotated the way humans annotate it — "White's initiative has become a
+  stampede" while Black is three pawns up.
+- **Eleven new plan hints**, including the first Nimzowitschian ones
+  (undermining, overprotection) and the trade family (hunt the bishop
+  pair, keep your best piece, trade off theirs).
+- **The verdict is fitted, not guessed.** Who-stands-better moved out of
+  the test harness into `kibitz-core::verdict` and its per-kind weights
+  were fitted against decisive master games with a held-out half.
+- **UI**: findings group by horizon — NOW / NEXT / LONG-TERM — and the
+  leading finding of each survives collapse, so a long-term plan is no
+  longer buried behind whatever is urgent.
+
+Measured on the 162-position private book corpus: imbalances 86.1% →
+90.9%, plans 71.4% → 74.1%, favors 62.6% → 68.7%, all 14 negative
+anchors clean.
+
+### Release pipeline
+
+- **Windows bundles are signed** (Azure Artifact Signing via OIDC, no
+  stored credential) and the signature is verified before publishing.
+- **The publish guard checks signatures, not just filenames.** It had
+  been matching artifacts by name, which passed happily on unsigned
+  binaries — the Windows release had been shipping unsigned.
+- Signed and unsigned runs no longer look alike when both are green: the
+  state is written to the run summary and stated in the release notes.
+- TWIC auto-sync backfill converges (independent budget, paced by time
+  rather than rationed by count), retries issues recorded with zero
+  games, and its log reports what was imported instead of what was
+  planned.
+
 ## 0.1.0 — 2026-07-26
 
 First tagged release: the complete application to date — database,
