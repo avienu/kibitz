@@ -262,10 +262,21 @@ jobs:
           if-no-files-found: error
 
   # Windows signing runs as its own job for one reason: the federated
-  # credential's subject is `repo:avienu/kibitz:environment:release`, and
-  # that claim only appears in the OIDC token when the JOB declares the
-  # environment. Putting it on `bundle` would gate every platform behind an
-  # approval; putting it here gates exactly the step that needs it.
+  # credential's subject ends in `:environment:release`, and that claim
+  # only appears in the OIDC token when the JOB declares the environment.
+  # Putting it on `bundle` would gate every platform behind an approval;
+  # putting it here gates exactly the step that needs it.
+  #
+  # The subject is the IMMUTABLE form, with numeric owner and repo IDs:
+  #     repo:avienu@4993427/kibitz@1312433848:environment:release
+  # not the name-based `repo:avienu/kibitz:...` that most documentation
+  # still shows. GitHub made immutable subjects the default for repos
+  # created after 2026-07-15, precisely so that renaming an org or repo
+  # cannot silently hand your credential to someone else. v0.1.0-test6
+  # failed on exactly this with AADSTS700213, which reports the mismatch
+  # accurately and does not mention that a format changed under you.
+  # If this ever fails again, read the `subject claim` line the azure/login
+  # step prints and make the credential match it verbatim.
   #
   # A tag subject was the alternative and does not work: wildcards are not
   # allowed in the plain subject field, so `refs/tags/v0.1.0` would not
