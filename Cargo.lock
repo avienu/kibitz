@@ -695,7 +695,7 @@ dependencies = [
 
 [[package]]
 name = "kibitz-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cozy-chess",
  "insta",
@@ -706,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "kibitz-db"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -729,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "kibitz-profile"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "insta",
  "kibitz-core",
@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "kibitz-srs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -747,7 +747,7 @@ dependencies = [
 
 [[package]]
 name = "kibitz-tb"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cc",
  "cozy-chess",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "kibitz-verbalize"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "insta",
  "kibitz-core",
@@ -817,7 +817,7 @@ dependencies = [
 
 [[package]]
 name = "movegen-bench"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cozy-chess",
  "criterion",
@@ -1182,7 +1182,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "si4-read"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cozy-chess",
  "tempfile",

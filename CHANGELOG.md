@@ -5,6 +5,36 @@ numbered work runs (full detail with verification numbers in
 `RUN_REPORT.md`); 0.1.0 is the first tagged release and collects them,
 newest first.
 
+## 0.1.1 — 2026-08-07
+
+A release-surface fix. No engine or UI changes.
+
+### Auto-update now reaches every platform we ship
+
+0.1.0 published a `latest.json` listing exactly one platform,
+`linux-x86_64`. macOS and Windows users got a correctly signed installer
+and an updater that would never offer them anything. Two silent causes:
+Tauri names the macOS updater bundle `Kibitz.app.tar.gz` with no
+architecture, so both macOS legs uploaded the same filename and one was
+kept; and the feed generator had no Windows branch at all, despite the
+Windows updater signature being built and uploaded every time.
+
+**If you already installed 0.1.0 on macOS or Windows, this one upgrade
+has to be done by hand** — the version that fixes auto-update cannot
+reach you through the auto-update it fixes. Download below, install over
+the top, and later versions will arrive on their own.
+
+### Guards, because none of the three existing ones caught it
+
+- The release now refuses to publish if a platform declared in
+  `release-targets.json` is missing from the updater feed. The
+  declaration sits next to the bundles each target owes, so adding a
+  platform means adding it in one place and the pipeline follows.
+- Release notes are generated as real download links from the files
+  actually collected, and the build fails if a declared platform has
+  nothing to link to. 0.1.0's notes rendered filenames as text; the
+  maintainer tried to click them.
+
 ## 0.1.0 — 2026-08-07
 
 First tagged release. The sections below are the work runs it collects,
