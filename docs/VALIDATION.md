@@ -1129,3 +1129,54 @@ The Opera Game gained two king alerts and both are right: the d-file
 really is open there (both d-pawns went on moves 3-5), Morphy castles
 away from it shortly after, and Black's e8 king standing on that file is
 the entire game.
+
+## TrappedPiece: the corpus wants a different concept
+
+Seven misses. Classified by which gate stops them, using SEE-safe
+destination counts per piece:
+
+- **Five** hold a piece with ZERO SEE-safe destinations that is simply
+  not under attack (cbcs-192, am-322-1, am-323-2, am-328-1,
+  htryc-381-151).
+- **Two** hold no such piece at all — every minor has a safe square
+  (cbcs-193 "entombed knights", am-10-1). Those pieces are mobile and
+  useless, which is not what this detector measures.
+- **None** hold a piece that is both immobile and attacked, so the
+  detector's own core condition never passes with its attack requirement.
+
+### Two predictions, one refuted
+
+Predicted: relaxing the attack requirement recovers 3-5 of the five, and
+TrappedPiece on quiet positions at least doubles.
+
+**Wrong on both counts.** Recall did not move at all — 40.6% before and
+after — while false positives rose anyway (0.10 -> 0.14 per position).
+A second gate was also blocking: `!attacked && home_ranks.has(sq)`.
+
+With both gates off the five do come back, and the price is the worst
+measured today:
+
+| change | recall | FP (quiet firing) | recall per FP point |
+|---|---|---|---|
+| WeakKing, open-file gated (shipped) | +9.4 | +3.6 | **2.6** |
+| WeakKing, naive (rejected) | +15.7 | +8.4 | 1.87 |
+| TrappedPiece, both gates off | +15.6 | +17.8 | **0.88** |
+
+64.6% of engine-quiet master positions would fire the screen, and
+TrappedPiece would fire five times as often, at 0.49 per position.
+Below one recall point per false-positive point is not a trade worth
+making.
+
+### What that says
+
+The gates are doing real work. A piece with no good square, unattacked,
+on its home rank is an ordinary undeveloped piece — not an alert. The
+five corpus entries want precisely what those gates exclude, and the
+other two want mobility-with-no-purpose, which the detector does not
+model at all.
+
+So "entombed" is not a sensitivity setting of TrappedPiece. It is a
+strategic property — a piece with no future — and its natural home is an
+imbalance beside the existing bad-bishop detection, not the tactical
+screen. Filed that way rather than tuned further; the alerts axis
+ceiling for TrappedPiece is 7 misses that mostly should not be alerts.
