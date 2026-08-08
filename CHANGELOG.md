@@ -5,7 +5,11 @@ numbered work runs (full detail with verification numbers in
 `RUN_REPORT.md`); 0.1.0 is the first tagged release and collects them,
 newest first.
 
-## Unreleased
+## 0.1.0 — 2026-08-07
+
+First tagged release. The sections below are the work runs it collects,
+newest first; runs 9-11 are recorded only in `RUN_REPORT.md` and are not
+written up here.
 
 ### Run 12 — long-term plans, and Windows signing
 
@@ -58,12 +62,6 @@ anchors clean.
   rather than rationed by count), retries issues recorded with zero
   games, and its log reports what was imported instead of what was
   planned.
-
-## 0.1.0 — 2026-07-26
-
-First tagged release: the complete application to date — database,
-training, explanatory engine, ten-screen UI — plus the packaging and
-release pipeline itself.
 
 ### Run 8 — packaging & release pipeline
 
