@@ -874,3 +874,54 @@ out 1-versus-1 in nearly every entry, and the prophylaxis gate is
 on a tie opens always. The denial bonus is effectively unconditional,
 which is the direct cause of the golden regression and is worth fixing
 before anything is decided about how denial should rank.
+
+## Retiring the sided-plan filter, and what it cost
+
+The run-8.5 sided-plan filter DROPPED any plan whose parent imbalance
+leaned the other way. With no owner on a hint, downstream would have
+narrated it for the wrong player, so discarding it was the right trade
+when the information did not exist. Schema v5 gives hints an owner and
+every consumer now reads it, so the filter was pure loss.
+
+**plans 74.1% -> 76.2%.** Narration now says "Here is what Black should
+be dreaming about: the bad bishop wants a new life" in a Sveshnikov that
+favours White — a true statement the filter was throwing away.
+
+It was briefly kept on the grounds that more plans mean more engine jobs
+during batch annotation, and CLAUDE.md #6 keeps the engine off by
+default. **That misread the principle.** #6 permits three things: a fired
+WSUI screen, an explicit user request, and user-initiated batch jobs.
+Batch annotation is the third, named in the principle itself. #6 governs
+the default path — browsing, stepping through a game — not a job the user
+launched and is waiting on. A filter that buys engine time by silently
+dropping correct plans pays in the wrong currency.
+
+### One composite sentence disappeared, and that is a WIN
+
+The Sveshnikov golden lost a composite plan. Do not restore it. The
+cluster behind it only held together because two plans belonging to
+OPPOSITE sides were being attributed to the same one; reading the owner
+split them, and the sentence it produced was never true. Composite count
+going down is not a regression here — it is a mis-clustering being
+removed. The book-eval line moving is the symptom, not the disease.
+
+### Which gate should enqueue a suggest-verify job
+
+Three candidates over the 162 positions. The prediction, recorded before
+running: jobs monotone decreasing, plans monotone non-increasing,
+plans-per-job monotone increasing. All three held, so the instrument is
+behaving.
+
+| gate | jobs | plans | plans / job |
+|---|---|---|---|
+| any plan | 159 | 360 | 2.26 |
+| **for side to move** (shipped) | **156** | **360** | **2.31** |
+| converging (>=2 supports) | 19 | 49 | 2.58 |
+
+**"For side to move" ships.** The deciding column is plans-per-job and it
+barely separates: converging is 12% more efficient per job while
+surfacing 86% fewer plans. Cutting engine work by 88% to gain a tenth of
+a plan per job is not an efficiency win, it is a coverage cut wearing
+one. "Any plan" is nearly identical in cost and strictly worse in
+principle — it enqueues work for plies whose only plans belong to the
+opponent, which is engine time bought with nothing to spend it on.

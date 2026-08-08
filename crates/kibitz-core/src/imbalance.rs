@@ -401,24 +401,28 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     } else {
         favors(score, 20, 45)?
     };
-    // Owners are stamped on; the run-8.5 filter is still here. It DROPS a
-    // plan whose parent imbalance leans the other way — a workaround for
-    // hints having had no owner, and now unnecessary for correctness:
-    // every consumer reads `attributed()` and narration names the right
-    // player. Retiring it measures at plans 74.1% -> 76.2%.
+    // Every side-owned plan survives, carrying its owner. The run-8.5
+    // filter used to DROP any whose parent imbalance leaned the other way,
+    // because with no owner downstream would have narrated them for the
+    // wrong player. That was the right trade when the information did not
+    // exist; now every consumer reads `attributed()`.
     //
-    // It is NOT retired in this commit because doing so has a product
-    // cost that is the maintainer's call, not a metric's: plans the
-    // filter was hiding make more plies eligible for a bounded
-    // suggest-verify job, so batch annotation spends more engine time.
-    // CLAUDE.md #6 keeps the engine off by default, and trading that for
-    // two points of coverage is a decision rather than a tuning step.
-    plans.extend(sided.into_iter().filter_map(|(side, p)| {
-        let side_favors = match side {
+    // It was briefly kept on the grounds that more plans mean more engine
+    // jobs during batch annotation, and CLAUDE.md #6 keeps the engine off
+    // by default. That misreads #6, which permits three things: a fired
+    // WSUI screen, an explicit user request, and USER-INITIATED BATCH
+    // JOBS. Batch annotation is the third. #6 governs the default path —
+    // browsing, stepping through a game — not a job the user launched and
+    // is waiting on.
+    //
+    // And a filter that buys engine time by silently dropping correct
+    // plans pays in the wrong currency. The engine bill is worth
+    // optimising; the set of true statements about the position is not.
+    plans.extend(sided.into_iter().map(|(side, p)| {
+        p.owned_by(match side {
             Color::White => Favors::White,
             Color::Black => Favors::Black,
-        };
-        (f == Favors::Balanced || f == side_favors).then_some(p.owned_by(side_favors))
+        })
     }));
     Some(Imbalance {
         kind: ImbalanceKind::MinorPieces,
@@ -1039,24 +1043,28 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
     // toward that side: hints are attributed to the imbalance's favored
     // side downstream, so a disfavored side's plan would be narrated for
     // the wrong player.
-    // Owners are stamped on; the run-8.5 filter is still here. It DROPS a
-    // plan whose parent imbalance leans the other way — a workaround for
-    // hints having had no owner, and now unnecessary for correctness:
-    // every consumer reads `attributed()` and narration names the right
-    // player. Retiring it measures at plans 74.1% -> 76.2%.
+    // Every side-owned plan survives, carrying its owner. The run-8.5
+    // filter used to DROP any whose parent imbalance leaned the other way,
+    // because with no owner downstream would have narrated them for the
+    // wrong player. That was the right trade when the information did not
+    // exist; now every consumer reads `attributed()`.
     //
-    // It is NOT retired in this commit because doing so has a product
-    // cost that is the maintainer's call, not a metric's: plans the
-    // filter was hiding make more plies eligible for a bounded
-    // suggest-verify job, so batch annotation spends more engine time.
-    // CLAUDE.md #6 keeps the engine off by default, and trading that for
-    // two points of coverage is a decision rather than a tuning step.
-    plans.extend(sided.into_iter().filter_map(|(side, p)| {
-        let side_favors = match side {
+    // It was briefly kept on the grounds that more plans mean more engine
+    // jobs during batch annotation, and CLAUDE.md #6 keeps the engine off
+    // by default. That misreads #6, which permits three things: a fired
+    // WSUI screen, an explicit user request, and USER-INITIATED BATCH
+    // JOBS. Batch annotation is the third. #6 governs the default path —
+    // browsing, stepping through a game — not a job the user launched and
+    // is waiting on.
+    //
+    // And a filter that buys engine time by silently dropping correct
+    // plans pays in the wrong currency. The engine bill is worth
+    // optimising; the set of true statements about the position is not.
+    plans.extend(sided.into_iter().map(|(side, p)| {
+        p.owned_by(match side {
             Color::White => Favors::White,
             Color::Black => Favors::Black,
-        };
-        (f == Favors::Balanced || f == side_favors).then_some(p.owned_by(side_favors))
+        })
     }));
     Some(Imbalance {
         kind: ImbalanceKind::PawnStructure,

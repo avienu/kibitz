@@ -245,8 +245,54 @@ fn annotate_enqueues_suggest_verify_only_at_quiet_plan_plies() {
     for capture in [7, 8, 26, 29] {
         assert!(!sv.contains(&capture), "capture ply {capture}: {sv:?}");
     }
-    for planless in 1..=6 {
-        assert!(!sv.contains(&planless), "plan-less ply {planless}: {sv:?}");
+    // The PROPERTY, not a list of ply indices. `for planless in 1..=6`
+    // was a true statement about a pipeline that filtered plans away, and
+    // editing the list to match new output would be a test rewritten to
+    // fit the data — it would then pass forever regardless of what
+    // happened to plan generation.
+    //
+    // What must hold is the reason: a ply is skipped because the position
+    // offers the side to move no plan, and any ply that DOES get a job
+    // has one. If a ply stops being plan-less next month for a good
+    // reason this notices and says which; if it stops because plan
+    // generation broke, the same assertion fails.
+    let start = cozy_chess::Board::default();
+    let movetext: Vec<u8> = conn
+        .query_row("SELECT movetext FROM games WHERE id = 1", [], |r| r.get(0))
+        .unwrap();
+    let moves = kibitz_db::movebin::decode_game(&start, &movetext).unwrap();
+    for ply_idx in 1..=moves.len() {
+        let ply = ply_idx as u32;
+        let mut b = start.clone();
+        for &mv in &moves[..ply_idx] {
+            b.play(mv);
+        }
+        let record = kibitz_core::analyze(&b);
+        let stm = match b.side_to_move() {
+            cozy_chess::Color::White => kibitz_core::record::Favors::White,
+            cozy_chess::Color::Black => kibitz_core::record::Favors::Black,
+        };
+        let has_plan_for_mover = record
+            .composite_plans
+            .iter()
+            .any(|c| c.favors == stm || c.favors == kibitz_core::record::Favors::Balanced);
+        if sv.contains(&ply) {
+            assert!(
+                has_plan_for_mover,
+                "ply {ply} got a suggest-verify job with no composite plan for the \
+                 side to move — the gate is enqueueing engine work with nothing to \
+                 spend it on: {sv:?}"
+            );
+        } else if !confirms.contains(&ply) {
+            // Not fired, not enqueued: either no plan for the mover, a
+            // capture, or suggest produced nothing. Only the first is
+            // asserted here; the others have their own checks above.
+            let capture = [7u32, 8, 26, 29].contains(&ply);
+            assert!(
+                !has_plan_for_mover || capture,
+                "ply {ply} has a plan for the side to move and was skipped anyway: {sv:?}"
+            );
+        }
     }
     assert_eq!(sv.len() as u32, report.suggest_jobs_enqueued);
 

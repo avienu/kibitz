@@ -189,6 +189,11 @@ enum Command {
         #[arg(default_value = "testdata/private/book-trials")]
         path: PathBuf,
     },
+    /// Compare suggest-verify gate settings: jobs, plans, plans per job.
+    GateStudy {
+        #[arg(default_value = "testdata/private/book-trials")]
+        path: PathBuf,
+    },
     /// Partition the missed book alerts into engine-off cost, static gap,
     /// and screen defect — the split that decides whether 31.2% can move.
     AlertsStudy {
@@ -609,6 +614,10 @@ fn main() -> anyhow::Result<()> {
                 kibitz_db::favorsfit::Label::Outcome
             };
             kibitz_db::favorsfit::run_labelled(&conn, samples, seed, label, nodes)?;
+        }
+        Command::GateStudy { path } => {
+            let corpora = kibitz_db::bookeval::load(&path)?;
+            kibitz_db::bookeval::gate_study(&corpora)?;
         }
         Command::AlertsStudy { path } => {
             let corpora = kibitz_db::bookeval::load(&path)?;

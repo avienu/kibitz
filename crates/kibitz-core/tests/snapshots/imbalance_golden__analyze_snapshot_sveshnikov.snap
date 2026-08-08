@@ -29,6 +29,13 @@ expression: record
       },
       "plans": [
         {
+          "hint": "TradeOrActivateBadBishop",
+          "squares": [
+            "f8"
+          ],
+          "owner": "black"
+        },
+        {
           "hint": "RestrictKnight",
           "squares": [
             "c6",
@@ -53,6 +60,13 @@ expression: record
         "queenside_majority": "white"
       },
       "plans": [
+        {
+          "hint": "AdvanceCentralMajority",
+          "squares": [
+            "d5"
+          ],
+          "owner": "black"
+        },
         {
           "hint": "PressureBackwardPawn",
           "squares": [
@@ -159,6 +173,34 @@ expression: record
       ],
       "score": 1,
       "favors": "white"
+    },
+    {
+      "target": "d5",
+      "hints": [
+        "AdvanceCentralMajority"
+      ],
+      "supporting": [
+        "PawnStructure"
+      ],
+      "squares": [
+        "d5"
+      ],
+      "score": 1,
+      "favors": "black"
+    },
+    {
+      "target": "f8",
+      "hints": [
+        "TradeOrActivateBadBishop"
+      ],
+      "supporting": [
+        "MinorPieces"
+      ],
+      "squares": [
+        "f8"
+      ],
+      "score": 1,
+      "favors": "black"
     }
   ],
   "maneuvers": [

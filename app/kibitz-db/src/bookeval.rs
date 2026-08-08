@@ -236,6 +236,69 @@ pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Three candidate gates for enqueueing a bounded suggest-verify job,
+/// over the same corpus. The deciding column is plans-per-job: coverage
+/// bought per unit of engine time.
+/// A candidate enqueue rule: does this position deserve a bounded
+/// suggest-verify job?
+type Gate = fn(&kibitz_core::record::FeatureRecord, kibitz_core::record::Favors) -> bool;
+
+pub fn gate_study(corpora: &[Corpus]) -> anyhow::Result<()> {
+    let gates: [(&str, Gate); 3] = [
+        ("any plan", |r, _| !r.composite_plans.is_empty()),
+        ("for side to move", |r, stm| {
+            r.composite_plans
+                .iter()
+                .any(|c| c.favors == stm || c.favors == kibitz_core::record::Favors::Balanced)
+        }),
+        ("converging (>=2 supports)", |r, stm| {
+            r.composite_plans.iter().any(|c| {
+                (c.favors == stm || c.favors == kibitz_core::record::Favors::Balanced)
+                    && c.supporting.len() >= 2
+            })
+        }),
+    ];
+    println!(
+        "{:<28} {:>6} {:>8} {:>14}",
+        "gate", "jobs", "plans", "plans / job"
+    );
+    for (name, gate) in gates {
+        let (mut jobs, mut plans) = (0usize, 0usize);
+        for corpus in corpora {
+            for e in &corpus.positions {
+                let Ok(board) = e.fen.parse::<cozy_chess::Board>() else {
+                    continue;
+                };
+                let record = kibitz_core::analyze(&board);
+                let stm = match board.side_to_move() {
+                    cozy_chess::Color::White => kibitz_core::record::Favors::White,
+                    cozy_chess::Color::Black => kibitz_core::record::Favors::Black,
+                };
+                if gate(&record, stm) {
+                    jobs += 1;
+                    // What the user gets for that job: the plans the
+                    // suggestions would be serving.
+                    plans += record
+                        .composite_plans
+                        .iter()
+                        .filter(|c| {
+                            c.favors == stm || c.favors == kibitz_core::record::Favors::Balanced
+                        })
+                        .count();
+                }
+            }
+        }
+        println!(
+            "{:<28} {:>6} {:>8} {:>14.2}",
+            name,
+            jobs,
+            plans,
+            plans as f64 / jobs.max(1) as f64
+        );
+    }
+    Ok(())
+}
+
 /// Plan token a `Maneuver::reason` stands for, where it has one.
 fn maneuver_token(reason: &str) -> Option<&'static str> {
     match reason {
