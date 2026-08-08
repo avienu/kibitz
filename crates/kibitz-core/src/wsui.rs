@@ -483,8 +483,19 @@ fn detect_weak_king(board: &Board, side: Color, cfg: &WsuiConfig, alerts: &mut V
     // Shield defects are only meaningful for a king that has left the
     // central files (castled or manually tucked away); an uncastled king
     // on d/e with its center pawns advanced is normal opening life.
-    let flank_king = !matches!(king.file(), File::D | File::E);
-    if back_ranks.has(king) && flank_king {
+    // A central king is assessed too, but on a stricter test. Excluding
+    // d/e-file kings outright blocked 7 of 11 WeakKing misses by
+    // construction, including an entry titled "king trapped center".
+    // Including them naively fired on White's e1 king on move 7 of a
+    // Sveshnikov and pushed quiet-position firing from 43.2% to 51.6%.
+    //
+    // The difference is what a missing pawn LEAVES BEHIND. In front of a
+    // castled flank king an absent pawn is exposure in itself. In the
+    // centre it is not: the Sveshnikov d-file is stopped by Black's own
+    // backward d6 pawn, so nothing bears on e1 — which is why that king
+    // is safe on move 7 despite two "defects" by the old counting.
+    let central_king = matches!(king.file(), File::D | File::E);
+    if back_ranks.has(king) {
         let kf = king.file() as i8;
         for df in -1..=1i8 {
             let f = kf + df;
@@ -495,10 +506,16 @@ fn detect_weak_king(board: &Board, side: Color, cfg: &WsuiConfig, alerts: &mut V
             let own_pawns_on_file = board.colored_pieces(side, Piece::Pawn) & file.bitboard();
             let enemy_pawns_on_file = board.colored_pieces(enemy, Piece::Pawn) & file.bitboard();
             if own_pawns_on_file.is_empty() {
-                shield_defects.push(format!("{}-file shield pawn missing", file_char(file)));
+                // For a central king the file must be genuinely open —
+                // an enemy pawn stopping it means no line to the king.
+                if !central_king || enemy_pawns_on_file.is_empty() {
+                    shield_defects.push(format!("{}-file shield pawn missing", file_char(file)));
+                }
                 if enemy_pawns_on_file.is_empty() {
                     open_files_at_king.push(file_char(file).to_string());
                 }
+            } else if central_king {
+                // An advanced central pawn is a plan, not an exposure.
             } else {
                 // Advanced shield pawn (beyond the third rank).
                 let advanced = own_pawns_on_file

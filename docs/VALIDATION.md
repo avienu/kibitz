@@ -1099,9 +1099,33 @@ alerts on positions where nothing is wrong. Neither number decides it
 alone, which is the point of having both — and it is a real trade rather
 than the free win the book corpus reported.
 
-The open-file condition identified above should be measured on BOTH axes
-before anything ships: it is expected to keep most of the recall (the
-central-king entries it recovers have genuinely open files) while cutting
-the false positives (the Sveshnikov e1 king does not, because the d-file
-is stopped by Black's own d6 pawn). That is a prediction, and it is now
-falsifiable in both directions instead of one.
+### The open-file condition, predicted and shipped
+
+Prediction, recorded before running and falsifiable in both directions:
+recall keeps at least 3 of the 5 (>= 40.6%) because "trapped in the
+centre" positions have genuinely open lines, and quiet-set firing returns
+to <= 47% because the Sveshnikov d-file is stopped by Black's own pawn.
+If firing stayed near 51.6%, the mechanism was wrong.
+
+Both held, narrowly: **recall 40.6%, firing 46.8%**.
+
+| | book recall | quiet firing | WeakKing/pos |
+|---|---|---|---|
+| shipped (before) | 31.2% | 43.2% | 0.52 |
+| central kings, naive | 46.9% | 51.6% | 0.77 |
+| **central kings, open-file gated** | **40.6%** | **46.8%** | 0.61 |
+
++9.4 points of recall for +3.6 of firing — 2.6 recall points per point of
+false positive, against 1.87 for the naive version. Negatives 14/14.
+
+The mechanism was checked on both ends rather than inferred from the
+totals. The Sveshnikov at move 7 now produces **no alerts at all** and
+does not fire the screen; cbcs-138 "king trapped center" produces
+WeakKing for Black. A missing pawn in front of a castled flank king is
+exposure in itself; in the centre it is only exposure if the file it
+leaves behind is genuinely open.
+
+The Opera Game gained two king alerts and both are right: the d-file
+really is open there (both d-pawns went on moves 3-5), Morphy castles
+away from it shortly after, and Black's e8 king standing on that file is
+the entire game.
