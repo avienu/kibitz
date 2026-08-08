@@ -872,12 +872,24 @@ fn moves_for_hint(
 /// development" degenerates into nonsense at static depth (attack their
 /// home squares?), so prior dreams are never denial targets — one's own
 /// prior dreams still count as constructive strength.
+/// How strong this side's best plan is, for comparing against the
+/// opponent's.
+///
+/// Balanced-owned plans are deliberately EXCLUDED, unlike in
+/// [`opponent_leading_plan`] where they remain eligible as denial
+/// targets. A plan belonging to nobody is evidence about the position,
+/// not about who is better placed to act on it, and counting it for both
+/// sides inflates both equally — which manufactured the tie that made the
+/// prophylaxis gate useless. Measured across the 25 corpus entries
+/// carrying a cited move, own and opponent strength came out 1-versus-1
+/// in nearly every one, and the gate `opp + 1 >= own` opens on a tie.
+/// A gate that opens on a tie opens always.
 fn plan_strength(record: &FeatureRecord, favors: Favors, deniable_only: bool) -> u32 {
     let denied = |hint: &str| deniable_only && crate::development::is_prior_hint(hint);
     let comp = record
         .composite_plans
         .iter()
-        .filter(|c| c.favors == favors || c.favors == Favors::Balanced)
+        .filter(|c| c.favors == favors)
         .filter(|c| c.hints.iter().any(|h| !denied(h)))
         .map(|c| c.score)
         .max()
@@ -888,10 +900,7 @@ fn plan_strength(record: &FeatureRecord, favors: Favors, deniable_only: bool) ->
         .flat_map(|i| {
             i.plans
                 .iter()
-                .filter(move |p| {
-                    let f = effective_favors(&p.hint, i.favors);
-                    (f == favors || f == Favors::Balanced) && !denied(&p.hint)
-                })
+                .filter(move |p| effective_favors(&p.hint, i.favors) == favors && !denied(&p.hint))
                 .map(move |_| magnitude_weight(i.magnitude))
         })
         .max()
@@ -1119,7 +1128,9 @@ pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
     }
 
     // Prophylaxis: when the opponent's best plan rivals ours (within one
-    // point), denial competes with construction.
+    // point), denial competes with construction. Tightening this to
+    // `opp >= own` was tried and made suggest@1 worse (12.0% -> 8.0%) —
+    // the slack is not the problem, the SCORING is: see below.
     let own_strength = plan_strength(record, stm_favors, false);
     let opp_strength = plan_strength(record, opp_favors, true);
     if opp_strength > 0 && opp_strength + 1 >= own_strength {
