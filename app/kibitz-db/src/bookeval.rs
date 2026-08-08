@@ -75,6 +75,167 @@ pub struct Expected {
 
 /// Known PlanHint tokens the engine can emit today. Expected plan tags
 /// outside this list are vocabulary gaps, reported rather than scored.
+/// Does Silman recommend denial or construction, and when?
+///
+/// The engine gives a prophylactic move a bonus that can outrank
+/// executing your own plan, and whether that ranking is right looked like
+/// a design argument. It is not: the corpus carries the author's own
+/// recommendation for every entry with `best_moves`, so the distribution
+/// is measurable. The maintainer's hypothesis is that his prophylactic
+/// picks cluster where the OPPONENT's plan is faster — which would make
+/// the fix a tempo term rather than a weight.
+pub fn prophylaxis_study(corpora: &[Corpus]) -> anyhow::Result<()> {
+    println!(
+        "{:<16} {:<8} {:<14} {:>8} {:>8} {:>9} {:>9}",
+        "entry", "move", "role", "own str", "opp str", "own hzn", "opp hzn"
+    );
+    let (mut denial, mut construct, mut both, mut neither) = (0, 0, 0, 0);
+    let mut denial_opp_faster = 0;
+    let mut construct_opp_faster = 0;
+
+    for corpus in corpora {
+        for e in &corpus.positions {
+            let Some(want) = e.expected.best_moves.first() else {
+                continue;
+            };
+            let Ok(board) = e.fen.parse::<cozy_chess::Board>() else {
+                continue;
+            };
+            let record = kibitz_core::analyze(&board);
+            // Find the legal move whose SAN matches the book's.
+            let mut found = None;
+            board.generate_moves(|pm| {
+                for mv in pm {
+                    if kibitz_core::suggest::san(&board, mv) == *want {
+                        found = Some(mv);
+                        return true;
+                    }
+                }
+                false
+            });
+            let Some(mv) = found else { continue };
+            let r = kibitz_core::suggest::role_of(&record, &board, mv);
+            let role = match (r.constructive.is_empty(), r.blocking.is_empty()) {
+                (false, false) => "both",
+                (false, true) => "constructive",
+                (true, false) => "denial",
+                (true, true) => "neither",
+            };
+            match role {
+                "denial" => denial += 1,
+                "constructive" => construct += 1,
+                "both" => both += 1,
+                _ => neither += 1,
+            }
+            // "Faster" means their cheapest scheme arrives sooner than ours,
+            // or they have a plan on this square and we have none.
+            let opp_faster = match (r.own_horizon, r.opp_horizon) {
+                (Some(o), Some(t)) => t < o,
+                (None, Some(_)) => true,
+                _ => false,
+            };
+            if opp_faster {
+                match role {
+                    "denial" | "both" => denial_opp_faster += 1,
+                    "constructive" => construct_opp_faster += 1,
+                    _ => {}
+                }
+            }
+            println!(
+                "{:<16} {:<8} {:<14} {:>8} {:>8} {:>9} {:>9}",
+                e.id,
+                want,
+                role,
+                r.own_strength,
+                r.opp_strength,
+                r.own_horizon.map(|h| h.to_string()).unwrap_or("—".into()),
+                r.opp_horizon.map(|h| h.to_string()).unwrap_or("—".into()),
+            );
+        }
+    }
+    println!(
+        "\nclassified: {construct} constructive, {denial} denial, {both} both, \
+{neither} neither (the engine recognises no role for those)"
+    );
+    println!(
+        "of the denial/both picks, {denial_opp_faster} sit where the opponent's plan is FASTER"
+    );
+    println!("of the constructive picks, {construct_opp_faster} do");
+    Ok(())
+}
+
+/// Why does the alerts axis sit at 31.2%, and can it move?
+///
+/// The number is uninterpretable on its own. A missed alert falls into
+/// one of three quite different buckets and only one of them is a bug:
+///
+///   * ENGINE-OFF COST — the screen correctly declined to fire, and
+///     seeing the alert needs a search. That is the stated product
+///     principle, not a defect, and it is a ceiling rather than a gap.
+///   * SCREEN DEFECT — the screen DID fire, so the engine would have
+///     been consulted, and we still produced no alert of the expected
+///     kind. Nothing about engine-off explains that one.
+///   * STATIC GAP — the screen did not fire and the expected alert is a
+///     structural feature (a trapped piece, a thin king shelter) that a
+///     detector could catch with the engine off.
+pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
+    println!(
+        "{:<22} {:<22} {:<8} {:<26} {}",
+        "entry", "expected alert", "screen", "bucket", "we produced"
+    );
+    let (mut cost, mut defect, mut gap) = (0, 0, 0);
+    for corpus in corpora {
+        for e in &corpus.positions {
+            let Ok(board) = e.fen.parse::<cozy_chess::Board>() else {
+                continue;
+            };
+            let record = kibitz_core::analyze(&board);
+            let got: Vec<String> = record
+                .wsui
+                .alerts
+                .iter()
+                .map(|a| format!("{:?}", a.kind))
+                .collect();
+            for want in &e.expected.alerts {
+                if got.iter().any(|k| k == want) {
+                    continue; // a hit, not a miss
+                }
+                let fired = record.wsui.screen_fired;
+                // Structural kinds a static detector can own outright.
+                let structural = want == "TrappedPiece" || want == "WeakKing";
+                let bucket = if fired {
+                    defect += 1;
+                    "SCREEN DEFECT"
+                } else if structural {
+                    gap += 1;
+                    "static gap"
+                } else {
+                    cost += 1;
+                    "engine-off cost"
+                };
+                println!(
+                    "{:<22} {:<22} {:<8} {:<26} {}",
+                    e.id,
+                    want,
+                    if fired { "fired" } else { "quiet" },
+                    bucket,
+                    if got.is_empty() {
+                        "nothing".to_string()
+                    } else {
+                        got.join(",")
+                    }
+                );
+            }
+        }
+    }
+    let total = cost + defect + gap;
+    println!("\nmissed alerts: {total}");
+    println!("  engine-off cost  {cost:>3}  screen correctly quiet; seeing it needs a search");
+    println!("  static gap       {gap:>3}  screen quiet, but the feature is structural");
+    println!("  SCREEN DEFECT    {defect:>3}  screen FIRED and we still said nothing of that kind");
+    Ok(())
+}
+
 /// Plan token a `Maneuver::reason` stands for, where it has one.
 fn maneuver_token(reason: &str) -> Option<&'static str> {
     match reason {

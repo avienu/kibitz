@@ -1019,6 +1019,70 @@ fn blocking_moves(
 /// Synthesize up to three candidate moves for the side to move from the
 /// record's plans (see the module docs for the scoring and prophylaxis
 /// rules). `board` must be the record's position.
+/// What role a specific move plays: which of OUR plans it advances, and
+/// which of THEIRS it denies.
+///
+/// Exposed for the corpus study of prophylaxis. The engine's ranking
+/// currently gives a denial bonus that can outrank executing your own
+/// plan, and whether that is right is not a matter of taste — the book
+/// corpus carries Silman's own recommendation for 25 positions, so the
+/// distribution of prophylactic-versus-constructive picks is measurable.
+#[derive(Debug, Default, Clone)]
+pub struct MoveRole {
+    /// Our plans this move advances.
+    pub constructive: Vec<String>,
+    /// Their plans it denies.
+    pub blocking: Vec<String>,
+    /// Magnitude-weighted strength of our plans, and of their deniable ones.
+    pub own_strength: u32,
+    pub opp_strength: u32,
+    /// Cheapest scheme horizon each side owns, in moves. `None` when that
+    /// side has no multi-stage plan — the tempo comparison the maintainer
+    /// proposed needs a speed, and this is the only one we compute.
+    pub own_horizon: Option<u8>,
+    pub opp_horizon: Option<u8>,
+}
+
+pub fn role_of(record: &FeatureRecord, board: &Board, mv: Move) -> MoveRole {
+    let stm = board.side_to_move();
+    let stm_favors = color_favors(stm);
+    let opp_favors = color_favors(!stm);
+    let legal = legal_moves(board);
+    let plans = active_plans(record);
+
+    let mut role = MoveRole {
+        own_strength: plan_strength(record, stm_favors, false),
+        opp_strength: plan_strength(record, opp_favors, true),
+        ..MoveRole::default()
+    };
+    let horizon = |f: Favors| {
+        record
+            .schemes
+            .iter()
+            .filter(|s| s.favors == f)
+            .map(|s| s.horizon)
+            .min()
+    };
+    role.own_horizon = horizon(stm_favors);
+    role.opp_horizon = horizon(opp_favors);
+
+    for p in plans.iter().filter(|p| p.favors == stm_favors) {
+        for (m, _) in moves_for_hint(board, &legal, stm, &p.hint, &p.squares) {
+            if m == mv && !role.constructive.contains(&p.hint) {
+                role.constructive.push(p.hint.clone());
+            }
+        }
+    }
+    if let Some((tokens, squares, target)) = opponent_leading_plan(record, opp_favors) {
+        for (m, _, token) in blocking_moves(board, &legal, stm, &tokens, &squares, target) {
+            if m == mv && !role.blocking.contains(&token) {
+                role.blocking.push(token);
+            }
+        }
+    }
+    role
+}
+
 pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
     let stm = board.side_to_move();
     let stm_favors = color_favors(stm);

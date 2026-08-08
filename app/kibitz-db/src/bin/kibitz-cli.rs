@@ -183,6 +183,18 @@ enum Command {
         #[arg(long, default_value_t = 200_000)]
         nodes: u64,
     },
+    /// Classify each book-recommended move as denial or construction,
+    /// with the tempo comparison, to settle how prophylaxis should rank.
+    ProphylaxisStudy {
+        #[arg(default_value = "testdata/private/book-trials")]
+        path: PathBuf,
+    },
+    /// Partition the missed book alerts into engine-off cost, static gap,
+    /// and screen defect — the split that decides whether 31.2% can move.
+    AlertsStudy {
+        #[arg(default_value = "testdata/private/book-trials")]
+        path: PathBuf,
+    },
     /// Score the analyzer against a private book-trial corpus
     /// (testdata/private/book-trials). Path may be a file or directory.
     BookEval {
@@ -597,6 +609,14 @@ fn main() -> anyhow::Result<()> {
                 kibitz_db::favorsfit::Label::Outcome
             };
             kibitz_db::favorsfit::run_labelled(&conn, samples, seed, label, nodes)?;
+        }
+        Command::AlertsStudy { path } => {
+            let corpora = kibitz_db::bookeval::load(&path)?;
+            kibitz_db::bookeval::alerts_study(&corpora)?;
+        }
+        Command::ProphylaxisStudy { path } => {
+            let corpora = kibitz_db::bookeval::load(&path)?;
+            kibitz_db::bookeval::prophylaxis_study(&corpora)?;
         }
         Command::BookEval { path, verbose } => {
             let corpora = kibitz_db::bookeval::load(&path)?;
