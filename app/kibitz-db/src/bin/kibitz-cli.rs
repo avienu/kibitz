@@ -189,6 +189,12 @@ enum Command {
         #[arg(default_value = "testdata/private/book-trials")]
         path: PathBuf,
     },
+    /// Alert false-positive rate over engine-quiet master positions —
+    /// the cost term the book corpus cannot measure.
+    AlertsFp {
+        #[arg(default_value = "testdata/corpus/quiet_fens.txt")]
+        path: PathBuf,
+    },
     /// Compare suggest-verify gate settings: jobs, plans, plans per job.
     GateStudy {
         #[arg(default_value = "testdata/private/book-trials")]
@@ -614,6 +620,9 @@ fn main() -> anyhow::Result<()> {
                 kibitz_db::favorsfit::Label::Outcome
             };
             kibitz_db::favorsfit::run_labelled(&conn, samples, seed, label, nodes)?;
+        }
+        Command::AlertsFp { path } => {
+            kibitz_db::bookeval::alerts_fp(&path)?;
         }
         Command::GateStudy { path } => {
             let corpora = kibitz_db::bookeval::load(&path)?;

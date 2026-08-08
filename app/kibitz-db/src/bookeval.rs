@@ -271,6 +271,59 @@ enough to fire the screen.",
 /// Three candidate gates for enqueueing a bounded suggest-verify job,
 /// over the same corpus. The deciding column is plans-per-job: coverage
 /// bought per unit of engine time.
+/// False-positive side of the alerts axis.
+///
+/// The book corpus scores alerts on RECALL only — its 14 negative
+/// anchors cover imbalances and plans, and there are none for alerts. So
+/// a sensitivity change that recovers five expectations and simultaneously
+/// starts alerting on healthy positions scores as a clean +5, which is
+/// how a gain and a regression come to look identical.
+///
+/// This is the denominator: engine-quiet positions from master games
+/// (both sides 2300+, |eval| < 50cp at 200k nodes — the set built for the
+/// WSUI validation). Nothing here is a tactic, so every alert is a cost
+/// and every screen firing buys an engine job for nothing.
+pub fn alerts_fp(path: &std::path::Path) -> anyhow::Result<()> {
+    let text = std::fs::read_to_string(path)?;
+    let fens: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    let cfg = kibitz_core::wsui::WsuiConfig::default();
+    let (mut fired, mut weak_king, mut trapped, mut undef, mut inadeq) = (0, 0, 0, 0, 0);
+    let mut n = 0;
+    for fen in &fens {
+        let Ok(board) = fen.parse::<cozy_chess::Board>() else {
+            continue;
+        };
+        n += 1;
+        let r = kibitz_core::wsui::screen(&board, &cfg);
+        if r.screen_fired {
+            fired += 1;
+        }
+        for a in &r.alerts {
+            match a.kind {
+                kibitz_core::record::AlertKind::WeakKing => weak_king += 1,
+                kibitz_core::record::AlertKind::TrappedPiece => trapped += 1,
+                kibitz_core::record::AlertKind::Undefended => undef += 1,
+                kibitz_core::record::AlertKind::InadequatelyDefended => inadeq += 1,
+            }
+        }
+    }
+    let pct = |k: usize| k as f64 / n.max(1) as f64 * 100.0;
+    println!("engine-quiet master positions: {n}");
+    println!("  screen fires        {fired:>5}  ({:.1}%)", pct(fired));
+    println!(
+        "  WeakKing alerts     {weak_king:>5}  ({:.2} per position)",
+        weak_king as f64 / n.max(1) as f64
+    );
+    println!(
+        "  TrappedPiece        {trapped:>5}  ({:.2} per position)",
+        trapped as f64 / n.max(1) as f64
+    );
+    println!("  Undefended          {undef:>5}");
+    println!("  InadequatelyDefended{inadeq:>5}");
+    println!("\nNothing here is a tactic. Every alert is a cost and every firing buys an engine job for nothing.");
+    Ok(())
+}
+
 /// A candidate enqueue rule: does this position deserve a bounded
 /// suggest-verify job?
 type Gate = fn(&kibitz_core::record::FeatureRecord, kibitz_core::record::Favors) -> bool;

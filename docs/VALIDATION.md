@@ -1057,3 +1057,51 @@ Untested.
 And the alerts axis needs negative anchors of its own before any
 sensitivity change can be trusted — every gain here is currently measured
 without a cost term.
+
+## The alerts axis gets a cost term
+
+The book corpus scores alerts on recall alone — its 14 negative anchors
+cover imbalances and plans, and there are none for alerts. A sensitivity
+change that recovers five expectations while starting to alert on healthy
+positions therefore scores as a clean +5. That is how a gain and a
+regression come to look identical, and it is why the WeakKing experiment
+above was not shipped on its book number.
+
+`kibitz-cli alerts-fp` supplies the denominator: the 500 engine-quiet
+master positions built for the WSUI validation (both sides 2300+,
+|eval| < 50cp at 200k nodes). Nothing in that set is a tactic, so every
+alert is a cost and every screen firing buys an engine job for nothing.
+
+### Baseline, shipped detector
+
+| measure | value |
+|---|---|
+| screen fires | **43.2%** (216/500) |
+| WeakKing alerts | 258 (0.52 per position) |
+| TrappedPiece | 49 (0.10 per position) |
+| Undefended | 713 |
+| InadequatelyDefended | 102 |
+
+43.2% is consistent with the 39.2% holdout FP rate recorded for the
+screen in run 3 — a different sample of the same behaviour, and the
+architecture expects it: a fired screen costs one bounded engine job
+whose verdict annotates the alert.
+
+### The WeakKing trade, both sides
+
+| | book recall | screen fires on quiet | WeakKing alerts |
+|---|---|---|---|
+| shipped | 31.2% | 43.2% | 258 |
+| central kings included | **46.9%** | **51.6%** | 386 |
+
++15.7 points of recall for +8.4 points of firing and 50% more WeakKing
+alerts on positions where nothing is wrong. Neither number decides it
+alone, which is the point of having both — and it is a real trade rather
+than the free win the book corpus reported.
+
+The open-file condition identified above should be measured on BOTH axes
+before anything ships: it is expected to keep most of the recall (the
+central-king entries it recovers have genuinely open files) while cutting
+the false positives (the Sveshnikov e1 king does not, because the d-file
+is stopped by Black's own d6 pawn). That is a prediction, and it is now
+falsifiable in both directions instead of one.
