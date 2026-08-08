@@ -474,33 +474,76 @@ jobs:
           node scripts/release/generate_latest_json.mjs \
             --version "$VERSION" --dir dist --out dist/latest.json \
             --notes "Kibitz $VERSION — see CHANGELOG.md"
-      - name: Write release notes stub
+      # The notes are a DOWNLOAD PAGE, not a description of one. v0.1.0
+      # shipped with a platform table whose filenames were inline code —
+      # it rendered as text, the maintainer tried to click it, and the
+      # real files were in the collapsed Assets section further down that
+      # a reader scanning top-down never reaches. Same shape as the
+      # signing guard checking filenames instead of signatures: a thing
+      # that reads as coverage and is not.
+      #
+      # So the links are built from the files actually collected, and the
+      # step fails if a platform we declare support for has nothing to
+      # link to. A plausible-looking dead link is worse than no link.
+      - name: Write release notes
         run: |
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           {
             echo "Kibitz $VERSION."
             echo
-            # Two independent facts, stated independently. Keying the
-            # signing banner off the UPDATER key was its own quiet lie: a
-            # build could hold the updater key, ship unsigned Windows
-            # binaries, and still announce "Signed bundles".
+            echo "## Download"
+            echo
+            echo "Click the one for your machine:"
+            echo
+          } > notes.md
+
+          link() { # label, glob
+            f=$(find dist -maxdepth 1 -type f -name "$2" | head -1)
+            if [ -z "$f" ]; then
+              echo "::error::no artifact matching '$2' to link for \"$1\". The \
+          release notes are the download page; a platform with nothing to link to \
+          must not render as an empty row."
+              return 1
+            fi
+            n=$(basename "$f")
+            echo "- **$1** — [$n]($base/$n)" >> notes.md
+          }
+          link "macOS — Apple Silicon"   '*aarch64.dmg'
+          link "macOS — Intel"           '*x64.dmg'
+          link "Windows — installer"     '*-setup.exe'
+          link "Windows — MSI"           '*.msi'
+          link "Linux — AppImage"        '*.AppImage'
+          link "Linux — Debian/Ubuntu"   '*.deb'
+
+          {
+            echo
+            echo "---"
+            echo
+            if [ "${{ steps.winverify.outputs.signed }}" = "false" ]; then
+              echo "> **The Windows installers here are UNSIGNED.** SmartScreen will"
+              echo "> warn and name no publisher. Built without Artifact Signing"
+              echo "> configured — see docs/RELEASING.md."
+            elif [ "${{ steps.winverify.outputs.signed }}" = "true" ]; then
+              echo "**Windows: expect one SmartScreen prompt.** The installers are signed"
+              echo "and the signature is verified before publishing, but SmartScreen earns"
+              echo "its reputation from download volume and a new publisher starts at zero."
+              echo "Click **More info**, check it names the publisher rather than *Unknown"
+              echo "publisher*, then **Run anyway**. It fades as installs accumulate."
+            fi
+            echo
             if [ "${{ steps.gate.outputs.updater }}" = "true" ]; then
               echo "Auto-update feed included (latest.json)."
             else
               echo "> No auto-update feed for this build (updater key absent)."
-              echo
-            fi
-            if [ "${{ steps.winverify.outputs.signed }}" = "false" ]; then
-              echo "> **The Windows installers in this release are UNSIGNED.** Windows"
-              echo "> SmartScreen will warn on first run and name no publisher. This build"
-              echo "> was produced without Artifact Signing configured. See docs/RELEASING.md."
-            elif [ "${{ steps.winverify.outputs.signed }}" = "true" ]; then
-              echo "Windows installers are signed by Shawn O'Connor Enterprises, Inc."
-              echo "and their signatures were verified before publishing."
             fi
             echo
-            echo "_Draft — replace this stub with the matching CHANGELOG.md section before publishing (docs/RELEASE_CHECKLIST.md)._"
-          } > notes.md
+            echo "---"
+            echo
+            echo "_Draft — replace this section with the matching CHANGELOG.md entry before publishing (docs/RELEASE_CHECKLIST.md)._"
+          } >> notes.md
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
