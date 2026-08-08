@@ -180,8 +180,8 @@ pub fn prophylaxis_study(corpora: &[Corpus]) -> anyhow::Result<()> {
 ///     detector could catch with the engine off.
 pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
     println!(
-        "{:<22} {:<22} {:<8} {:<26} {}",
-        "entry", "expected alert", "screen", "bucket", "we produced"
+        "{:<22} {:<22} {:<8} {:<26} we produced",
+        "entry", "expected alert", "screen", "bucket"
     );
     let (mut cost, mut defect, mut gap) = (0, 0, 0);
     for corpus in corpora {
