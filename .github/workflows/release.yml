@@ -240,6 +240,27 @@ jobs:
           spctl -a -vvv -t install "$app"
           hdiutil detach /tmp/kibitz-verify
 
+      # Tauri names the macOS updater bundle `Kibitz.app.tar.gz` with no
+      # architecture in it, so BOTH macOS legs upload the same filename and
+      # download-artifact --merge-multiple silently keeps one. v0.1.0 shipped
+      # with the generator logging "cannot detect arch in Kibitz.app.tar.gz"
+      # and macOS auto-update simply absent. Stamp the arch on before it
+      # leaves the runner; the .sig has to travel with it.
+      - name: Name the macOS updater bundle for its architecture
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          arch="${{ matrix.rust_target }}"
+          arch="${arch%%-*}"
+          while IFS= read -r f; do
+            case "$f" in
+              *.sig) mv "$f" "${f%Kibitz.app.tar.gz.sig}Kibitz_${arch}.app.tar.gz.sig" ;;
+              *)     mv "$f" "${f%Kibitz.app.tar.gz}Kibitz_${arch}.app.tar.gz" ;;
+            esac
+          done < <(find app/src-tauri/target -type f \
+                     \( -name 'Kibitz.app.tar.gz' -o -name 'Kibitz.app.tar.gz.sig' \))
+          find app/src-tauri/target -name 'Kibitz_*.app.tar.gz*' -exec basename {} \;
+
       - name: Collect bundles
         run: |
           mkdir -p dist-bundles
@@ -249,6 +270,7 @@ jobs:
           # setup .exe, plus their updater signatures.
           find "$BUNDLE_DIR" -type f -path '*/release/bundle/*' \
             \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \
+               -o -name '*_*.app.tar.gz' -o -name '*_*.app.tar.gz.sig' \
                -o -name '*.AppImage' -o -name '*.AppImage.sig' -o -name '*.deb' \
                -o -name '*.msi' -o -name '*.msi.sig' \
                -o -name '*-setup.exe' -o -name '*-setup.exe.sig' \) \
@@ -485,6 +507,27 @@ jobs:
       # So the links are built from the files actually collected, and the
       # step fails if a platform we declare support for has nothing to
       # link to. A plausible-looking dead link is worse than no link.
+      # v0.1.0 published a feed covering linux-x86_64 alone. Both macOS
+      # legs and Windows were simply missing, and all three existing guards
+      # passed — they assert that installers are present, and that Windows
+      # installers are signed. Nobody was asserting that the thing which
+      # delivers the NEXT version knows these platforms exist.
+      - name: The updater feed covers every declared platform
+        if: steps.gate.outputs.updater == 'true'
+        run: |
+          set -euo pipefail
+          have=$(jq -r '.platforms | keys[]' dist/latest.json | sort)
+          want=$(jq -r '.targets[].updater' .github/release-targets.json | sort -u)
+          echo "  declared: $(echo "$want" | tr '\n' ' ')"
+          echo "  in feed:  $(echo "$have" | tr '\n' ' ')"
+          missing=$(comm -23 <(echo "$want") <(echo "$have"))
+          if [ -n "$missing" ]; then
+            echo "::error::latest.json is missing $(echo "$missing" | tr '\n' ' ')- these \
+          platforms get an installer from this release and would never be offered the next \
+          one. Every other guard passes on this, which is how v0.1.0 shipped it."
+            exit 1
+          fi
+
       - name: Write release notes
         run: |
           set -euo pipefail

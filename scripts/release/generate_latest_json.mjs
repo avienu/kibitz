@@ -14,6 +14,8 @@
  *   *.app.tar.gz  + .sig  → darwin-<arch>   (aarch64|arm64 → aarch64, x86_64|x64 → x86_64,
  *                                            universal → darwin-universal)
  *   *.AppImage    + .sig  → linux-<arch>    (amd64|x86_64 → x86_64, aarch64|arm64 → aarch64)
+ *   *-setup.exe   + .sig  → windows-<arch>  (the NSIS installer is Tauri's Windows
+ *                                            updater target; the .msi is not)
  *
  * URLs point at the GitHub release download path for tag v<version> on
  * avienu/kibitz. Exits 1 if no platform entry could be built (a feed with an
@@ -70,6 +72,9 @@ for (const path of files) {
   let os = null;
   if (name.endsWith(".app.tar.gz")) os = "darwin";
   else if (name.endsWith(".AppImage")) os = "linux";
+  // Windows was simply absent from this mapping until v0.1.0 shipped a
+  // feed that no Windows install would ever match.
+  else if (name.endsWith("-setup.exe")) os = "windows";
   else continue;
 
   const sigPath = files.find((f) => f === `${path}.sig`);

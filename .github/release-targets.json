@@ -14,6 +14,12 @@
     "meant to police repeats that. Adding a platform means adding it HERE,",
     "and the pipeline follows.",
     "",
+    "`updater` is the Tauri platform key this target must appear under in",
+    "latest.json. It is declared here for the same reason `requires` is: the",
+    "publish guard asserts it, so a platform cannot be supported by the",
+    "installer and silently unsupported by auto-update. v0.1.0 shipped a feed",
+    "covering Linux alone and every existing guard passed.",
+    "",
     "`requires` are globs matched against the collected artifacts; every",
     "one must be present or the release refuses to publish. Architecture is",
     "part of a target, not a detail of one: macOS ships two DMGs because an",
@@ -22,6 +28,7 @@
   "targets": [
     {
       "name": "macos-aarch64",
+      "updater": "darwin-aarch64",
       "label": "macOS · Apple Silicon",
       "os": "macos-latest",
       "bundles": "app,dmg",
@@ -30,6 +37,7 @@
     },
     {
       "name": "macos-x86_64",
+      "updater": "darwin-x86_64",
       "label": "macOS · Intel",
       "os": "macos-latest",
       "bundles": "app,dmg",
@@ -38,6 +46,7 @@
     },
     {
       "name": "linux-x86_64",
+      "updater": "linux-x86_64",
       "label": "Linux · x86-64",
       "os": "ubuntu-22.04",
       "bundles": "appimage,deb",
@@ -46,6 +55,7 @@
     },
     {
       "name": "windows-x86_64",
+      "updater": "windows-x86_64",
       "label": "Windows · 64-bit",
       "os": "windows-latest",
       "bundles": "nsis,msi",
