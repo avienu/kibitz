@@ -981,3 +981,79 @@ The detector finding stands unchanged — PawnStructure leans on two
 positions in three at 60% and is right 68% when it commits. What is no
 longer true is that raising this particular threshold is the way to act
 on it.
+
+## Naming the 13, and one WeakKing experiment that measured its own cost
+
+### The 13 have a name now
+
+"Screen defect" was withdrawn as wrong — the screen fired, so the engine
+WAS consulted — and the bucket then had no label, which is worse than a
+wrong one. Three readings were possible: no alert downstream of a
+consultation, an alert of the wrong kind, or the right alert sorted out
+of view. `screen_trace` settles it, and the screen neither truncates nor
+suppresses, so nothing is sorted away.
+
+**"Silent, screen fired", n=13.** The expected detector reported zero;
+other detectors fired the screen anyway.
+
+All 21 non-engine-off misses share that one cause. They differ only in
+consequence — whether other evidence sufficed to fire the screen (13) or
+not (8, filed separately, where the engine is never consulted and
+engine-off is honoured by accident).
+
+`detect_trapped` now returns `Scanned::Yes | Scanned::NoNullMove` rather
+than an empty list for both. It is not the cause of anything today — the
+exit fired in none of the 22 — but a detector that reports "nothing here"
+when it means "could not evaluate" is an accessor you cannot audit.
+
+### WeakKing: a structural exclusion, and why removing it did not ship
+
+Shield defects were computed only for a king on the a-c or f-h files.
+A king on d/e got no shield analysis at all, which blocked **7 of the 11
+WeakKing misses by construction** — including one entry literally titled
+"king trapped center".
+
+Prediction before running: removing the restriction moves some of the 7
+central-king entries and **none** of the 4 flank ones, whose zero must
+come from elsewhere. Any flank movement is instrument failure.
+
+**Held exactly.** Five moved — cbcs-138, cbcs-195, htryc-369-37,
+htryc-386-169, htryc-391-200 — all central-king, no flank entry touched.
+Alerts 31.2% -> **46.9%**, negatives 14/14 still clean.
+
+**It is not shipped, because the corpus could not see its cost.** The
+Sveshnikov tabiya then reports White's e1 king as weak on move 7, and
+half a sample of quiet master middlegames began firing the screen. The
+book corpus has no negative anchors for alerts, so it scored this as a
+pure +5.
+
+Calling that Sveshnikov reading "normal opening play" was too glib, and
+the maintainer pushed back correctly: an uncastled king DOES grow more
+dangerous as pieces come out. The mechanism is OPEN LINES, and this
+position is the exception that names the missing condition — the e-file
+is locked (e4 against e5) and the d-file is half-open FOR WHITE, blocked
+by the very d6 pawn White is attacking. Black's queen on d8 is looking at
+her own backward pawn. Nothing bears on e1.
+
+The detector fired on "d-file shield pawn missing" without asking whether
+the resulting file was open. A missing shield pawn in front of a flank
+king exposes it; a missing central pawn does not, if the file is stopped
+by an enemy pawn or locked. That is the defect, and it is the same
+refinement flagged below — with the correction that it is not merely a
+better gate for central kings, it is the condition the feature always
+meant.
+
+Gating central-king analysis on lost castling rights removes every false
+positive (0 of 6 quiet positions fire) and every gain (back to 31.2%).
+The reason is a property of the CORPUS, not the idea: reconstructed FENs
+carry castling rights as transcription assumptions, so the flag does not
+mean what it means in a real game.
+
+What remains is position-based, and is now the primary hypothesis rather
+than a fallback: count a missing shield pawn only where the file it
+leaves behind is genuinely open — no pawn of either colour on it — and,
+for a central king, only where an enemy major already bears down it.
+Untested.
+And the alerts axis needs negative anchors of its own before any
+sensitivity change can be trusted — every gain here is currently measured
+without a cost term.

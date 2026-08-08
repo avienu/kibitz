@@ -172,9 +172,14 @@ pub fn prophylaxis_study(corpora: &[Corpus]) -> anyhow::Result<()> {
 ///   * ENGINE-OFF COST — the screen correctly declined to fire, and
 ///     seeing the alert needs a search. That is the stated product
 ///     principle, not a defect, and it is a ceiling rather than a gap.
-///   * SCREEN DEFECT — the screen DID fire, so the engine would have
-///     been consulted, and we still produced no alert of the expected
-///     kind. Nothing about engine-off explains that one.
+///   * SILENT, SCREEN FIRED — the expected detector produced nothing, and
+///     other detectors fired the screen anyway, so the engine WAS
+///     consulted. Named precisely because the earlier label "screen
+///     defect" was wrong: the screen behaved correctly. Three readings
+///     were possible — no alert downstream of a consultation, an alert of
+///     the wrong kind, or the right alert sorted out of view — and
+///     screen_trace settles it: the detector reported zero. The screen
+///     neither truncates nor suppresses, so nothing was sorted away.
 ///   * STATIC GAP — the screen did not fire and the expected alert is a
 ///     structural feature (a trapped piece, a thin king shelter) that a
 ///     detector could catch with the engine off.
@@ -211,7 +216,7 @@ pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
                 let structural = want == "TrappedPiece" || want == "WeakKing";
                 let bucket = if fired {
                     defect += 1;
-                    "SCREEN DEFECT"
+                    "silent, screen fired"
                 } else if structural {
                     gap += 1;
                     "static gap"
@@ -250,7 +255,16 @@ pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
     println!("\nmissed alerts: {total}");
     println!("  engine-off cost  {cost:>3}  screen correctly quiet; seeing it needs a search");
     println!("  static gap       {gap:>3}  screen quiet, but the feature is structural");
-    println!("  SCREEN DEFECT    {defect:>3}  screen FIRED and we still said nothing of that kind");
+    println!(
+        "  silent, screen fired {defect:>3}  the expected detector produced nothing; OTHER \
+detectors fired the screen, so the engine was consulted anyway"
+    );
+    println!(
+        "\nAll {} non-engine-off misses share one cause: the expected detector reported \
+zero (screen_trace). They differ only in consequence — whether other evidence was \
+enough to fire the screen.",
+        defect + gap
+    );
     Ok(())
 }
 

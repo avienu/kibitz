@@ -149,7 +149,7 @@ pub fn screen(board: &Board, cfg: &WsuiConfig) -> WsuiReport {
     let mut alerts = Vec::new();
     for side in [stm, !stm] {
         detect_undefended_and_inadequate(board, side, cfg, &mut alerts);
-        detect_trapped(board, side, &mut alerts);
+        let _ = detect_trapped(board, side, &mut alerts);
         detect_weak_king(board, side, cfg, &mut alerts);
     }
     // Most severe first within the stable side order.
@@ -296,7 +296,19 @@ fn detect_undefended_and_inadequate(
 }
 
 /// S — pieces with no safe square, including the attackable check.
-fn detect_trapped(board: &Board, side: Color, alerts: &mut Vec<TacticAlert>) {
+/// Whether a detector actually examined the position, as distinct from
+/// examining it and finding nothing. A detector returning an empty list
+/// for both is an accessor you cannot audit: the caller sees zero and
+/// cannot tell a clean bill of health from a skipped scan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scanned {
+    Yes,
+    /// The side is not to move and the mover is in check, so no null-move
+    /// board exists to generate replies on. Nothing was examined.
+    NoNullMove,
+}
+
+fn detect_trapped(board: &Board, side: Color, alerts: &mut Vec<TacticAlert>) -> Scanned {
     let enemy = !side;
     let occ = board.occupied();
     let own_pieces = board.colors(side)
@@ -313,7 +325,9 @@ fn detect_trapped(board: &Board, side: Color, alerts: &mut Vec<TacticAlert>) {
     } else {
         board.null_move()
     };
-    let Some(probe) = probe_board else { return };
+    let Some(probe) = probe_board else {
+        return Scanned::NoNullMove;
+    };
 
     let mut dest_map: Vec<(Square, BitBoard)> = Vec::new();
     probe.generate_moves(|pm| {
@@ -396,6 +410,7 @@ fn detect_trapped(board: &Board, side: Color, alerts: &mut Vec<TacticAlert>) {
             engine_check: None,
         });
     }
+    Scanned::Yes
 }
 
 /// SEE against the piece that just moved to `sq` (it is now the victim).
