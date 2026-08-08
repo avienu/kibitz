@@ -139,6 +139,7 @@ mod tests {
     fn hint(h: &str, sqs: &[&str]) -> PlanHint {
         PlanHint {
             hint: h.into(),
+            owner: None,
             squares: sqs.iter().map(|s| s.to_string()).collect(),
         }
     }

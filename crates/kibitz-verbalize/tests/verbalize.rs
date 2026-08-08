@@ -117,6 +117,7 @@ fn quiet_record() -> FeatureRecord {
             evidence: evidence(&[("isolated_black", serde_json::json!(["d5"]))]),
             plans: vec![PlanHint {
                 hint: "BlockadeThenPressure".into(),
+                owner: None,
                 squares: vec!["d4".into(), "d5".into()],
             }],
         },
@@ -131,6 +132,7 @@ fn quiet_record() -> FeatureRecord {
             ]),
             plans: vec![PlanHint {
                 hint: "OpenThePosition".into(),
+                owner: None,
                 squares: vec![],
             }],
         },
@@ -141,6 +143,7 @@ fn quiet_record() -> FeatureRecord {
             evidence: evidence(&[("established_outpost_black", serde_json::json!("e4"))]),
             plans: vec![PlanHint {
                 hint: "ManeuverKnight".into(),
+                owner: None,
                 squares: vec!["f6".into(), "e4".into()],
             }],
         },
@@ -160,6 +163,7 @@ fn endgame_record() -> FeatureRecord {
             evidence: evidence(&[("passed_white", serde_json::json!(["a5"]))]),
             plans: vec![PlanHint {
                 hint: "EscortThePasser".into(),
+                owner: None,
                 squares: vec!["a5".into(), "a6".into(), "a7".into(), "a8".into()],
             }],
         },
@@ -343,6 +347,7 @@ fn full_coverage_record() -> FeatureRecord {
             ]),
             plans: vec![PlanHint {
                 hint: "KeepPositionClosed".into(),
+                owner: None,
                 squares: vec![],
             }],
         },
@@ -365,10 +370,12 @@ fn full_coverage_record() -> FeatureRecord {
             plans: vec![
                 PlanHint {
                     hint: "AdvanceQueensideMajority".into(),
+                    owner: None,
                     squares: vec![],
                 },
                 PlanHint {
                     hint: "BlockadeBlackPasser".into(),
+                    owner: None,
                     squares: vec!["h3".into()],
                 },
             ],
@@ -396,6 +403,7 @@ fn full_coverage_record() -> FeatureRecord {
             ]),
             plans: vec![PlanHint {
                 hint: "DoubleOnOpenFile".into(),
+                owner: None,
                 squares: vec![],
             }],
         },
@@ -421,6 +429,7 @@ fn full_coverage_record() -> FeatureRecord {
             ]),
             plans: vec![PlanHint {
                 hint: "UseSpaceAvoidExchanges".into(),
+                owner: None,
                 squares: vec![],
             }],
         },
@@ -434,6 +443,7 @@ fn full_coverage_record() -> FeatureRecord {
             ]),
             plans: vec![PlanHint {
                 hint: "OpenPositionBeforeOpponentCompletes".into(),
+                owner: None,
                 squares: vec![],
             }],
         },

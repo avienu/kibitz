@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -138,6 +138,38 @@ pub struct PlanHint {
     pub hint: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub squares: Vec<String>,
+    /// Whose plan this is (schema v5).
+    ///
+    /// Before v5 a hint had no owner and consumers inferred one from the
+    /// parent imbalance's `favors`, which is wrong whenever the parent is
+    /// Balanced: RookBehindPasser is White's plan about White's passer
+    /// whatever the pawn-structure verdict happens to be. That inference
+    /// forced TakeOpposition onto `Maneuver`, blocked the PawnStructure
+    /// lean-threshold change, and is the sole reason the sided-plan filter
+    /// exists — a workaround that DROPS correct hints it cannot attribute.
+    ///
+    /// `None` means genuinely nobody's: a blockade belongs to whoever
+    /// faces the passer, and `plans.rs` re-attributes those by name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<Favors>,
+}
+
+impl PlanHint {
+    /// A hint nobody owns — the caller either does not know or the plan
+    /// genuinely belongs to whoever the position hands it to.
+    pub fn new(hint: impl Into<String>, squares: Vec<String>) -> Self {
+        Self {
+            hint: hint.into(),
+            squares,
+            owner: None,
+        }
+    }
+
+    /// The same hint, owned.
+    pub fn owned_by(mut self, owner: Favors) -> Self {
+        self.owner = Some(owner);
+        self
+    }
 }
 
 /// One positional imbalance (docs/KIBITZ_ENGINE_SPEC.md Stage 2).
@@ -472,6 +504,7 @@ mod tests {
                 plans: vec![PlanHint {
                     hint: "BlockadeThenPressure".into(),
                     squares: vec!["d4".into(), "d5".into()],
+                    owner: None,
                 }],
             }],
             composite_plans: vec![],
@@ -486,7 +519,7 @@ mod tests {
         let json = serde_json::to_string_pretty(&record).unwrap();
         // Spec-sketch spellings must hold exactly.
         for needle in [
-            "\"schema_version\": 4",
+            "\"schema_version\": 5",
             "\"side_to_move\": \"white\"",
             "\"phase\": \"middlegame\"",
             "\"kind\": \"InadequatelyDefended\"",

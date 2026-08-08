@@ -3,7 +3,7 @@ source: crates/kibitz-core/src/record.rs
 expression: json
 ---
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "fen": "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2",
   "side_to_move": "white",
   "phase": "middlegame",

@@ -162,7 +162,7 @@ fn sveshnikov_composite_plan_converges_on_d5() {
 fn analyze_snapshot_sveshnikov() {
     let b = board("r1bqkb1r/pp3ppp/2np1n2/1N2p3/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 7");
     let record = kibitz_core::analyze(&b);
-    assert_eq!(record.schema_version, 4);
+    assert_eq!(record.schema_version, 5);
     insta::assert_json_snapshot!(record, {
         ".provenance.version" => "[version]",
     });

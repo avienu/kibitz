@@ -70,6 +70,7 @@ fn fixture_record() -> FeatureRecord {
             evidence,
             plans: vec![PlanHint {
                 hint: "BlockadeThenPressure".into(),
+                owner: None,
                 squares: vec!["d4".into(), "d5".into()],
             }],
         }],

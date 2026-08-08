@@ -211,6 +211,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                 color,
                 PlanHint {
                     hint: "HuntBishopPair".into(),
+                    owner: None,
                     squares: vec![square_name(knight), square_name(bishop)],
                 },
             ));
@@ -272,6 +273,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                     color,
                     PlanHint {
                         hint: "TradeOrActivateBadBishop".into(),
+                        owner: None,
                         squares: vec![square_name(b)],
                     },
                 ));
@@ -359,6 +361,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                 color,
                 PlanHint {
                     hint: "RestrictKnight".into(),
+                    owner: None,
                     squares: eknights.into_iter().map(square_name).collect(),
                 },
             ));
@@ -370,6 +373,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     if white_wants_closed || black_wants_closed {
         plans.push(PlanHint {
             hint: "KeepPositionClosed".into(),
+            owner: None,
             squares: vec![],
         });
     }
@@ -381,6 +385,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     if pair_edge || mix_edge {
         plans.push(PlanHint {
             hint: "OpenPositionForBishops".into(),
+            owner: None,
             squares: vec![],
         });
     }
@@ -396,12 +401,18 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     } else {
         favors(score, 20, 45)?
     };
+    // The owner is stamped on rather than inferred. The filter below is
+    // the run-8.5 workaround for hints having no owner: it DROPS a plan
+    // whose parent imbalance leans the other way, because downstream
+    // would otherwise narrate it for the wrong player. It is kept here
+    // unchanged so this commit is a provably neutral refactor; retiring
+    // it is the next step and needs its own measurement.
     plans.extend(sided.into_iter().filter_map(|(side, p)| {
         let side_favors = match side {
             Color::White => Favors::White,
             Color::Black => Favors::Black,
         };
-        (f == Favors::Balanced || f == side_favors).then_some(p)
+        (f == Favors::Balanced || f == side_favors).then_some(p.owned_by(side_favors))
     }));
     Some(Imbalance {
         kind: ImbalanceKind::MinorPieces,
@@ -623,6 +634,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 Color::White,
                 PlanHint {
                     hint: "AdvanceQueensideMajority".into(),
+                    owner: None,
                     squares: vec![],
                 },
             ));
@@ -634,6 +646,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 Color::Black,
                 PlanHint {
                     hint: "AdvanceQueensideMajority".into(),
+                    owner: None,
                     squares: vec![],
                 },
             ));
@@ -675,6 +688,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 color,
                 PlanHint {
                     hint: "AdvanceCentralMajority".into(),
+                    owner: None,
                     squares: vec![square_name(front)],
                 },
             ));
@@ -712,6 +726,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                     color,
                     PlanHint {
                         hint: "MinorityAttack".into(),
+                        owner: None,
                         squares,
                     },
                 ));
@@ -770,6 +785,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 color,
                 PlanHint {
                     hint: "WingPawnStormClosedCenter".into(),
+                    owner: None,
                     squares,
                 },
             ));
@@ -796,6 +812,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                     !color,
                     PlanHint {
                         hint: "PressureDoubledPawn".into(),
+                        owner: None,
                         squares: vec![square_name(p)],
                     },
                 ));
@@ -821,6 +838,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                         !color,
                         PlanHint {
                             hint: "PressureBackwardPawn".into(),
+                            owner: None,
                             squares: vec![square_name(p), square_name(stop)],
                         },
                     ));
@@ -854,6 +872,10 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                         }
                         .into(),
                         squares: vec![square_name(stop)],
+                        // Blockades belong to whoever FACES the passer, and
+                        // plans.rs re-attributes them by name — so this one
+                        // is genuinely ownerless rather than unknown.
+                        owner: None,
                     });
                 }
                 // Tarrasch: the rook belongs behind the passer — worth
@@ -870,6 +892,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                             color,
                             PlanHint {
                                 hint: "RookBehindPasser".into(),
+                                owner: None,
                                 squares: vec![square_name(p), square_name(behind)],
                             },
                         ));
@@ -893,6 +916,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 if !already {
                     plans.push(PlanHint {
                         hint: "BlockadeThenPressure".into(),
+                        owner: None,
                         squares: vec![square_name(p), square_name(stop)],
                     });
                 }
@@ -915,6 +939,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                     color,
                     PlanHint {
                         hint: "ActivateKingInEndgame".into(),
+                        owner: None,
                         squares: vec![square_name(target)],
                     },
                 ));
@@ -993,6 +1018,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 color,
                 PlanHint {
                     hint: "CreatePassedPawn".into(),
+                    owner: None,
                     squares: vec![square_name(candidate)],
                 },
             ));
@@ -1007,12 +1033,18 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
     // toward that side: hints are attributed to the imbalance's favored
     // side downstream, so a disfavored side's plan would be narrated for
     // the wrong player.
+    // The owner is stamped on rather than inferred. The filter below is
+    // the run-8.5 workaround for hints having no owner: it DROPS a plan
+    // whose parent imbalance leans the other way, because downstream
+    // would otherwise narrate it for the wrong player. It is kept here
+    // unchanged so this commit is a provably neutral refactor; retiring
+    // it is the next step and needs its own measurement.
     plans.extend(sided.into_iter().filter_map(|(side, p)| {
         let side_favors = match side {
             Color::White => Favors::White,
             Color::Black => Favors::Black,
         };
-        (f == Favors::Balanced || f == side_favors).then_some(p)
+        (f == Favors::Balanced || f == side_favors).then_some(p.owned_by(side_favors))
     }));
     Some(Imbalance {
         kind: ImbalanceKind::PawnStructure,
@@ -1272,6 +1304,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
         for r in on7th {
             plans.push(PlanHint {
                 hint: "RookToSeventh".into(),
+                owner: None,
                 squares: vec![square_name(r)],
             });
         }
@@ -1300,6 +1333,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
             if !(rooks & file.bitboard()).is_empty() {
                 plans.push(PlanHint {
                     hint: "RookToSeventh".into(),
+                    owner: None,
                     squares: vec![square_name(entry)],
                 });
                 continue;
@@ -1320,6 +1354,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
             };
             plans.push(PlanHint {
                 hint: "ManeuverRookToOpenFile".into(),
+                owner: None,
                 squares: std::iter::once(rook)
                     .chain(r.via.iter().copied())
                     .chain([r.to])
@@ -1351,6 +1386,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
             let file = File::index((fname.as_bytes()[0] - b'a') as usize);
             plans.push(PlanHint {
                 hint: "OpenLinesTowardWeakKing".into(),
+                owner: None,
                 squares: vec![square_name(Square::new(file, entry_rank))],
             });
             score += if color == Color::White { 15 } else { -15 };
@@ -1364,6 +1400,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
     if !open.is_empty() {
         plans.push(PlanHint {
             hint: "DoubleOnOpenFile".into(),
+            owner: None,
             squares: vec![],
         });
     }
@@ -1767,30 +1804,35 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
             );
             plans.push(PlanHint {
                 hint: "AttackWhereYouAreStronger".into(),
+                owner: None,
                 squares: vec![square_name(board.king(!color))],
             });
         }
         for pawn in weak_pawn_targets(board, color) {
             plans.push(PlanHint {
                 hint: "TargetWeakPawn".into(),
+                owner: None,
                 squares: vec![square_name(pawn)],
             });
         }
         if let Some(p) = best_piece(board, color) {
             plans.push(PlanHint {
                 hint: "KeepBestPiece".into(),
+                owner: None,
                 squares: vec![square_name(p)],
             });
         }
         if let Some(a) = attacker_to_trade(board, color) {
             plans.push(PlanHint {
                 hint: "TradeOffAttacker".into(),
+                owner: None,
                 squares: vec![square_name(a)],
             });
         }
         for (wanted, defender) in square_defender_trades(board, color) {
             plans.push(PlanHint {
                 hint: "TradeSquareDefender".into(),
+                owner: None,
                 squares: vec![square_name(defender), square_name(wanted)],
             });
         }
@@ -1801,12 +1843,14 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
             // who-is-better vote — and the same holds here.
             plans.push(PlanHint {
                 hint: "UndermineDefender".into(),
+                owner: None,
                 squares: vec![square_name(defender), square_name(wanted)],
             });
         }
         for point in overprotect_squares(board, color) {
             plans.push(PlanHint {
                 hint: "OverprotectStrongPoint".into(),
+                owner: None,
                 squares: vec![square_name(point)],
             });
             evidence.insert(
@@ -1855,6 +1899,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
                 let moves = route.len() as i32 + 1;
                 plans.push(PlanHint {
                     hint: "ManeuverKnightToOutpost".into(),
+                    owner: None,
                     squares: std::iter::once(n)
                         .chain(route)
                         .chain([target])
@@ -1909,6 +1954,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
             {
                 plans.push(PlanHint {
                     hint: "ManeuverBishopToSupportPoint".into(),
+                    owner: None,
                     squares: std::iter::once(b)
                         .chain(r.via.iter().copied())
                         .chain([r.to])
@@ -2102,6 +2148,7 @@ pub fn space(board: &Board) -> Option<Imbalance> {
     // them that way): keep pieces on, use the extra room.
     let plans = vec![PlanHint {
         hint: "UseSpaceAvoidExchanges".into(),
+        owner: None,
         squares: vec![],
     }];
     Some(Imbalance {
@@ -2145,6 +2192,7 @@ pub fn development(board: &Board) -> Option<Imbalance> {
     let (f, m) = favors(diff, 36, 72)?;
     let plans = vec![PlanHint {
         hint: "OpenPositionBeforeOpponentCompletes".into(),
+        owner: None,
         squares: vec![],
     }];
     Some(Imbalance {

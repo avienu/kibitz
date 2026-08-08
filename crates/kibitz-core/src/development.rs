@@ -316,6 +316,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
             );
             plans.push(PlanHint {
                 hint: "CompleteDevelopment".into(),
+                owner: None,
                 squares: sqs(&dev.sleeping_minors),
             });
         }
@@ -326,6 +327,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
                 }
                 plans.push(PlanHint {
                     hint: "CastleIntoSafety".into(),
+                    owner: None,
                     squares: vec![sq(king), sq(rook)],
                 });
             } else if dev.king_in_center {
@@ -339,6 +341,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
             );
             plans.push(PlanHint {
                 hint: "ClaimTheCenter".into(),
+                owner: None,
                 squares: sqs(&dev.center_advances),
             });
         }
@@ -346,6 +349,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
             evidence.insert(format!("queen_sortie_{suffix}"), json!(sq(queen)));
             plans.push(PlanHint {
                 hint: "QueenAheadOfHerArmy".into(),
+                owner: None,
                 squares: vec![sq(queen)],
             });
         }
@@ -356,6 +360,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
             );
             plans.push(PlanHint {
                 hint: "SamePieceWandering".into(),
+                owner: None,
                 squares: vec![sq(square)],
             });
         }
