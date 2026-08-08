@@ -64,13 +64,8 @@ pub fn synthesize(imbalances: &[Imbalance]) -> Vec<CompositePlan> {
             let Some(target_file) = plan.squares.last().and_then(|s| file_of(s)) else {
                 continue; // square-less hints don't cluster
             };
-            // A blockade is the DEFENDER's plan: it clusters with the side
-            // facing the passer, not the side the parent imbalance favors.
-            let hint_favors = match plan.hint.as_str() {
-                "BlockadeWhitePasser" => Favors::Black,
-                "BlockadeBlackPasser" => Favors::White,
-                _ => imb.favors,
-            };
+            // Whose plan it is, from the hint itself where it says so.
+            let hint_favors = plan.attributed(imb.favors);
             let c = clusters
                 .entry((favors_key(hint_favors), target_file))
                 .or_default();

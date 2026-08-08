@@ -70,8 +70,23 @@ pub fn annotate_game(
                     // engine-cleared candidates to show. Fired plies get
                     // the same review via their wsui-confirm job instead.
                     // Enqueue-only; idempotent per (game, ply).
-                    if !record.composite_plans.is_empty()
-                        && !crate::narrate::is_capture_ply(&board_before, *mv)
+                    // A plan for the side TO MOVE, not merely a plan. We
+                    // suggest moves for whoever is on move, so a ply whose
+                    // only plans belong to the opponent buys a bounded
+                    // engine job and nothing to spend it on. This used to
+                    // read "any composite plan exists", which was
+                    // indistinguishable while the sided-plan filter was
+                    // dropping the opponent's plans for us. Correct either
+                    // way, and it becomes load-bearing the moment that
+                    // filter retires — engine work stays off by default
+                    // (CLAUDE.md #6).
+                    if record.composite_plans.iter().any(|c| {
+                        let stm: kibitz_core::record::Favors = match board.side_to_move() {
+                            cozy_chess::Color::White => kibitz_core::record::Favors::White,
+                            cozy_chess::Color::Black => kibitz_core::record::Favors::Black,
+                        };
+                        c.favors == stm || c.favors == kibitz_core::record::Favors::Balanced
+                    }) && !crate::narrate::is_capture_ply(&board_before, *mv)
                         && !kibitz_core::suggest::suggest(&record, &board).is_empty()
                     {
                         let (_, created) = crate::jobs::enqueue_suggest_verify(

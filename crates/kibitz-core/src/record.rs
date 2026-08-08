@@ -155,6 +155,18 @@ pub struct PlanHint {
 }
 
 impl PlanHint {
+    /// Whose plan this is, for consumers that must attribute it.
+    ///
+    /// The explicit owner wins. Blockades stay a named special case
+    /// because they are the one family whose owner is the OPPOSITE of the
+    /// side the parent imbalance favours — a passer is an asset to its
+    /// owner and a problem for the other player, and the plan is the
+    /// other player's. Everything else falls back to the parent only
+    /// because older records carry no owner at all.
+    pub fn attributed(&self, parent: Favors) -> Favors {
+        attribute(&self.hint, self.owner, parent)
+    }
+
     /// A hint nobody owns — the caller either does not know or the plan
     /// genuinely belongs to whoever the position hands it to.
     pub fn new(hint: impl Into<String>, squares: Vec<String>) -> Self {
@@ -169,6 +181,20 @@ impl PlanHint {
     pub fn owned_by(mut self, owner: Favors) -> Self {
         self.owner = Some(owner);
         self
+    }
+}
+
+/// Whose plan a hint is. Free-standing because `CompositePlan` carries
+/// bare hint strings with no owner to consult, and both shapes must reach
+/// the same verdict or attribution differs by which consumer asks.
+pub fn attribute(hint: &str, owner: Option<Favors>, parent: Favors) -> Favors {
+    if let Some(o) = owner {
+        return o;
+    }
+    match hint {
+        "BlockadeWhitePasser" => Favors::Black,
+        "BlockadeBlackPasser" => Favors::White,
+        _ => parent,
     }
 }
 

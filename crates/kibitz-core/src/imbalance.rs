@@ -401,12 +401,18 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     } else {
         favors(score, 20, 45)?
     };
-    // The owner is stamped on rather than inferred. The filter below is
-    // the run-8.5 workaround for hints having no owner: it DROPS a plan
-    // whose parent imbalance leans the other way, because downstream
-    // would otherwise narrate it for the wrong player. It is kept here
-    // unchanged so this commit is a provably neutral refactor; retiring
-    // it is the next step and needs its own measurement.
+    // Owners are stamped on; the run-8.5 filter is still here. It DROPS a
+    // plan whose parent imbalance leans the other way — a workaround for
+    // hints having had no owner, and now unnecessary for correctness:
+    // every consumer reads `attributed()` and narration names the right
+    // player. Retiring it measures at plans 74.1% -> 76.2%.
+    //
+    // It is NOT retired in this commit because doing so has a product
+    // cost that is the maintainer's call, not a metric's: plans the
+    // filter was hiding make more plies eligible for a bounded
+    // suggest-verify job, so batch annotation spends more engine time.
+    // CLAUDE.md #6 keeps the engine off by default, and trading that for
+    // two points of coverage is a decision rather than a tuning step.
     plans.extend(sided.into_iter().filter_map(|(side, p)| {
         let side_favors = match side {
             Color::White => Favors::White,
@@ -1033,12 +1039,18 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
     // toward that side: hints are attributed to the imbalance's favored
     // side downstream, so a disfavored side's plan would be narrated for
     // the wrong player.
-    // The owner is stamped on rather than inferred. The filter below is
-    // the run-8.5 workaround for hints having no owner: it DROPS a plan
-    // whose parent imbalance leans the other way, because downstream
-    // would otherwise narrate it for the wrong player. It is kept here
-    // unchanged so this commit is a provably neutral refactor; retiring
-    // it is the next step and needs its own measurement.
+    // Owners are stamped on; the run-8.5 filter is still here. It DROPS a
+    // plan whose parent imbalance leans the other way — a workaround for
+    // hints having had no owner, and now unnecessary for correctness:
+    // every consumer reads `attributed()` and narration names the right
+    // player. Retiring it measures at plans 74.1% -> 76.2%.
+    //
+    // It is NOT retired in this commit because doing so has a product
+    // cost that is the maintainer's call, not a metric's: plans the
+    // filter was hiding make more plies eligible for a bounded
+    // suggest-verify job, so batch annotation spends more engine time.
+    // CLAUDE.md #6 keeps the engine off by default, and trading that for
+    // two points of coverage is a decision rather than a tuning step.
     plans.extend(sided.into_iter().filter_map(|(side, p)| {
         let side_favors = match side {
             Color::White => Favors::White,

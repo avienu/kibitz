@@ -92,12 +92,8 @@ struct ActivePlan {
     favors: Favors,
 }
 
-fn effective_favors(hint: &str, favors: Favors) -> Favors {
-    match hint {
-        "BlockadeWhitePasser" => Favors::Black,
-        "BlockadeBlackPasser" => Favors::White,
-        _ => favors,
-    }
+fn effective_favors(plan: &crate::record::PlanHint, favors: Favors) -> Favors {
+    plan.attributed(favors)
 }
 
 fn magnitude_weight(m: crate::record::Magnitude) -> u32 {
@@ -143,7 +139,7 @@ fn active_plans(record: &FeatureRecord) -> Vec<ActivePlan> {
             out.push(ActivePlan {
                 hint: plan.hint.clone(),
                 squares: plan.squares.clone(),
-                favors: effective_favors(&plan.hint, imb.favors),
+                favors: effective_favors(plan, imb.favors),
             });
         }
     }
@@ -156,7 +152,7 @@ fn active_plans(record: &FeatureRecord) -> Vec<ActivePlan> {
             out.push(ActivePlan {
                 hint: hint.clone(),
                 squares: cp.squares.clone(),
-                favors: effective_favors(hint, cp.favors),
+                favors: crate::record::attribute(hint, None, cp.favors),
             });
         }
     }
@@ -900,7 +896,7 @@ fn plan_strength(record: &FeatureRecord, favors: Favors, deniable_only: bool) ->
         .flat_map(|i| {
             i.plans
                 .iter()
-                .filter(move |p| effective_favors(&p.hint, i.favors) == favors && !denied(&p.hint))
+                .filter(move |p| effective_favors(p, i.favors) == favors && !denied(&p.hint))
                 .map(move |_| magnitude_weight(i.magnitude))
         })
         .max()
@@ -940,7 +936,7 @@ fn opponent_leading_plan(
     let mut best: Option<(u32, &crate::record::PlanHint)> = None;
     for imb in &record.imbalances {
         for plan in &imb.plans {
-            let f = effective_favors(&plan.hint, imb.favors);
+            let f = effective_favors(plan, imb.favors);
             if (f != opp && f != Favors::Balanced) || crate::development::is_prior_hint(&plan.hint)
             {
                 continue;

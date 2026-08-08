@@ -1208,13 +1208,13 @@ fn pawn_owner(board: &Board, squares: &[String]) -> Option<SideColor> {
 }
 
 pub(crate) fn render_plan(plan: &PlanHint, favors: Favors, index: usize, voice: Voice) -> String {
-    // A blockade is the DEFENDER's plan: attribute it to the side facing
-    // the passer, whatever the parent imbalance favors.
-    let favors = match plan.hint.as_str() {
-        "BlockadeWhitePasser" => Favors::Black,
-        "BlockadeBlackPasser" => Favors::White,
-        _ => favors,
-    };
+    // Whose plan it is, from the hint. This was the third copy of a
+    // name-based guess at attribution, and it is the one that MATTERS:
+    // the other two decide ranking, this one decides which player the
+    // sentence names. Retiring the sided-plan filter means plans owned by
+    // the side the imbalance disfavours now reach here, so reading the
+    // owner is what makes that safe rather than a regression.
+    let favors = plan.attributed(favors);
     let hint_key = format!("plan.{}", plan.hint);
     let known = lookup_voiced(voice, &[hint_key.as_str()]);
     let action = if known.is_empty() {

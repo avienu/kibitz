@@ -12,9 +12,7 @@ expression: pgn
 [ECO "C41"]
 
 1. e4 {Still in the book — theory has walked this road.} 1... e5 2. Nf3 d6 3.
-d4 Bg4 $2 4. dxe5 {The whole position is pointing at e2 — every signpost reads
-the same: roll the central majority through it and pry open lines toward the
-king there.} 4... Bxf3 {Half of White's army is still dreaming on the back rank
+d4 Bg4 $2 4. dxe5 Bxf3 {Half of White's army is still dreaming on the back rank
 — development first. Among the sleepers on b1, c1 and f1, the knights already
 know where they are going — the bishops are waiting to find out. White's king
 is still standing in the middle of the road, and castling is right there
