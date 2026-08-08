@@ -63,9 +63,52 @@ impl Rng {
     }
 }
 
+/// How a sampled position gets its label.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Label {
+    /// Who went on to win. A PRACTICAL signal, and the honest answer to
+    /// "who has the easier game" — but it is settled thirty moves later,
+    /// so it systematically under-credits slow structural advantages
+    /// relative to immediate ones. Pawn structure is the slowest-acting
+    /// imbalance on the board and therefore the worst served by it.
+    Outcome,
+    /// What an engine thinks of the POSITION. Answers a different
+    /// question — is the assessment right, rather than did they win — and
+    /// is the fairer yardstick for anything that pays off slowly.
+    Engine,
+}
+
 /// Sample middlegame positions from decisive master games and label each
-/// by who went on to win.
+/// by who went on to win, or by what an engine makes of the position.
 pub fn collect(conn: &Connection, want: usize, seed: u64) -> Result<Vec<Sample>> {
+    collect_labelled(conn, want, seed, Label::Outcome, 0)
+}
+
+pub fn collect_labelled(
+    conn: &Connection,
+    want: usize,
+    seed: u64,
+    label_kind: Label,
+    nodes: u64,
+) -> Result<Vec<Sample>> {
+    let mut engine = if label_kind == Label::Engine {
+        let path = crate::engine::resolve_engine_path()
+            .ok_or_else(|| anyhow::anyhow!("no engine binary found"))?;
+        Some(crate::engine::Engine::spawn(&path)?)
+    } else {
+        None
+    };
+    collect_inner(conn, want, seed, label_kind, nodes, &mut engine)
+}
+
+fn collect_inner(
+    conn: &Connection,
+    want: usize,
+    seed: u64,
+    label_kind: Label,
+    nodes: u64,
+    engine: &mut Option<crate::engine::Engine>,
+) -> Result<Vec<Sample>> {
     let mut stmt = conn.prepare(
         "SELECT movetext, result FROM games
          WHERE COALESCE(white_elo,0) >= 2300 AND COALESCE(black_elo,0) >= 2300
@@ -121,10 +164,41 @@ pub fn collect(conn: &Connection, want: usize, seed: u64) -> Result<Vec<Sample>>
         if features.iter().all(|f| *f == 0) {
             continue; // nothing to learn from a reading with no lean
         }
-        out.push(Sample {
-            features,
-            label: if *result == 1 { 1 } else { -1 },
-        });
+        let label = match label_kind {
+            Label::Outcome => {
+                if *result == 1 {
+                    1
+                } else {
+                    -1
+                }
+            }
+            Label::Engine => {
+                let line = engine
+                    .as_mut()
+                    .expect("engine present for Label::Engine")
+                    .eval_nodes(&b.to_string(), nodes)?;
+                // Engine scores are from the side to move; normalise to
+                // White's point of view so the label means the same thing
+                // as an outcome label does.
+                let cp = if b.side_to_move() == cozy_chess::Color::White {
+                    line.score_cp
+                } else {
+                    -line.score_cp
+                };
+                // A position the engine calls level has no side to be
+                // right about; excluding it is not cherry-picking, it is
+                // declining to grade an unanswered question.
+                if line.mate.is_none() && cp.abs() < 30 {
+                    continue;
+                }
+                if cp > 0 {
+                    1
+                } else {
+                    -1
+                }
+            }
+        };
+        out.push(Sample { features, label });
         if out.len() % 500 == 0 {
             eprintln!("sampled {}", out.len());
         }
@@ -299,7 +373,17 @@ fn fit_shared_ladder(train: &[Sample]) -> ([i32; 16], i32) {
 }
 
 pub fn run(conn: &Connection, want: usize, seed: u64) -> Result<()> {
-    let samples = collect(conn, want, seed)?;
+    run_labelled(conn, want, seed, Label::Outcome, 0)
+}
+
+pub fn run_labelled(
+    conn: &Connection,
+    want: usize,
+    seed: u64,
+    label_kind: Label,
+    nodes: u64,
+) -> Result<()> {
+    let samples = collect_labelled(conn, want, seed, label_kind, nodes)?;
     if samples.len() < 100 {
         anyhow::bail!("only {} samples; need at least 100", samples.len());
     }

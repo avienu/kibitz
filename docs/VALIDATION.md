@@ -755,3 +755,61 @@ either a corpus that can separate two models this near, or a detector
 change that makes Minor readings rarer and sharper rather than a vote
 change that discounts them after the fact. The second is the better
 lead: `PawnStructure` leaning on two positions in three is the finding.
+
+## Is the yardstick fair? (the maintainer's challenge)
+
+Reading "PawnStructure fits lowest" as "pawn structure does not matter"
+would be wrong, and the maintainer pushed back on the measurement itself:
+*are we evaluating correctly?*
+
+The challenge lands. Labelling a random middlegame ply by **who won the
+game** is a practical signal and the honest answer to "who has the easier
+game" — but it is settled thirty moves later. Material is immediate; a
+backward pawn is a mortgage that may not be foreclosed before a blunder
+decides the game. So outcome-labelling systematically under-credits
+slow-acting imbalances, and pawn structure is the slowest on the board.
+
+`favors-fit --engine` re-labels the same positions by what Stockfish
+makes of the POSITION (120k nodes, |eval| >= 30cp, level positions
+excluded rather than graded). That asks *was the assessment right*
+instead of *did they win*.
+
+| kind | by outcome | by engine | delta |
+|---|---|---|---|
+| Material | 70.1% | 76.8% | +6.7 |
+| Initiative | 63.9% | 71.7% | +7.8 |
+| **Space** | 57.0% | **66.7%** | **+9.7** |
+| **Development** | 54.4% | **63.8%** | **+9.4** |
+| PawnStructure | 59.5% | 64.7% | +5.2 |
+| FilesDiagonals | 57.8% | 58.1% | +0.3 |
+| MinorPieces | 56.5% | 59.5% | +3.0 |
+| SquaresOutposts | 54.5% | 57.5% | +3.0 |
+
+**The bias is real and it is not evenly spread.** Space and Development
+gain nearly ten points apiece — they are slow, and outcomes were
+punishing them for it. The shipped weights were fitted on outcome labels
+and are therefore too low for those two.
+
+**But it does not explain PawnStructure.** Refitting entirely on engine
+labels still puts it lowest, at 2/5. Under both yardsticks it leans on
+about two positions in three — more than any other detector — while
+Material leans on half and is right three times in four. Over-leaning is
+the diagnosis, and it survives the fairer measure. Its Minor band is
+61.8% against 72.9% for Clear+, an eleven-point gap, the largest of the
+eight.
+
+`SquaresOutposts` is lowest-accuracy under **both** yardsticks (54.5%,
+57.5%). That finding is robust; nothing about the labelling rescues it.
+
+### Neither yardstick is ground truth
+
+Outcomes under-credit slow factors. Engine evals are another engine's
+opinion, and asking a positional analyzer to agree with Stockfish's
+positional model is circular in a way that flatters agreement. The book
+corpus is the only concept-aligned measure and is n=99 in aggregate, too
+small to separate per-kind claims.
+
+So the weights are not being refit on the engine labels either. What the
+comparison establishes is narrower and more useful: the outcome-fitted
+weights under-serve Space and Development specifically, and the
+PawnStructure calibration finding is not a measurement artifact.

@@ -174,6 +174,14 @@ enum Command {
         samples: usize,
         #[arg(long, default_value_t = 0xC0FFEE)]
         seed: u64,
+        /// Label by what an engine makes of the POSITION rather than by
+        /// who won the game. Slow-acting imbalances are under-credited by
+        /// outcomes settled thirty moves later; this asks whether the
+        /// assessment was right instead.
+        #[arg(long)]
+        engine: bool,
+        #[arg(long, default_value_t = 200_000)]
+        nodes: u64,
     },
     /// Score the analyzer against a private book-trial corpus
     /// (testdata/private/book-trials). Path may be a file or directory.
@@ -577,8 +585,18 @@ fn main() -> anyhow::Result<()> {
                     / st.elapsed.as_secs_f64().max(1e-9)
             );
         }
-        Command::FavorsFit { samples, seed } => {
-            kibitz_db::favorsfit::run(&conn, samples, seed)?;
+        Command::FavorsFit {
+            samples,
+            seed,
+            engine,
+            nodes,
+        } => {
+            let label = if engine {
+                kibitz_db::favorsfit::Label::Engine
+            } else {
+                kibitz_db::favorsfit::Label::Outcome
+            };
+            kibitz_db::favorsfit::run_labelled(&conn, samples, seed, label, nodes)?;
         }
         Command::BookEval { path, verbose } => {
             let corpora = kibitz_db::bookeval::load(&path)?;
