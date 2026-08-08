@@ -180,8 +180,8 @@ pub fn prophylaxis_study(corpora: &[Corpus]) -> anyhow::Result<()> {
 ///     detector could catch with the engine off.
 pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
     println!(
-        "{:<22} {:<22} {:<8} {:<26} we produced",
-        "entry", "expected alert", "screen", "bucket"
+        "{:<20} {:<20} {:<7} {:<16} {:<7} we produced",
+        "entry", "expected alert", "screen", "bucket", "det"
     );
     let (mut cost, mut defect, mut gap) = (0, 0, 0);
     for corpus in corpora {
@@ -196,6 +196,12 @@ pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
                 .iter()
                 .map(|a| format!("{:?}", a.kind))
                 .collect();
+            // Pre-arbitration counts. The screen does not arbitrate — all
+            // three detectors append and it only sorts — so this
+            // distinguishes "fired and lost" from "never fired", which
+            // have opposite fixes.
+            let trace =
+                kibitz_core::wsui::screen_trace(&board, &kibitz_core::wsui::WsuiConfig::default());
             for want in &e.expected.alerts {
                 if got.iter().any(|k| k == want) {
                     continue; // a hit, not a miss
@@ -213,12 +219,24 @@ pub fn alerts_study(corpora: &[Corpus]) -> anyhow::Result<()> {
                     cost += 1;
                     "engine-off cost"
                 };
+                let n = match want.as_str() {
+                    "TrappedPiece" => trace.trapped,
+                    "WeakKing" => trace.weak_king,
+                    "Undefended" => trace.undefended,
+                    _ => trace.inadequate,
+                };
                 println!(
-                    "{:<22} {:<22} {:<8} {:<26} {}",
+                    "{:<20} {:<20} {:<7} {:<16} det={:<3} {}{}",
                     e.id,
                     want,
                     if fired { "fired" } else { "quiet" },
                     bucket,
+                    n,
+                    if trace.trapped_skipped.is_empty() {
+                        ""
+                    } else {
+                        "TRAPPED-SKIPPED "
+                    },
                     if got.is_empty() {
                         "nothing".to_string()
                     } else {

@@ -87,6 +87,63 @@ fn names(bb: BitBoard) -> Vec<String> {
 }
 
 /// Run the full screen for both sides; side to move's problems first.
+/// What each detector produced, per side, before anything downstream
+/// looks at the result.
+///
+/// The screen does not arbitrate — all three detectors append to one vec
+/// and it is only sorted by severity — so a kind missing from the output
+/// genuinely did not fire. That is worth being able to SHOW rather than
+/// assert, because "TrappedPiece is insensitive" and "TrappedPiece fired
+/// and lost" have opposite fixes, and lowering a threshold on a detector
+/// that is already firing produces no change and reads as blindness.
+///
+/// `trapped_skipped` is the one silent exit in the whole screen:
+/// `detect_trapped` needs a board it can generate moves on, and for the
+/// side NOT to move that means a null move, which is unavailable when the
+/// mover is in check. The detector then returns having examined nothing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScreenTrace {
+    pub undefended: usize,
+    pub inadequate: usize,
+    pub trapped: usize,
+    pub weak_king: usize,
+    /// Sides for which detect_trapped exited without examining anything.
+    pub trapped_skipped: Vec<crate::record::SideColor>,
+}
+
+pub fn screen_trace(board: &Board, cfg: &WsuiConfig) -> ScreenTrace {
+    let stm = board.side_to_move();
+    let mut t = ScreenTrace::default();
+    for side in [stm, !side_of(stm)] {
+        let mut ud = Vec::new();
+        detect_undefended_and_inadequate(board, side, cfg, &mut ud);
+        t.undefended += ud
+            .iter()
+            .filter(|a| a.kind == crate::record::AlertKind::Undefended)
+            .count();
+        t.inadequate += ud
+            .iter()
+            .filter(|a| a.kind == crate::record::AlertKind::InadequatelyDefended)
+            .count();
+
+        let mut tr = Vec::new();
+        detect_trapped(board, side, &mut tr);
+        t.trapped += tr.len();
+        if board.side_to_move() != side && board.null_move().is_none() {
+            t.trapped_skipped.push(side.into());
+        }
+
+        let mut wk = Vec::new();
+        detect_weak_king(board, side, cfg, &mut wk);
+        t.weak_king += wk.len();
+    }
+    t
+}
+
+fn side_of(c: Color) -> Color {
+    c
+}
+
 pub fn screen(board: &Board, cfg: &WsuiConfig) -> WsuiReport {
     let stm = board.side_to_move();
     let mut alerts = Vec::new();

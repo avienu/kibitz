@@ -925,3 +925,59 @@ a plan per job is not an efficiency win, it is a coverage cut wearing
 one. "Any plan" is nearly identical in cost and strictly worse in
 principle — it enqueues work for plies whose only plans belong to the
 opponent, which is engine time bought with nothing to spend it on.
+
+## Alerts: arbitration ruled out, and the PawnStructure threshold withdrawn
+
+### Is TrappedPiece firing and losing, or not firing?
+
+Opposite fixes, so it was instrumented rather than assumed.
+`wsui::screen_trace` reports each detector's output before anything
+downstream sees it. Two facts fell out immediately:
+
+- **The screen does not arbitrate.** All three detectors append to one
+  vec and it is only sorted by severity. Nothing is suppressed.
+- `detect_trapped` has the screen's one silent exit: for the side NOT to
+  move it needs a null-move board, which is unavailable when the mover is
+  in check, and it then returns having examined nothing.
+
+Positive control first, per §0.9 — the Noah's-Ark trapped bishop, where
+TrappedPiece is known to fire and to survive to the output. The trace
+reports `trapped: 1` and the output carries the alert, so the instrument
+returns a positive and a zero elsewhere is a measurement.
+
+Over the 22 misses: **the expected detector reports zero in every single
+one**, and `trapped_skipped` never fires. Arbitration is not the cause,
+the null-move exit is not the cause, and these are genuine non-firings.
+The fix is sensitivity, and lowering a threshold will actually move
+something.
+
+One correction to the earlier bucket names, because it changes what to
+file. "Screen defect" was the wrong label for the 13: in those the screen
+FIRED, so the engine would have been consulted — the expected alert kind
+simply never appeared. The under-firing concern belongs to the 8 QUIET
+ones, and there it is real and worth naming: `decide()` fires on the
+alerts it is given, so a silent detector KEEPS THE SCREEN QUIET. In those
+eight positions the engine-off principle is being honoured by accident
+rather than by design.
+
+### PawnStructure lean threshold: withdrawn
+
+Raising it 15 -> 45 was measured before and after retiring the
+sided-plan filter, and the gains it appeared to offer were an artifact of
+the interaction:
+
+| | before (filter present) | after (filter retired) |
+|---|---|---|
+| plans | 74.1% -> 74.8% | 76.2% -> 76.2% |
+| suggest@1 | 8.0% -> 12.0% | 8.0% -> 8.0% |
+| favors | 68.7% -> 67.7% | 68.7% -> 67.7% |
+
+With owners surviving a Balanced parent, the change buys **nothing
+measurable** and still costs a point of favors, and it now breaks a
+second citation-backed golden (`sveshnikov_d5_hole_and_backward_d6`)
+rather than the first. Not shipped.
+
+The detector finding stands unchanged — PawnStructure leans on two
+positions in three at 60% and is right 68% when it commits. What is no
+longer true is that raising this particular threshold is the way to act
+on it.
