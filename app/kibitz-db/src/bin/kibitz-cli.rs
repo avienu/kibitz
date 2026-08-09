@@ -216,6 +216,15 @@ enum Command {
         ])]
         paths: Vec<PathBuf>,
     },
+    /// Firing rate of one plan hint over the engine-quiet master set —
+    /// the generic cost term for new plan-hint conditions.
+    HintFp {
+        hint: String,
+        #[arg(default_value = "testdata/corpus/quiet_fens.txt")]
+        path: PathBuf,
+        #[arg(long)]
+        dump: bool,
+    },
     /// Price the four remaining WeakKing misses: how common are the
     /// lagging-king and sector-funnel conditions, and does WeakKing
     /// already fire there?
@@ -660,6 +669,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::ShieldStudy { paths } => {
             kibitz_db::bookeval::shield_study(&paths)?;
+        }
+        Command::HintFp { hint, path, dump } => {
+            kibitz_db::bookeval::hint_fp(&path, &hint, dump)?;
         }
         Command::KingStudy { paths } => {
             kibitz_db::bookeval::king_study(&paths)?;

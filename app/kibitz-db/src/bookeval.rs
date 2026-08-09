@@ -539,6 +539,9 @@ const KNOWN_HINTS: &[&str] = &[
     // Run 12 (#12): entombment, an imbalance rather than an alert.
     "ActivateEntombedPiece",
     "KeepPieceEntombed",
+    // Run 12, ruling 3: the blockade B2 pair from the Nimzowitsch ch. 4
+    // inventory (mechanism 10; mechanism 7 is evidence, not a hint).
+    "UprootBlockader",
 ];
 
 #[derive(Debug, Default)]
@@ -867,6 +870,51 @@ pub fn print_report(book: &str, r: &Report, verbose: bool) {
             println!("  MISS {axis:<9} {id}: expected {want}");
         }
     }
+}
+
+/// Firing rate of one plan hint over the engine-quiet set — the
+/// entomb-fp discipline made generic, so every future B2 condition gets
+/// its cost term from the same instrument (run 12, ruling 3).
+///
+/// The currency is prose: a plan hint runs no engine, so each firing on
+/// a healthy master position is a sentence of advice about a plan that
+/// is not there. Measure before wiring into KNOWN_HINTS, not after.
+pub fn hint_fp(path: &std::path::Path, hint: &str, dump: bool) -> anyhow::Result<()> {
+    let text = std::fs::read_to_string(path)?;
+    let (mut n, mut firing, mut count) = (0usize, 0usize, 0usize);
+    for fen in text.lines().filter(|l| !l.trim().is_empty()) {
+        let Ok(board) = fen.parse::<cozy_chess::Board>() else {
+            continue;
+        };
+        n += 1;
+        let record = kibitz_core::analyze(&board);
+        let hits = record
+            .imbalances
+            .iter()
+            .flat_map(|i| i.plans.iter())
+            .filter(|p| p.hint == hint)
+            .count()
+            + record
+                .composite_plans
+                .iter()
+                .flat_map(|c| c.hints.iter())
+                .filter(|h| h.as_str() == hint)
+                .count();
+        if hits > 0 {
+            firing += 1;
+            count += hits;
+            if dump {
+                println!("{fen}");
+            }
+        }
+    }
+    println!("engine-quiet master positions: {n}");
+    println!(
+        "  positions where {hint} fires {firing:>5}  ({:.1}%)",
+        firing as f64 / n.max(1) as f64 * 100.0
+    );
+    println!("  total firings                {count:>5}");
+    Ok(())
 }
 
 /// The four remaining WeakKing static-gap misses, priced (run 12, #10).
