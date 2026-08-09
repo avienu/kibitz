@@ -815,6 +815,157 @@ pub fn print_report(book: &str, r: &Report, verbose: bool) {
     }
 }
 
+/// Was the shield pawn TRADED, or did it just relocate one file over?
+///
+/// `cbcs-239` is the first red negative anchor the corpus-side alert bans
+/// produced: WeakKing reports "f-file shield pawn missing" on the
+/// position Jeremy Silman uses to teach that doubled pawns can be an
+/// asset. The f-pawn is not gone from in front of that king — it captured
+/// onto e3, and the pawn count in front of g1 is unchanged.
+///
+/// That is the same shape of error as the one the run-12 WeakKing work
+/// already fixed once: "central king" was a proxy for "open file", and
+/// "shield file empty" may be a proxy for "shield pawn traded away". This
+/// study asks whether the suspicion is a CLASS or one anchor. It reports
+/// every (position, side) where the detector's own shield arm applies and
+/// some shield file is empty while an adjacent file carries an own
+/// DOUBLED pawn, and whether WeakKing fired.
+///
+/// It settles nothing by itself. A condition written off one anchor is
+/// how a detector gets tuned to a corpus; a condition written off a class
+/// is a condition.
+pub fn shield_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    use cozy_chess::{Color, File, Piece, Rank};
+
+    let mut fens: Vec<String> = Vec::new();
+    for p in paths {
+        if p.extension().and_then(|e| e.to_str()) == Some("json") || p.is_dir() {
+            for c in load(p)? {
+                fens.extend(c.positions.into_iter().map(|e| e.fen));
+            }
+        } else {
+            fens.extend(
+                std::fs::read_to_string(p)?
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(str::to_string),
+            );
+        }
+    }
+
+    let (mut scanned, mut candidates, mut fired, mut sole) = (0usize, 0usize, 0usize, 0usize);
+    println!(
+        "{:<70} {:<6} {:<9} {:<8} {:<6} screen",
+        "fen", "side", "empty/dbl", "severity", "blame"
+    );
+    for fen in &fens {
+        let Ok(board) = fen.parse::<cozy_chess::Board>() else {
+            continue;
+        };
+        scanned += 1;
+        let record = kibitz_core::wsui::screen(&board, &kibitz_core::wsui::WsuiConfig::default());
+        for side in [Color::White, Color::Black] {
+            let king = board.king(side);
+            let back = match side {
+                Color::White => Rank::First.bitboard() | Rank::Second.bitboard(),
+                Color::Black => Rank::Eighth.bitboard() | Rank::Seventh.bitboard(),
+            };
+            // Exactly the detector's own gate: back two ranks, flank file.
+            if !back.has(king) || matches!(king.file(), File::D | File::E) {
+                continue;
+            }
+            let pawns = board.colored_pieces(side, Piece::Pawn);
+            let on = |f: i8| -> u32 {
+                if !(0..8).contains(&f) {
+                    return 0;
+                }
+                (pawns & File::index(f as usize).bitboard()).len()
+            };
+            let kf = king.file() as i8;
+            let mut hits: Vec<String> = Vec::new();
+            for df in -1..=1i8 {
+                let f = kf + df;
+                if !(0..8).contains(&f) || on(f) > 0 {
+                    continue;
+                }
+                // A doubled own pawn on either neighbour is the signature
+                // of a shield pawn that captured sideways rather than one
+                // that was traded off the board.
+                for adj in [f - 1, f + 1] {
+                    if on(adj) >= 2 {
+                        hits.push(format!(
+                            "{}->{}",
+                            (b'a' + f as u8) as char,
+                            (b'a' + adj as u8) as char
+                        ));
+                    }
+                }
+            }
+            if hits.is_empty() {
+                continue;
+            }
+            candidates += 1;
+            let alert = record.alerts.iter().find(|a| {
+                a.kind == kibitz_core::record::AlertKind::WeakKing
+                    && a.side == kibitz_core::record::SideColor::from(side)
+            });
+            // Firing is not the same as firing BECAUSE of this. Only an
+            // alert whose own detail names the relocated file as a
+            // missing shield pawn would be touched by the candidate
+            // condition, and only one that is otherwise bare would be
+            // silenced by it — a king under real pressure keeps its alert.
+            let detail = alert.and_then(|a| a.detail.clone()).unwrap_or_default();
+            let blamed = hits.iter().any(|h| {
+                let f = h.chars().next().unwrap_or('?');
+                detail.contains(&format!("{f}-file shield pawn missing"))
+            });
+            // `detail` is the reason list joined with "; " (see
+            // wsui::detect_weak_king). Anything in it that is not a
+            // missing-shield note is an independent reason to alert.
+            let other_reason = detail
+                .split("; ")
+                .any(|d| !d.trim().is_empty() && !d.contains("shield pawn missing"));
+            if blamed {
+                fired += 1;
+                if !other_reason {
+                    sole += 1;
+                }
+            }
+            println!(
+                "{fen:<70} {:<6} {:<9} {:<8} {:<6} {}",
+                if side == Color::White {
+                    "white"
+                } else {
+                    "black"
+                },
+                hits.join(","),
+                match alert {
+                    None => "silent".to_string(),
+                    Some(a) => format!("{:?}", a.severity).to_lowercase(),
+                },
+                if blamed { "blamed" } else { "-" },
+                if record.screen_fired {
+                    "screen"
+                } else {
+                    "quiet"
+                },
+            );
+        }
+    }
+    println!("\npositions scanned            {scanned:>5}");
+    println!("relocated-shield candidates  {candidates:>5}");
+    println!(
+        "  WeakKing blames the file   {fired:>5}  ({:.0}%)",
+        fired as f64 / candidates.max(1) as f64 * 100.0
+    );
+    println!(
+        "  and has no other reason    {sole:>5}  ({:.0}%) — these are the alerts a \
+         relocated-pawn condition would actually silence",
+        sole as f64 / candidates.max(1) as f64 * 100.0
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

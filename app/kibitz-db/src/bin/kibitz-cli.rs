@@ -206,6 +206,16 @@ enum Command {
         #[arg(long)]
         dump: bool,
     },
+    /// Is "shield file empty" a proxy for "shield pawn traded away"?
+    /// Lists every position where a shield pawn is absent while an
+    /// adjacent file holds a doubled pawn, and whether WeakKing fired.
+    ShieldStudy {
+        #[arg(num_args = 1.., default_values = [
+            "testdata/private/book-trials",
+            "testdata/corpus/quiet_fens.txt",
+        ])]
+        paths: Vec<PathBuf>,
+    },
     /// Compare suggest-verify gate settings: jobs, plans, plans per job.
     GateStudy {
         #[arg(default_value = "testdata/private/book-trials")]
@@ -637,6 +647,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::EntombFp { path, dump } => {
             kibitz_db::bookeval::entomb_fp(&path, dump)?;
+        }
+        Command::ShieldStudy { paths } => {
+            kibitz_db::bookeval::shield_study(&paths)?;
         }
         Command::GateStudy { path } => {
             let corpora = kibitz_db::bookeval::load(&path)?;
