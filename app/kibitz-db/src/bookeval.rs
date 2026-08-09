@@ -53,6 +53,18 @@ pub struct NotExpected {
     pub imbalances: Vec<String>,
     #[serde(default)]
     pub plan_tags: Vec<String>,
+    /// Alert kinds this position must NOT produce (run 12, #11 follow-up).
+    ///
+    /// The alerts axis had no corpus-side negatives at all: `alerts_fp`
+    /// over 500 engine-quiet master positions was its only cost term. That
+    /// set is the honest one — nobody chose it with these detectors in
+    /// mind, so it can surprise you — but it is anonymous. A ban written
+    /// against a transcribed position says WHICH claim would be wrong and
+    /// WHY, and it fails loudly in book-eval rather than moving a rate by
+    /// a fraction of a point. Only one of the two can surprise you; both
+    /// are worth having.
+    #[serde(default)]
+    pub alerts: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -650,6 +662,12 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
             r.negative_checks += 1;
             if detected_hints.iter().any(|h| h == banned) {
                 r.false_fires.push((e.id.clone(), "plan", banned.clone()));
+            }
+        }
+        for banned in &e.not_expected.alerts {
+            r.negative_checks += 1;
+            if detected_alerts.iter().any(|k| k == banned) {
+                r.false_fires.push((e.id.clone(), "alert", banned.clone()));
             }
         }
 
