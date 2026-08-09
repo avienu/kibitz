@@ -1685,3 +1685,103 @@ severity. Nothing else remains in the static gap. That is what "priced"
 means: the next point on this axis has a known cost and a named
 mechanism, and both were established by predictions that were allowed to
 fail.
+
+## Run 12 close-out: the blockade B2 pair, and the corpus goes multi-author
+
+Corpus composition, stated per the standing rule (every figure below
+sits on this denominator): **165 positions — 162 Jeremy Silman across
+four books, 3 Nimzowitsch (Chess Praxis batch 1)**; positive
+expectations 293 imbalance / 149 plan / 25 alert / 102 favors; negative
+anchors 37 (31 prior + 6 new); quiet holdout unchanged at 500.
+
+### The prose remediation, first
+
+Per the maintainer's ruling, before the corpus grew: of the 41 entries
+the audit flagged, **35 were rewritten** — authorial sentences replaced
+with factual claims in our own words, citations and reconstruction
+caveats kept intact — and **6 were judged already clean**. The criterion:
+a note is clean when its flagged content is only a titular caption used
+as an identifier, bare moves or results (facts about the book's answer),
+or our own reconstruction record; it is rewritten when it reproduces the
+author's sentences or rule phrasings. The four clean titular captions
+were normalized to quoted-title form so the criterion is visible in the
+file. Axes unchanged before/after (the notes field is unscored), which
+was the point: the positions and citations were never the problem.
+
+### The three missing lines, closed
+
+The maintainer authorized reading the books directly. All three
+line_conditional entries now carry their SAN, replay-verified from each
+entry's FEN with an independent library. Reading the actual answers
+corrected a placeholder error: in htryc-381-151 the trapped piece is
+not the dark-squared bishop but the black KNIGHT that grabs a2
+(20.Rxe6 ... 28.Kd2 Nxa2 29.Rb3). At the recorded endpoints the
+TrappedPiece detector fires on two of the three today; the third
+(the a2 knight) needs the book's few extra rounding-up moves — a real
+test case for the future suggest-verify walker, not a defect.
+
+### The blockade B2 pair (inventory mechanisms 7 and 10)
+
+Prediction registered before implementation; measured after.
+
+| prediction | line | actual |
+|---|---|---|
+| UprootBlockader quiet firing 1-4% | ship line: under 8% | **4.2%** (21/500, 46 firings) — ships, just above the predicted band |
+| book axes unchanged, negatives 31/31 | any regression reverts | **held exactly** |
+| cbcs-216 elasticity split: knight elastic (threats >= 2), bishop inelastic | bishop elastic = metric wrong | **held** (unit-tested) |
+| Praxis batch contains a position carrying UprootBlockader | — | **held** (g70: white, e6/e5) |
+
+Elasticity v1 is evidence only (`blockader_<sq>`: piece, threats,
+elastic); the strict leave-and-return race stays unbuilt, as bucketed.
+The cost instrument is now generic — `kibitz-cli hint-fp <hint>` — so
+every future B2 condition pays the same toll on the way in.
+
+### Chess Praxis batch 1: three entries, selected by the author's own index
+
+Provenance chain, stated because it is the property everything else
+rests on: **stratagem (the book's own index) → game number → Sherwood
+numbering → printed score → replay → FEN.** No judgment call sits
+anywhere in that chain — which means the Praxis corpus can be trusted,
+entry for entry, in a way the Jeremy Silman transcriptions (diagram-read FENs,
+reconstruction caveats) currently cannot. Every batch-1 `sans` list
+replays to its FEN by independent verification.
+
+Batch 1 results: imbalances **6/6**, scored plans **3/3**
+(PressureDoubledPawn, BlockadeThenPressure, PressureBackwardPawn — the
+last already firing on the exact pawn the book calls weak), favors
+**2/3**, and **four vocabulary gaps counted**: blockade of a non-passed
+pawn complex (x2), restraint of a freeing pawn move, and the reserve
+blockader — the book's index cites exactly one game for that concept
+and batch 1 has it. The gaps are the deliverable as much as the hits:
+this is the concept-coverage instrument doing its job.
+
+The favors miss is g70 and it is the axis's known shape: a pawn down
+with the two bishops and a strangling bind, the book (and the game)
+say black, the material-led vote says white. Compensation stories
+remain what the favors axis cannot see.
+
+**One negative anchor added red, by declaration.** g70's WeakKing ban
+was written down as expected-red before the entry was scored: with the
+queens off, black's king walking to e7 to stand reserve behind the
+blockader is the book's own technique, and the detector calls that king
+weak. Same posture as cbcs-239: left red, not tuned to, and now there
+are two standing red anchors pointing at WeakKing's endgame arm — worth
+noting they agree with each other.
+
+### Quiet-set drift check after the batch
+
+alerts-fp and entomb-fp re-run after all of the above: screen 46.6%,
+WeakKing 0.58/position, TrappedPiece 0.10, entombed 0.000 — identical
+to the pre-batch measurements, as they must be (corpus growth changes
+no detector). Stated anyway, per the rule: the day these move without a
+detector change is the day something is wrong with the harness.
+
+### Multi-author, first honest reading
+
+Three positions is not a measurement, so no Jeremy Silman-versus-Nimzowitsch
+number is claimed yet. What batch 1 does establish is the shape of the
+answer to come: the engine hit every Nimzowitsch imbalance and scored
+plan in the batch, and every concept it lacked surfaced as a NAMED gap
+rather than a silent miss. The comparison becomes reportable when the
+Praxis corpus reaches a few dozen entries across at least three
+stratagem families.

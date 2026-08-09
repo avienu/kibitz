@@ -31,8 +31,13 @@ several carry full sentences labeled as book text (cbcs-192, cbcs-216,
 cbcs-217, cbcs-219, cbcs-236, cbcs-239 among others). Mitigation:
 testdata/private is git-ignored and never ships. But the CBCS
 transcription style is the one precedent the Nimzowitsch work might have
-copied, and it is the wrong precedent. Flagged to the maintainer;
-entries not rewritten without direction.
+copied, and it is the wrong precedent. Flagged to the maintainer.
+
+**Remediated on the maintainer's ruling (run 12): 35 entries rewritten
+as factual claims in our own words, 6 judged clean under the stated
+criterion (titular captions as identifiers, bare moves/results, own
+reconstruction notes), citations kept throughout.** The Nimzowitsch
+corpus is built to this standard from its first entry.
 
 ## Prediction (recorded before opening the chapter)
 
