@@ -740,6 +740,41 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
         }
     }
 
+    // The isolated PAIR (run 12, Chess Praxis game 62): a two-pawn
+    // island — adjacent files, nothing on the flanking files — where
+    // neither member is isolated by the single-pawn test and the pair
+    // as a whole is exactly as friendless as an isolani. Nimzowitsch
+    // blockades it like one, so the blockade family below treats its
+    // members like one.
+    //
+    // CENTRAL files only (c-f). The first draft took any two-file
+    // island and the cost term destroyed it: every ordinary a+b or g+h
+    // wing pair after a c- or f-file trade qualified, +7.6 points of
+    // quiet BlockadeThenPressure and a suggest@3 regression in one
+    // measurement. Nimzowitsch's isolated pair is the remnant of a
+    // dissolved CENTER (his c6+d5), not a healthy wing.
+    let mut pair = [BitBoard::EMPTY; 2];
+    for (ci, color) in [(0, Color::White), (1, Color::Black)] {
+        let own = board.colored_pieces(color, Piece::Pawn);
+        let has_file = |f: i8| -> bool {
+            (0..8).contains(&f) && !(own & File::index(f as usize).bitboard()).is_empty()
+        };
+        for f in 2..=4i8 {
+            // both files within c..f
+            if has_file(f) && has_file(f + 1) && !has_file(f - 1) && !has_file(f + 2) {
+                pair[ci] |= own
+                    & (File::index(f as usize).bitboard()
+                        | File::index((f + 1) as usize).bitboard());
+            }
+        }
+        if !pair[ci].is_empty() {
+            evidence.insert(
+                format!("isolated_pair_{}", if ci == 0 { "white" } else { "black" }),
+                sq_list(pair[ci]),
+            );
+        }
+    }
+
     for (name, arr) in [
         ("isolated", &iso),
         ("doubled", &doubled),
@@ -1094,9 +1129,10 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 }
             }
         }
-        // Blockade-then-pressure against enemy passed AND isolated pawns
-        // already halted by a piece on the stop square.
-        for p in passed[ci] | iso[ci] {
+        // Blockade-then-pressure against enemy passed and isolated pawns
+        // — and members of an isolated PAIR — already halted by a piece
+        // on the stop square.
+        for p in passed[ci] | iso[ci] | pair[ci] {
             if let Some(stop) = match color {
                 Color::White => p.try_offset(0, 1),
                 Color::Black => p.try_offset(0, -1),
@@ -1113,6 +1149,35 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                         owner: None,
                         squares: vec![square_name(p), square_name(stop)],
                     });
+                }
+                // Overprotection of the blockade point (run 12, Chess
+                // Praxis game 62, 21.Qc3 — "an over-protection of d4
+                // takes place"). The spearhead arm of overprotection
+                // requires the point to be a pawn under fire; the
+                // blockade point is the OTHER strategically important
+                // square Nimzowitsch names, and there the surplus is
+                // prophylactic — piled up before anyone shoots. Two or
+                // more own units behind the blockader is the surplus
+                // test; one defender is just a defended piece.
+                //
+                // Pair stop squares only. The first draft claimed
+                // overprotection at every blockaded passer and isolani
+                // with two backers and cost +10.2 points of quiet
+                // firing — a blockaded isolani with Nd4, e3 and Qd2 is
+                // half of master chess, and calling all of it
+                // overprotection is noise, not Nimzowitsch.
+                let owner = !color;
+                let backers =
+                    crate::attack::attackers_of(board, stop, owner, board.occupied()).len();
+                if pair[ci].has(p) && backers >= 2 {
+                    sided.push((
+                        owner,
+                        PlanHint {
+                            hint: "OverprotectStrongPoint".into(),
+                            owner: None,
+                            squares: vec![square_name(stop)],
+                        },
+                    ));
                 }
             }
         }
@@ -2598,6 +2663,56 @@ mod tests {
 
     fn has(plans: &[PlanHint], hint: &str) -> bool {
         plans.iter().any(|p| p.hint == hint)
+    }
+
+    /// Chess Praxis, Game 62 (Nimzowitsch-Kudriavtsev/Landau, Dorpat
+    /// 1910), after 21.Qc3 — the position entered in the corpus knowing
+    /// the detectors missed both of the book's claims. The isolated
+    /// PAIR c6/d5 is blockaded on both stop squares (Rd4, Nc5), and the
+    /// queen's arrival on c3 makes two units behind the d4 blockader:
+    /// the book's own words are "the blockade proceeds" and "an
+    /// over-protection of d4 takes place".
+    #[test]
+    fn isolated_pair_is_blockaded_and_overprotected_like_an_isolani() {
+        let b = board("1r2b1k1/p3qpp1/1rp2n1p/2Np4/3R4/1PQBP3/P4PPP/2R3K1 b - - 1 21");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        assert!(
+            imb.evidence.contains_key("isolated_pair_black"),
+            "{:?}",
+            imb.evidence.keys()
+        );
+        let btp: Vec<_> = imb
+            .plans
+            .iter()
+            .filter(|p| p.hint == "BlockadeThenPressure")
+            .collect();
+        assert!(btp.iter().any(|p| p.squares == vec!["d5", "d4"]), "{btp:?}");
+        let over: Vec<_> = imb
+            .plans
+            .iter()
+            .filter(|p| p.hint == "OverprotectStrongPoint")
+            .collect();
+        assert!(
+            over.iter()
+                .any(|p| p.squares == vec!["d4"] && p.owner == Some(Favors::White)),
+            "{over:?}"
+        );
+    }
+
+    /// One defender is just a defended piece: strip the e3 pawn from the
+    /// game-62 position and the d4 blockader is backed by the queen
+    /// alone — no overprotection claim.
+    #[test]
+    fn a_singly_defended_blockader_is_not_overprotected() {
+        let b = board("1r2b1k1/p3qpp1/1rp2n1p/2Np4/3R4/1PQB4/P4PPP/2R3K1 b - - 1 21");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        assert!(
+            !imb.plans
+                .iter()
+                .any(|p| p.hint == "OverprotectStrongPoint" && p.squares == vec!["d4"]),
+            "{:?}",
+            imb.plans
+        );
     }
 
     /// Jeremy Silman, The Complete Book of Chess Strategy, p. 298

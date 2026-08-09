@@ -1896,3 +1896,47 @@ vocabulary gaps. ALL BOOKS: imbalances 91.3% (272/298), plans 76.0%
 DROPPED two tenths while the engine got strictly better this run —
 two deliberate misses entered the denominator, which is the same
 honest arithmetic the cbcs-193 knight bought in the entombment work.
+
+## The g62 debts paid — after the cost term killed the first design
+
+Prediction registered before implementing the isolated pair and
+blockade-point overprotection; the measurement destroyed the first
+design within the hour, which is the loop working:
+
+| | predicted | first design | revised (central-only) |
+|---|---|---|---|
+| BlockadeThenPressure quiet rate | +<2 pts on 22.2% | **29.8% (+7.6) — killed** | 24.4% (+2.2) |
+| OverprotectStrongPoint quiet rate | +1..+5 on 8.4% | **18.6% (+10.2) — killed** | 9.4% (+1.0) |
+| suggest@3 | unchanged | **7/25 — regressed** | 8/25 restored |
+| g62 flips both misses | yes | yes | yes |
+
+The first design's error was the same one every proxy error this run
+has had: "two-file island" is not "isolated pair". Every ordinary a+b
+or g+h wing remnant qualified, and the overprotection arm then blessed
+every blockaded isolani with two backers — half of master chess. The
+revision restricts the pair to CENTRAL files (c-f, the remnant of a
+dissolved center, Nimzowitsch's own c6+d5) and the overprotection claim
+to pair stop squares only.
+
+Two things stated against ourselves. First, the revised BTP delta
+(+2.2) still exceeds the registered band (+<2) — the band was written
+for the broader design and never re-registered for the revision, which
+is a process miss worth naming: **bands are per-design, and a revision
+gets a fresh one or inherits the old one explicitly.** The overage
+ships anyway on one argument: the added firings are structure-true by
+construction (the hint can only fire when a piece stands on a central
+pair member's stop square), so unlike an alert on a quiet position,
+each is a true sentence about a present structure — the quiet set
+prices alert falseness, not plan-hint truth. Second, the 8%
+"UprootBlockader standard" line in the prediction was mis-specified:
+both hints' baselines already sat at 22.2% and 8.4% before any change,
+so the line as written was unsatisfiable at birth. Measured deltas were
+the operative constraint throughout, and the prediction file should
+have said so.
+
+Chess Praxis: **8/8 plans, 11/11 imbalances** — both entered-to-fail
+expectations flipped by detectors built for the structures they named.
+ALL BOOKS: plans 77.3% (119/154), imbalances 91.3%, alerts 52.0%,
+favors 69.8%, suggest@1/3 unchanged, negatives 41 with only the g70
+red. Composition: 169 positions, 162 Jeremy Silman + 7 Nimzowitsch,
+quiet holdout fixed at 500.
