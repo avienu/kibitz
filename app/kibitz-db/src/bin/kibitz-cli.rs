@@ -216,6 +216,15 @@ enum Command {
         ])]
         paths: Vec<PathBuf>,
     },
+    /// Class study for the praxis-g70 red anchor: WeakKing alerts on
+    /// pure shield evidence against a queenless opponent.
+    QueenlessStudy {
+        #[arg(num_args = 1.., default_values = [
+            "testdata/private/book-trials",
+            "testdata/corpus/quiet_fens.txt",
+        ])]
+        paths: Vec<PathBuf>,
+    },
     /// Firing rate of one plan hint over the engine-quiet master set —
     /// the generic cost term for new plan-hint conditions.
     HintFp {
@@ -669,6 +678,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::ShieldStudy { paths } => {
             kibitz_db::bookeval::shield_study(&paths)?;
+        }
+        Command::QueenlessStudy { paths } => {
+            kibitz_db::bookeval::queenless_study(&paths)?;
         }
         Command::HintFp { hint, path, dump } => {
             kibitz_db::bookeval::hint_fp(&path, &hint, dump)?;

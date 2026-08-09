@@ -1764,9 +1764,12 @@ remain what the favors axis cannot see.
 was written down as expected-red before the entry was scored: with the
 queens off, black's king walking to e7 to stand reserve behind the
 blockader is the book's own technique, and the detector calls that king
-weak. Same posture as cbcs-239: left red, not tuned to, and now there
-are two standing red anchors pointing at WeakKing's endgame arm — worth
-noting they agree with each other.
+weak. Same posture as cbcs-239 had before its class was found: left
+red, not tuned to. It is the only standing red anchor (cbcs-239 went
+green with the relocated-shield condition), and like cbcs-239 it reads
+as a proxy error — "king off the back files" standing in for "king in
+danger" — which makes it a candidate for the same treatment: predict a
+class, sweep for it, and fix on the class or not at all.
 
 ### Quiet-set drift check after the batch
 
@@ -1785,3 +1788,58 @@ plan in the batch, and every concept it lacked surfaced as a NAMED gap
 rather than a silent miss. The comparison becomes reportable when the
 Praxis corpus reaches a few dozen entries across at least three
 stratagem families.
+
+## The queenless-shield class: found, and refused on its own terms
+
+praxis-g70 got the cbcs-239 treatment. Prediction registered before the
+sweep: WeakKing alerts on pure shield/open-file evidence against a
+queenless opponent form a class (predicted 60-130 of the quiet
+holdout's 289 WeakKing alerts); no book WeakKing recall hit sits in the
+class; refutation line — **any hit in the class means the gate loses
+recall and does not ship.**
+
+`kibitz-cli queenless-study`: the class is real — **90 of 289 quiet
+WeakKing alerts (31%)**, and 27 class alerts across the book corpus
+including the g70 anchor. **And the refutation line fired**: cbcs-329
+(two hogs on the seventh) expects WeakKing for the back-rank-trapped
+black king, the queens are off, and its alert is shield-only — the
+back-rank arm does not engage because black's own a8 rook technically
+guards the rank while the doubled rooks deliver mate anyway. am-316-2
+is also at risk. A queenless king CAN be in mortal danger from heavy
+pieces alone; "opponent has no queen" is too blunt a gate, exactly as
+the pre-registered line anticipated it might be.
+
+So: no fix ships. The class is real and priced (a third of quiet
+WeakKing prose is shield chatter against queenless opponents), the
+blunt gate is refuted by the corpus's own recall, and the refinement —
+something like "shield terms require enemy majors actually bearing on
+the king's half", which would have to keep cbcs-329 while releasing
+g70 — is a NEW prediction for a future run, not a same-day retry. One
+prediction, one refutation, one stop: re-predicting until the gate fits
+is the mistake this document exists to prevent. g70 stays red, now with
+its class quantified and the recall constraint that any future fix must
+satisfy written down.
+
+## Praxis batch 2: the fight against the blockader, scored by the detector built for it
+
+Corpus composition: **167 positions — 162 Jeremy Silman, 5 Nimzowitsch**;
+negative anchors 39; quiet holdout fixed at 500 (no detector changed
+since the drift check above, so the quiet figures stand as measured).
+
+Batch 2 is games 7 and 9 — the index's fight-against-the-blockader
+pair, and the book's own compare-and-contrast exercise: in game 9 the
+d3 blockader falls in the course of the defense, in game 7 in the
+course of an attack White was compelled to undertake. Both entries were
+replay-verified from the printed scores (the harness caught a
+transcription typo in one pasted FEN before it could enter the corpus,
+which is the verification property doing its job), and both carry
+UprootBlockader as the book's own stated plan.
+
+Results: Chess Praxis now **9/9 imbalances, 5/5 plans, 4/5 favors,
+8/9 negatives** — the one red the declared g70 anchor. UprootBlockader,
+shipped earlier this run at a measured 4.2% quiet cost, scored both of
+its first two corpus expectations. Fifth vocabulary gap harvested:
+rolling up a paralysed majority.
+
+ALL BOOKS: imbalances 91.2% (270/296), plans 76.8% (116/151), alerts
+52.0% (13/25), favors 72/104 = 69.2%.

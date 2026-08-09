@@ -1065,6 +1065,97 @@ fn eback_own(side: cozy_chess::Color) -> cozy_chess::BitBoard {
     }
 }
 
+/// Does shield anatomy predict anything once the queens are off?
+///
+/// The praxis-g70 red anchor: WeakKing at severity HIGH, on pure
+/// shield/open-file evidence, against a king the book is walking up the
+/// board as a reserve blockader — no queen on the board. Same proxy
+/// shape as cbcs-239 ("shield file empty" standing in for "shield pawn
+/// gone"): here "shield anatomy broken" stands in for "king in danger",
+/// which without a queen it may not be.
+///
+/// Class: a WeakKing alert on side S where S's opponent is queenless
+/// and the alert's own detail is shield/open-file ONLY — no zone
+/// pressure, no back-rank. Reports the class size on the quiet holdout
+/// and, on the book corpus, whether any RECALL HIT sits in the class
+/// (the refutation condition: a gate that loses recall does not ship).
+pub fn queenless_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    use cozy_chess::{Color, Piece};
+    let mut items: Vec<(String, String, Vec<String>)> = Vec::new(); // (label, fen, expected alerts)
+    for p in paths {
+        if p.extension().and_then(|e| e.to_str()) == Some("json") || p.is_dir() {
+            for c in load(p)? {
+                items.extend(
+                    c.positions
+                        .into_iter()
+                        .map(|e| (e.id, e.fen, e.expected.alerts)),
+                );
+            }
+        } else {
+            items.extend(
+                std::fs::read_to_string(p)?
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .enumerate()
+                    .map(|(i, l)| (format!("quiet-{i}"), l.to_string(), vec![])),
+            );
+        }
+    }
+    let (mut quiet_alerts, mut quiet_class) = (0usize, 0usize);
+    let mut book_class: Vec<String> = Vec::new();
+    let mut hits_in_class: Vec<String> = Vec::new();
+    for (label, fen, expected) in &items {
+        let Ok(board) = fen.parse::<cozy_chess::Board>() else {
+            continue;
+        };
+        let r = kibitz_core::wsui::screen(&board, &kibitz_core::wsui::WsuiConfig::default());
+        for a in &r.alerts {
+            if a.kind != kibitz_core::record::AlertKind::WeakKing {
+                continue;
+            }
+            let quiet = label.starts_with("quiet-");
+            if quiet {
+                quiet_alerts += 1;
+            }
+            let side = match a.side {
+                kibitz_core::record::SideColor::White => Color::White,
+                kibitz_core::record::SideColor::Black => Color::Black,
+            };
+            let enemy_queenless = board.colored_pieces(!side, Piece::Queen).is_empty();
+            let detail = a.detail.clone().unwrap_or_default();
+            let shield_only = !detail.contains("zone-pressure") && !detail.contains("back-rank");
+            if enemy_queenless && shield_only {
+                if quiet {
+                    quiet_class += 1;
+                } else {
+                    book_class.push(format!("{label} ({:?})", a.side));
+                    // A recall hit in the class: this entry EXPECTS
+                    // WeakKing and the class alert may be the one
+                    // satisfying it.
+                    if expected.iter().any(|w| w == "WeakKing") {
+                        hits_in_class.push(label.clone());
+                    }
+                }
+            }
+        }
+    }
+    println!("quiet holdout: {quiet_alerts} WeakKing alerts, {quiet_class} in the queenless-shield class ({:.0}%)",
+        quiet_class as f64 / quiet_alerts.max(1) as f64 * 100.0);
+    println!("book corpus class members:");
+    for b in &book_class {
+        println!("  {b}");
+    }
+    if hits_in_class.is_empty() {
+        println!("no book WeakKing EXPECTATION is satisfied by a class alert — gate loses no recall");
+    } else {
+        println!("RECALL AT RISK — these entries expect WeakKing and hold a class alert:");
+        for h in &hits_in_class {
+            println!("  {h}");
+        }
+    }
+    Ok(())
+}
+
 /// Was the shield pawn TRADED, or did it just relocate one file over?
 ///
 /// `cbcs-239` is the first red negative anchor the corpus-side alert bans
