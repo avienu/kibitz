@@ -119,3 +119,105 @@ it does, the product is a Jeremy Silman emulator — a fine product, but a
 different claim than "explains positions in human terms," and nobody has
 checked. The per-book breakdown book-eval already prints is the
 instrument; it just needs a second author in the denominator.
+
+## Step 0 addendum — source assessment (run 12, second pass)
+
+### Source A: the two My System scans
+
+| | `My System.pdf` (302pp) | `nimzowitsch - my system.pdf` (270pp) |
+|---|---|---|
+| edition | **Quality Chess 2007** ("New Translation", 2nd print, from the 2005 Rattman German edition) | 21st Century Edition (Hays) — **byte-identical (same SHA-1) to the Dropbox copy** the chapter-4 inventory was built from |
+| text | crisp digital-quality bilevel (ScanKromsator); OCR trivially viable | photocopy-grade, grainy; OCR marginal |
+| diagrams | numbered continuously, sharp glyphs, every square unambiguous — at p. 250 the count is at diagram 490, total ≈ 520 | Part 1-2 numbered (ch. 4 spans diagrams 38-61); games-section diagrams unnumbered, muddier but readable; total est. 250-300 |
+| page geometry | PDF page = printed page (probe-verified) | printed page = PDF page − 10 |
+
+Both are image-only (pdftotext extracts nothing); both are readable by
+page-image reading, which is how the chapter-4 inventory was produced.
+
+**Chosen: Quality Chess 2007**, on every axis — sharper diagrams for any
+future diagram-to-FEN work, cleaner prose for concept reading, and full
+SAN game scores typeset in the text (which mostly removes the
+diagram-to-FEN problem for in-game positions; see scoping below). Copied
+to `testdata/private/sources/my-system-qc2007.pdf` — verified
+git-ignored. Nothing from either file goes into a tracked file.
+
+One consequence flagged: the chapter-4 inventory above cites 21st
+Century Edition pages (it predates the QC copy). Future corpus entries
+key to the QC edition; the inventory's mechanism list is
+edition-independent.
+
+### Source B: Chess Praxis via the chessgames.com collection
+
+Assessed at human scale — the collection page plus one game page,
+nothing harvested.
+
+- Collection: "Book: Chess Praxis (Nimzowitsch)", compiled by member
+  Baby Hawk, keyed to the **Robert Sherwood translation's** game
+  numbering. **100 games, numbered 1-109 with nine gaps** (30, 56, 76,
+  79, 88, 96, 99, 104, 106 missing).
+- **Annotations are present as described**, and provenance is
+  structurally distinguishable, which was the load-bearing question:
+  book-derived notes are embedded in the game score itself, opened by
+  an explicit "Notes by Nimzowitsch" marker and closed by a footer
+  attribution line ("Annotations by Aron Nimzowitsch"); member
+  kibitzing is a separate section of dated, usernamed posts below the
+  score. The two cannot be confused by structure alone.
+- **Two verification duties remain per entry.** First, the footer says
+  the site holds 48 Nimzowitsch-annotated games TOTAL — roughly half
+  the collection's games will have no book notes on the site, so the
+  attribution line must be checked per game, never assumed from
+  collection membership. Second, the site's annotation TEXT is a
+  transcription with its own defects — on the sampled game a member
+  correctly points out the note "Ne5" should read "Nc5" — so site notes
+  are a secondary witness; where an expectation label depends on a
+  precise claim, the book is the authority.
+- Licensing posture unchanged: annotations are read to derive a short
+  factual label in our own words; no annotation text is copied into any
+  file, tracked or not.
+
+Why B matters: position and judgment arrive PAIRED, in replayable SAN,
+with zero diagram-reading — and it supplies the second author for the
+does-the-engine-only-track-one-author measurement at a fraction of
+Source A's transcription cost. A supplies the vocabulary; B supplies
+the positions.
+
+## Diagram-to-FEN: scoped and priced, NOT started
+
+Three paths, cheapest first. The finding is that the hard version of
+this problem is mostly avoidable.
+
+**Path A — Chess Praxis positions (Source B): no diagram-to-FEN at
+all.** Game scores are historical facts in replayable SAN. Transcribe
+the SAN (or take the position from the site's viewer at the annotated
+ply), replay with the existing `san` module, emit the FEN. Deterministic
+verification for free: an illegal or mis-transcribed line fails to
+replay. Cost per entry: minutes. This is the recommended corpus path.
+
+**Path B — My System diagrams that sit inside quoted games (most of
+them): replay, don't read.** The QC edition prints full SAN from move
+one; the games are also historical and exist in open databases. Replay
+to the diagram's ply and the FEN is derived, not transcribed — the
+diagram serves only as a checksum. Same verification property as A.
+
+**Path C — constructed/schematic diagrams (no game behind them):
+visual read + harness.** Nimzowitsch's ideal-position sketches (the
+united-passers schema, blockade skeletons) are typically under a dozen
+men. Read the diagram from the page image, emit FEN, verify with the
+harness we already trust: cozy_chess legality parse, material sanity,
+side-to-move from the surrounding text, double-read on any entry whose
+first read fails a check. Error source is my transcription; the checks
+are deterministic.
+
+**Path D — a CV pipeline (page raster → board detection → grid split →
+per-square classifier → FEN): priced and deferred.** Two to three runs
+of engineering: segmentation is easy on the QC scan (strong borders,
+clean hatching), but the per-square classifier needs labeled glyphs for
+this exact figurine font, which do not exist — the honest bootstrap is
+Path B's replay-verified FENs providing free square labels, which means
+the pipeline is built AFTER the manual corpus, not instead of it. Break-
+even is several hundred diagrams — i.e. digitizing multiple books
+wholesale, which is not the current deliverable. Do not build it for
+one chapter.
+
+Recommendation standing until countermanded: A and B for corpus
+positions, C for the handful of schematics, D deferred.
