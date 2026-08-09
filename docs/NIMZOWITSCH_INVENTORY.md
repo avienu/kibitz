@@ -221,3 +221,51 @@ one chapter.
 
 Recommendation standing until countermanded: A and B for corpus
 positions, C for the handful of schematics, D deferred.
+
+## Step 0 second addendum — a third source changes the plan
+
+`~/Downloads/0a9cc761332e7f9fc1739a4bccbbbf46.pdf` turns out to be **My
+System & Chess Praxis, the New In Chess 2016 combined volume, Robert
+Sherwood translation — with a full text layer.** pdftotext extracts
+~1MB of clean prose across 1030 text pages, figurine SAN included. It
+contains, in one file:
+
+- **My System** (Sherwood)
+- **Chess Praxis** (Sherwood — the very translation the chessgames.com
+  collection's game numbering is keyed to)
+- **The Blockade**, Nimzowitsch's separate monograph, as Appendix Two —
+  a book this document reported absent from the machine
+- the 1911-1914 chess-revolution history article
+- **Nimzowitsch's own Index of Stratagems in Chess Praxis** — every
+  named mechanism mapped to the games that illustrate it, by the
+  author, for the whole book
+
+Copied (PDF + extracted text) to `testdata/private/sources/`, verified
+git-ignored. NIC 2016, all rights reserved: the licensing posture is
+unchanged and the text layer changes nothing about it — read to derive
+labels, never copy prose into tracked files.
+
+**Consequences, in order of size:**
+
+1. **The primary source is now this volume, for everything.** The QC
+   2007 scan drops to a fallback for anything needing the printed
+   diagrams; the Niridha scan is now redundant twice over.
+2. **The stratagem index is a whole-book concept inventory for Chess
+   Praxis, authored by Nimzowitsch.** The chapter-at-a-time inventory
+   method stays (My System is where mechanisms are DEFINED), but for
+   Praxis the mechanism list and its illustrating games arrive
+   pre-paired: stratagem → game number → Sherwood numbering →
+   chessgames.com collection → replayable score → FEN. The provenance
+   chain has no weak link and no judgment calls in it.
+3. **Step 2's price falls again.** SAN in this volume is machine-
+   extractable text, so Path B (replay, don't read) can be driven from
+   the book itself — parse the printed score, replay with the existing
+   san module, emit FEN with the diagram as checksum. The constructed-
+   schematic residue (Path C) is all that ever needs eyes on a diagram,
+   and a text-layer grep can now locate every schematic first.
+4. **The multi-author measurement gets its denominator cheaper**: the
+   index's stratagem→games mapping selects high-value Praxis entries
+   (blockade: 8 games; prophylaxis: 30+; over-protection: 8) without
+   reading the whole book to find them.
+
+Step 2 remains not started; nothing above begins it.
