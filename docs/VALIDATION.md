@@ -2000,3 +2000,34 @@ manages.
 The multi-author measurement: 11 entries across four families,
 roughly half of the few-dozen threshold. Every axis figure above
 carries its composition, per the standing rule.
+
+## Plan speed priced: the tempo hypothesis needs a term that does not exist
+
+Batch 1's instrument gap, given the king-study treatment. Prediction
+registered before the sweep; `kibitz-cli horizon-study` over the 29
+labeled best-move entries and the quiet 500:
+
+| | labeled | quiet |
+|---|---|---|
+| scheme for either side | 10% | 12% |
+| **schemes for BOTH sides** | **0%** | **1%** |
+| any maneuver | 45% | 69% |
+| no speed at all | 55% | 31% |
+
+Predictions 1 and 2 held (scheme coverage under 15%, far below the 30%
+artifact line; maneuver coverage under 50% on the labeled set).
+Prediction 3 split: scheme coverage matches across sets within 2
+points, but maneuver coverage differs by 24 — quiet master middlegames
+carry outposts and open files at a rate the prophylactic positions do
+not, and the prediction's "within 15 points" was refuted on that half.
+
+The decision the price forces: the tempo comparison in role_of needs
+BOTH sides to have a speed, which happens in ~1% of positions, because
+horizons descend from schemes, schemes from converging routed
+maneuvers, and only three hints ever route. A fallback from schemes to
+bare maneuver cost would still leave the comparison dataless in the
+majority of positions. **The fix is a plan-speed term across the hint
+vocabulary — every hint needs a moves-to-execute estimate — which is
+run-sized B3 design work, now named and priced, and the prerequisite
+for both the maintainer's tempo hypothesis and any suggest@1 ranking
+fix.** Not started; the design deserves its own prediction sheet.

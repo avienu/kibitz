@@ -216,6 +216,15 @@ enum Command {
         ])]
         paths: Vec<PathBuf>,
     },
+    /// Coverage of plan speed: how often schemes/maneuvers (and thus
+    /// horizons) exist at all — prices the tempo-hypothesis prerequisite.
+    HorizonStudy {
+        #[arg(num_args = 1.., default_values = [
+            "testdata/private/book-trials",
+            "testdata/corpus/quiet_fens.txt",
+        ])]
+        paths: Vec<PathBuf>,
+    },
     /// Class study for the praxis-g70 red anchor: WeakKing alerts on
     /// pure shield evidence against a queenless opponent.
     QueenlessStudy {
@@ -678,6 +687,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::ShieldStudy { paths } => {
             kibitz_db::bookeval::shield_study(&paths)?;
+        }
+        Command::HorizonStudy { paths } => {
+            kibitz_db::bookeval::horizon_study(&paths)?;
         }
         Command::QueenlessStudy { paths } => {
             kibitz_db::bookeval::queenless_study(&paths)?;

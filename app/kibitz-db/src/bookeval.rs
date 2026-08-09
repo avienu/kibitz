@@ -1066,6 +1066,83 @@ fn eback_own(side: cozy_chess::Color) -> cozy_chess::BitBoard {
     }
 }
 
+/// What fraction of positions have a plan SPEED at all?
+///
+/// Prophylaxis batch 1 found own/opp horizons None on every one of the
+/// 29 author-labeled best-move positions — the tempo comparison in
+/// role_of has never had data. Horizons come only from schemes; schemes
+/// only form when routed maneuvers converge with composite plans; and
+/// only three hints ever route. This study prices the gap: per position
+/// and side, does a scheme exist, a maneuver, or neither. The answer
+/// decides whether the fix is a role_of fallback (B2) or a plan-speed
+/// term across the whole hint vocabulary (run-sized B3).
+pub fn horizon_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    let mut sets: Vec<(String, Vec<String>)> = Vec::new(); // (set name, fens)
+    for p in paths {
+        if p.extension().and_then(|e| e.to_str()) == Some("json") || p.is_dir() {
+            let mut fens = Vec::new();
+            for c in load(p)? {
+                fens.extend(
+                    c.positions
+                        .into_iter()
+                        .filter(|e| !e.expected.best_moves.is_empty())
+                        .map(|e| e.fen),
+                );
+            }
+            sets.push(("labeled best-move entries".into(), fens));
+        } else {
+            let fens = std::fs::read_to_string(p)?
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .map(str::to_string)
+                .collect();
+            sets.push(("quiet holdout".into(), fens));
+        }
+    }
+    for (name, fens) in &sets {
+        let (mut n, mut scheme_any, mut scheme_both, mut man_any, mut neither) =
+            (0usize, 0usize, 0usize, 0usize, 0usize);
+        for fen in fens {
+            let Ok(board) = fen.parse::<cozy_chess::Board>() else {
+                continue;
+            };
+            n += 1;
+            let r = kibitz_core::analyze(&board);
+            let sides = |f: kibitz_core::record::Favors| r.schemes.iter().any(|s| s.favors == f);
+            let w = sides(kibitz_core::record::Favors::White);
+            let b = sides(kibitz_core::record::Favors::Black);
+            if w || b {
+                scheme_any += 1;
+            }
+            if w && b {
+                scheme_both += 1;
+            }
+            if !r.maneuvers.is_empty() {
+                man_any += 1;
+            }
+            if !(w || b) && r.maneuvers.is_empty() {
+                neither += 1;
+            }
+        }
+        let pct = |k: usize| k as f64 / n.max(1) as f64 * 100.0;
+        println!("{name}: {n} positions");
+        println!(
+            "  scheme for either side  {scheme_any:>4}  ({:.0}%)",
+            pct(scheme_any)
+        );
+        println!("  schemes for BOTH sides  {scheme_both:>4}  ({:.0}%)  <- the tempo comparison needs this", pct(scheme_both));
+        println!(
+            "  any maneuver            {man_any:>4}  ({:.0}%)",
+            pct(man_any)
+        );
+        println!(
+            "  no speed at all         {neither:>4}  ({:.0}%)",
+            pct(neither)
+        );
+    }
+    Ok(())
+}
+
 /// Does shield anatomy predict anything once the queens are off?
 ///
 /// The praxis-g70 red anchor: WeakKing at severity HIGH, on pure
