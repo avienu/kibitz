@@ -1180,3 +1180,308 @@ strategic property — a piece with no future — and its natural home is an
 imbalance beside the existing bad-bishop detection, not the tactical
 screen. Filed that way rather than tuned further; the alerts axis
 ceiling for TrappedPiece is 7 misses that mostly should not be alerts.
+
+## Entombment becomes an imbalance (#12), and what the cost term did to it
+
+The previous section filed "entombed" as a concept error in the alerts
+axis and predicted its natural home was an imbalance beside bad-bishop
+detection. That is now built: `kibitz-core::entomb`, feeding
+`minor_pieces` (a positional charge, next to the bad bishop) and
+`material` (a ledger discount, because Jeremy Silman's p. 192 point is that the
+side with the extra rook is WORSE).
+
+### The definition, and why permanence is the whole of it
+
+A piece is entombed when, within `route::MAX_HOPS`:
+
+1. it cannot reach the enemy half of the board, nor take anything without
+   losing by the trade;
+2. the squares it can reach and hold number no more than
+   `entomb::MAX_CELL` (3); and
+3. **no sequence of two pawn moves by its owner changes either of those.**
+
+Condition 3 is the entire distinction between an entombed piece and an
+undeveloped one, and it is why this could never have been a TrappedPiece
+threshold. The f1-bishop in the starting position satisfies (1) and (2) —
+it has no moves at all — and fails (3), because e2-e4 hands it a
+diagonal. The f1-bishop of The Amateur's Mind p. 10 satisfies all three,
+because every white pawn on that board is frozen.
+
+### Three cost-term measurements, and what each one deleted
+
+`kibitz-cli entomb-fp` is the analogue of `alerts-fp` for a detector that
+buys no engine time: the same 500 engine-quiet master positions, where
+every firing is a false statement in the prose and a wrong discount in
+the ledger. It was run BEFORE the detector was wired into anything, and
+it rewrote the design three times.
+
+| version | quiet-set firing | what it was calling entombed |
+|---|---|---|
+| condition (1) alone | **51.0%** (545 pieces) | 362 back-rank rooks |
+| + `MAX_CELL` size test | **28.2%** (207) | 126 back-rank rooks |
+| + own pieces are not walls | **1.2%** (6) | 5 bishops, 1 arrived rook |
+| + pawn-only sealing, arrival | **0.4%** (2) | 2 hemmed bishops |
+| + two pawn moves, not one | **0.0%** (0) | — |
+
+Each row is a concept the first draft had wrong, not a threshold:
+
+- **A cell has to be small.** Reaching nothing is the pure case; the
+  p. 10 bishop shuffling between g2, h3 and h1 is the other end of it.
+- **Your own men are not walls.** A rook on f8 with its king on g8 and
+  its queen on d8 is not entombed; those pieces move. This one deletion
+  took 27 points off the firing rate.
+- **Only pawns seal a square.** Being watched by an enemy knight is a
+  reason not to go somewhere this move, not a wall. This is what had
+  condemned the c8-bishop of a Paulsen Sicilian, whose one route out
+  (…Bb5) happened to be covered by a knight and a queen.
+- **A piece already in enemy territory has arrived**, however little it
+  can do next.
+- **Two pawn moves, not one.** See below — this row is the one the book
+  corpus caught rather than the quiet set.
+
+### Fischer's bishop, and why the depth-1 test was not enough
+
+At depth 1 the detector cost a favors point, and the entry it cost was
+htryc-379-140 — Fischer-Gadia, Mar del Plata 1960, where White's
+b3-bishop is boxed in by its own a2/c2 and Black's b5-pawn. No single
+white pawn move frees it. `c2-c4` followed by `cxb5` does, and Jeremy Silman's
+whole answer is that White is better because his structure is still
+fluid. Depth 1 discounted that bishop 165cp and handed the position to
+Black.
+
+The candidate set that reaches the permanence test is one or two pieces
+in a couple of positions per thousand, so the squared cost of depth 2 is
+nothing measurable (`entomb-fp` over 500 positions: 0.46s, unchanged).
+
+### One prediction, recorded and refuted
+
+Predicted before running: the detector catches cbcs-193's h2-knight
+(boxed by its own f3/g4 and Black's f4-pawn) and misses the b1-knight
+(c3 is defended by the d2-pawn, so it can pay a bishop for itself and go
+c3-e4-d6).
+
+**Half right, and the wrong half is the interesting one.** b1 escapes
+exactly as predicted. h2 escapes too, through **d2xe3** — a pawn capture
+that removes the very pawn covering d2 and g3, and opens the box. The
+book does not consider it. Captures stay in the permanence test: the
+detector being stricter than the text is the right direction for
+something that discounts material, and the committed test asserts the
+non-detection with the reason rather than papering over it.
+
+### The corpus re-transcription, stated plainly
+
+Three entries had `TrappedPiece` in their `expected.alerts` because that
+was the only vocabulary the transcription had for the book's own word.
+One of them (am-10-1) said so in its own note: "TrappedPiece is our
+closest alert for the entombed bishop". Those three moved to the plans
+axis:
+
+| entry | was | now |
+|---|---|---|
+| cbcs-192-entombed-rook | alert TrappedPiece | plan KeepPieceEntombed — **hit** |
+| am-10-1 | alert TrappedPiece | plan KeepPieceEntombed — **hit** |
+| cbcs-193-entombed-knights | alert TrappedPiece | plan KeepPieceEntombed — **miss** |
+
+This is an edit to ground truth made by the implementer and it should be
+read with that in mind. Two things bound it. The book itself names the
+concept — both CBCS entries carry `concept: entombed-piece` from the
+p. 192-193 entry title — so the correction is to the transcription, not
+to the standard. And the third entry was re-transcribed knowing it would
+FAIL, which is the test of whether a corpus edit is honest.
+
+The other four TrappedPiece expectations were **left alone**, because
+they are a different problem and not this one:
+
+- am-322-1 — "the game's knight raid via c7 died on a8"
+- am-323-2 — "the queen ultimately snared"
+- am-328-1 — "the g6-bishop's near-entombment" (there is no piece on g6
+  in the FEN; the diagram is before 15.Bg6?)
+- htryc-381-151 — the note does not mention a trapped piece at all
+
+The first three are COUNTERFACTUAL: the trapping happens several moves
+into a line the book is warning against, not in the diagram. No static
+detector can see them, and neither can an engine at this position
+without first playing the bad move. Correcting them is a judgment for
+the corpus author, not for the code.
+
+### Results
+
+| axis | before #12 | after #12 |
+|---|---|---|
+| imbalances | 90.9% (261/287) | **90.9%** (261/287) |
+| plans | 76.2% (109/143) | **76.0%** (111/146) |
+| alerts | 40.6% (13/32) | **44.8%** (13/29) |
+| favors | 68.7% (68/99) | **68.7%** (68/99) |
+| negatives | 14/14 | 30/31 (see #11 below) |
+
+Read the plans row carefully: it went DOWN 0.2 points while gaining two
+hits, because the axis gained three expectations and one of them is the
+knight the detector deliberately does not claim. The rate fell and the
+engine got better; that is what happens when you add an expectation you
+know you fail.
+
+**The alerts ceiling, restated.** 44.8%, up from 40.6%, and not one point
+of it came from the screen getting better. Three expectations left the
+denominator because they were never alerts. The Complete Book of Chess
+Strategy's alerts axis is now 4/4. What remains is 16 misses over 29
+expectations, and the partition below has not moved.
+
+If the four counterfactual expectations were also corrected, the axis
+would read **13/25 = 52.0%**. That number is offered as a bound, not
+claimed: it is what the axis measures if every expectation in it is
+something the position actually contains.
+
+## #10 re-measured: still 6, and why #12 did not touch it
+
+`kibitz-cli alerts-study` after #12:
+
+| bucket | count |
+|---|---|
+| engine-off cost | 1 |
+| static gap | **6** |
+| silent, screen fired | 9 |
+
+The static gap is unchanged at 6 — four WeakKing (am-324-2,
+htryc-375-128, htryc-388-182, htryc-391-200) and two TrappedPiece
+(am-323-2, am-328-1), exactly the six named before this run.
+
+That is not an accident of counting. Re-running the study against the
+pre-#12 transcription puts all three entombment entries in **silent,
+screen fired** (12, now 9), never in the static gap: the screen was
+already firing on those positions for other reasons, so the engine was
+being consulted regardless. #12 removed three expectations the screen
+was never going to satisfy and left the six structural gaps untouched.
+The two TrappedPiece entries still in the gap are two of the four
+counterfactuals above, so the honest reading of the static gap is
+**four WeakKing misses and two expectations that are not about the
+position.**
+
+## The alerts axis gets corpus-side negatives too (#11, second source)
+
+Until now the alerts axis had exactly one negative source: `alerts-fp`
+over 500 engine-quiet master positions. That set is the honest one —
+nobody chose it with these detectors in mind, so it can surprise you —
+but it is anonymous. It moves a rate by fractions of a point and it
+cannot say WHICH claim was wrong.
+
+`not_expected` now carries an `alerts` list, and 17 alert bans were
+written across the 10 transcribed counter-example entries. The selection
+rule was fixed before running: on a counter-example whose text settles
+the position as quiet, both judgment detectors must stay silent;
+WeakKing is withheld from the ban only where king safety is genuinely an
+open question (kings still in the centre at move 3, and a queen endgame
+where every king is airy by nature).
+
+Negative checks: **14 → 31. Thirty are clean and one is RED.**
+
+| entry | banned | status |
+|---|---|---|
+| cbcs-239-doubled-pawns-useful (p. 239) | WeakKing | **FIRES** |
+
+`r1bq1rk1/ppp2pp1/2np1n1p/4p3/2B1P3/2NPPN2/PPP3PP/R2Q1RK1 w`. White's
+doubled e-pawns are the book's example of a GOOD doubled pawn — they
+hold d5/f5/d4/f4 and hand White the half-open f-file, which is exactly
+where his rook already is. The detector looks at the same structure and
+reports `WeakKing white g1, f-file shield pawn missing`.
+
+It is left red on purpose. In mitigation the alert is severity `low` and
+**the screen does not fire**, so it costs no engine job — it is a claim
+in the prose, not a tactical call. Against that, the missing f-pawn is
+the whole reason the position is good for White, so the one sentence the
+coach adds contradicts the lesson. Whether the anchor is too strict or
+WeakKing's castled-king arm needs a "did an enemy piece ever get near
+that file" condition is a judgment for the maintainer; what is NOT
+allowed is tuning a detector against one anchor, which is the same
+mistake this document has spent two runs cataloguing.
+
+Worth stating flatly, because the caution was raised before the source
+existed and it was right: a negative set chosen by someone who knows
+what the detectors do is **weaker evidence, not useless evidence**. It
+cannot surprise you the way the quiet holdout can, because the holdout
+was assembled by people who had never heard of WeakKing. The failure
+mode to guard against is therefore over-confidence in a clean sheet
+here — "30/31 clean" is not the same claim as "30/31 clean on positions
+nobody chose" — and not absence of signal. It found something on its
+first run.
+
+## Methodology: the cost term comes before the tuning, not after
+
+Promoted here from three runs of evidence, because it decided the
+outcome twice in this run alone.
+
+The book corpus scores recall. A detector that fires more will always
+look better on it, and there is no number anywhere in a recall-only
+harness that distinguishes a gain from a regression. Every sensitivity
+argument in the previous three sections was undecidable until a
+denominator existed:
+
+- **WeakKing** looked like a free +15.7 on the book corpus. With
+  `alerts-fp` it was +15.7 recall for +8.4 points of screen firing —
+  1.87 per point — and the gated version that shipped is 2.6 per point.
+- **TrappedPiece with both gates off** looked like +15.6. With the cost
+  term it is 0.88 recall points per false-positive point, the worst
+  trade measured, and it was refused.
+- **Entombment** would have shipped as a detector firing on **51% of
+  quiet master positions**. Nothing in the book corpus would have said
+  so; its numbers were unchanged in every version. The five deletions in
+  the table above were all driven by a measurement taken before the
+  detector was connected to anything.
+
+The rule, then. A detector gets a denominator before it gets a
+threshold. The denominator is a set nobody picked with that detector in
+mind. It is measured before the detector is wired into the product, not
+after the recall number looks good — because once the recall number
+looks good, every subsequent measurement is an argument about whether to
+give it up.
+
+The corollary is the one that cost real work this run: **when the cost
+term deletes a concept, that is the finding.** Four of the five entombment
+revisions were not tuning. They were the detector being wrong about what
+a wall is, and only a denominator could say so.
+
+### And the corpus caught what the cost term could not
+
+The rule above is not "the FP rate is the real metric." Entombment
+shipped through two instruments and each one caught a failure the other
+was structurally blind to.
+
+The false-positive rate found **breadth errors**: a rule that condemns
+half the quiet set is visibly wrong however few positions you inspect,
+and the 51.0% row needed no judgment at all to read. What it cannot see
+is a rule that fires rarely and is wrong when it does. At depth 1 the
+detector fired on **two positions in five hundred** — a rate any
+reviewer would have signed off — and one of the two it was quietly
+right about while the corpus held the case that mattered.
+
+The book corpus found the **depth error**: Fischer-Gadia, htryc-379-140,
+where discounting White's b3-bishop 165cp flips a position Jeremy Silman
+spends a page explaining is good for White. The bishop really is boxed
+in. What the detector had wrong was how long for — `c2-c4` then `cxb5`
+opens it, and the entire book answer rests on White's structure still
+being fluid. No false-positive count over anonymous positions could ever
+surface that, because the FP rate has no opinion about which side stands
+better; it only counts firings. The corpus does nothing else.
+
+So the two are not a primary metric and a sanity check. They are two
+instruments with disjoint blind spots:
+
+| | catches | blind to |
+|---|---|---|
+| quiet-set FP rate | firing too broadly, on positions nobody chose | firing rarely and wrongly |
+| book corpus | being wrong about a position someone can explain | over-firing, by construction |
+
+A recall metric is invariant to over-firing — version one and version
+five of this detector score identically on it — which is why the FP rate
+had to exist. And an FP rate is invariant to being wrong about the
+positions you do fire on, which is why it could not have replaced the
+corpus. Ship nothing on one of them.
+
+### One thing found and not fixed
+
+`route::route_to` treats an enemy-occupied square as a passable waypoint
+whether or not the capture is sound, so a rook walled in behind a
+defended pawn "routes" straight through it. `entomb` needed its own BFS
+because of it. This is benign where `route_to` is used today — its
+targets are empty outpost squares and its callers only ever add plans —
+but it is a real defect, and fixing it would move every maneuver number
+in this document. Filed, not touched.
