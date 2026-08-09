@@ -489,6 +489,43 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     })
 }
 
+/// The squares `piece` of `color` attacks from `sq` on the current board.
+fn attack_squares_from(board: &Board, piece: Piece, color: Color, sq: Square) -> BitBoard {
+    let occ = board.occupied();
+    match piece {
+        Piece::Pawn => cozy_chess::get_pawn_attacks(sq, color),
+        Piece::Knight => cozy_chess::get_knight_moves(sq),
+        Piece::Bishop => cozy_chess::get_bishop_moves(sq, occ),
+        Piece::Rook => cozy_chess::get_rook_moves(sq, occ),
+        Piece::Queen => cozy_chess::get_bishop_moves(sq, occ) | cozy_chess::get_rook_moves(sq, occ),
+        Piece::King => cozy_chess::get_king_moves(sq),
+    }
+}
+
+/// Can `color` bring force to bear on `target`? True when any of its
+/// N/B/R/Q has a route to a square attacking it (the HuntBishopPair
+/// machinery), or a pawn can come to attack it within the pawn-contact
+/// model. Kings and current attackers count too — a target already
+/// attacked is trivially gettable-at.
+fn can_get_at(board: &Board, color: Color, target: Square) -> bool {
+    if !crate::attack::attackers_of(board, target, color, board.occupied()).is_empty() {
+        return true;
+    }
+    if crate::pawn_contact::evict_distance(board, color)[target as usize]
+        != crate::pawn_contact::NEVER
+    {
+        return true;
+    }
+    for piece in [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen] {
+        for from in board.colored_pieces(color, piece) {
+            if crate::route::route_to_attack(board, color, piece, from, target).is_some() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Squares in `camp_owner`'s outpost band the owner's pawns can never
 /// defend, WITHOUT the occupancy filter — used to test whether a piece
 /// already standing on such a square is on an outpost.
@@ -960,6 +997,55 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                                 hint: "RookBehindPasser".into(),
                                 owner: None,
                                 squares: vec![square_name(p), square_name(behind)],
+                            },
+                        ));
+                    }
+                }
+
+                // An enemy piece already standing on the stop square is a
+                // BLOCKADER, and Nimzowitsch's two blockade B2 conditions
+                // live here (My System ch. 4; docs/NIMZOWITSCH_INVENTORY.md
+                // mechanisms 7 and 10).
+                if let Some(blocker) = board
+                    .colors(!color)
+                    .has(stop)
+                    .then(|| board.piece_on(stop))
+                    .flatten()
+                {
+                    // Mechanism 7, elasticity v1: a blockader is judged by
+                    // what it does WHILE standing there. Threats counted
+                    // from its post; the strict leave-and-return race is
+                    // deliberately not attempted (B3). Evidence only — the
+                    // corpus positions that ask about blockader quality
+                    // (cbcs-178, cbcs-216) are answered by this field plus
+                    // the BlockadeThenPressure hint that already exists.
+                    let threats = (attack_squares_from(board, blocker, !color, stop)
+                        & board.colors(color))
+                    .len();
+                    evidence.insert(
+                        format!("blockader_{}", square_name(stop)),
+                        json!({
+                            "pawn": square_name(p),
+                            "piece": format!("{blocker:?}"),
+                            "threats": threats,
+                            "elastic": threats >= 1,
+                        }),
+                    );
+
+                    // Mechanism 10, uprooting — "Changez les blockeurs!".
+                    // The passer's owner wants the blockader attacked,
+                    // exchanged, or driven off. Only where the passer is
+                    // advanced (same urgency gate as the blockade hint) and
+                    // we can actually get at the blockader: a piece with a
+                    // route to attack it, or a pawn that can come to hit
+                    // the stop square.
+                    if advanced(p) && can_get_at(board, color, stop) {
+                        sided.push((
+                            color,
+                            PlanHint {
+                                hint: "UprootBlockader".into(),
+                                owner: None,
+                                squares: vec![square_name(stop), square_name(p)],
                             },
                         ));
                     }
@@ -2470,6 +2556,65 @@ mod tests {
 
     fn has(plans: &[PlanHint], hint: &str) -> bool {
         plans.iter().any(|p| p.hint == hint)
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 216
+    /// (diagram 210): both sides blockade a passer, and the book's
+    /// contrast is the whole point — black's d6 knight radiates threats
+    /// from its post while white's b3 bishop stops the pawn and does
+    /// nothing else. Elasticity v1 must tell them apart.
+    #[test]
+    fn blockader_quality_tells_the_knight_from_the_bishop() {
+        let b = board("6k1/6pp/3n1p2/2pPp3/PpP1P2q/1B6/4Q1PP/6K1 w - - 0 1");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        let knight = imb
+            .evidence
+            .get("blockader_d6")
+            .expect("black blockader on d6");
+        assert_eq!(knight["elastic"], serde_json::json!(true), "{knight}");
+        assert!(knight["threats"].as_u64().unwrap() >= 2, "{knight}");
+        let bishop = imb
+            .evidence
+            .get("blockader_b3")
+            .expect("white blockader on b3");
+        assert_eq!(bishop["elastic"], serde_json::json!(false), "{bishop}");
+    }
+
+    /// Same position: both passers are advanced and both blockaders can
+    /// be gotten at, so BOTH sides carry the uprooting plan, each owning
+    /// its own (Nimzowitsch, My System ch. 4, the fight against the
+    /// blockader).
+    #[test]
+    fn uproot_blockader_fires_for_the_passer_owner() {
+        let b = board("6k1/6pp/3n1p2/2pPp3/PpP1P2q/1B6/4Q1PP/6K1 w - - 0 1");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        let uproots: Vec<_> = imb
+            .plans
+            .iter()
+            .filter(|p| p.hint == "UprootBlockader")
+            .collect();
+        assert!(
+            uproots.iter().any(|p| p.squares == vec!["d6", "d5"]),
+            "white wants the d6 blockader uprooted: {uproots:?}"
+        );
+        assert!(
+            uproots.iter().any(|p| p.squares == vec!["b3", "b4"]),
+            "black wants the b3 blockader uprooted: {uproots:?}"
+        );
+    }
+
+    /// A blockaded passer still on its own side of the board is not yet
+    /// an uprooting story — same urgency gate as the blockade hint. White
+    /// pawn on d4 blockaded by a knight on d5: no UprootBlockader.
+    #[test]
+    fn uproot_blockader_waits_for_the_frontier() {
+        let b = board("4k3/8/8/3n4/3P4/8/5N2/4K3 w - - 0 1");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        assert!(
+            !imb.plans.iter().any(|p| p.hint == "UprootBlockader"),
+            "{:?}",
+            imb.plans
+        );
     }
 
     /// Jeremy Silman, The Amateur's Mind, p. 323, test 15: wing storm
