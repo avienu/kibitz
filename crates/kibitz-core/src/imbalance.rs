@@ -688,12 +688,54 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 - iso[ci].len() as i32 * 15
                 - doubled_extras * 10
                 - backward[ci].len() as i32 * 15);
-        // Protected passers are worth more.
+        // Passer classification (run 12, Nimzowitsch ch. 4 mechanisms 14
+        // and 16, the B2 classification halves). Protected passers were
+        // already scored; now every passer carries its named character,
+        // because the books argue from the character, not the count:
+        // protected (an own pawn holds it), connected (an own passer on
+        // the neighbouring file — the pair the blockade cannot hold),
+        // outside (far from the enemy king, the endgame decoy). The
+        // which-of-two-connected-pawns-advances rule and the decoy
+        // SACRIFICE are bucket-3 and deliberately absent.
         for p in passed[ci] {
             let color = if ci == 0 { Color::White } else { Color::Black };
             let protectors = get_pawn_attacks(p, !color) & board.colored_pieces(color, Piece::Pawn);
             if !protectors.is_empty() {
                 score += sign * 15;
+            }
+            let connected = !(adjacent_files(p.file()) & passed[ci]).is_empty();
+            // Outside = far from BOTH kings. The first draft measured
+            // distance from the enemy king only, and the corpus's
+            // bishop-stops-all-passers position (CBoCS p. 212) refuted
+            // it before it shipped: black's g3/h2 pawns sat four files
+            // from the wandering white king and were called outside
+            // while being the entire theater, with their own king on
+            // top of them. A decoy has to be far from where everyone
+            // lives, not just from one address.
+            let file_dist = |k: Square| (p.file() as i8 - k.file() as i8).abs();
+            let outside = phase(board) != crate::record::Phase::Opening
+                && file_dist(board.king(!color)) >= 4
+                && file_dist(board.king(color)) >= 4;
+            evidence.insert(
+                format!("passer_{}", square_name(p)),
+                json!({
+                    "protected": !protectors.is_empty(),
+                    "connected": connected,
+                    "outside": outside,
+                }),
+            );
+            // The outside passer's endgame job is diversion: it costs
+            // the defender a king, not a square (Jeremy Silman, CBoCS
+            // p. 299; Nimzowitsch, My System ch. 4 §6c).
+            if outside && phase(board) == crate::record::Phase::Endgame {
+                sided.push((
+                    color,
+                    PlanHint {
+                        hint: "OutsidePasserDecoy".into(),
+                        owner: None,
+                        squares: vec![square_name(p)],
+                    },
+                ));
             }
         }
     }
@@ -2556,6 +2598,62 @@ mod tests {
 
     fn has(plans: &[PlanHint], hint: &str) -> bool {
         plans.iter().any(|p| p.hint == hint)
+    }
+
+    /// Jeremy Silman, The Complete Book of Chess Strategy, p. 298
+    /// (diagram 278): the far-advanced a6 passer with both kings on the
+    /// other wing is the textbook OUTSIDE passer. The classification
+    /// spot-checks were fixed in the prediction before the code was
+    /// written: this one is outside, and praxis-g70's e5 passer (enemy
+    /// king one file away on f7) is not.
+    #[test]
+    fn passer_classification_outside_versus_near() {
+        let far = board("q7/5pk1/P3p1pp/1Q6/8/8/8/6K1 w - - 0 1");
+        let imb = pawn_structure(&far).expect("pawn structure");
+        let a6 = imb.evidence.get("passer_a6").expect("a6 classified");
+        assert_eq!(a6["outside"], serde_json::json!(true), "{a6}");
+        assert!(imb.plans.iter().any(|p| p.hint == "OutsidePasserDecoy"));
+
+        let near = board("3r4/bp1r1k2/2p1b2p/1p2P1p1/3P4/P4NKP/1PBR2P1/4R3 w - - 0 31");
+        let imb = pawn_structure(&near).expect("pawn structure");
+        let e5 = imb.evidence.get("passer_e5").expect("e5 classified");
+        assert_eq!(e5["outside"], serde_json::json!(false), "{e5}");
+    }
+
+    /// The spot-check that refuted the first draft (CBoCS p. 212,
+    /// diagram 204): black's g3/h2 passers are four files from the
+    /// white king and are still not OUTSIDE anything — they are the
+    /// main theater, with black's own king standing on top of them.
+    /// Outside means far from both kings.
+    #[test]
+    fn passers_in_the_main_theater_are_not_outside() {
+        let b = board("8/PB3kn1/8/8/2K2p2/6p1/7p/8 w - - 0 1");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        for sq in ["g3", "h2", "f4"] {
+            let e = imb
+                .evidence
+                .get(&format!("passer_{sq}"))
+                .expect("classified");
+            assert_eq!(e["outside"], serde_json::json!(false), "{sq}: {e}");
+        }
+    }
+
+    /// Connected passers are named as a pair; a lone passer is not.
+    /// White b5/c5 vs nothing on the queenside: both connected. The
+    /// black h-passer: neither connected nor protected.
+    #[test]
+    fn passer_classification_connected_pair() {
+        let b = board("6k1/8/8/1PP5/8/8/7p/6K1 w - - 0 1");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        for sq in ["b5", "c5"] {
+            let e = imb
+                .evidence
+                .get(&format!("passer_{sq}"))
+                .expect("classified");
+            assert_eq!(e["connected"], serde_json::json!(true), "{sq}: {e}");
+        }
+        let h2 = imb.evidence.get("passer_h2").expect("h2 classified");
+        assert_eq!(h2["connected"], serde_json::json!(false), "{h2}");
     }
 
     /// Jeremy Silman, The Complete Book of Chess Strategy, p. 216
