@@ -83,6 +83,33 @@ pub struct Expected {
     /// them — scored against kibitz-core::suggest (run 10).
     #[serde(default)]
     pub best_moves: Vec<String>,
+    /// Expectations that hold only after a CONTINUATION is played — real
+    /// chess content about a derived position, not this one (run 12).
+    ///
+    /// Three corpus entries expected TrappedPiece for a piece that gets
+    /// snared several moves into a line the book is warning against. No
+    /// static detector can see those from the diagram, and neither can an
+    /// engine that has not played the bad move — so scoring them at
+    /// position level punished the analyzer for not hallucinating. They
+    /// are excluded from position-level scoring and reported separately;
+    /// they become scorable when a suggest-then-verify harness can walk
+    /// `line` and screen the resulting position.
+    #[serde(default)]
+    pub line_conditional: Vec<LineConditional>,
+}
+
+/// One line-gated expectation: play `line` from the entry's FEN, then the
+/// `alerts` are expected to hold in the resulting position. An empty
+/// `line` means the SAN has not been transcribed yet (needs the book) —
+/// still excluded from scoring, still counted, flagged in the report.
+#[derive(Debug, Default, Deserialize)]
+pub struct LineConditional {
+    #[serde(default)]
+    pub line: Vec<String>,
+    #[serde(default)]
+    pub alerts: Vec<String>,
+    #[serde(default)]
+    pub note: String,
 }
 
 /// Known PlanHint tokens the engine can emit today. Expected plan tags
@@ -550,6 +577,9 @@ pub struct Report {
     /// Precision: negative assertions that FIRED anyway.
     pub false_fires: Vec<(String, &'static str, String)>,
     pub negative_checks: u32,
+    /// Line-conditional expectations seen: (entry id, alert, line transcribed?).
+    /// Counted and reported, never scored — see [`LineConditional`].
+    pub line_conditional: Vec<(String, String, bool)>,
 }
 
 pub fn eval_corpus(corpus: &Corpus) -> Report {
@@ -648,6 +678,13 @@ pub fn eval_corpus(corpus: &Corpus) -> Report {
                 r.alerts.hits += 1;
             } else {
                 r.misses.push((e.id.clone(), "alert", want.clone()));
+            }
+        }
+
+        for lc in &e.expected.line_conditional {
+            for a in &lc.alerts {
+                r.line_conditional
+                    .push((e.id.clone(), a.clone(), !lc.line.is_empty()));
             }
         }
 
@@ -806,6 +843,23 @@ pub fn print_report(book: &str, r: &Report, verbose: bool) {
         );
         for (id, axis, what) in &r.false_fires {
             println!("  FALSE-FIRE {axis:<9} {id}: {what}");
+        }
+    }
+    if !r.line_conditional.is_empty() {
+        println!(
+            "  line-conditional {} expectation(s) excluded from position-level scoring \
+             (await suggest-verify):",
+            r.line_conditional.len()
+        );
+        for (id, alert, has_line) in &r.line_conditional {
+            println!(
+                "    {id}: {alert}{}",
+                if *has_line {
+                    ""
+                } else {
+                    "  [line not yet transcribed]"
+                }
+            );
         }
     }
     if verbose {
@@ -997,6 +1051,7 @@ mod tests {
                         alerts: vec![],
                         theme: String::new(),
                         best_moves: vec!["Nd5".into()],
+                        line_conditional: vec![],
                     },
                 },
                 Entry {
