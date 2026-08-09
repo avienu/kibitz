@@ -542,6 +542,7 @@ const KNOWN_HINTS: &[&str] = &[
     // Run 12, ruling 3: the blockade B2 pair from the Nimzowitsch ch. 4
     // inventory (mechanism 10; mechanism 7 is evidence, not a hint).
     "UprootBlockader",
+    "OutsidePasserDecoy",
 ];
 
 #[derive(Debug, Default)]
@@ -1146,7 +1147,9 @@ pub fn queenless_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
         println!("  {b}");
     }
     if hits_in_class.is_empty() {
-        println!("no book WeakKing EXPECTATION is satisfied by a class alert — gate loses no recall");
+        println!(
+            "no book WeakKing EXPECTATION is satisfied by a class alert — gate loses no recall"
+        );
     } else {
         println!("RECALL AT RISK — these entries expect WeakKing and hold a class alert:");
         for h in &hits_in_class {
