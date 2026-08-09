@@ -153,6 +153,29 @@ fn wrecked_shield_open_file_fires_w() {
     assert!(alert.severity >= Severity::Medium);
 }
 
+/// W — the shield pawn RELOCATED, it did not leave. Jeremy Silman, The
+/// Complete Book of Chess Strategy, p. 239: White's doubled e-pawns are
+/// the book's example of a USEFUL doubled pawn, and the empty f-file in
+/// front of g1 exists only because the f-pawn captured onto e3. The pawn
+/// count in front of the king is unchanged, Black's f7-pawn still blocks
+/// the file, and White's own rook sits on it.
+///
+/// The pair with `wrecked_shield_open_file_fires_w` above is the whole
+/// condition: the same "shield file empty, doubled pawn next door"
+/// signature, alerting in one and silent in the other, decided by
+/// whether the file the pawn left is genuinely open.
+#[test]
+fn relocated_shield_pawn_is_not_a_missing_one() {
+    let r = run("r1bq1rk1/ppp2pp1/2np1n1p/4p3/2B1P3/2NPPN2/PPP3PP/R2Q1RK1 w - - 0 1");
+    assert!(
+        !r.alerts
+            .iter()
+            .any(|a| a.kind == AlertKind::WeakKing && a.side == SideColor::White),
+        "f-pawn is on e3, not gone: {:?}",
+        r.alerts
+    );
+}
+
 /// Pin-awareness: an absolutely pinned defender does not count.
 /// Constructed: black Bf5 attacked by white Rf1; its only "defender" is
 /// the e6 knight, absolutely pinned by Bc4 against Kg8.

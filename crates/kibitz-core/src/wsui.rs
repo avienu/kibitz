@@ -506,9 +506,40 @@ fn detect_weak_king(board: &Board, side: Color, cfg: &WsuiConfig, alerts: &mut V
             let own_pawns_on_file = board.colored_pieces(side, Piece::Pawn) & file.bitboard();
             let enemy_pawns_on_file = board.colored_pieces(enemy, Piece::Pawn) & file.bitboard();
             if own_pawns_on_file.is_empty() {
+                // Did the shield pawn LEAVE, or just move one file over?
+                // A doubled own pawn on a neighbouring file is the
+                // signature of a shield pawn that captured sideways: the
+                // file is bare but the number of pawns in front of the
+                // king is unchanged, which is the whole reason the
+                // Jeremy Silman doubled e-pawns (Complete Book of Chess
+                // Strategy p. 239) are an asset rather than a hole.
+                //
+                // Same error as `central_king` was before run 12: the
+                // feature was a proxy for the thing that matters. It is a
+                // class and not one position — 24 across the book corpus
+                // and the quiet holdout, WeakKing blaming the relocated
+                // file in every one and having no other reason in 21
+                // (`kibitz-cli shield-study`).
+                //
+                // The excuse holds only while the file stays blocked. On
+                // a GENUINELY open file it is no comfort at all that the
+                // pawn is alive one file over: there is a highway to the
+                // king either way, which is the same test the central
+                // king already gets, run in the opposite direction. The
+                // committed golden for a shattered kingside (…gxf6 with
+                // a white rook on the open g-file) is what caught the
+                // condition without it.
+                let relocated = !enemy_pawns_on_file.is_empty()
+                    && [f - 1, f + 1].iter().any(|&adj| {
+                        (0..8).contains(&adj)
+                            && (board.colored_pieces(side, Piece::Pawn)
+                                & File::index(adj as usize).bitboard())
+                            .len()
+                                >= 2
+                    });
                 // For a central king the file must be genuinely open —
                 // an enemy pawn stopping it means no line to the king.
-                if !central_king || enemy_pawns_on_file.is_empty() {
+                if !relocated && (!central_king || enemy_pawns_on_file.is_empty()) {
                     shield_defects.push(format!("{}-file shield pawn missing", file_char(file)));
                 }
                 if enemy_pawns_on_file.is_empty() {
