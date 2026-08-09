@@ -3,6 +3,37 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+## route_to passes through unsound captures (run 12, open)
+
+`crates/kibitz-core/src/route.rs` marks a square blocked if our own piece
+stands on it or if the enemy out-guns it, but that out-gunned map is
+computed over EMPTY squares only. A square holding an enemy piece is
+therefore never blocked, so the BFS walks through it whether or not the
+capture is sound. A rook penned behind a defended pawn "routes" straight
+through the pawn and reports a path that does not exist.
+
+Found while building the entombed-piece detector (#12), which needed a
+BFS whose whole claim is that no path exists and so could not use this
+one. It has its own, deliberately duplicated, with the reason in a
+comment at `entomb::steps`.
+
+**Why it is parked rather than fixed.** Every maneuver, scheme and
+plan-hint number in docs/VALIDATION.md was measured with the current
+behaviour — ManeuverKnightToOutpost, ManeuverBishopToSupportPoint,
+ManeuverRookToOpenFile, HuntBishopPair, TradeSquareDefender, the
+scheme synthesis on top of them, and the suggest@1/@3 rates downstream.
+Correcting it is a one-line class of change and a full re-measurement of
+the plans axis, both instruments, and the 41-suite golden set. That is a
+run item, not a drive-by.
+
+**Mitigating today:** the callers all take empty outpost or entry squares
+as targets and only ever ADD plan hints, so a phantom route produces an
+over-optimistic suggestion, never a wrong veto or a missed alert.
+
+**The decision:** fix it and re-baseline the plans axis in a run of its
+own, or leave it documented. Not a licensing or user-visible-behaviour
+question; it is a question of when to spend the re-measurement.
+
 Run-8 note: three go-public decisions are with the maintainer, listed
 as the checklist closing RUN_REPORT.md run-8: (1) history rewrite for
 the personal email (proposed filter-repo plan, not executed); (2)
