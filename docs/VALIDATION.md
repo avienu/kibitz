@@ -1577,3 +1577,111 @@ because of it. Benign where `route_to` is used today, real all the same,
 and fixing it would move every maneuver number in this document. Parked
 as a decision rather than a surprise — see DECISIONS_NEEDED.md,
 "route_to passes through unsound captures".
+
+## The counterfactuals leave the alerts axis: 52.0%, with stated exclusions
+
+The maintainer ruled on the four counterfactual TrappedPiece
+expectations, and the bound from the entombment section is now the
+figure.
+
+**am-328-1 was a plain transcription error and is simply corrected.**
+Its note claimed TrappedPiece for "the g6-bishop's near-entombment", but
+the FEN is the diagram BEFORE 15.Bg6? — there is no piece on g6 to trap.
+The expectation is removed, not relocated.
+
+**The other three are real chess content about a derived position**, and
+the corpus now has a category for that: `expected.line_conditional`, an
+expectation that holds only after a recorded continuation is played from
+the entry's FEN. am-322-1 (the knight raid that dies on a8), am-323-2
+(the queen ultimately snared) and htryc-381-151 (the bishop trapped by
+the recommended exchange sacrifice) moved there. They are excluded from
+position-level scoring, counted and printed by the harness, and become
+scorable when a suggest-then-verify harness can walk the line and screen
+the resulting position — the category where that engine gets graded
+eventually, created now rather than invented under pressure. The SAN
+lines are not yet transcribed (they need the books at hand) and each
+entry is flagged `[line not yet transcribed]` until they are.
+
+| axis | with counterfactuals | after the ruling |
+|---|---|---|
+| alerts | 13/29 = 44.8% | **13/25 = 52.0%** |
+| line-conditional (unscored) | — | 3 |
+
+Every expectation still in the denominator is now something the diagram
+actually contains. The #10 partition after the ruling: **1 engine-off,
+4 static gap, 7 silent-screen-fired** — the static gap is purely the
+four WeakKing misses, which the next section prices.
+
+## Pricing the four WeakKing misses: two mechanisms, both real, neither ships bare
+
+All four are silent today — no WeakKing at any severity. Read together
+they are not one gap. am-324-2 and htryc-391-200 hold a king still on
+its home d/e square, shield intact, nothing attacking the zone, while a
+castled opponent prepares to open the centre — exposure that is
+TEMPORAL, invisible to every current arm because every current arm reads
+the present. htryc-375-128 and htryc-388-182 hold castled kings with
+intact shields under a massed piece funnel — force that can ARRIVE,
+where the zone-surplus arm counts force that already attacks.
+
+### Prediction, recorded before the sweep was written
+
+1. The split is 2+2: lagging-king covers exactly the first pair, the
+   sector funnel exactly the second, and no single condition covers all
+   four.
+2. Lagging-king class size: book 6-14, quiet 10-40 (2-8%). Refutation
+   line stated in advance: **quiet frequency above ~10% means the bare
+   condition cannot ship.**
+3. WeakKing silent on >90% of lagging-king candidates.
+4. Sector-funnel (force_in margin >= 300cp at a flank king) quiet
+   frequency 15-35% — predicted DEAD as a bare condition before running.
+
+### Result: `kibitz-cli king-study`, 662 positions
+
+| | book | quiet | WeakKing already fires |
+|---|---|---|---|
+| A — lagging king | 16 | **57 (11.4%)** | 31% / 26% of candidates |
+| B — sector funnel | 61 | **176 (35.2%)** | 28% / 22% of candidates |
+
+Prediction 1 **held exactly**: am-324-2 and htryc-391-200 are A and not
+B on the miss side; htryc-375-128 and htryc-388-182 are B and not A. Two
+mechanisms, no overlap, no third thing.
+
+Prediction 4 held at the top of its band: B is dead as a bare condition,
+as predicted.
+
+Predictions 2 and 3 were **refuted**. A came in at 11.4% quiet — above
+the 10% line written down in advance, so the bare lagging-king condition
+does not ship either, by the criterion set before the run. And WeakKing
+is not silent on the classes: it already fires on a quarter to a third
+of the candidates through its existing arms, which means a naive
+implementation would not only add its own false positives but double-
+count a substantial overlap.
+
+### The price, in the currency the shipped detector set
+
+The shipped standard is 2.6 recall points per point of quiet firing
+(WeakKing open-file gate). Each recovered miss is worth 4 points on the
+25-expectation axis:
+
+- **Bare A**: +8 recall for ~+8.4 points of new quiet firing — ~0.95 per
+  point, worse than the 1.87 naive-WeakKing version that was already
+  rejected.
+- **Bare B**: +8 recall for ~+27.6 — 0.29 per point, the worst number
+  yet measured on this axis.
+
+For a GATED lagging-king detector to meet the shipped 2.6 standard, its
++8 recall may cost at most ~3.1 points of quiet firing: the gate must
+cut 57 quiet candidates to about 15 while keeping both misses. The
+obvious candidate term is the one the book names in both entries — the
+opponent must actually be able to OPEN the centre (a central lever
+available, or half-open central files) — but designing and pre-
+registering that gate is its own piece of work, deliberately not begun
+in the run that priced it.
+
+**The floor, stated.** The alerts axis stands at 52.0% and will not move
+past 60.0% (both A misses) without a gated lagging-king design, or past
+68.0% (all four) without a funnel gate that cuts 35.2% by two orders of
+severity. Nothing else remains in the static gap. That is what "priced"
+means: the next point on this axis has a known cost and a named
+mechanism, and both were established by predictions that were allowed to
+fail.
