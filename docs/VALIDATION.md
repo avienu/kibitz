@@ -1384,15 +1384,18 @@ hold d5/f5/d4/f4 and hand White the half-open f-file, which is exactly
 where his rook already is. The detector looks at the same structure and
 reports `WeakKing white g1, f-file shield pawn missing`.
 
-It is left red on purpose. In mitigation the alert is severity `low` and
+It was left red at first, deliberately. The alert is severity `low` and
 **the screen does not fire**, so it costs no engine job — it is a claim
-in the prose, not a tactical call. Against that, the missing f-pawn is
-the whole reason the position is good for White, so the one sentence the
-coach adds contradicts the lesson. Whether the anchor is too strict or
-WeakKing's castled-king arm needs a "did an enemy piece ever get near
-that file" condition is a judgment for the maintainer; what is NOT
-allowed is tuning a detector against one anchor, which is the same
-mistake this document has spent two runs cataloguing.
+in the prose, not a tactical call — but the missing f-pawn is the whole
+reason the position is good for White, so the one sentence the coach
+adds contradicts the lesson. What was NOT allowed was tuning a detector
+against one anchor, which is the mistake this document has spent two
+runs cataloguing.
+
+It is green now, and not because it was tuned to: see "cbcs-239 was the
+first instance of a class" below, where the suspicion was written as a
+falsifiable prediction, swept over 662 positions, found in 24 of them,
+and cut back by a golden test before it shipped.
 
 Worth stating flatly, because the caution was raised before the source
 existed and it was right: a negative set chosen by someone who knows
@@ -1476,12 +1479,101 @@ had to exist. And an FP rate is invariant to being wrong about the
 positions you do fire on, which is why it could not have replaced the
 corpus. Ship nothing on one of them.
 
+## cbcs-239 was the first instance of a class, and the fix is smaller than it looks
+
+The red anchor from the section above turned out not to be a choice
+between "anchor too strict" and "WeakKing needs a proximity condition".
+The maintainer proposed a third reading and it is the right one: the
+f-pawn in Jeremy Silman's good-doubled-pawn position **did not leave the
+board, it relocated by capture onto e3.** The number of pawns in front of
+g1 is unchanged. "Shield file empty" was a proxy for "shield pawn traded
+away", in exactly the way "central king" was a proxy for "open file" one
+section earlier.
+
+### Prediction, recorded before the sweep was written
+
+1. Class size 8-30 across the 662 positions of the book corpus plus the
+   quiet holdout.
+2. WeakKing fires on more than 80% of them, because the condition is
+   per-file and has no mechanism for seeing the relocated pawn.
+3. Therefore cbcs-239 is the first instance of a class.
+
+Refutation conditions stated at the same time: a class of 2 or fewer
+means the anchor is too strict and the condition is withdrawn; firing
+well under 80% means something already separates these positions and
+cbcs-239 fires for a reason not yet found.
+
+### Result: `kibitz-cli shield-study`
+
+| | |
+|---|---|
+| positions scanned | 662 |
+| shield file empty, own doubled pawn next door | **24** |
+| WeakKing names that file as a missing shield pawn | **24 (100%)** |
+| …and has no other reason to alert at all | **21 (88%)** |
+
+All three predictions held. The study reports blame rather than firing
+on purpose: a king under real pressure keeps its alert whatever the pawn
+count says, and counting those would have inflated the case from 21 to
+24.
+
+### The condition, and the golden test that cut it down
+
+An empty shield file is not a defect when a neighbouring file carries an
+own doubled pawn — **unless the file the pawn left is genuinely open**,
+in which case the pawn being alive one file over is no comfort at all.
+
+The second clause was not in the first draft. It was forced by a
+committed golden, `wrecked_shield_open_file_fires_w`: a shattered
+kingside where Black has played …gxf6 and White's rook stands on the
+open g-file. That position has the identical signature — g-file bare,
+doubled f-pawns next door — and the king really is in trouble. Without
+the open-file clause the condition silenced it.
+
+Worth noticing which instrument caught which failure, because it is the
+third distinct one in this run. The corpus anchor found the defect; the
+sweep established it was a class and not one position; and the golden
+set found that the fix was too broad. None of the three could have done
+another's job.
+
+The two now sit as a pair in `wsui_golden.rs` — same signature, opposite
+verdicts, decided by whether the file is open.
+
+### What it cost and what it bought, against the prediction
+
+Predicted: book recall unchanged; cbcs-239 green; WeakKing 0.57-0.59 per
+quiet position; **screen firing down 1-3 points.**
+
+| measure | before | after |
+|---|---|---|
+| book alerts | 13/29 = 44.8% | **13/29 = 44.8%** |
+| negative anchors | 30/31 | **31/31** |
+| WeakKing per quiet position | 0.61 (306) | **0.58 (289)** |
+| screen fires on quiet | 46.8% | **46.6%** |
+
+The first three held. **The fourth is refuted, by the criterion written
+down before the run.** Screen firing moved 0.2 points, not 1-3, which
+the prediction had already named as the line: under half a point means
+the shield note was almost never the thing tipping the screen.
+
+So this is a **prose-accuracy fix and not a false-positive win**, and it
+has to be described that way. It deletes seventeen wrong sentences per
+five hundred positions and saves one engine job. The seventeen sentences
+are worth deleting — each one told a user their king was exposed in a
+position where the structure is an asset, and one of them contradicted
+the page it was transcribed from. But the honest headline is that the
+alerts axis did not move and neither did the cost term.
+
+Nothing here changes the standing rule. The condition shipped because a
+class of 24 supported it and three instruments agreed, not because one
+anchor was red.
+
 ### One thing found and not fixed
 
 `route::route_to` treats an enemy-occupied square as a passable waypoint
 whether or not the capture is sound, so a rook walled in behind a
 defended pawn "routes" straight through it. `entomb` needed its own BFS
-because of it. This is benign where `route_to` is used today — its
-targets are empty outpost squares and its callers only ever add plans —
-but it is a real defect, and fixing it would move every maneuver number
-in this document. Filed, not touched.
+because of it. Benign where `route_to` is used today, real all the same,
+and fixing it would move every maneuver number in this document. Parked
+as a decision rather than a surprise — see DECISIONS_NEEDED.md,
+"route_to passes through unsound captures".
