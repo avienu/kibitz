@@ -216,6 +216,16 @@ enum Command {
         ])]
         paths: Vec<PathBuf>,
     },
+    /// Price the four remaining WeakKing misses: how common are the
+    /// lagging-king and sector-funnel conditions, and does WeakKing
+    /// already fire there?
+    KingStudy {
+        #[arg(num_args = 1.., default_values = [
+            "testdata/private/book-trials",
+            "testdata/corpus/quiet_fens.txt",
+        ])]
+        paths: Vec<PathBuf>,
+    },
     /// Compare suggest-verify gate settings: jobs, plans, plans per job.
     GateStudy {
         #[arg(default_value = "testdata/private/book-trials")]
@@ -650,6 +660,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::ShieldStudy { paths } => {
             kibitz_db::bookeval::shield_study(&paths)?;
+        }
+        Command::KingStudy { paths } => {
+            kibitz_db::bookeval::king_study(&paths)?;
         }
         Command::GateStudy { path } => {
             let corpora = kibitz_db::bookeval::load(&path)?;

@@ -869,6 +869,154 @@ pub fn print_report(book: &str, r: &Report, verbose: bool) {
     }
 }
 
+/// The four remaining WeakKing static-gap misses, priced (run 12, #10).
+///
+/// am-324-2, htryc-375-128, htryc-388-182, htryc-391-200 are all silent
+/// today — no WeakKing at any severity — and the hypothesis under test
+/// (recorded before this function was written) is that they are NOT one
+/// class but a 2+2 split:
+///
+///   A — the LAGGING KING: king still on its home-rank d/e square while
+///   the enemy king is already castled, queens on. Shield intact, no
+///   open file, nothing hits the zone: every current arm is correctly
+///   silent, because the exposure is temporal.
+///
+///   B — the SECTOR FUNNEL: castled flank king whose sector the enemy
+///   out-forces by >= 300cp of travel-discounted force (force::force_in).
+///   The zone-surplus arm counts pieces attacking zone squares NOW; a
+///   funnel is pieces that can arrive.
+///
+/// This is a pricing study, not a detector: it reports how common each
+/// condition is on each corpus and whether WeakKing already fires there.
+/// The quiet-set frequency is the cost a real detector would start from.
+pub fn king_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    use cozy_chess::{Color, File, Piece, Rank};
+    use kibitz_core::force::{force_in, Sector};
+
+    // (label, fen): book entries keep their ids, quiet lines are numbered.
+    let mut items: Vec<(String, String)> = Vec::new();
+    for p in paths {
+        if p.extension().and_then(|e| e.to_str()) == Some("json") || p.is_dir() {
+            for c in load(p)? {
+                items.extend(c.positions.into_iter().map(|e| (e.id, e.fen)));
+            }
+        } else {
+            items.extend(
+                std::fs::read_to_string(p)?
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .enumerate()
+                    .map(|(i, l)| (format!("quiet-{i}"), l.to_string())),
+            );
+        }
+    }
+
+    const MISSES: [&str; 4] = [
+        "am-324-2",
+        "htryc-375-128",
+        "htryc-388-182",
+        "htryc-391-200",
+    ];
+    // [book, quiet] x [candidates, weak-king-fires]
+    let mut a = [[0usize; 2]; 2];
+    let mut b = [[0usize; 2]; 2];
+    let mut scanned = [0usize; 2];
+
+    println!("book-corpus candidates:");
+    for (label, fen) in &items {
+        let Ok(board) = fen.parse::<cozy_chess::Board>() else {
+            continue;
+        };
+        let quiet = label.starts_with("quiet-");
+        let src = usize::from(quiet);
+        scanned[src] += 1;
+        let record = kibitz_core::wsui::screen(&board, &kibitz_core::wsui::WsuiConfig::default());
+        let queens_on = !board.pieces(Piece::Queen).is_empty();
+        for side in [Color::White, Color::Black] {
+            let king = board.king(side);
+            let enemy = !side;
+            let eking = board.king(enemy);
+            let home = match side {
+                Color::White => Rank::First,
+                Color::Black => Rank::Eighth,
+            };
+            let eback = match enemy {
+                Color::White => Rank::First.bitboard() | Rank::Second.bitboard(),
+                Color::Black => Rank::Eighth.bitboard() | Rank::Seventh.bitboard(),
+            };
+            let central = |sq: cozy_chess::Square| matches!(sq.file(), File::D | File::E);
+            let enemy_castled = eback.has(eking) && !central(eking);
+
+            // A: lagging king.
+            let is_a = king.rank() == home && central(king) && enemy_castled && queens_on;
+            // B: sector funnel at a castled flank king.
+            let sector = Sector::of(king);
+            let is_b = eback_own(side).has(king)
+                && !central(king)
+                && sector != Sector::Center
+                && force_in(&board, enemy, sector) - force_in(&board, side, sector) >= 300;
+
+            if !is_a && !is_b {
+                continue;
+            }
+            let weak = record.alerts.iter().any(|al| {
+                al.kind == kibitz_core::record::AlertKind::WeakKing
+                    && al.side == kibitz_core::record::SideColor::from(side)
+            });
+            if is_a {
+                a[src][0] += 1;
+                a[src][1] += usize::from(weak);
+            }
+            if is_b {
+                b[src][0] += 1;
+                b[src][1] += usize::from(weak);
+            }
+            if !quiet {
+                println!(
+                    "  {label:<28} {:<6} {}{}{}  WeakKing: {}",
+                    if side == Color::White {
+                        "white"
+                    } else {
+                        "black"
+                    },
+                    if is_a { "A" } else { "" },
+                    if is_a && is_b { "+" } else { "" },
+                    if is_b { "B" } else { "" },
+                    if weak { "fires" } else { "silent" },
+                );
+                if MISSES.contains(&label.as_str()) {
+                    println!("    ^ one of the four misses");
+                }
+            }
+        }
+    }
+    let pct = |k: usize, n: usize| k as f64 / n.max(1) as f64 * 100.0;
+    println!("\nscanned: book {}, quiet {}", scanned[0], scanned[1]);
+    for (name, m) in [("A lagging king", &a), ("B sector funnel", &b)] {
+        println!("{name}:");
+        println!(
+            "  book  {:>4} candidates, WeakKing fires on {}",
+            m[0][0], m[0][1]
+        );
+        println!(
+            "  quiet {:>4} candidates ({:.1}% of positions), WeakKing fires on {}",
+            m[1][0],
+            pct(m[1][0], scanned[1]),
+            m[1][1]
+        );
+    }
+    Ok(())
+}
+
+/// `side`'s own back two ranks (the "has castled or stayed home" band).
+fn eback_own(side: cozy_chess::Color) -> cozy_chess::BitBoard {
+    use cozy_chess::Rank;
+    match side {
+        cozy_chess::Color::White => Rank::First.bitboard() | Rank::Second.bitboard(),
+        cozy_chess::Color::Black => Rank::Eighth.bitboard() | Rank::Seventh.bitboard(),
+    }
+}
+
 /// Was the shield pawn TRADED, or did it just relocate one file over?
 ///
 /// `cbcs-239` is the first red negative anchor the corpus-side alert bans
