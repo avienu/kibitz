@@ -1409,6 +1409,13 @@ first run.
 
 ## Methodology: the cost term comes before the tuning, not after
 
+**The worked example is the entombment table** (five design cuts,
+51.0% → 28.2% → 1.2% → 0.4% → 0.0% quiet firing, identical book
+numbers at every step — "Entombment becomes an imbalance", above).
+Version one would have shipped, because it was reached first and
+scored the same. Everything below is the rule; that table is the
+argument.
+
 Promoted here from three runs of evidence, because it decided the
 outcome twice in this run alone.
 
@@ -1940,3 +1947,56 @@ ALL BOOKS: plans 77.3% (119/154), imbalances 91.3%, alerts 52.0%,
 favors 69.8%, suggest@1/3 unchanged, negatives 41 with only the g70
 red. Composition: 169 positions, 162 Jeremy Silman + 7 Nimzowitsch,
 quiet holdout fixed at 500.
+
+## Prophylaxis batch 1: the first author-labeled test of the denial machinery
+
+Corpus composition: **173 positions — 162 Jeremy Silman, 11 Nimzowitsch
+across four stratagem families** (blockade, fight-against-the-blockader,
+isolani, prophylaxis); negative anchors 45, 44 clean, the one red still
+g70; quiet holdout fixed at 500 and drift-checked identical (46.6%,
+0.58/pos) — no detector changed this batch.
+
+Four entries from games 53, 54 and 55, each anchored at a ply the Part
+III introduction cites by number, each carrying the book's own
+prophylactic move as `best_moves` — the first data ever run through
+suggest and role_of that was labeled prophylactic by the author
+himself. Selection procedure (grep for explicit prophylaxis
+annotations, prefer ply-specific claims) was fixed in the prediction
+before any game was read. All axes green except the standing g70
+items: imbalances 15/15, plans 8/8, favors 7/8 — including three
+"balanced" verdicts called correctly, which the favors axis rarely
+manages.
+
+### The prediction scorecard, two refutations in opposite directions
+
+1. **role_of sees prophylaxis at least half the time: REFUTED — 1 of 4
+   (25%), sitting exactly on the pre-registered finding line.** The one
+   hit is 21...Qf7 (denial): it blocks a CONCRETE piece plan, White's
+   Bc1-e3-d4. Both waiting moves (8...a6, 6...a6) classify
+   "constructive" and the prophylaxis-with-threat (24...Qe8) classifies
+   "neither". The shape of the blindness is now precise: the machinery
+   recognizes denial only where it obstructs a specific piece route;
+   waiting moves and goading threats — the beginning of every
+   prophylaxis, in the book's own words — are invisible to it.
+2. **The maintainer's tempo hypothesis: UNANSWERABLE, which is its own
+   finding.** Zero of the denial/both picks sit where the opponent's
+   plan is faster — but zero of the constructive ones do either,
+   because own/opp horizons are None on every one of the 29 labeled
+   moves in the study. The tempo comparison has never had data: the
+   scheme-horizon machinery does not emit on these positions. The
+   hypothesis is not refuted; it has not yet been tested, and testing
+   it is blocked on horizons actually existing.
+3. **suggest@3 under 40%: REFUTED UPWARD — 3 of 4 (75%), with
+   suggest@1 at 0 of 4.** The plan-led suggester gets prophylactic
+   moves INTO the top three far more often than predicted; what it
+   cannot do is rank them first (g54's Qe8 misses entirely — top three
+   were Bf6/Bh8/Nh8). The suggest problem on this family is ranking,
+   not recognition, which redirects any future work there.
+4. Negatives grew 3, all green; one entry (g53's move-21 position)
+   carries no ban because everything that fires there is unsettled by
+   the text — the at-least-one-per-entry prediction is 3/4, missed and
+   stated.
+
+The multi-author measurement: 11 entries across four families,
+roughly half of the few-dozen threshold. Every axis figure above
+carries its composition, per the standing rule.
