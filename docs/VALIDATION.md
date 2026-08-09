@@ -1843,3 +1843,56 @@ rolling up a paralysed majority.
 
 ALL BOOKS: imbalances 91.2% (270/296), plans 76.8% (116/151), alerts
 52.0% (13/25), favors 72/104 = 69.2%.
+
+## Passer classification (mechanisms 14/16), and Praxis batch 3 grades the gaps on purpose
+
+Corpus composition: **169 positions — 162 Jeremy Silman, 7 Nimzowitsch
+across three stratagem families** (blockade, fight-against-the-
+blockader, isolani); negative anchors 41; quiet holdout fixed at 500.
+
+### The classification, and the spot-check that fixed it before it shipped
+
+Every passed pawn now carries `passer_<sq>`: protected / connected /
+outside, plus one corpus-demanded hint — **OutsidePasserDecoy**, endgame
+only. Prediction registered first; the scorecard:
+
+| prediction | line | actual |
+|---|---|---|
+| quiet cost 2-6% | ship under 8% | **2.8%** (14/500) — ships |
+| book unchanged, no new red | any regression reverts | held |
+| three classification spot-checks | any wrong = does not ship | **one FAILED** — and fixed pre-ship |
+
+The failed spot-check is the finding. The first draft called a passer
+"outside" when far from the ENEMY king, and CBoCS p. 212 refuted it:
+black's g3/h2 pawns sit four files from the wandering white king and
+are the entire theater, with black's own king standing on top of them.
+King-distance was a proxy for theater-distance — the third proxy error
+this run has caught (central-king/open-file, shield-empty/relocated,
+now this). Outside now means far from BOTH kings; the refuting position
+is a committed unit test. This was a pre-ship verification revision,
+entomb-style — not post-ship tuning against an anchor.
+
+### Batch 3: the isolani family, including two deliberate misses
+
+praxis-g61 is the formula executed — "Now we have it, the Isolani!"
+with the knight landing on d4 in the same breath; BlockadeThenPressure
+fires on the exact squares, favors white, all green.
+
+praxis-g62 is the more valuable entry BECAUSE it fails. The book's own
+annotations at moves 18 and 21 — the blockade of the isolated PAIR
+proceeds, an over-protection of d4 takes place — are entered in our
+vocabulary knowing both detectors miss: BlockadeThenPressure's
+precondition recognizes only passed and isolated pawns, and c6/d5 are
+neither by that test (the isolated pair is a structure the engine does
+not classify); OverprotectStrongPoint recognizes only pawn spearheads,
+and the strong point here is a SQUARE held by a rook. Free-form tags in
+their place would have cooked the multi-author number. The two misses
+now stand in the plans axis as named, cited concept debts.
+
+Chess Praxis after three batches: **11/11 imbalances, 6/8 plans, 6/7
+favors, 10/11 negatives** (the one red is the declared g70 anchor), six
+vocabulary gaps. ALL BOOKS: imbalances 91.3% (272/298), plans 76.0%
+(117/154), alerts 52.0% (13/25), favors 69.8% (74/106). The plans rate
+DROPPED two tenths while the engine got strictly better this run —
+two deliberate misses entered the denominator, which is the same
+honest arithmetic the cbcs-193 knight bought in the entombment work.
