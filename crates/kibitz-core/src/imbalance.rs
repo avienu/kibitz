@@ -1631,7 +1631,7 @@ fn weak_pawn_targets(board: &Board, color: Color) -> Vec<Square> {
 }
 
 /// Our best minor: one standing in the enemy half on a square its own
-/// pawn defends. Silman's instruction in The Amateur's Mind p. 328 is to
+/// pawn defends. Jeremy Silman's instruction in The Amateur's Mind p. 328 is to
 /// identify that piece and never trade it — the whole plan is built
 /// around keeping it where it is.
 fn best_piece(board: &Board, color: Color) -> Option<Square> {

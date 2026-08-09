@@ -7,7 +7,7 @@
 //!
 //! **Ground truth is the game result, not an engine.** A centipawn score
 //! answers "who is winning if both sides play perfectly from here", and
-//! that is not the question Silman's verdicts answer. "Who has the easier
+//! that is not the question Jeremy Silman's verdicts answer. "Who has the easier
 //! game to play" is a practical claim, and the practical evidence is what
 //! actually happened when two strong players played it out. It is a noisy
 //! label at any single position and an honest one in aggregate.

@@ -4,7 +4,7 @@
 //! right now?". That is enough to judge a one-move landing but useless for
 //! a multi-move maneuver: a waypoint nobody attacks today is worthless if
 //! the opponent can push a pawn at it in the same number of moves the
-//! knight needs to arrive. Silman's whole objection to "outposts" that can
+//! knight needs to arrive. Jeremy Silman's whole objection to "outposts" that can
 //! be kicked (Complete Book of Chess Strategy p. 219) is a statement about
 //! pawn contact over TIME, not about the current attack map.
 //!
@@ -104,7 +104,7 @@ mod tests {
 
     /// The kickable knight: a knight on g5 with an enemy h-pawn on h7 is
     /// one pawn move from being hit (h7-h6). This is the case the old
-    /// current-attacks-only test called safe. (Silman, CBoCS p. 219 —
+    /// current-attacks-only test called safe. (Jeremy Silman, CBoCS p. 219 —
     /// an "outpost" a pawn can evict is not an outpost.)
     #[test]
     fn knight_on_g5_is_one_move_from_being_kicked() {

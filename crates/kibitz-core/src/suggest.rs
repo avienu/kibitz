@@ -1030,7 +1030,7 @@ fn blocking_moves(
 /// Exposed for the corpus study of prophylaxis. The engine's ranking
 /// currently gives a denial bonus that can outrank executing your own
 /// plan, and whether that is right is not a matter of taste — the book
-/// corpus carries Silman's own recommendation for 25 positions, so the
+/// corpus carries Jeremy Silman's own recommendation for 25 positions, so the
 /// distribution of prophylactic-versus-constructive picks is measurable.
 #[derive(Debug, Default, Clone)]
 pub struct MoveRole {

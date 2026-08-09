@@ -4,7 +4,7 @@
 //! same square. That is a taxonomy, and a taxonomy cannot express the
 //! thing the books actually teach: *first* trade the defenders of d5,
 //! *then* land the knight, *then* press the weakness behind it (Jeremy
-//! Silman, How to Reassess Your Chess, ex. 60). Nimzowitsch's
+//! Jeremy Silman, How to Reassess Your Chess, ex. 60). Nimzowitsch's
 //! restrain-blockade-destroy is the same shape — one plan, three stages,
 //! and the order is the whole lesson.
 //!

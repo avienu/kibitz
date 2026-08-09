@@ -75,7 +75,7 @@ pub struct Expected {
 
 /// Known PlanHint tokens the engine can emit today. Expected plan tags
 /// outside this list are vocabulary gaps, reported rather than scored.
-/// Does Silman recommend denial or construction, and when?
+/// Does Jeremy Silman recommend denial or construction, and when?
 ///
 /// The engine gives a prophylactic move a bonus that can outrank
 /// executing your own plan, and whether that ranking is right looked like
