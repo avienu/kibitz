@@ -324,6 +324,71 @@ pub fn alerts_fp(path: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The same denominator, applied to the entombed-piece imbalance (#12).
+///
+/// Entombment costs no engine time — it is an imbalance, not a screen
+/// alert — so the currency here is different: every firing on a healthy
+/// master position is a false STATEMENT in the coach prose and a wrong
+/// discount in the material ledger, which moves who the app says is
+/// better. Same discipline as `alerts_fp` all the same: measure the cost
+/// term before tuning the detector, not after.
+pub fn entomb_fp(path: &std::path::Path, dump: bool) -> anyhow::Result<()> {
+    use cozy_chess::{Color, Piece};
+    let text = std::fs::read_to_string(path)?;
+    let mut n = 0usize;
+    let mut positions_firing = 0usize;
+    let mut pieces = 0usize;
+    let mut by_piece: BTreeMap<&'static str, usize> = BTreeMap::new();
+    for fen in text.lines().filter(|l| !l.trim().is_empty()) {
+        let Ok(board) = fen.parse::<cozy_chess::Board>() else {
+            continue;
+        };
+        n += 1;
+        let found: Vec<_> = [Color::White, Color::Black]
+            .iter()
+            .flat_map(|c| kibitz_core::entomb::entombed(&board, *c))
+            .collect();
+        if found.is_empty() {
+            continue;
+        }
+        positions_firing += 1;
+        pieces += found.len();
+        if dump {
+            println!("{fen}");
+        }
+        for e in found {
+            if dump {
+                println!("   {:?} on {}", e.piece, e.square);
+            }
+            let name = match e.piece {
+                Piece::Knight => "knight",
+                Piece::Bishop => "bishop",
+                Piece::Rook => "rook",
+                Piece::Queen => "queen",
+                _ => "other",
+            };
+            *by_piece.entry(name).or_default() += 1;
+        }
+    }
+    println!("engine-quiet master positions: {n}");
+    println!(
+        "  positions with an entombed piece {positions_firing:>5}  ({:.1}%)",
+        positions_firing as f64 / n.max(1) as f64 * 100.0
+    );
+    println!(
+        "  entombed pieces                  {pieces:>5}  ({:.3} per position)",
+        pieces as f64 / n.max(1) as f64
+    );
+    for (k, v) in &by_piece {
+        println!("    {k:<8} {v:>5}");
+    }
+    println!(
+        "\nNothing here is in trouble. Every firing is a false claim in the prose \
+         and a wrong discount in the material ledger."
+    );
+    Ok(())
+}
+
 /// A candidate enqueue rule: does this position deserve a bounded
 /// suggest-verify job?
 type Gate = fn(&kibitz_core::record::FeatureRecord, kibitz_core::record::Favors) -> bool;
@@ -432,6 +497,9 @@ const KNOWN_HINTS: &[&str] = &[
     "ClaimTheCenter",
     "QueenAheadOfHerArmy",
     "SamePieceWandering",
+    // Run 12 (#12): entombment, an imbalance rather than an alert.
+    "ActivateEntombedPiece",
+    "KeepPieceEntombed",
 ];
 
 #[derive(Debug, Default)]

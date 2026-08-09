@@ -195,6 +195,17 @@ enum Command {
         #[arg(default_value = "testdata/corpus/quiet_fens.txt")]
         path: PathBuf,
     },
+    /// Entombed-piece firing rate over the same engine-quiet master
+    /// positions — the cost term for the imbalance, which buys no engine
+    /// time but does move the material ledger.
+    EntombFp {
+        #[arg(default_value = "testdata/corpus/quiet_fens.txt")]
+        path: PathBuf,
+        /// Print every firing position, so the hits can be read rather
+        /// than counted. A rate is not a verdict.
+        #[arg(long)]
+        dump: bool,
+    },
     /// Compare suggest-verify gate settings: jobs, plans, plans per job.
     GateStudy {
         #[arg(default_value = "testdata/private/book-trials")]
@@ -623,6 +634,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::AlertsFp { path } => {
             kibitz_db::bookeval::alerts_fp(&path)?;
+        }
+        Command::EntombFp { path, dump } => {
+            kibitz_db::bookeval::entomb_fp(&path, dump)?;
         }
         Command::GateStudy { path } => {
             let corpora = kibitz_db::bookeval::load(&path)?;

@@ -236,6 +236,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
         }
     };
     let mut plans = Vec::new();
+    let mut bad_bishops = BitBoard::EMPTY;
     for (color, sign) in [(Color::White, 1i32), (Color::Black, -1i32)] {
         for b in board.colored_pieces(color, Piece::Bishop) {
             let complex = if light.has(b) { light } else { !light };
@@ -256,6 +257,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
             let bad = (own_center_pawns.len() >= 2 && mobility <= 2)
                 || (own_center_pawns.len() >= 3 && mobility <= 4);
             if bad {
+                bad_bishops |= b.bitboard();
                 evidence.insert(
                     format!(
                         "bad_bishop_{}",
@@ -279,6 +281,60 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                 ));
             }
         }
+    }
+
+    // Entombed minors (run 12, #12). A bad bishop is a bishop having a bad
+    // time; an entombed piece is not playing at all, so it costs more than
+    // the 25 above and it is the only imbalance that also reaches into the
+    // material ledger (see `material`). The two detectors overlap on
+    // purpose — Jeremy Silman's Amateur's Mind p. 10 bishop is both — and the
+    // square is only charged once.
+    for (color, sign) in [(Color::White, 1i32), (Color::Black, -1i32)] {
+        let tomb: Vec<Square> = crate::entomb::entombed(board, color)
+            .into_iter()
+            .filter(|e| matches!(e.piece, Piece::Knight | Piece::Bishop))
+            .map(|e| e.square)
+            .collect();
+        if tomb.is_empty() {
+            continue;
+        }
+        evidence.insert(
+            format!(
+                "entombed_{}",
+                if color == Color::White {
+                    "white"
+                } else {
+                    "black"
+                }
+            ),
+            json!(tomb.iter().copied().map(square_name).collect::<Vec<_>>()),
+        );
+        for sq in &tomb {
+            if bad_bishops.has(*sq) {
+                continue; // already charged as a bad bishop
+            }
+            score -= sign * 40;
+        }
+        let squares: Vec<String> = tomb.iter().copied().map(square_name).collect();
+        // Both sides get a plan, which is unusual and deliberate: unlike a
+        // bad bishop, the OPPONENT of an entombed piece has a concrete and
+        // valuable one — do not let the structure release.
+        sided.push((
+            color,
+            PlanHint {
+                hint: "ActivateEntombedPiece".into(),
+                owner: None,
+                squares: squares.clone(),
+            },
+        ));
+        sided.push((
+            !color,
+            PlanHint {
+                hint: "KeepPieceEntombed".into(),
+                owner: None,
+                squares,
+            },
+        ));
     }
 
     // Opposite-colored single bishops: a named imbalance worth reporting
@@ -1193,8 +1249,64 @@ pub fn material(board: &Board) -> Option<Imbalance> {
             + count(c, Piece::Rook) * 500
             + count(c, Piece::Queen) * 900
     };
-    let diff = total(Color::White) - total(Color::Black);
-    evidence.insert("material_diff_cp".into(), json!(diff));
+    let raw_diff = total(Color::White) - total(Color::Black);
+    evidence.insert("material_diff_cp".into(), json!(raw_diff));
+
+    // Entombed pieces are counted at half (run 12, #12). Jeremy Silman's whole
+    // point in The Complete Book of Chess Strategy p. 192 is that the
+    // side with the "extra" rook is worse, because that rook is not on
+    // the board in any sense that matters. `material_diff_cp` stays the
+    // raw ledger — consumers that want to say "a rook for a bishop" must
+    // still be able to count — and the lean is taken on the effective one.
+    let mut plans: Vec<PlanHint> = Vec::new();
+    let mut dead = [0i32; 2];
+    for (idx, color) in [Color::White, Color::Black].into_iter().enumerate() {
+        let tomb = crate::entomb::entombed(board, color);
+        if tomb.is_empty() {
+            continue;
+        }
+        dead[idx] = tomb.iter().map(|e| e.discount_cp()).sum();
+        // Minors are narrated by `minor_pieces`, which owns the
+        // bad-bishop story they sit beside. Rooks and queens have no such
+        // home, so their plans belong here with the discount.
+        let majors: Vec<String> = tomb
+            .iter()
+            .filter(|e| matches!(e.piece, Piece::Rook | Piece::Queen))
+            .map(|e| square_name(e.square))
+            .collect();
+        if !majors.is_empty() {
+            plans.push(
+                PlanHint {
+                    hint: "ActivateEntombedPiece".into(),
+                    owner: None,
+                    squares: majors.clone(),
+                }
+                .owned_by(match color {
+                    Color::White => Favors::White,
+                    Color::Black => Favors::Black,
+                }),
+            );
+            plans.push(
+                PlanHint {
+                    hint: "KeepPieceEntombed".into(),
+                    owner: None,
+                    squares: majors,
+                }
+                .owned_by(match color {
+                    Color::White => Favors::Black,
+                    Color::Black => Favors::White,
+                }),
+            );
+        }
+    }
+    let diff = raw_diff - dead[0] + dead[1];
+    if diff != raw_diff {
+        evidence.insert(
+            "entombed_discount_cp".into(),
+            json!({ "white": dead[0], "black": dead[1] }),
+        );
+        evidence.insert("effective_diff_cp".into(), json!(diff));
+    }
     // Per-piece surplus (white minus black) so the verbalizer can NAME
     // the imbalance ("a knight for two pawns") instead of counting pawns.
     evidence.insert(
@@ -1230,7 +1342,7 @@ pub fn material(board: &Board) -> Option<Imbalance> {
     ]
     .iter()
     .any(|p| count(Color::White, *p) != count(Color::Black, *p));
-    let (f, m) = if mix_differs {
+    let (f, m) = if mix_differs || !plans.is_empty() {
         favors_or_balanced(diff, 80, 250)
     } else {
         favors(diff, 80, 250)?
@@ -1240,7 +1352,7 @@ pub fn material(board: &Board) -> Option<Imbalance> {
         favors: f,
         magnitude: m,
         evidence,
-        plans: vec![],
+        plans,
     })
 }
 

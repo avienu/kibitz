@@ -182,6 +182,51 @@ fn bad_bishop_wants_trade_or_freedom() {
     assert!(kinds(&r).contains(&ImbalanceKind::MinorPieces));
 }
 
+// --- Entombed pieces: an imbalance, not a tactical alert (run 12, #12). ---
+
+/// Jeremy Silman, The Complete Book of Chess Strategy, p. 192, entry
+/// 'Entombed Pieces': Black is a rook up on the ledger and worse on the
+/// board, because the b8-rook is buried behind White's b7-pawn forever.
+/// The whole claim is that the Material verdict flips.
+#[test]
+fn entombed_rook_flips_the_material_verdict() {
+    let fen = "1rB5/1P6/p4k2/2p5/2P2KP1/8/8/8 w - - 0 1";
+    let r = analyze(fen);
+    assert!(hints(&r).contains(&"KeepPieceEntombed".to_string()));
+    assert_eq!(favors_of(&r, ImbalanceKind::Material), Some(Favors::White));
+    // The screen must stay out of it: entombment is strategic, and a
+    // trapped-piece alert here would buy an engine job for nothing.
+    assert!(r
+        .wsui
+        .alerts
+        .iter()
+        .all(|a| a.kind != kibitz_core::record::AlertKind::TrappedPiece));
+}
+
+/// Jeremy Silman, The Amateur's Mind, p. 10 (Bishops vs Knights): the
+/// f1-bishop is sealed behind five frozen white pawns while Black's
+/// knight owns the board.
+#[test]
+fn entombed_bishop_beside_the_bad_bishop() {
+    let r = analyze("8/8/8/6p1/3n1pP1/2pPpP2/k1P1P3/3K1B2 w - - 0 1");
+    assert!(hints(&r).contains(&"ActivateEntombedPiece".to_string()));
+    assert_eq!(
+        favors_of(&r, ImbalanceKind::MinorPieces),
+        Some(Favors::Black)
+    );
+}
+
+/// The precision anchor for the concept: the starting position has eight
+/// pieces with nothing to do and not one of them is entombed. What
+/// separates them is a single pawn move, which is the entire distinction
+/// between an undeveloped piece and a buried one.
+#[test]
+fn the_opening_position_entombs_nobody() {
+    let r = analyze("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    assert!(!hints(&r).contains(&"ActivateEntombedPiece".to_string()));
+    assert!(!hints(&r).contains(&"KeepPieceEntombed".to_string()));
+}
+
 // --- Files, the seventh rank, and rooks. ---
 
 /// Jeremy Silman, The Complete Book of Chess Strategy, p. 329, entry
