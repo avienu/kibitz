@@ -133,6 +133,7 @@ mod tests {
 
     fn hint(h: &str, sqs: &[&str]) -> PlanHint {
         PlanHint {
+            speed: None,
             hint: h.into(),
             owner: None,
             squares: sqs.iter().map(|s| s.to_string()).collect(),
@@ -196,5 +197,215 @@ mod tests {
         let plans = synthesize(&[a, b]);
         assert_eq!(plans.len(), 2);
         assert!(plans.iter().all(|p| p.supporting.len() == 1));
+    }
+}
+
+/// The plan-speed post-pass (run 12): give every hint the engine can
+/// honestly cost a `speed` — moves the OWNER needs to complete or
+/// activate the plan.
+///
+/// One pass over the finished imbalances, never at the emission sites,
+/// so speed cannot change what fires and is testable in isolation. The
+/// tempo comparison in `suggest::role_of` and the maintainer's
+/// prophylaxis hypothesis both need a per-side plan speed, and
+/// horizon-study measured the previous source (schemes) at 0-1%
+/// both-sides coverage.
+///
+/// Families with no honest cheap estimate keep `None`: maintenance
+/// plans (Keep*, Restrict*, UseSpace*, Overprotect*) have no arrival
+/// time, and None is the correct value there, not zero — otherwise
+/// every side would trivially own a horizon of 0.
+pub fn annotate_speed(board: &cozy_chess::Board, imbalances: &mut [Imbalance]) {
+    use cozy_chess::{Color, Piece, Square};
+    let parse = |s: &str| -> Option<Square> { s.parse().ok() };
+    let color_of = |f: Favors| match f {
+        Favors::White => Some(Color::White),
+        Favors::Black => Some(Color::Black),
+        Favors::Balanced => None,
+    };
+    // Cheapest way for `color` to bring a NEW attacker against `target`:
+    // 1 if something already attacks it, else the shortest attack route
+    // of any piece. None when nothing can come.
+    let attack_cost = |color: Color, target: Square| -> Option<u8> {
+        if !crate::attack::attackers_of(board, target, color, board.occupied()).is_empty() {
+            return Some(1);
+        }
+        let mut best: Option<u8> = None;
+        for piece in [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen] {
+            for from in board.colored_pieces(color, piece) {
+                if let Some(r) = crate::route::route_to_attack(board, color, piece, from, target) {
+                    let m = r.moves();
+                    if best.is_none_or(|b| m < b) {
+                        best = Some(m);
+                    }
+                }
+            }
+        }
+        best
+    };
+    // Cheapest piece journey onto `target` itself (blockade duty).
+    let occupy_cost = |color: Color, target: Square| -> Option<u8> {
+        if (board.colors(color) & target.bitboard()).is_empty() {
+            let mut best: Option<u8> = None;
+            for piece in [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen] {
+                for from in board.colored_pieces(color, piece) {
+                    if let Some(r) = crate::route::route_to(
+                        board,
+                        color,
+                        piece,
+                        from,
+                        target.bitboard(),
+                        &|_| true,
+                    ) {
+                        let m = r.moves();
+                        if best.is_none_or(|b| m < b) {
+                            best = Some(m);
+                        }
+                    }
+                }
+            }
+            best
+        } else {
+            Some(0)
+        }
+    };
+
+    for imb in imbalances.iter_mut() {
+        let parent = imb.favors;
+        for plan in imb.plans.iter_mut() {
+            let owner = crate::record::attribute(&plan.hint, plan.owner, parent);
+            let Some(color) = color_of(owner) else {
+                continue;
+            };
+            let sq = |i: usize| plan.squares.get(i).and_then(|s| parse(s));
+            plan.speed = match plan.hint.as_str() {
+                // Routed maneuvers carry their own path.
+                "ManeuverKnightToOutpost"
+                | "ManeuverBishopToSupportPoint"
+                | "ManeuverRookToOpenFile"
+                    if plan.squares.len() >= 2 =>
+                {
+                    Some((plan.squares.len() - 1).min(6) as u8)
+                }
+                // Pressure family: the plan is executing once one more
+                // attacker bears on the target.
+                "TargetWeakPawn" | "PressureDoubledPawn" => {
+                    sq(0).and_then(|t| attack_cost(color, t))
+                }
+                "PressureBackwardPawn" | "BlockadeThenPressure" => {
+                    sq(0).and_then(|t| attack_cost(color, t))
+                }
+                // Trade family: get at the named enemy piece.
+                "HuntBishopPair" | "TradeSquareDefender" => {
+                    // squares = [ours/theirs, victim] — the victim is the
+                    // last square for HuntBishopPair, the first for
+                    // TradeSquareDefender; both are enemy-occupied, so
+                    // take whichever square holds an enemy piece.
+                    let victim = [sq(0), sq(1)]
+                        .into_iter()
+                        .flatten()
+                        .find(|s| !(board.colors(!color) & s.bitboard()).is_empty());
+                    victim.and_then(|v| attack_cost(color, v))
+                }
+                "TradeOffAttacker" | "UprootBlockader" => sq(0).and_then(|v| attack_cost(color, v)),
+                // Blockade duty: somebody has to reach the stop square.
+                "BlockadeWhitePasser" | "BlockadeBlackPasser" => {
+                    sq(0).and_then(|t| occupy_cost(color, t))
+                }
+                "RookBehindPasser" => sq(1).and_then(|t| {
+                    if (board.colored_pieces(color, Piece::Rook) & t.bitboard()).is_empty() {
+                        occupy_cost(color, t)
+                    } else {
+                        Some(0)
+                    }
+                }),
+                // Rooks already established on the seventh.
+                "RookToSeventh" => Some(0),
+                // King work.
+                "ActivateKingInEndgame" => sq(0).map(|t| {
+                    let k = board.king(color);
+                    (k.file() as i8 - t.file() as i8)
+                        .abs()
+                        .max((k.rank() as i8 - t.rank() as i8).abs())
+                        .clamp(0, 6) as u8
+                }),
+                _ => None,
+            };
+            // A journey longer than the routing horizon is a dream, not
+            // a speed.
+            if plan.speed.is_some_and(|s| s > 6) {
+                plan.speed = None;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod speed_tests {
+    use crate::record::Favors;
+    use std::str::FromStr;
+
+    type SpeedRow = (String, Option<Favors>, Vec<String>, Option<u8>);
+
+    fn speeds(fen: &str) -> Vec<SpeedRow> {
+        let board = cozy_chess::Board::from_str(fen).expect("fen");
+        let mut imb = crate::imbalance::assess(&board);
+        super::annotate_speed(&board, &mut imb);
+        imb.into_iter()
+            .flat_map(|i| {
+                i.plans
+                    .into_iter()
+                    .map(move |p| (p.hint, p.owner, p.squares, p.speed))
+            })
+            .collect()
+    }
+
+    /// The three spot-checks fixed in the plan-speed prediction sheet,
+    /// on the positions that fixed them (Chess Praxis game 70; CBoCS
+    /// p. 192 endgame).
+    #[test]
+    fn plan_speed_spot_checks() {
+        let g70 = speeds("3r4/bp1r1k2/2p1b2p/1p2P1p1/3P4/P4NKP/1PBR2P1/4R3 w - - 1 31");
+        // (a) a rook one move from standing behind its passer: speed 0-1.
+        let rbp = g70.iter().find(|p| p.0 == "RookBehindPasser").expect("rbp");
+        assert!(rbp.3.is_some_and(|s| s <= 1), "{rbp:?}");
+        // (c) pressure plans whose target is already attacked: speed 1.
+        let pbp = g70
+            .iter()
+            .find(|p| p.0 == "PressureBackwardPawn")
+            .expect("pbp");
+        assert_eq!(pbp.3, Some(1), "{pbp:?}");
+        // Routed maneuvers keep their own path length.
+        let mko = g70
+            .iter()
+            .find(|p| p.0 == "ManeuverKnightToOutpost")
+            .expect("mko");
+        assert_eq!(mko.3, Some((mko.2.len() - 1) as u8), "{mko:?}");
+        // A blockade already manned costs its owner nothing.
+        let bwp = g70
+            .iter()
+            .find(|p| p.0 == "BlockadeWhitePasser")
+            .expect("bwp");
+        assert_eq!(bwp.3, Some(0), "{bwp:?}");
+
+        // (b) king activation speed equals the king's chebyshev distance.
+        let end = speeds("1rB5/1P6/p4k2/2p5/2P2KP1/8/8/8 w - - 0 1");
+        for p in end.iter().filter(|p| p.0 == "ActivateKingInEndgame") {
+            assert_eq!(p.3, Some(1), "{p:?}"); // both kings one step off-center
+        }
+    }
+
+    /// Maintenance plans have no arrival time: None, never zero.
+    #[test]
+    fn maintenance_plans_have_no_speed() {
+        let g35 = speeds("r4rk1/p1pqbppp/B1p1pn2/2Pp3b/Q2P1B2/P3P3/1P3PPP/RN2K2R b KQ - 2 12");
+        for p in g35.iter().filter(|p| {
+            matches!(
+                p.0.as_str(),
+                "KeepPositionClosed" | "UseSpaceAvoidExchanges" | "RestrictKnight"
+            )
+        }) {
+            assert_eq!(p.3, None, "{p:?}");
+        }
     }
 }

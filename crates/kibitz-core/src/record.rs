@@ -152,6 +152,13 @@ pub struct PlanHint {
     /// faces the passer, and `plans.rs` re-attributes those by name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<Favors>,
+    /// Moves the owner needs to complete or activate the plan, capped
+    /// small (run 12, the plan-speed term). `None` means no honest
+    /// estimate exists — maintenance plans have no arrival time, and
+    /// None is the correct value there, not zero. Computed in one
+    /// post-pass (`plans::annotate_speed`), never at emission sites.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<u8>,
 }
 
 impl PlanHint {
@@ -174,6 +181,7 @@ impl PlanHint {
             hint: hint.into(),
             squares,
             owner: None,
+            speed: None,
         }
     }
 
@@ -528,6 +536,7 @@ mod tests {
                 magnitude: Magnitude::Clear,
                 evidence,
                 plans: vec![PlanHint {
+                    speed: None,
                     hint: "BlockadeThenPressure".into(),
                     squares: vec!["d4".into(), "d5".into()],
                     owner: None,

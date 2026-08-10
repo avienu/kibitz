@@ -43,7 +43,8 @@ pub fn analyze_with_history(
 }
 
 pub fn analyze(board: &cozy_chess::Board) -> record::FeatureRecord {
-    let imbalances = imbalance::assess(board);
+    let mut imbalances = imbalance::assess(board);
+    plans::annotate_speed(board, &mut imbalances);
     let composite_plans = plans::synthesize(&imbalances);
     let maneuvers = route::extract(board, &imbalances);
     let schemes = scheme::synthesize(board, &maneuvers, &composite_plans);

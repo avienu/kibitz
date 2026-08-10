@@ -315,6 +315,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
                 json!(sqs(&dev.sleeping_minors)),
             );
             plans.push(PlanHint {
+                speed: None,
                 hint: "CompleteDevelopment".into(),
                 owner: None,
                 squares: sqs(&dev.sleeping_minors),
@@ -326,6 +327,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
                     evidence.insert(format!("king_in_center_{suffix}"), json!("available"));
                 }
                 plans.push(PlanHint {
+                    speed: None,
                     hint: "CastleIntoSafety".into(),
                     owner: None,
                     squares: vec![sq(king), sq(rook)],
@@ -340,6 +342,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
                 json!(sqs(&dev.center_advances)),
             );
             plans.push(PlanHint {
+                speed: None,
                 hint: "ClaimTheCenter".into(),
                 owner: None,
                 squares: sqs(&dev.center_advances),
@@ -348,6 +351,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
         if let Some(queen) = dev.queen_sortie {
             evidence.insert(format!("queen_sortie_{suffix}"), json!(sq(queen)));
             plans.push(PlanHint {
+                speed: None,
                 hint: "QueenAheadOfHerArmy".into(),
                 owner: None,
                 squares: vec![sq(queen)],
@@ -359,6 +363,7 @@ pub fn imbalances(report: &DevelopmentReport) -> Vec<Imbalance> {
                 json!({ "square": sq(square), "times": times }),
             );
             plans.push(PlanHint {
+                speed: None,
                 hint: "SamePieceWandering".into(),
                 owner: None,
                 squares: vec![sq(square)],

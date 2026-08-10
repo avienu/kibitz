@@ -116,6 +116,7 @@ fn quiet_record() -> FeatureRecord {
             magnitude: Magnitude::Clear,
             evidence: evidence(&[("isolated_black", serde_json::json!(["d5"]))]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "BlockadeThenPressure".into(),
                 owner: None,
                 squares: vec!["d4".into(), "d5".into()],
@@ -131,6 +132,7 @@ fn quiet_record() -> FeatureRecord {
                 ("locked_center_pawns", serde_json::json!(0)),
             ]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "OpenThePosition".into(),
                 owner: None,
                 squares: vec![],
@@ -142,6 +144,7 @@ fn quiet_record() -> FeatureRecord {
             magnitude: Magnitude::Minor,
             evidence: evidence(&[("established_outpost_black", serde_json::json!("e4"))]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "ManeuverKnight".into(),
                 owner: None,
                 squares: vec!["f6".into(), "e4".into()],
@@ -162,6 +165,7 @@ fn endgame_record() -> FeatureRecord {
             magnitude: Magnitude::Winning,
             evidence: evidence(&[("passed_white", serde_json::json!(["a5"]))]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "EscortThePasser".into(),
                 owner: None,
                 squares: vec!["a5".into(), "a6".into(), "a7".into(), "a8".into()],
@@ -346,6 +350,7 @@ fn full_coverage_record() -> FeatureRecord {
                 ("locked_center_pawns", serde_json::json!(3)),
             ]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "KeepPositionClosed".into(),
                 owner: None,
                 squares: vec![],
@@ -369,11 +374,13 @@ fn full_coverage_record() -> FeatureRecord {
             ]),
             plans: vec![
                 PlanHint {
+                    speed: None,
                     hint: "AdvanceQueensideMajority".into(),
                     owner: None,
                     squares: vec![],
                 },
                 PlanHint {
+                    speed: None,
                     hint: "BlockadeBlackPasser".into(),
                     owner: None,
                     squares: vec!["h3".into()],
@@ -402,6 +409,7 @@ fn full_coverage_record() -> FeatureRecord {
                 ("rook_on_seventh", serde_json::json!("white")),
             ]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "DoubleOnOpenFile".into(),
                 owner: None,
                 squares: vec![],
@@ -428,6 +436,7 @@ fn full_coverage_record() -> FeatureRecord {
                 ("black_space", serde_json::json!(3)),
             ]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "UseSpaceAvoidExchanges".into(),
                 owner: None,
                 squares: vec![],
@@ -442,6 +451,7 @@ fn full_coverage_record() -> FeatureRecord {
                 ("black_developed", serde_json::json!(2)),
             ]),
             plans: vec![PlanHint {
+                speed: None,
                 hint: "OpenPositionBeforeOpponentCompletes".into(),
                 owner: None,
                 squares: vec![],

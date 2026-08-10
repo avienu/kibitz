@@ -1060,13 +1060,31 @@ pub fn role_of(record: &FeatureRecord, board: &Board, mv: Move) -> MoveRole {
         opp_strength: plan_strength(record, opp_favors, true),
         ..MoveRole::default()
     };
+    // Cheapest speed each side owns: scheme horizons where they exist,
+    // else annotated plan speeds (run 12 — horizon-study measured
+    // schemes alone at 0-1% both-sides coverage, so the tempo
+    // comparison was dataless without this).
     let horizon = |f: Favors| {
-        record
+        let scheme = record
             .schemes
             .iter()
             .filter(|s| s.favors == f)
             .map(|s| s.horizon)
-            .min()
+            .min();
+        let plan = record
+            .imbalances
+            .iter()
+            .flat_map(|i| {
+                i.plans
+                    .iter()
+                    .filter(|p| p.attributed(i.favors) == f)
+                    .filter_map(|p| p.speed)
+            })
+            .min();
+        match (scheme, plan) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     };
     role.own_horizon = horizon(stm_favors);
     role.opp_horizon = horizon(opp_favors);

@@ -2031,3 +2031,44 @@ vocabulary — every hint needs a moves-to-execute estimate — which is
 run-sized B3 design work, now named and priced, and the prerequisite
 for both the maintainer's tempo hypothesis and any suggest@1 ranking
 fix.** Not started; the design deserves its own prediction sheet.
+
+## The plan-speed term ships, and the tempo hypothesis gets its first data
+
+The run-sized design horizon-study priced, built against its own
+prediction sheet. `speed: Option<u8>` on every plan hint — moves the
+owner needs to complete or activate the plan — computed in a single
+post-pass (`plans::annotate_speed`) that cannot change what fires, with
+role_of's horizon falling back from schemes to attributed plan speeds.
+Maintenance plans keep None by design: a plan with no arrival time has
+no speed, and zero would hand every side a trivial horizon.
+
+### Scorecard
+
+| prediction | line | actual |
+|---|---|---|
+| both-sides coverage >= 60%, both sets | under 40% = do not ship | quiet **69%** (held); labeled **45%** (REFUTED, above the ship line) |
+| zero behavioral drift | any movement = bug | **held** — book-eval diffed IDENTICAL against a stash-restored baseline; alerts-fp unchanged |
+| three spot-checks | any wrong = family ships as None | **all held**, now committed as unit tests |
+| tempo hypothesis measured, no outcome predicted | — | measured (below) |
+
+The labeled-set refutation is informative: prophylactic and early
+positions carry maintenance and development hints that correctly have
+no speed, so coverage there is structurally lower than in middlegames.
+45% sits above the pre-registered 40% ship line, and shipping at a
+refuted prediction with the refutation stated is the relocated-pawn
+precedent, not an exception to it.
+
+The drift check deserves its sentence: the harness had no true
+pre-change baseline mid-turn, so one was made — stash the change,
+measure, restore, diff. IDENTICAL to the byte on every axis.
+
+### The tempo hypothesis, measured for the first time
+
+Of the 17 role-classified picks on labeled data: **3 of 8 denial/both
+picks sit where the opponent's plan is faster, against 2 of 9
+constructive ones.** Directionally consistent with the maintainer's
+hypothesis — prophylactic picks do sit opp-faster at a higher rate —
+and nowhere near a confirmation: n is 8, both-sides coverage on this
+set is 45%, and the margin is one pick. The instrument now exists; the
+verdict needs the prophylaxis corpus to grow and coverage to rise.
+No stronger claim is made.

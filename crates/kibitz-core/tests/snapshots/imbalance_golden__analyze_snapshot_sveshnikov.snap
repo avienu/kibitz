@@ -1,5 +1,6 @@
 ---
 source: crates/kibitz-core/tests/imbalance_golden.rs
+assertion_line: 166
 expression: record
 ---
 {
@@ -73,7 +74,8 @@ expression: record
             "d6",
             "d5"
           ],
-          "owner": "white"
+          "owner": "white",
+          "speed": 1
         }
       ]
     },
@@ -104,21 +106,24 @@ expression: record
           "hint": "TargetWeakPawn",
           "squares": [
             "d6"
-          ]
+          ],
+          "speed": 1
         },
         {
           "hint": "TradeSquareDefender",
           "squares": [
             "f6",
             "d5"
-          ]
+          ],
+          "speed": 1
         },
         {
           "hint": "ManeuverKnightToOutpost",
           "squares": [
             "c3",
             "d5"
-          ]
+          ],
+          "speed": 1
         },
         {
           "hint": "ManeuverBishopToSupportPoint",
@@ -126,7 +131,8 @@ expression: record
             "f1",
             "c4",
             "d5"
-          ]
+          ],
+          "speed": 2
         }
       ]
     },

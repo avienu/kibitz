@@ -1100,8 +1100,8 @@ pub fn horizon_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
         }
     }
     for (name, fens) in &sets {
-        let (mut n, mut scheme_any, mut scheme_both, mut man_any, mut neither) =
-            (0usize, 0usize, 0usize, 0usize, 0usize);
+        let (mut n, mut scheme_any, mut scheme_both, mut man_any, mut neither, mut speed_both) =
+            (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
         for fen in fens {
             let Ok(board) = fen.parse::<cozy_chess::Board>() else {
                 continue;
@@ -1123,6 +1123,21 @@ pub fn horizon_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
             if !(w || b) && r.maneuvers.is_empty() {
                 neither += 1;
             }
+            // The role_of definition after the plan-speed term: scheme
+            // horizon OR annotated plan speed, per side.
+            let speed_side = |f: kibitz_core::record::Favors| {
+                sides(f)
+                    || r.imbalances.iter().any(|i| {
+                        i.plans
+                            .iter()
+                            .any(|p| p.attributed(i.favors) == f && p.speed.is_some())
+                    })
+            };
+            if speed_side(kibitz_core::record::Favors::White)
+                && speed_side(kibitz_core::record::Favors::Black)
+            {
+                speed_both += 1;
+            }
         }
         let pct = |k: usize| k as f64 / n.max(1) as f64 * 100.0;
         println!("{name}: {n} positions");
@@ -1138,6 +1153,10 @@ pub fn horizon_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
         println!(
             "  no speed at all         {neither:>4}  ({:.0}%)",
             pct(neither)
+        );
+        println!(
+            "  BOTH sides have a speed {speed_both:>4}  ({:.0}%)  <- after the plan-speed term",
+            pct(speed_both)
         );
     }
     Ok(())

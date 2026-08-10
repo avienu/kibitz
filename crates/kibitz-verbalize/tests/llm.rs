@@ -69,6 +69,7 @@ fn fixture_record() -> FeatureRecord {
             magnitude: Magnitude::Clear,
             evidence,
             plans: vec![PlanHint {
+                speed: None,
                 hint: "BlockadeThenPressure".into(),
                 owner: None,
                 squares: vec!["d4".into(), "d5".into()],

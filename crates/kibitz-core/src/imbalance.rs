@@ -210,6 +210,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
             sided.push((
                 color,
                 PlanHint {
+                    speed: None,
                     hint: "HuntBishopPair".into(),
                     owner: None,
                     squares: vec![square_name(knight), square_name(bishop)],
@@ -274,6 +275,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
                 sided.push((
                     color,
                     PlanHint {
+                        speed: None,
                         hint: "TradeOrActivateBadBishop".into(),
                         owner: None,
                         squares: vec![square_name(b)],
@@ -322,6 +324,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
         sided.push((
             color,
             PlanHint {
+                speed: None,
                 hint: "ActivateEntombedPiece".into(),
                 owner: None,
                 squares: squares.clone(),
@@ -330,6 +333,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
         sided.push((
             !color,
             PlanHint {
+                speed: None,
                 hint: "KeepPieceEntombed".into(),
                 owner: None,
                 squares,
@@ -416,6 +420,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
             sided.push((
                 color,
                 PlanHint {
+                    speed: None,
                     hint: "RestrictKnight".into(),
                     owner: None,
                     squares: eknights.into_iter().map(square_name).collect(),
@@ -428,6 +433,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     let black_wants_closed = closed && (bn > wn || (bn > 0 && !holes_b_side.is_empty()));
     if white_wants_closed || black_wants_closed {
         plans.push(PlanHint {
+            speed: None,
             hint: "KeepPositionClosed".into(),
             owner: None,
             squares: vec![],
@@ -440,6 +446,7 @@ pub fn minor_pieces(board: &Board) -> Option<Imbalance> {
     let mix_edge = !closed && ((wb > bb && wn < bn) || (bb > wb && bn < wn));
     if pair_edge || mix_edge {
         plans.push(PlanHint {
+            speed: None,
             hint: "OpenPositionForBishops".into(),
             owner: None,
             squares: vec![],
@@ -731,6 +738,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 sided.push((
                     color,
                     PlanHint {
+                        speed: None,
                         hint: "OutsidePasserDecoy".into(),
                         owner: None,
                         squares: vec![square_name(p)],
@@ -813,6 +821,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             sided.push((
                 Color::White,
                 PlanHint {
+                    speed: None,
                     hint: "AdvanceQueensideMajority".into(),
                     owner: None,
                     squares: vec![],
@@ -825,6 +834,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             sided.push((
                 Color::Black,
                 PlanHint {
+                    speed: None,
                     hint: "AdvanceQueensideMajority".into(),
                     owner: None,
                     squares: vec![],
@@ -867,6 +877,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             sided.push((
                 color,
                 PlanHint {
+                    speed: None,
                     hint: "AdvanceCentralMajority".into(),
                     owner: None,
                     squares: vec![square_name(front)],
@@ -905,6 +916,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 sided.push((
                     color,
                     PlanHint {
+                        speed: None,
                         hint: "MinorityAttack".into(),
                         owner: None,
                         squares,
@@ -964,6 +976,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             sided.push((
                 color,
                 PlanHint {
+                    speed: None,
                     hint: "WingPawnStormClosedCenter".into(),
                     owner: None,
                     squares,
@@ -991,6 +1004,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 sided.push((
                     !color,
                     PlanHint {
+                        speed: None,
                         hint: "PressureDoubledPawn".into(),
                         owner: None,
                         squares: vec![square_name(p)],
@@ -1017,6 +1031,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                     sided.push((
                         !color,
                         PlanHint {
+                            speed: None,
                             hint: "PressureBackwardPawn".into(),
                             owner: None,
                             squares: vec![square_name(p), square_name(stop)],
@@ -1045,6 +1060,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             } {
                 if advanced(p) {
                     plans.push(PlanHint {
+                        speed: None,
                         hint: if ci == 0 {
                             "BlockadeWhitePasser"
                         } else {
@@ -1071,6 +1087,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                         sided.push((
                             color,
                             PlanHint {
+                                speed: None,
                                 hint: "RookBehindPasser".into(),
                                 owner: None,
                                 squares: vec![square_name(p), square_name(behind)],
@@ -1120,6 +1137,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                         sided.push((
                             color,
                             PlanHint {
+                                speed: None,
                                 hint: "UprootBlockader".into(),
                                 owner: None,
                                 squares: vec![square_name(stop), square_name(p)],
@@ -1145,6 +1163,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 });
                 if !already {
                     plans.push(PlanHint {
+                        speed: None,
                         hint: "BlockadeThenPressure".into(),
                         owner: None,
                         squares: vec![square_name(p), square_name(stop)],
@@ -1173,6 +1192,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                     sided.push((
                         owner,
                         PlanHint {
+                            speed: None,
                             hint: "OverprotectStrongPoint".into(),
                             owner: None,
                             squares: vec![square_name(stop)],
@@ -1197,6 +1217,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                 sided.push((
                     color,
                     PlanHint {
+                        speed: None,
                         hint: "ActivateKingInEndgame".into(),
                         owner: None,
                         squares: vec![square_name(target)],
@@ -1276,6 +1297,7 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
             sided.push((
                 color,
                 PlanHint {
+                    speed: None,
                     hint: "CreatePassedPawn".into(),
                     owner: None,
                     squares: vec![square_name(candidate)],
@@ -1470,6 +1492,7 @@ pub fn material(board: &Board) -> Option<Imbalance> {
         if !majors.is_empty() {
             plans.push(
                 PlanHint {
+                    speed: None,
                     hint: "ActivateEntombedPiece".into(),
                     owner: None,
                     squares: majors.clone(),
@@ -1481,6 +1504,7 @@ pub fn material(board: &Board) -> Option<Imbalance> {
             );
             plans.push(
                 PlanHint {
+                    speed: None,
                     hint: "KeepPieceEntombed".into(),
                     owner: None,
                     squares: majors,
@@ -1628,6 +1652,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
     for (color, on7th) in [(Color::White, w7), (Color::Black, b2)] {
         for r in on7th {
             plans.push(PlanHint {
+                speed: None,
                 hint: "RookToSeventh".into(),
                 owner: None,
                 squares: vec![square_name(r)],
@@ -1657,6 +1682,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
             }
             if !(rooks & file.bitboard()).is_empty() {
                 plans.push(PlanHint {
+                    speed: None,
                     hint: "RookToSeventh".into(),
                     owner: None,
                     squares: vec![square_name(entry)],
@@ -1678,6 +1704,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
                 continue;
             };
             plans.push(PlanHint {
+                speed: None,
                 hint: "ManeuverRookToOpenFile".into(),
                 owner: None,
                 squares: std::iter::once(rook)
@@ -1710,6 +1737,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
         if let Some(fname) = open.iter().chain(halves.iter()).find(|f| near_king(f)) {
             let file = File::index((fname.as_bytes()[0] - b'a') as usize);
             plans.push(PlanHint {
+                speed: None,
                 hint: "OpenLinesTowardWeakKing".into(),
                 owner: None,
                 squares: vec![square_name(Square::new(file, entry_rank))],
@@ -1724,6 +1752,7 @@ pub fn files_diagonals(board: &Board) -> Option<Imbalance> {
     let (f, m) = favors_or_balanced(score, 15, 40);
     if !open.is_empty() {
         plans.push(PlanHint {
+            speed: None,
             hint: "DoubleOnOpenFile".into(),
             owner: None,
             squares: vec![],
@@ -2128,6 +2157,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
                 json!(crate::force::force_in(board, color, sector)),
             );
             plans.push(PlanHint {
+                speed: None,
                 hint: "AttackWhereYouAreStronger".into(),
                 owner: None,
                 squares: vec![square_name(board.king(!color))],
@@ -2135,6 +2165,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         }
         for pawn in weak_pawn_targets(board, color) {
             plans.push(PlanHint {
+                speed: None,
                 hint: "TargetWeakPawn".into(),
                 owner: None,
                 squares: vec![square_name(pawn)],
@@ -2142,6 +2173,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         }
         if let Some(p) = best_piece(board, color) {
             plans.push(PlanHint {
+                speed: None,
                 hint: "KeepBestPiece".into(),
                 owner: None,
                 squares: vec![square_name(p)],
@@ -2149,6 +2181,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         }
         if let Some(a) = attacker_to_trade(board, color) {
             plans.push(PlanHint {
+                speed: None,
                 hint: "TradeOffAttacker".into(),
                 owner: None,
                 squares: vec![square_name(a)],
@@ -2156,6 +2189,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         }
         for (wanted, defender) in square_defender_trades(board, color) {
             plans.push(PlanHint {
+                speed: None,
                 hint: "TradeSquareDefender".into(),
                 owner: None,
                 squares: vec![square_name(defender), square_name(wanted)],
@@ -2167,6 +2201,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
             // prior — a plan the side still has to execute poisons the
             // who-is-better vote — and the same holds here.
             plans.push(PlanHint {
+                speed: None,
                 hint: "UndermineDefender".into(),
                 owner: None,
                 squares: vec![square_name(defender), square_name(wanted)],
@@ -2174,6 +2209,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
         }
         for point in overprotect_squares(board, color) {
             plans.push(PlanHint {
+                speed: None,
                 hint: "OverprotectStrongPoint".into(),
                 owner: None,
                 squares: vec![square_name(point)],
@@ -2223,6 +2259,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
                 // follow. (Consumers still read the DESTINATION as `.last()`.)
                 let moves = route.len() as i32 + 1;
                 plans.push(PlanHint {
+                    speed: None,
                     hint: "ManeuverKnightToOutpost".into(),
                     owner: None,
                     squares: std::iter::once(n)
@@ -2278,6 +2315,7 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
                 crate::route::route_to(board, color, Piece::Bishop, b, support_points, &|_| true)
             {
                 plans.push(PlanHint {
+                    speed: None,
                     hint: "ManeuverBishopToSupportPoint".into(),
                     owner: None,
                     squares: std::iter::once(b)
@@ -2472,6 +2510,7 @@ pub fn space(board: &Board) -> Option<Imbalance> {
     // Plans are phrased for the favored side (the verbalizer attributes
     // them that way): keep pieces on, use the extra room.
     let plans = vec![PlanHint {
+        speed: None,
         hint: "UseSpaceAvoidExchanges".into(),
         owner: None,
         squares: vec![],
@@ -2516,6 +2555,7 @@ pub fn development(board: &Board) -> Option<Imbalance> {
     evidence.insert("black_developed".into(), json!(b));
     let (f, m) = favors(diff, 36, 72)?;
     let plans = vec![PlanHint {
+        speed: None,
         hint: "OpenPositionBeforeOpponentCompletes".into(),
         owner: None,
         squares: vec![],
