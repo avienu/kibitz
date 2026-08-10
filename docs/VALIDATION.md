@@ -2190,3 +2190,64 @@ knowledge that the book's own gate term fails the price, so any future
 attempt needs a different discriminator entirely (enemy READINESS —
 the development-lead half of the mechanism — is the untested
 candidate, for a future sheet).
+
+## Praxis bulk 2: seven entries, four more families
+
+Corpus composition: **191 positions — 162 Jeremy Silman, 29 Nimzowitsch
+across twelve stratagem families**; negatives 65 (64 clean, g70 the
+standing red); quiet holdout fixed and drift-checked (46.6%). Predictions
+registered before reading; every entry replay-verified; game 22 was
+DROPPED rather than transcribed because the book prints its score only
+from move 37 — no replay chain, no entry, no exceptions.
+
+Scorecard: imbalances 32/32 and RookToSeventh hit on the absolute-
+seventh exhibit (predictions 1 and 2 held); four new vocabulary gaps
+(attack-chain-at-base — the pawn-chain family's first tag —
+time-the-liberating-break, roll-up-the-restraining-pawn,
+hanging-pawns-blockaded-security) against a predicted two; favors
+13/17 with the new miss (g18) the same hypermodern-bind shape as g13
+and g78. **Prediction 3 refuted low**: 1 of the 6 new labeled moves
+classified by role_of (17%, band was 25-50%) — even the timed pawn
+breaks read "neither", which sharpens the blindness diagnosis rather
+than softening it, but the band was wrong and is retired: the honest
+statement after four samples is that role_of classifies 10 of 35
+author-labeled strategic moves (29%), almost exclusively the
+route-obstruction subset.
+
+## The multi-author comparison, first formal reading
+
+The question this line of work was opened to answer: does the engine
+track Jeremy Silman better than Nimzowitsch? At 29 Nimzowitsch entries
+across twelve families, selected by the author's own stratagem index
+through a chain with no judgment calls in it, the answer has a shape —
+and it is not the feared one.
+
+| axis | Jeremy Silman (162) | Nimzowitsch (29) |
+|---|---|---|
+| imbalances | 261/287 = 90.9% | **32/32 = 100%** |
+| plans | 111/146 = 76.0% | **12/13 = 92.3%** |
+| favors | 68/99 = 68.7% | 13/17 = 76.5% |
+| suggest@3 | 8/25 = 32.0% | **4/21 = 19.0%** |
+| role_of on labeled moves | (not labeled) | 10/35 = 29% |
+
+Not a Silman emulator: on the structural axes the engine reads
+Nimzowitsch BETTER than the corpus it was tuned against, partly
+because the Praxis entries are replay-derived positions with no
+reconstruction noise, and partly because run 12 built detectors for
+his named structures (blockade quality, uprooting, the isolated pair,
+the blockade-point overprotection, passer classification) with the
+corpus growing alongside. The gap is concentrated and named: the
+QUIET-MOVE axes. suggest@3 drops by a third against Silman's number on
+the moves Nimzowitsch himself labeled, and the denial classifier sees
+less than a third of his prophylaxis. The honest one-sentence answer:
+**the engine explains Nimzowitsch's positions better than Silman's,
+and plays his moves worse — because his signature is the quiet move,
+and quiet moves are the engine's measured blind spot on every axis
+that touches them.**
+
+Caveats attached: the two corpora differ in transcription fidelity
+(replay-derived vs diagram-read), in negative density, and in what
+they ask of the alerts axis (the Praxis batch deliberately carries no
+alert expectations); 29 entries is past the stated threshold but the
+per-family counts are still 2-7. The comparison strengthens or breaks
+as the corpus grows; the composition line above is its denominator.
