@@ -234,6 +234,15 @@ enum Command {
         ])]
         paths: Vec<PathBuf>,
     },
+    /// Print the runtime fingerprints of the measurement inputs — the
+    /// same values every eval prints unprompted, for manifest checks.
+    CorpusFingerprint {
+        #[arg(num_args = 1.., default_values = [
+            "testdata/private/book-trials",
+            "testdata/corpus/quiet_fens.txt",
+        ])]
+        paths: Vec<PathBuf>,
+    },
     /// Firing rate of one plan hint over the engine-quiet master set —
     /// the generic cost term for new plan-hint conditions.
     HintFp {
@@ -680,24 +689,34 @@ fn main() -> anyhow::Result<()> {
             kibitz_db::favorsfit::run_labelled(&conn, samples, seed, label, nodes)?;
         }
         Command::AlertsFp { path } => {
+            kibitz_db::bookeval::print_input_fingerprint(std::slice::from_ref(&path));
             kibitz_db::bookeval::alerts_fp(&path)?;
         }
         Command::EntombFp { path, dump } => {
+            kibitz_db::bookeval::print_input_fingerprint(std::slice::from_ref(&path));
             kibitz_db::bookeval::entomb_fp(&path, dump)?;
         }
         Command::ShieldStudy { paths } => {
+            kibitz_db::bookeval::print_input_fingerprint(&paths);
             kibitz_db::bookeval::shield_study(&paths)?;
         }
         Command::HorizonStudy { paths } => {
+            kibitz_db::bookeval::print_input_fingerprint(&paths);
             kibitz_db::bookeval::horizon_study(&paths)?;
         }
         Command::QueenlessStudy { paths } => {
+            kibitz_db::bookeval::print_input_fingerprint(&paths);
             kibitz_db::bookeval::queenless_study(&paths)?;
         }
+        Command::CorpusFingerprint { paths } => {
+            kibitz_db::bookeval::print_input_fingerprint(&paths);
+        }
         Command::HintFp { hint, path, dump } => {
+            kibitz_db::bookeval::print_input_fingerprint(std::slice::from_ref(&path));
             kibitz_db::bookeval::hint_fp(&path, &hint, dump)?;
         }
         Command::KingStudy { paths } => {
+            kibitz_db::bookeval::print_input_fingerprint(&paths);
             kibitz_db::bookeval::king_study(&paths)?;
         }
         Command::GateStudy { path } => {
@@ -713,6 +732,7 @@ fn main() -> anyhow::Result<()> {
             kibitz_db::bookeval::prophylaxis_study(&corpora)?;
         }
         Command::BookEval { path, verbose } => {
+            kibitz_db::bookeval::print_input_fingerprint(std::slice::from_ref(&path));
             let corpora = kibitz_db::bookeval::load(&path)?;
             let mut totals = kibitz_db::bookeval::Report::default();
             for corpus in &corpora {

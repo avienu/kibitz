@@ -1162,6 +1162,59 @@ pub fn horizon_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// FNV-1a 64 over a file's bytes — the measurement-input fingerprint.
+///
+/// Every eval and study prints the fingerprints of what it actually
+/// read, so a measurement self-identifies its inputs instead of
+/// relying on a manifest someone remembered to regenerate (second-desk
+/// finding, run 12: a stale manifest is worse than none, because it
+/// attests confidently to the wrong hashes). docs/CORPUS_MANIFEST.md
+/// carries the same values plus SHA-256 for binary-free verification;
+/// a mismatch between a printed fingerprint and the manifest at the
+/// same ref means the manifest is stale, and the printed value wins.
+fn fnv64(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
+/// Print one fingerprint line per input file (dirs expand to their
+/// sorted *.json members), plus a combined whole-input fingerprint.
+pub fn print_input_fingerprint(paths: &[std::path::PathBuf]) {
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    for p in paths {
+        if p.is_dir() {
+            let mut inner: Vec<_> = std::fs::read_dir(p)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|q| q.extension().and_then(|x| x.to_str()) == Some("json"))
+                .collect();
+            inner.sort();
+            files.extend(inner);
+        } else {
+            files.push(p.clone());
+        }
+    }
+    let mut combined: u64 = 0xcbf29ce484222325;
+    for f in &files {
+        match std::fs::read(f) {
+            Ok(bytes) => {
+                let h = fnv64(&bytes);
+                combined ^= h;
+                combined = combined.wrapping_mul(0x100000001b3);
+                println!("input {:016x}  {} ({} bytes)", h, f.display(), bytes.len());
+            }
+            Err(e) => println!("input UNREADABLE       {} ({e})", f.display()),
+        }
+    }
+    println!("inputs-combined {combined:016x}");
+}
+
 /// Does shield anatomy predict anything once the queens are off?
 ///
 /// The praxis-g70 red anchor: WeakKing at severity HIGH, on pure
