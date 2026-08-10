@@ -2369,3 +2369,66 @@ suggest@3 **16.7% vs 32.0%**. The comparison's shape sharpened as the
 corpus grew: the structure-reading gap widened in Nimzowitsch's favor
 and the quiet-move gap widened against him — both directions
 strengthening the one-sentence answer already on record.
+
+## The full-mine turn: My System enters the corpus, Praxis reaches 44
+
+The corpus's sixth book, and the one the run-12 inventory was built
+from. Both My System entries come from the Leonhardt game the chapter
+uses to teach blockader choice — full printed score, replay-verified,
+no diagram reading — and **both hit the detectors built from the
+chapter's own inventory**: BlockadeWhitePasser on the
+choose-the-blockader ply, BlockadeThenPressure (with UprootBlockader
+alongside) on the keep-the-knight ply. My System: 2/2 imbalances, 2/2
+plans. The inventory's detectors, meeting the book that generated
+them, on the first try — prediction 1 held exactly.
+
+The diagram path got its first honest test and its first honest
+failure, per prediction 4: Te Kolste-Nimzowitsch (the candidate-
+sacrifice exhibit) transcribed to a position whose 21-ply printed
+continuation replayed legally against THIRTY-FOUR different
+completions of the ambiguous squares — the checksum proved the
+on-path pieces and could not pin the rest. Dropped and logged, not
+guessed. Prediction 2's other half fell with it: crippling-spreads
+and lust-to-expand gained no My System citations this turn, because
+their exhibits are the fragment-and-diagram passages the discipline
+will not enter without a chain.
+
+Six more Praxis entries alongside (positional feeler, centralize-to-
+save, the third forestall-pawn-break, the diagonal blockade,
+changing-the-guard, the dead point): Praxis stands at 44 entries, and
+suggest@3 gained three hits from the batch's book moves — the first
+suggest movement in the corpus's history that came from corpus growth
+rather than detector change.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **208 positions — 162 Jeremy Silman (4 books), 46 Nimzowitsch
+(My System 2, Chess Praxis 44) across twenty stratagem families**;
+negatives 87 (86 clean, praxis-g70 the standing red); quiet holdout
+fixed at 500; fingerprints in docs/CORPUS_MANIFEST.md, printed by
+every measurement.
+
+| axis | figure |
+|---|---|
+| imbalances | 306/332 = 92.2% |
+| plans | 125/161 = 77.6% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 88/126 = 69.8% |
+| suggest@1 | 3/63 = 4.8% |
+| suggest@3 | 16/63 = 25.4% |
+
+Cost terms on the fixed 500: screen 46.6%, WeakKing 0.58/pos,
+TrappedPiece 0.10/pos, entombed 0.000, UprootBlockader 4.2%,
+OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
+OverprotectStrongPoint 9.4%. All unchanged; corpus growth moved
+nothing it should not.
+
+What remains unmined, stated so nobody mistakes 208 for "done":
+roughly 60 Praxis games of thinner annotation density; My System's
+Parts 1-2 fragment exhibits (need per-diagram transcription that
+survives the D143 lesson — a zoomed-read protocol with unique-
+completion verification); My System Part 3's fifty games and The
+Blockade appendix (full scores, minable exactly like Praxis). The
+extraction machinery and the verification discipline both exist; the
+remaining cost is reading time, now demonstrably ~1.5 entries per
+game read.
