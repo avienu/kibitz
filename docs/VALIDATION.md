@@ -2479,3 +2479,29 @@ Cost terms on the fixed 500: unchanged to the digit (screen 46.6%,
 WeakKing 0.58, TrappedPiece 0.10, entombed 0.000, UprootBlockader
 4.2%, OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
 OverprotectStrongPoint 9.4%).
+
+## RestrainLiberation: attempted on seven exhibits, refused on its own sheet
+
+The corpus's most-cited concept debt (restrain-liberating-pawn-move,
+four citations; forestall-pawn-break, three) got its graduation
+attempt. The sheet promised: at least 3 of the 7 exhibit entries
+graduate from gap to scored hit, quiet rate under 12%.
+
+| design | exhibit graduations | quiet rate |
+|---|---|---|
+| v1: lever within two pawn-moves of a moved pawn, scarcity <= 2 | 2 predicted-fires correct, but 3 predicted-silents fired with noise | **78.6% — obliterated** |
+| v2: + the restrainer must hold the Space favor | **2** (g24's exact book-lever pair c6/d5 + f5/e4; g35's e5-vs-d4) | **18.6%** |
+
+Both halves of the promise failed at v2 and the one-revision budget
+was spent; everything is reverted. The finding is worth the failed
+run: **lever geometry plus cramp is still not liberation.** The books
+define the liberating move by its CONSEQUENCE — what it releases —
+and v1's 78.6% proved geometry alone measures ubiquitous pawn tension,
+while v2's space gate halved coverage of the very exhibits the
+concept was cited from (the Karlsbad beauty-prize restraint and the
+Breyer c5-forestalling both went silent, their positions carrying no
+Space imbalance at the anchor ply). A real detector here needs a
+release term — does the lever's execution un-cramp the mover's pieces
+— which is mobility-delta machinery, bucket 3, now recorded with
+seven corpus citations of pressure and one failed graduation attached.
+The gaps stay gaps, and they stay counted.
