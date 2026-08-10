@@ -2432,3 +2432,50 @@ Blockade appendix (full scores, minable exactly like Praxis). The
 extraction machinery and the verification discipline both exist; the
 remaining cost is reading time, now demonstrably ~1.5 entries per
 game read.
+
+## The Blockade enters: seven books, 211 positions
+
+The monograph the whole blockade family descends from, as the corpus's
+seventh book — three entries: the odds-game that is the book's own
+proof text for the lust to expand (replayed from its STATED modified
+start, rook odds being printed text and therefore chain-valid), van
+Vliet's 18...d4!! ("no other move is even to be considered"), and the
+Karlsbad beauty-prize 12.Nh4! restraint. All verified; 3/3 imbalances;
+and the suggester's best batch ever — 2 of 3 book moves in the top
+three, one at the top — because these anchors are pawn breaks and
+knight reroutes, exactly the move-shapes suggest speaks.
+
+Scorecard: prediction 1 held (lust-to-expand's source citation plus
+the pawn-wedge gap); prediction 2 half-held (imbalances 100%; the
+existing-detector-hint half went unexercised because all three book
+claims were gap concepts, entered as such); prediction 3
+refuted-by-absence — the Freymann elasticity exhibit could not be
+located in the NIC edition's My System, whose Part 3 appears folded
+differently than the Hays printing, logged for a future locate;
+predictions 4-5 held (zero drift, no new reds).
+
+restrain-liberating-pawn-move now has FOUR citations across THREE
+books — the most corpus pressure any concept debt has carried, and
+the natural first pick when the next detector run opens.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **211 positions — 162 Jeremy Silman (4 books), 49 Nimzowitsch
+(My System 2, Chess Praxis 44, The Blockade 3) across twenty-one
+stratagem families**; negatives 91 (90 clean, praxis-g70 the standing
+red); quiet holdout fixed at 500; fingerprints in
+docs/CORPUS_MANIFEST.md, printed by every measurement.
+
+| axis | figure |
+|---|---|
+| imbalances | 309/335 = 92.2% |
+| plans | 125/161 = 77.6% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 89/129 = 69.0% |
+| suggest@1 | 4/66 = 6.1% |
+| suggest@3 | 18/66 = 27.3% |
+
+Cost terms on the fixed 500: unchanged to the digit (screen 46.6%,
+WeakKing 0.58, TrappedPiece 0.10, entombed 0.000, UprootBlockader
+4.2%, OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
+OverprotectStrongPoint 9.4%).
