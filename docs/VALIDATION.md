@@ -2072,3 +2072,37 @@ and nowhere near a confirmation: n is 8, both-sides coverage on this
 set is 45%, and the margin is one pick. The instrument now exists; the
 verdict needs the prophylaxis corpus to grow and coverage to rise.
 No stronger claim is made.
+
+## Prophylaxis batch 2: the blindness diagnosis holds, the recognition claim wobbles
+
+Corpus composition: **176 positions — 162 Jeremy Silman, 14 Nimzowitsch
+(four stratagem families)**; negatives 47 (46 clean, g70 the standing
+red); quiet holdout fixed and drift-checked (46.6%). Corpus-only batch;
+selection (games 52, 38, 21) and predictions registered before reading.
+
+Three new author-labeled moves, including the corpus's **first WHITE
+prophylactic anchor** (19.Qb2, whose later continuation 24.Qe5 the book
+credits to prophylaxis by name). Axes: imbalances 17/17, plans 8/8,
+favors 8/9 with all three new calls hit.
+
+Scorecard:
+
+1. **role_of 25-50% band: held — 1 of 3 (33%).** And the hit pattern
+   repeats batch 1 exactly: 3...e5 classifies (it obstructs the
+   concrete d2-d4 break); 14...Rad8 (forestalls c5) and 19.Qb2 (king
+   security) classify "neither". The route/break-obstruction diagnosis
+   is stable across seven labeled moves and two batches. Over 75%
+   would have refuted it; 33% did not.
+2. **suggest@3 >= 50% on new entries: REFUTED — 1 of 3.** Batch 1
+   measured recognition at 75% and this batch says that number does
+   not generalize; pooled, the family sits at 4/7. The honest state:
+   recognition is neither reliably present nor absent at n=7, and the
+   claim needs the family corpus it was always going to need.
+3. Two new vocabulary gaps harvested (forestall-pawn-break,
+   preventive-king-security) and restrain-liberating-pawn-move earned
+   its second citation across two books' worth of games.
+4. Tempo tally, reported not predicted: denial/both picks 9, of which
+   3 sit opp-faster; constructive 2 of 9. Unchanged margin — the new
+   early-opening anchor carries no costable plans (development and
+   maintenance hints correctly have no speed), which is the labeled-set
+   coverage structure the plan-speed scorecard already named.
