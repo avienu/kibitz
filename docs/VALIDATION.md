@@ -2155,3 +2155,38 @@ the draft of the answer.
 Tempo tally (reported): denial/both 11, of which 3 opp-faster;
 constructive 2 of 11. Horizons now appear across the study's columns —
 the plan-speed term is feeding it — but the margin stays one pick.
+
+## The lagging-king gate, built to its price — and refused by it
+
+The one priced alerts gain on the board, attempted against its
+pre-registered sheet. Gate: the A-candidate condition (home d/e king,
+enemy castled, queens on) plus "the enemy can actually open the
+centre", the term both target book entries name. Two designs, one
+measurement each:
+
+| | book alerts | quiet screen | line |
+|---|---|---|---|
+| v1: captures + push-contact + half-open files | 16/25 (+3 flips) | **53.6% (+7.0)** | +3.1 — killed |
+| v2: pawn ACTS only (captures, push-contact) | 15/25 (+8 pts, both targets) | **51.8% (+5.2)** | +3.1 — killed |
+
+v1 also turned three negative anchors red and exposed a corpus defect
+worth more than the detector work: the WeakKing bans on praxis-g35,
+g59 and g60 had been written on detector SILENCE, in violation of the
+corpus's own selection rule (bans only where the text settles the
+position as quiet — these three texts have those kings attacked or
+castling promptly). The three bans are removed with per-entry
+correction notes; cbcs-136, the rule-valid anchor for the concept,
+stayed clean through both designs, which is exactly what a good anchor
+does.
+
+The verdict the numbers force: **+8 recall at +5.2 firing is 1.54
+points per point — below the 2.6 shipped standard, below even the 1.87
+naive design this same axis refused in run 12.** Central pawn tension
+is ordinary master chess; "can open the centre" does not separate the
+dangerous lagging king from the routine pre-castling position, even
+restricted to pawn acts. The arm is reverted in full. The +8 stays
+unbought, and the axis keeps its floor at 52.0% — now with the added
+knowledge that the book's own gate term fails the price, so any future
+attempt needs a different discriminator entirely (enemy READINESS —
+the development-lead half of the mechanism — is the untested
+candidate, for a future sheet).
