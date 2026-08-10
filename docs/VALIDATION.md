@@ -2106,3 +2106,52 @@ Scorecard:
    early-opening anchor carries no costable plans (development and
    maintenance hints correctly have no speed), which is the labeled-set
    coverage structure the plan-speed scorecard already named.
+
+## Praxis bulk batch: eight entries, four new families, and the corpus crosses the threshold
+
+Corpus composition: **184 positions — 162 Jeremy Silman, 22 Nimzowitsch
+across EIGHT stratagem families** (blockade, fight-against-the-
+blockader, isolani, prophylaxis, over-protection, restraint,
+alternating maneuvers, lust-to-expand); negatives 59, 58 clean, g70
+still the only red; quiet holdout fixed and drift-checked (46.6%).
+Selection and predictions registered before reading; every entry
+replay-verified; batch size raised to eight on the maintainer's
+direction, and the pipeline held.
+
+Scorecard:
+
+1. **Over-protection detector arms on the family's own games: 3 of 4 —
+   held.** g58, g59 and g60 (the Qg4 French complex and Bogoljubow's
+   avant-la-lettre Bf4) all fire OverprotectStrongPoint on the e5
+   spearhead. The miss is g57, entered to fail: black's d5 sits one
+   rank shy of the spearhead band, the depth analogue of the square
+   narrowness g62 documented. Plans 11/12, the only miss being that
+   deliberate one.
+2. imbalances 26/26; favors 11/14 with both misses (g13, g78)
+   predicted in their own entry notes — hypermodern positions where
+   the space ledger reads white and the book reads black.
+3. **role_of stability: third sample inside the band — 3 of 8
+   (37.5%).** And the hit pattern refined itself: 8...Nce7 classifies
+   (a routed regroup), 48...Kc6 classifies as denial (a king
+   maneuver), while every rook-consolidation and queen-repositioning
+   move stays "neither".
+4. **Four new vocabulary gaps** (alternating-maneuvers,
+   lust-to-expand, sacrifice-for-blockade, prophylactic-consolidation),
+   and restrain-liberating-pawn-move reaches THREE citations across
+   three games — the best-supported concept debt in the corpus.
+
+**The number the batch hardened: suggest@3 on author-labeled strategic
+moves is 4/15 (26.7%), with suggest@1 at 0/15.** Batch 1's 75% was the
+outlier, not the rule. Across fifteen labeled moves the suggester
+almost never surfaces the book's quiet move — its top-3s are uniformly
+piece-active. Combined with the role_of pattern, the shape of the
+engine's Nimzowitsch gap is now precise: it reads his STRUCTURES
+nearly perfectly (26/26 imbalances this batch, 59/59 across all Praxis
+batches), executes his named plans where a detector exists, and is
+blind to exactly two things — quiet-move ranking and non-obstruction
+prophylaxis. The multi-author threshold is crossed; that sentence is
+the draft of the answer.
+
+Tempo tally (reported): denial/both 11, of which 3 opp-faster;
+constructive 2 of 11. Horizons now appear across the study's columns —
+the plan-speed term is feeding it — but the margin stays one pick.
