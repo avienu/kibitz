@@ -509,6 +509,32 @@ fn attack_squares_from(board: &Board, piece: Piece, color: Color, sq: Square) ->
     }
 }
 
+/// Knight-move distance on an EMPTY board. Deliberately blind to the
+/// current occupancy: ChooseBlockader uses it as the "the road can be
+/// opened" proxy, because at My System Diagram 145 the right blockader's
+/// road (Ne8-g7-e6) is blocked by its own g7 pawn and the book's move
+/// 12...g6 exists precisely to open it — a real route_to cannot see a
+/// road one pawn-move from existing.
+fn knight_dist_empty(from: Square, to: Square) -> u8 {
+    if from == to {
+        return 0;
+    }
+    let mut seen = from.bitboard();
+    let mut frontier = from.bitboard();
+    for d in 1..=6u8 {
+        let mut next = BitBoard::EMPTY;
+        for sq in frontier {
+            next |= cozy_chess::get_knight_moves(sq);
+        }
+        if next.has(to) {
+            return d;
+        }
+        frontier = next & !seen;
+        seen |= next;
+    }
+    7
+}
+
 /// Can `color` bring force to bear on `target`? True when any of its
 /// N/B/R/Q has a route to a square attacking it (the HuntBishopPair
 /// machinery), or a pawn can come to attack it within the pawn-contact
@@ -1073,6 +1099,29 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                         // is genuinely ownerless rather than unknown.
                         owner: None,
                     });
+                    // Mechanism 7, the CHOOSING side, on an empty stop
+                    // square: it is by no means a matter of indifference
+                    // by which piece — recommend the knight. Empty-board
+                    // distance, not route_to (see knight_dist_empty).
+                    if !board.occupied().has(stop) {
+                        let near = board
+                            .colored_pieces(!color, Piece::Knight)
+                            .into_iter()
+                            .map(|n| (knight_dist_empty(n, stop), n))
+                            .filter(|(d, _)| *d <= 3)
+                            .min();
+                        if let Some((_, n)) = near {
+                            sided.push((
+                                !color,
+                                PlanHint {
+                                    speed: None,
+                                    hint: "ChooseBlockader".into(),
+                                    owner: None,
+                                    squares: vec![square_name(stop), square_name(n)],
+                                },
+                            ));
+                        }
+                    }
                 }
                 // Tarrasch: the rook belongs behind the passer — worth
                 // saying one rank earlier than the blockade is urgent.
@@ -1106,6 +1155,23 @@ pub fn pawn_structure(board: &Board) -> Option<Imbalance> {
                     .then(|| board.piece_on(stop))
                     .flatten()
                 {
+                    // Mechanism 7, the CHOOSING side (My System ch. 4,
+                    // Diagrams 145-146): the knight is the right
+                    // blockader. A facing knight already on the stop
+                    // square IS the right choice — say so, so nobody
+                    // swaps it for a bishop ("whoever gives up one of
+                    // these proud steeds... has made a bad bargain").
+                    if advanced(p) && blocker == Piece::Knight {
+                        sided.push((
+                            !color,
+                            PlanHint {
+                                speed: None,
+                                hint: "ChooseBlockader".into(),
+                                owner: None,
+                                squares: vec![square_name(stop)],
+                            },
+                        ));
+                    }
                     // Mechanism 7, elasticity v1: a blockader is judged by
                     // what it does WHILE standing there. Threats counted
                     // from its post; the strict leave-and-return race is
@@ -2839,6 +2905,54 @@ mod tests {
             .get("blockader_b3")
             .expect("white blockader on b3");
         assert_eq!(bishop["elastic"], serde_json::json!(false), "{bishop}");
+    }
+
+    // My System ch. 4, Diagram 145 (Leonhardt-Nimzowitsch, San Sebastian
+    // 1912, before 12...g6): the e5 passer must be blockaded and the
+    // knight is the right piece — the book's move opens the road
+    // Ne8-g7-e6, which is exactly why the detector measures the road on
+    // an empty board rather than routing through Black's own g7 pawn.
+    #[test]
+    fn choose_blockader_recommends_the_knight_down_a_blocked_road() {
+        let b = board("r1bqnrk1/p1p1b1pp/2p5/3pPp2/5P2/1PN1B3/P1P1B1PP/R2Q1RK1 b - - 1 12");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        let hint = imb
+            .plans
+            .iter()
+            .find(|h| h.hint == "ChooseBlockader")
+            .expect("ChooseBlockader fires on the empty stop square");
+        assert_eq!(hint.squares, vec!["e6", "e8"], "{hint:?}");
+    }
+
+    // Diagram 146, four moves on (before 17.Nc5?): the blockading knight
+    // has reached e6, and the book's verdict is to KEEP it — "whoever
+    // gives up one of these proud steeds for a bishop has made a bad
+    // bargain" (correct was 17.Bc5).
+    #[test]
+    fn choose_blockader_keeps_the_knight_on_the_stop_square() {
+        let b = board("r1br2k1/p1pqb2p/2p1n1p1/Q2pPp2/N4P2/1P2B3/P1P1B1PP/3R1RK1 w - - 8 17");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        let hint = imb
+            .plans
+            .iter()
+            .find(|h| h.hint == "ChooseBlockader")
+            .expect("ChooseBlockader fires for the installed knight");
+        assert_eq!(hint.squares, vec!["e6"], "{hint:?}");
+    }
+
+    // Chess Praxis game 70 (Goldstein-Nimzowitsch, London 1927, after
+    // 30...Kf7): the e6 blockader is a BISHOP the book approves of; the
+    // knight-choice hint has nothing to say and must stay silent —
+    // reserve-blockader is a different mechanism and remains a gap.
+    #[test]
+    fn choose_blockader_is_silent_for_a_bishop_blockader() {
+        let b = board("3r4/bp1r1k2/2p1b2p/1p2P1p1/3P4/P4NKP/1PBR2P1/4R3 w - - 1 31");
+        let imb = pawn_structure(&b).expect("pawn structure");
+        assert!(
+            !imb.plans.iter().any(|h| h.hint == "ChooseBlockader"),
+            "{:?}",
+            imb.plans
+        );
     }
 
     /// Same position: both passers are advanced and both blockaders can

@@ -274,3 +274,21 @@ labels, never copy prose into tracked files.
    reading the whole book to find them.
 
 Step 2 remains not started; nothing above begins it.
+
+## Mechanism status updates
+
+- **Mechanism 7 (blockader quality), the CHOOSING side: shipped** as
+  the `ChooseBlockader` hint (see docs/VALIDATION.md, "ChooseBlockader:
+  mechanism 7's choosing side"). Both Diagram 145/146 corpus citations
+  graduated; quiet cost 1.4%. What shipped is the piece-type
+  preference the chapter states (knight on the stop square, or the
+  nearest knight by empty-board distance when the stop is empty — the
+  road-can-be-opened proxy that Diagram 145's own g7 pawn forced).
+  The threat-radiation half of mechanism 7 already ships as the
+  `blockader_<sq>` elasticity evidence.
+- **Mechanism 8 (elasticity in the strict sense) stays B3** —
+  leave-and-return race, unattempted, deliberately.
+- **Liberation restraint (Praxis stratagem, 7 combined citations):
+  attempted and refused** on its own sheet — lever geometry plus a
+  space gate is not liberation; needs a mobility-delta release term
+  (B3). Full record in docs/VALIDATION.md.

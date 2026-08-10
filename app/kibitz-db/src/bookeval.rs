@@ -542,6 +542,7 @@ const KNOWN_HINTS: &[&str] = &[
     // Run 12, ruling 3: the blockade B2 pair from the Nimzowitsch ch. 4
     // inventory (mechanism 10; mechanism 7 is evidence, not a hint).
     "UprootBlockader",
+    "ChooseBlockader",
     "OutsidePasserDecoy",
 ];
 

@@ -2505,3 +2505,57 @@ release term — does the lever's execution un-cramp the mover's pieces
 — which is mobility-delta machinery, bucket 3, now recorded with
 seven corpus citations of pressure and one failed graduation attached.
 The gaps stay gaps, and they stay counted.
+
+## ChooseBlockader: mechanism 7's choosing side, shipped on its sheet
+
+After RestrainLiberation refused, the next debt in line:
+choose-the-right-blockader, 2 citations, both from the
+Leonhardt-Nimzowitsch game My System ch. 4 uses as its casting call.
+Sheet fixed in advance: both exhibits fire, g70 stays silent, quiet
+<= 10%.
+
+The design's one idea: **the road can be opened.** At Diagram 145 the
+right blockader's route (Ne8-g7-e6) is blocked by Black's OWN g7 pawn
+— the book's move 12...g6 exists precisely to open it — so a real
+route_to can never see it. Arm B therefore measures knight distance
+on an EMPTY board (<= 3) from any facing knight to the empty stop
+square. Arm A says "keep it" when a facing knight already stands
+there (Diagram 146's bad-bargain verdict against 17.Nc5?). Both arms
+live inside the existing advanced-passer block: no new firing
+surface.
+
+| prediction | result |
+|---|---|
+| d145 fires [e6, e8] via the blocked road | **fired, exactly those squares** |
+| d146 fires [e6] for the installed knight | **fired** |
+| g70 silent (bishop blockader; reserve-blockader is a different mechanism) | **silent** |
+| quiet <= 10% (bounded by the Blockade*Passer surface) | **1.4%** (7 positions, 14 firings) |
+| zero drift elsewhere; plans 125/161 -> 127/163 | **held to the digit; 77.9%** |
+
+Three unit tests cite the positions. Both corpus tags graduated;
+vocabulary-gap count down exactly 2. The concept's strict form — the
+leave-and-return elasticity race — remains B3 and unattempted;
+what shipped is the piece-type preference the chapter actually
+states, at a fortieth of the cost line.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **211 positions — 162 Jeremy Silman (4 books), 49 Nimzowitsch
+(My System 2, Chess Praxis 44, The Blockade 3) across twenty-one
+stratagem families**; negatives 91 (90 clean, praxis-g70 the standing
+red); quiet holdout fixed at 500; fingerprints in
+docs/CORPUS_MANIFEST.md, printed by every measurement.
+
+| axis | figure |
+|---|---|
+| imbalances | 309/335 = 92.2% |
+| plans | 127/163 = 77.9% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 89/129 = 69.0% |
+| suggest@1 | 4/66 = 6.1% |
+| suggest@3 | 18/66 = 27.3% |
+
+Cost terms on the fixed 500: screen 46.6%, WeakKing 0.58,
+TrappedPiece 0.10, entombed 0.000, UprootBlockader 4.2%,
+OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
+OverprotectStrongPoint 9.4%, **ChooseBlockader 1.4% (new)**.
