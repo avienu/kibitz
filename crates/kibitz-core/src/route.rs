@@ -107,6 +107,16 @@ pub fn route_to(
                 if blocked.has(n) || !waypoint_ok(n, hop) {
                     continue;
                 }
+                // An enemy-occupied square is a doorway only if walking
+                // through it is a sound capture (run 12, the parked
+                // ticket): the outgunned map above is computed over
+                // EMPTY squares, so before this check a rook penned
+                // behind a defended pawn "routed" straight through it
+                // and reported a path that does not exist. SEE from our
+                // side must not lose material on the capture.
+                if board.colors(enemy).has(n) && crate::see::see(board, n, color) < 0 {
+                    continue;
+                }
                 prev[n as usize] = Some(s);
                 seen |= n.bitboard();
                 next.push(n);

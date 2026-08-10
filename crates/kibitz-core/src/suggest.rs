@@ -81,6 +81,9 @@ pub struct Suggestion {
     /// like the Winawer's ...cxd4 from a plain piece-dropper like
     /// ...f5??; that distinction is the engine layer's job).
     pub static_risk: Option<i32>,
+    /// Cheapest speed among the plans this move serves (run 12) — the
+    /// ranking tiebreak. None when no serving plan carries a speed.
+    pub min_speed: Option<u8>,
 }
 
 /// One active plan pulled out of the record, with its EFFECTIVE owner (a
@@ -1125,6 +1128,18 @@ pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
     let mut cands: BTreeMap<String, (Move, Cand)> = BTreeMap::new();
 
     let plans = active_plans(record);
+    // Cheapest annotated speed per hint name, for the ranking tiebreak.
+    let mut speed_by_hint: BTreeMap<String, u8> = BTreeMap::new();
+    for imb in &record.imbalances {
+        for plan in &imb.plans {
+            if let Some(sp) = plan.speed {
+                let e = speed_by_hint.entry(plan.hint.clone()).or_insert(sp);
+                if sp < *e {
+                    *e = sp;
+                }
+            }
+        }
+    }
     for plan in &plans {
         if plan.favors != stm_favors && plan.favors != Favors::Balanced {
             continue;
@@ -1184,6 +1199,10 @@ pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
                     serving.push(k.clone());
                 }
             }
+            let min_speed = serving
+                .iter()
+                .filter_map(|h| speed_by_hint.get(h).copied())
+                .min();
             Suggestion {
                 mv: mv.to_string(),
                 san: san(board, mv),
@@ -1191,13 +1210,31 @@ pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
                 serving,
                 prophylactic,
                 static_risk: static_risk(board, mv),
+                min_speed,
             }
         })
         .collect();
     scored.sort_by(|a, b| {
-        b.score
-            .cmp(&a.score)
+        // Unmarked before marked (run 12): a no-engine consumer drops
+        // static-risk-marked moves AFTER receiving the list, so ranking
+        // marked moves above safe ones starved it on tactical positions
+        // — a safe candidate at rank four was thrown away with the
+        // truncation while three marked ones were handed over and then
+        // discarded. Unmarked-first is monotone for such consumers:
+        // it can only add scoreable candidates, never remove one.
+        a.static_risk
+            .is_some()
+            .cmp(&b.static_risk.is_some())
+            .then(b.score.cmp(&a.score))
             .then(b.serving.len().cmp(&a.serving.len()))
+            // Speed as the tiebreak (run 12, the plan-speed term's
+            // second consumer): between equally-scored plans, the one
+            // that arrives sooner ranks first. None sorts last — a
+            // plan with no arrival time cannot claim urgency.
+            .then_with(|| {
+                let sp = |x: &Suggestion| x.min_speed.unwrap_or(u8::MAX);
+                sp(a).cmp(&sp(b))
+            })
             .then(a.san.cmp(&b.san))
     });
     scored.truncate(3);

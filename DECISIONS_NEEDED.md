@@ -3,7 +3,19 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
-## suggest truncates before the static veto filters (run 12, open)
+## CLOSED (run 12): suggest ordering and route_to phantom captures
+
+Both fixed in one run against one sheet, and the re-baseline everyone
+priced turned out to be a no-op: every axis, every cost term and all
+41 suites byte-identical after both fixes. route_to's phantom paths
+existed but never decided a published number; the ordering fix is
+monotone for no-engine consumers and bought nothing on the current
+corpus because the one starving position (Praxis game 58) has
+genuinely no safe plan-derived candidate. Two tickets closed at zero
+re-measurement cost — the deferral was right when the price was
+unknown, and the price turned out to be nothing.
+
+## suggest truncates before the static veto filters (run 12, CLOSED — see above)
 
 `suggest()` returns exactly three moves; consumers that must play
 without an engine (bookeval, and eventually the UI's no-engine path)
@@ -21,7 +33,7 @@ economy cap also surfaced a different executor than the book's on g59,
 Bf4 for Qg3 — a finding about scoring against exact book moves, not a
 defect).
 
-## route_to passes through unsound captures (run 12, open)
+## route_to passes through unsound captures (run 12, CLOSED — see above)
 
 `crates/kibitz-core/src/route.rs` marks a square blocked if our own piece
 stands on it or if the enemy out-guns it, but that out-gunned map is
