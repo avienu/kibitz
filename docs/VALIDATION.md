@@ -2559,3 +2559,69 @@ Cost terms on the fixed 500: screen 46.6%, WeakKing 0.58,
 TrappedPiece 0.10, entombed 0.000, UprootBlockader 4.2%,
 OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
 OverprotectStrongPoint 9.4%, **ChooseBlockader 1.4% (new)**.
+
+## AlternateTargets: the two-weaknesses principle, a 1-of-2 ship by design
+
+alternating-maneuvers (2 citations) was next, and the sheet made an
+unusual promise BEFORE implementation: **only game 74 graduates.**
+Game 71's second weakness is lever-created — its kingside pawns are
+still pawn-defended, so only backward c3 exists in our weakness
+vocabulary, and no pairing detector can pair one target. Registering
+the miss in advance is the difference between a designed limitation
+and a shortfall discovered after the fact.
+
+The design: when the pressure family (TargetWeakPawn,
+PressureBackwardPawn, PressureDoubledPawn) already names two enemy
+pawn targets at least four files apart AND the queens are off, emit
+`AlternateTargets` [leftmost, rightmost] for the attacker — a
+post-pass over the collected imbalances, since pressure hints span
+PawnStructure and SquaresOutposts. The queenless gate is the cost
+control: TargetWeakPawn alone fires on 49.6% of quiet positions; two
+distant weak pawns with queens on are a middlegame, not an
+alternation field.
+
+| prediction | result |
+|---|---|
+| g74 fires [a5, g6] owner white | **fired, exactly those squares** |
+| g71 silent (designed miss, registered first) | **silent** |
+| quiet <= 8% | **2.8%** (14 positions, 30 firings) |
+| zero drift; plans 127/163 -> 128/164 after graduating g74 only | **held; 78.0%** |
+
+Three unit tests: the exact squares at g74, g71's silence, and the
+queenless gate (g74 with queens restored goes quiet). The remaining
+alternating-maneuvers ×1 gap at g71 is the weakness-vocabulary
+problem (lever-created future weaknesses), not an alternation
+problem — it graduates the day the vocabulary does.
+
+Also refused this run, before AlternateTargets was chosen:
+**waiting-move-prophylaxis (2 citations) has no honest static form.**
+Both anchors are commit-nothing moves (the mysterious rook-pawn move
+...a6, castling-as-waiting) whose entire content is what the OPPONENT
+must reveal next — that is search, not statics. Bucket 3, recorded
+without an attempt rather than with a doomed one. Likewise
+centralization-as-consolidation's g1 anchor is a recapture choice
+(a suggest problem, not a plan hint); g23's centralize-to-save
+remains a live B2 candidate for a future sheet.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **211 positions — 162 Jeremy Silman (4 books), 49 Nimzowitsch
+(My System 2, Chess Praxis 44, The Blockade 3) across twenty-one
+stratagem families**; negatives 91 (90 clean, praxis-g70 the standing
+red); quiet holdout fixed at 500; fingerprints in
+docs/CORPUS_MANIFEST.md, printed by every measurement.
+
+| axis | figure |
+|---|---|
+| imbalances | 309/335 = 92.2% |
+| plans | 128/164 = 78.0% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 89/129 = 69.0% |
+| suggest@1 | 4/66 = 6.1% |
+| suggest@3 | 18/66 = 27.3% |
+
+Cost terms on the fixed 500: screen 46.6%, WeakKing 0.58,
+TrappedPiece 0.10, entombed 0.000, UprootBlockader 4.2%,
+OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
+OverprotectStrongPoint 9.4%, ChooseBlockader 1.4%,
+**AlternateTargets 2.8% (new)**.

@@ -2734,8 +2734,74 @@ pub fn assess(board: &Board) -> Vec<Imbalance> {
     .into_iter()
     .flatten()
     .collect();
+    alternate_targets(board, &mut out);
     out.sort_by_key(|i| std::cmp::Reverse(i.magnitude));
     out
+}
+
+/// Chess Praxis Part V — alternation: maneuvering against two
+/// weaknesses. When the pressure family already names two enemy pawn
+/// targets at least four files apart, the plan is bigger than either
+/// pawn — swing between them until one guard fails (game 71's axis
+/// position, game 74's changing of the guard). A post-pass over the
+/// collected imbalances because the pressure hints span PawnStructure
+/// and SquaresOutposts; queens must be off, because with queens on two
+/// distant weak pawns are a middlegame, not an alternation field.
+fn alternate_targets(board: &Board, imbalances: &mut [Imbalance]) {
+    if !board.pieces(Piece::Queen).is_empty() {
+        return;
+    }
+    const PRESSURE: [&str; 3] = [
+        "TargetWeakPawn",
+        "PressureBackwardPawn",
+        "PressureDoubledPawn",
+    ];
+    // Targets grouped by the color of the pawn under fire.
+    let mut targets: [Vec<Square>; 2] = [Vec::new(), Vec::new()];
+    for imb in imbalances.iter() {
+        for hint in &imb.plans {
+            if !PRESSURE.contains(&hint.hint.as_str()) {
+                continue;
+            }
+            let Some(sq) = hint.squares.first().and_then(|s| s.parse::<Square>().ok()) else {
+                continue;
+            };
+            for (ci, color) in [(0, Color::White), (1, Color::Black)] {
+                if board.colored_pieces(color, Piece::Pawn).has(sq) && !targets[ci].contains(&sq) {
+                    targets[ci].push(sq);
+                }
+            }
+        }
+    }
+    for (ci, victim) in [(0, Color::White), (1, Color::Black)] {
+        let files: Vec<i8> = targets[ci].iter().map(|s| s.file() as i8).collect();
+        let (Some(&lo), Some(&hi)) = (files.iter().min(), files.iter().max()) else {
+            continue;
+        };
+        if hi - lo < 4 {
+            continue;
+        }
+        let left = targets[ci].iter().min_by_key(|s| s.file() as i8).unwrap();
+        let right = targets[ci].iter().max_by_key(|s| s.file() as i8).unwrap();
+        let owner = match victim {
+            Color::White => Favors::Black,
+            Color::Black => Favors::White,
+        };
+        if let Some(ps) = imbalances
+            .iter_mut()
+            .find(|i| i.kind == ImbalanceKind::PawnStructure)
+        {
+            ps.plans.push(
+                PlanHint {
+                    speed: None,
+                    hint: "AlternateTargets".into(),
+                    owner: None,
+                    squares: vec![square_name(*left), square_name(*right)],
+                }
+                .owned_by(owner),
+            );
+        }
+    }
 }
 
 /// Game phase (material + move based, per spec).
@@ -2938,6 +3004,53 @@ mod tests {
             .find(|h| h.hint == "ChooseBlockader")
             .expect("ChooseBlockader fires for the installed knight");
         assert_eq!(hint.squares, vec!["e6"], "{hint:?}");
+    }
+
+    // Chess Praxis game 74 (after 50...Rf7, before 51.Rb1!): the
+    // changing of the guard. White's pressure family already names a5
+    // (weak) and g6 (backward) — six files apart, queens off: the
+    // alternation field the book maneuvers across.
+    #[test]
+    fn alternate_targets_fires_across_the_board() {
+        let b = board("r7/2k2r2/4p1p1/p1P4p/PpKP1P1P/1N4P1/4P3/6R1 w - - 9 51");
+        let hints: Vec<_> = assess(&b)
+            .into_iter()
+            .flat_map(|i| i.plans)
+            .filter(|h| h.hint == "AlternateTargets")
+            .collect();
+        assert_eq!(hints.len(), 1, "{hints:?}");
+        assert_eq!(hints[0].squares, vec!["a5", "g6"], "{:?}", hints[0]);
+    }
+
+    // Chess Praxis game 71 (before 48...Kc6): the Part V axis position.
+    // The book's second weakness is LEVER-CREATED — the kingside pawns
+    // are still pawn-defended, so only backward c3 is in our weakness
+    // vocabulary and the hint must stay silent. A designed miss,
+    // registered on the prediction sheet before implementation.
+    #[test]
+    fn alternate_targets_needs_two_flagged_weaknesses() {
+        let b = board("8/8/3kp3/1p1bnppp/1P6/2P2P1P/1N1N2P1/6K1 b - - 0 48");
+        assert!(
+            !assess(&b)
+                .into_iter()
+                .flat_map(|i| i.plans)
+                .any(|h| h.hint == "AlternateTargets"),
+            "g71's second weakness is not flagged; firing means the gate leaked"
+        );
+    }
+
+    // Game 74's position with queens restored: two distant targets are
+    // a middlegame, not an alternation field — the queenless gate holds.
+    #[test]
+    fn alternate_targets_waits_for_the_queens_to_leave() {
+        let b = board("r2q4/2k2r2/4p1p1/p1P4p/PpKP1P1P/1N4P1/4P3/3Q2R1 w - - 9 51");
+        assert!(
+            !assess(&b)
+                .into_iter()
+                .flat_map(|i| i.plans)
+                .any(|h| h.hint == "AlternateTargets"),
+            "queens are on the board"
+        );
     }
 
     // Chess Praxis game 70 (Goldstein-Nimzowitsch, London 1927, after

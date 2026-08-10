@@ -543,6 +543,7 @@ const KNOWN_HINTS: &[&str] = &[
     // inventory (mechanism 10; mechanism 7 is evidence, not a hint).
     "UprootBlockader",
     "ChooseBlockader",
+    "AlternateTargets",
     "OutsidePasserDecoy",
 ];
 
