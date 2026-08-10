@@ -3,6 +3,24 @@
 Parked decisions that change documented behavior, the license boundary, or
 user-visible product behavior. Work continued on other tracks.
 
+## suggest truncates before the static veto filters (run 12, open)
+
+`suggest()` returns exactly three moves; consumers that must play
+without an engine (bookeval, and eventually the UI's no-engine path)
+then drop any of the three the whole-board static veto marked. On
+tactical positions all three survivors can be marked while safe
+candidates sat at ranks 4+ — Chess Praxis game 58 (queen attacked,
+book answer Qg3) returns an empty suggestion list this way. The fix is
+one line of ordering (filter marked moves before truncating, or return
+more and let consumers cut), but it changes what every consumer sees
+and re-baselines suggest@1/@3, so it belongs in the same run as any
+future suggest work — alongside the route_to ticket below, which also
+feeds suggest. Found while measuring the overprotection move-generation
+slice, which was reverted by its own sheet (0 gains at both tiers; the
+economy cap also surfaced a different executor than the book's on g59,
+Bf4 for Qg3 — a finding about scoring against exact book moves, not a
+defect).
+
 ## route_to passes through unsound captures (run 12, open)
 
 `crates/kibitz-core/src/route.rs` marks a square blocked if our own piece

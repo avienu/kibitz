@@ -2211,7 +2211,15 @@ pub fn squares_outposts(board: &Board) -> Option<Imbalance> {
             plans.push(PlanHint {
                 speed: None,
                 hint: "OverprotectStrongPoint".into(),
-                owner: None,
+                // Owned (run 12): the spearhead belongs to whoever owns
+                // the pawn, whatever the parent imbalance's lean — an
+                // unowned hint under a Balanced parent attributes to
+                // Balanced and the suggester's overprotection pass
+                // rightly refuses to guess whose quiet move it is.
+                owner: Some(match color {
+                    Color::White => Favors::White,
+                    Color::Black => Favors::Black,
+                }),
                 squares: vec![square_name(point)],
             });
             evidence.insert(
