@@ -2230,17 +2230,17 @@ and it is not the feared one.
 | suggest@3 | 8/25 = 32.0% | **4/21 = 19.0%** |
 | role_of on labeled moves | (not labeled) | 10/35 = 29% |
 
-Not a Silman emulator: on the structural axes the engine reads
+Not a Jeremy Silman emulator: on the structural axes the engine reads
 Nimzowitsch BETTER than the corpus it was tuned against, partly
 because the Praxis entries are replay-derived positions with no
 reconstruction noise, and partly because run 12 built detectors for
 his named structures (blockade quality, uprooting, the isolated pair,
 the blockade-point overprotection, passer classification) with the
 corpus growing alongside. The gap is concentrated and named: the
-QUIET-MOVE axes. suggest@3 drops by a third against Silman's number on
+QUIET-MOVE axes. suggest@3 drops by a third against the Jeremy Silman number on
 the moves Nimzowitsch himself labeled, and the denial classifier sees
 less than a third of his prophylaxis. The honest one-sentence answer:
-**the engine explains Nimzowitsch's positions better than Silman's,
+**the engine explains Nimzowitsch's positions better than Jeremy Silman's,
 and plays his moves worse — because his signature is the quiet move,
 and quiet moves are the engine's measured blind spot on every axis
 that touches them.**
