@@ -2317,3 +2317,55 @@ at zero re-measurement cost. The general lesson is the deferral
 calculus running in reverse: parking route_to was right when its price
 was unknown, and the price was nothing — but only the fix could prove
 that.
+
+## The mega-batch: nine entries, the corpus reaches 200
+
+Nine entries from seven games across five more families —
+centralization and the author's own FAULTY-centralization exhibits,
+consolidation-by-retreat, restraint-plus-wing (Saemisch), prepared
+breakthrough, the Johner restraint masterpiece (12...Qd7!!),
+mummification's preventive rook, and the von Gottschall zugzwang.
+Game 14 was dropped (printed from move 53 only — no replay chain, no
+entry), as was game 22 before it; the rule holds under scale.
+
+Prediction scorecard: imbalances 38/38 and seven new vocabulary gaps
+(predictions 2-3 held, gaps at more than double the predicted three,
+including zugzwang-as-weapon — inventory mechanism 18's first corpus
+citation); role_of 2 of 9 on the new labeled moves, inside the
+successor band; drift zero. **Prediction 1 failed, and vacuously,
+which is the finding**: the author's faulty-centralization exhibits
+were predicted to yield plan bans from his own condemnations, and they
+cannot — nothing centralization-shaped fires for the condemned side at
+either anchor ply, because building and advancing a proud pawn center
+are not concepts the engine can voice. The engine cannot be caught
+praising what it cannot say. The negative family is real in the book
+and vacuous against this vocabulary; recorded in the entry notes where
+the next vocabulary extension will trip over it.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **200 positions — 162 Jeremy Silman, 38 Nimzowitsch across
+seventeen stratagem families**; negatives 79 (78 clean, praxis-g70 the
+standing red); quiet holdout fixed at 500; corpus fingerprints in
+docs/CORPUS_MANIFEST.md, printed by every measurement.
+
+| axis | figure |
+|---|---|
+| imbalances | 299/325 = 92.0% |
+| plans | 123/159 = 77.4% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 86/122 = 70.5% |
+| suggest@1 | 2/55 = 3.6% |
+| suggest@3 | 13/55 = 23.6% |
+
+Cost terms on the fixed 500: screen 46.6%, WeakKing 0.58/pos,
+TrappedPiece 0.10/pos, entombed 0.000, UprootBlockader 4.2%,
+OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
+OverprotectStrongPoint 9.4%.
+
+Multi-author, updated: Nimzowitsch imbalances **38/38 (100%)** vs
+Jeremy Silman 90.9%; plans 92.3% vs 76.0%; favors 78.3% vs 68.7%;
+suggest@3 **16.7% vs 32.0%**. The comparison's shape sharpened as the
+corpus grew: the structure-reading gap widened in Nimzowitsch's favor
+and the quiet-move gap widened against him — both directions
+strengthening the one-sentence answer already on record.
