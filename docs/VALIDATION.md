@@ -2625,3 +2625,28 @@ TrappedPiece 0.10, entombed 0.000, UprootBlockader 4.2%,
 OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
 OverprotectStrongPoint 9.4%, ChooseBlockader 1.4%,
 **AlternateTargets 2.8% (new)**.
+
+## CentralizeToConsolidate: refused on its own sheet
+
+The last live B2 from the run's debt list: game 23's 18.Nd4!
+(centralization as the saving resource; 2 citations, g1 already
+recorded as a suggest problem). Design: the side FACING an Initiative
+imbalance gets a hint when a knight has a short route to a true
+center square it can hold.
+
+| design | g23 | quiet rate |
+|---|---|---|
+| v1: route <= 2 moves, holdable arrival | fired [d4, c2] | **19.8%** |
+| v2 (the one revision, named in advance): route = 1 move | fired [d4, c2] | **13.8%** |
+
+The exhibit was never the problem — the GATE was. The 19.8% -> 13.8%
+drop brackets the real number: an Initiative imbalance with a side
+attached exists in at least 14% of engine-quiet master positions, so
+"the opponent holds the initiative" is not a distress signal, it is
+Tuesday. Consolidation is a response to actual danger, and the
+detector suite has no danger term (favors compensation blindness and
+the alerts axis's missing enemy-readiness discriminator are the same
+hole seen from other sides). Everything reverted; restoration
+verified to the digit. The concept keeps its two citations, now with
+a precise dependency recorded: it graduates when a real distress
+term exists, not before.
