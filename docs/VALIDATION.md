@@ -2800,3 +2800,46 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 24/97 = 24.7% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## Praxis batch 10: Part VI — the hypermodern chapters
+
+Games 81-85, 87-96 (15 entries; 86 was already covered),
+replay-verified. The center-vs-flank doctrine games, the small
+center, asymmetry, and the diagonal outpost.
+
+Corpus: **262 positions — 162 Jeremy Silman (4 books), 100
+Nimzowitsch (My System 2, Chess Praxis 95, The Blockade 3)**. Quiet
+holdout re-measured: identical to the digit.
+
+Batch axes (new entries only): 4/4 imbalances, **4/8 favors** — the
+worst favors batch on record, and diagnostically so: g84 (White's
+bind vs the extra doubled e-pawn), g87, g92, g96 all flip or flatten
+where the book prices structure, bind, or attack over the ledger.
+Part VI positions are compensation-shaped by design; the favors
+refit now has eight fresh labeled cases. Two bright spots: g95's
+expectation graduated on arrival (the book's diagonal outpost IS
+ManeuverKnightToOutpost, and it fires — plans 130/166), and g94's
+interior-lines knight retreat 13...Nc8 hit suggest@3.
+
+Strengthened vocabulary: anticipate-opponents-plan ×7 (now the
+second-heaviest debt on the board), gradual-liberation ×3,
+maneuver-on-interior-lines ×2 (new this run, already doubled),
+waiting-move-prophylaxis ×3, lust-to-expand ×4, forestall-pawn-break
+×7. New: wing-attack-requires-solid-center.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **262 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 329/357 = 92.2% |
+| plans | 130/166 = 78.3% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 108/154 = 70.1% |
+| suggest@1 | 8/112 = 7.1% |
+| suggest@3 | 25/112 = 22.3% |
+
+Cost terms on the fixed 500: unchanged to the digit.
