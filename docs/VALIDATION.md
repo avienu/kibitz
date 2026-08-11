@@ -2707,3 +2707,53 @@ WeakKing 0.58, TrappedPiece 0.10, entombed 0.000, UprootBlockader
 4.2%, OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
 OverprotectStrongPoint 9.4%, ChooseBlockader 1.4%, AlternateTargets
 2.8%).
+
+## Praxis batch 8: the blockade and prophylaxis chapters
+
+Games 37, 39, 40, 41, 42, 44, 46, 47, 48, 49, 50, 51 — one entry
+each, replay-verified from the printed scores. Includes the two stem
+games of 'sacrifice for the sake of blockade' (46, 47), the
+preventive-combination showcase (39), and the king-flight palliative
+(50).
+
+Corpus: **235 positions — 162 Jeremy Silman (4 books), 73 Nimzowitsch
+(My System 2, Chess Praxis 68, The Blockade 3)**. Quiet holdout
+re-measured: identical to the digit (corpus-only change).
+
+Batch axes (new entries only): 3/3 imbalances, 6/7 favors, and —
+the batch's finding — **3 of 11 best-move entries hit suggest@1**:
+g40's 14...Qe6, g48's 21.Qb4, g50's 16...Kd7. All three are
+PREVENTIVE moves. The suggest machinery, which has been near-zero on
+quiet book moves for the whole history of this corpus, connects with
+the prophylaxis family specifically where the preventive move also
+does static work the detectors already price (defense of a pressured
+point, a queen realignment, king activity). suggest@1 6.5% -> 9.1%
+on composition change alone. The blind spot stays real — the other
+eight quiet recommendations (Nc3, Nh5, b6, f5, b5, a3, Nh4, Qc8)
+missed @3 entirely — but it now has a measured bright edge.
+
+One favors miss: g40 (book says Black after the prophylactic
+exchange; we say balanced). g42 scored clean on every expected axis.
+
+New vocabulary this batch: overprotect-key-diagonal,
+king-flight-palliative, defend-without-weakening. Strengthened:
+anticipate-opponents-plan ×3, forestall-pawn-break ×6,
+restrain-liberating-pawn-move ×6, fight-for-key-square ×4,
+sacrifice-for-blockade ×3.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **235 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 321/349 = 92.0% |
+| plans | 128/164 = 78.0% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 98/140 = 70.0% |
+| suggest@1 | 8/88 = 9.1% |
+| suggest@3 | 23/88 = 26.1% |
+
+Cost terms on the fixed 500: unchanged to the digit.
