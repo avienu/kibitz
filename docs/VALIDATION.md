@@ -2650,3 +2650,60 @@ hole seen from other sides). Everything reverted; restoration
 verified to the digit. The concept keeps its two citations, now with
 a precise dependency recorded: it graduates when a real distress
 term exists, not before.
+
+## Praxis batch 7: twelve games from the centralization and restraint chapters
+
+Games 3, 4, 5, 6, 16, 20, 25, 26, 29, 31, 32, 33 — one entry each,
+selected in numeric order from the uncovered thin games, all
+replay-verified from the NIC 2016 printed scores. Games 14 and 22
+print CONCLUSIONS only (no score from move 1) and are deferred to a
+chessgames.com Source-B pass rather than transcribed without a
+provenance chain.
+
+Corpus: **223 positions — 162 Jeremy Silman (4 books), 61 Nimzowitsch
+(My System 2, Chess Praxis 56, The Blockade 3)**. Quiet holdout
+unchanged and re-measured: screen 46.6%, WeakKing 0.58, TrappedPiece
+0.10 — identical to the digit, as a corpus-only change must be.
+
+Batch axes (new entries only): 9/11 imbalances, 3/4 favors, 2 of 11
+best-move sets hit suggest@3 (g26's 18.f4, g32's 24.Nf5 family) —
+suggest@1 even gained its fifth hit. The misses worth naming:
+
+- **g26 favors: we said black, the book says white** — Marshall's
+  active rook and bishop against Nimzowitsch's centralized knight and
+  queenside bind. The compensation-blindness family again, this time
+  with centralization as the invisible asset.
+- **g20/g26 Space silent** — the cramped-side positions the book
+  calls cramped don't clear our Space bar. Worth a look when favors
+  is refit.
+
+The gap board moved decisively: **restrain-liberating-pawn-move ×5,
+forestall-pawn-break ×4** (the liberation cluster, 9 citations,
+refused this run for want of a release term) and **centralize-pieces
+×4, centralization-as-consolidation ×3, prevent-enemy-centralization
+×2** (the centralization cluster, 9 citations, refused this run for
+want of a danger term). The two failed graduations of the detector
+run are now the two heaviest debts on the board, each with a named
+missing term. New single-citation vocabulary: counter-in-center-vs-
+flank, gradual-liberation, keep-central-piece, provoke-pawn-advance.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **223 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 318/346 = 91.9% |
+| plans | 128/164 = 78.0% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 92/133 = 69.2% |
+| suggest@1 | 5/77 = 6.5% |
+| suggest@3 | 20/77 = 26.0% |
+
+Cost terms on the fixed 500: unchanged to the digit (screen 46.6%,
+WeakKing 0.58, TrappedPiece 0.10, entombed 0.000, UprootBlockader
+4.2%, OutsidePasserDecoy 2.8%, BlockadeThenPressure 24.4%,
+OverprotectStrongPoint 9.4%, ChooseBlockader 1.4%, AlternateTargets
+2.8%).
