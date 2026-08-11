@@ -2843,3 +2843,47 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 25/112 = 22.3% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## Praxis batch 11: the book completed
+
+Games 97-105, 107-109 (12 entries), replay-verified. **Chess Praxis
+is now fully mined**: 107 entries across all 105 games whose scores
+the NIC 2016 volume prints from move 1. The four conclusion-only
+fragments (14, 22, 77, 106) are deferred to the chessgames.com
+Source-B path and are the book's only remaining material.
+
+Corpus: **274 positions — 162 Jeremy Silman (4 books), 112
+Nimzowitsch (My System 2, Chess Praxis 107, The Blockade 3)**. Quiet
+holdout re-measured: identical to the digit.
+
+Batch results: g105's do-away-with-the-bishops IS HuntBishopPair and
+fired on arrival (the second such graduation this run); g107's
+renunciatory 13...Ne7 pawn sacrifice hit suggest@3. g102's
+OverprotectStrongPoint expectation missed EXACTLY as the entry's
+notes predicted — the hint knows only pair stop squares, the book
+overprotects a centralized knight; that miss is now standing
+pressure to widen the overprotection machinery. Both favors
+expectations missed (g99's light-square ruin, g100's chronic
+dark-square weaknesses) — color-complex verdicts are another face of
+the compensation blindness, now with labeled cases.
+
+New vocabulary: color-complex-contrast. Strengthened:
+anticipate-opponents-plan ×8, deep-prophylaxis-preserve-options ×3,
+gradual-liberation ×4, counter-in-center-vs-flank ×2.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **274 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 332/360 = 92.2% |
+| plans | 131/168 = 78.0% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 108/156 = 69.2% |
+| suggest@1 | 8/123 = 6.5% |
+| suggest@3 | 26/123 = 21.1% |
+
+Cost terms on the fixed 500: unchanged to the digit.
