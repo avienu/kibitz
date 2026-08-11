@@ -2757,3 +2757,46 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 23/88 = 26.1% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## Praxis batch 9: hanging pawns, alternation, and Part VI openings
+
+Games 56, 63, 64, 66, 67, 68, 69, 73, 75, 76, 79, 80 — one entry
+each, replay-verified. Game 77 prints a conclusion only (joins 14
+and 22 on the Source-B list). Includes the ghost-isolani study (64),
+the alternation showcase pair (73, 75), and the isolani-bankruptcy
+correspondence game (63).
+
+Corpus: **247 positions — 162 Jeremy Silman (4 books), 85 Nimzowitsch
+(My System 2, Chess Praxis 80, The Blockade 3)**. Quiet holdout
+re-measured: identical to the digit.
+
+Batch axes (new entries only): 4/4 imbalances, 6/6 favors, and one
+each on plans and suggest: **g69's expectation graduated on arrival**
+— the book's "render the bishops harmless" is our existing
+HuntBishopPair hint, and it fires at the anchor — and g56's
+mandatory 32.Qe3 (trade queens to activate the passers) hit
+suggest@3. Eight quiet recommendations missed, consistent with the
+known blind spot.
+
+alternating-maneuvers now carries ×3 (g71, g73, g75) — and the g73
+entry documents why AlternateTargets rightly stays silent there: the
+book's whole point is that the second weakness does not exist yet
+and must be manufactured. The detector fires on alternation FIELDS;
+the corpus now also wants the alternation PROJECT.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **247 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 325/353 = 92.1% |
+| plans | 129/165 = 78.2% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 104/146 = 71.2% |
+| suggest@1 | 8/97 = 8.2% |
+| suggest@3 | 24/97 = 24.7% |
+
+Cost terms on the fixed 500: unchanged to the digit.

@@ -9,20 +9,20 @@ the same ref, the manifest is stale and the printed value wins.
 ## Runtime fingerprints (as printed by every eval)
 ```
 input b136b775bc2fc85b  testdata/private/book-trials/amateurs-mind.json (41609 bytes)
-input 795e036af50b2582  testdata/private/book-trials/chess-praxis.json (106179 bytes)
+input fc43a9e0d6b86cfc  testdata/private/book-trials/chess-praxis.json (124420 bytes)
 input 9b1287d875a7ff9b  testdata/private/book-trials/chess-strategy.json (50046 bytes)
 input e606daf4fda35eb8  testdata/private/book-trials/endgame-course.json (28367 bytes)
 input 208733d0c0d3048d  testdata/private/book-trials/htryc.json (44855 bytes)
 input e6e5eb4c2f66c26d  testdata/private/book-trials/my-system.json (3824 bytes)
 input 77585a4f5136a828  testdata/private/book-trials/the-blockade.json (5508 bytes)
 input 79825c1da72cd7cf  testdata/corpus/quiet_fens.txt (30576 bytes)
-inputs-combined e7cd1248a4d844a8
+inputs-combined 2c8d9f010a23446a
 ```
 
 ## SHA-256
 ```
 cc22dafac89d748d53cca0d57a86def6defc4b50f96fd63747a18f9d3385bde7  testdata/private/book-trials/amateurs-mind.json
-ca9e12850ba00e8400579ccf7493e8c61e843181a7877bacee1418828a119ce3  testdata/private/book-trials/chess-praxis.json
+adda8b997a35d7e0ba866ae77e81aaa412674b7ed187d56f17229e8ade8fce31  testdata/private/book-trials/chess-praxis.json
 9a1103ba6c9ec22ecc5a5a5d995cdaf7b484fb4dac417522675255e1f6f77499  testdata/private/book-trials/chess-strategy.json
 8cb23bb920b5afe7eb06acca23c3d93b55594acdf2a689a99570bcb2f1382655  testdata/private/book-trials/endgame-course.json
 848956b7d26142e85911cdd89095a9252c872ac1386ed6880dd1ddf5ed7bf009  testdata/private/book-trials/htryc.json
