@@ -2887,3 +2887,53 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 26/123 = 21.1% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## Source-B pass: three of the four fragments recovered
+
+The four Chess Praxis games whose scores the NIC volume prints only
+from mid-game (14, 22, 77, 106) went through the authorized
+chessgames.com path. The verification design was dual-witness: the
+site supplies the full score (a historical fact in replayable SAN),
+and the book's printed conclusion must be textually identical to the
+site score's tail — both held, to the move, for all three
+recoveries:
+
+- **Game 14** (Alekhine-Nimzowitsch, 1914 playoff): the site's
+  85-move version — which its own kibitzing sources to Skinner &
+  Verhoeven citing the 1914 primary publications — matches the
+  book's fragment numbering exactly from 53.Rf4 to 85...Rd7. Anchor
+  before 53...Rc4 (strike the attacker's base).
+- **Game 22** (Nimzowitsch-Vukovic, Kecskemet 1927): 64 moves ending
+  64.Kc5 as printed; anchor before 37.Qh5, the book's own
+  "I succeeded in decentralizing my opponent."
+- **Game 77** (Cohn-Nimzowitsch, Karlsbad 1911): 100 moves ending
+  100...d4 as printed; anchor before 63...a5, Part V's closing
+  alternation exhibit ("massaging by turns of the enemy weaknesses").
+
+**Game 106 (Nimzowitsch-Behting, Riga 1909) is NOT recoverable by
+this path**: chessgames.com holds four Nimzowitsch-Behting games and
+none is it (the 1911 correspondence draw has an entirely different
+ending). The fragment stays on the unresolved list; its heroic-
+defense perpetual would need another primary source.
+
+Corpus: **277 positions — 162 Jeremy Silman (4 books), 115
+Nimzowitsch (My System 2, Chess Praxis 110, The Blockade 3)**.
+Chess Praxis coverage: **110 entries, 108 of 109 games** — everything
+except game 106. Quiet holdout re-measured: identical to the digit.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **277 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 333/361 = 92.2% |
+| plans | 131/168 = 78.0% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 109/157 = 69.4% |
+| suggest@1 | 8/126 = 6.3% |
+| suggest@3 | 26/126 = 20.6% |
+
+Cost terms on the fixed 500: unchanged to the digit.
