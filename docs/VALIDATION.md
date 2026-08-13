@@ -2937,3 +2937,42 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 26/126 = 20.6% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## My System batch 1: the numbered games open
+
+The NIC volume prints My System's 22 numbered illustrative games
+with full scores — the same replay pipeline as Chess Praxis, no
+diagram protocol needed. Games 1-8 mined, one anchor each.
+
+Corpus: **285 positions — 162 Jeremy Silman (4 books), 123
+Nimzowitsch (My System 10, Chess Praxis 110, The Blockade 3)**.
+Quiet holdout re-measured: identical to the digit.
+
+Batch axes: 4/4 imbalances, 4/6 favors, 2 of 7 best-move sets hit
+suggest (13...Nc5 exchange-to-breathe, 16...Bf5
+emphasize-your-strength). The headline miss: **ms-g1, the cleanest
+compensation case the corpus now holds** — Black two pawns up
+against 12.O-O-O and mate in seven, our favors says black. When the
+danger-term design finally runs, this entry is its first exhibit.
+
+New vocabulary: relieve-cramp-by-exchange. Strengthened:
+fight-for-key-square ×7 (now third-heaviest), waiting-move-
+prophylaxis ×4, create-target ×2, convert-development-lead-into-
+attack ×2.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **285 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 337/365 = 92.3% |
+| plans | 131/168 = 78.0% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 113/163 = 69.3% |
+| suggest@1 | 8/133 = 6.0% |
+| suggest@3 | 28/133 = 21.1% |
+
+Cost terms on the fixed 500: unchanged to the digit.

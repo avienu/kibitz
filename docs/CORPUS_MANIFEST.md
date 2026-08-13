@@ -13,10 +13,10 @@ input e37886e541605661  testdata/private/book-trials/chess-praxis.json (163857 b
 input 9b1287d875a7ff9b  testdata/private/book-trials/chess-strategy.json (50046 bytes)
 input e606daf4fda35eb8  testdata/private/book-trials/endgame-course.json (28367 bytes)
 input 208733d0c0d3048d  testdata/private/book-trials/htryc.json (44855 bytes)
-input e6e5eb4c2f66c26d  testdata/private/book-trials/my-system.json (3824 bytes)
+input 24ed95661728976d  testdata/private/book-trials/my-system.json (13683 bytes)
 input 77585a4f5136a828  testdata/private/book-trials/the-blockade.json (5508 bytes)
 input 79825c1da72cd7cf  testdata/corpus/quiet_fens.txt (30576 bytes)
-inputs-combined aeb12032c0866f45
+inputs-combined bd8bc3c24b7b2e45
 ```
 
 ## SHA-256
@@ -26,7 +26,7 @@ cc22dafac89d748d53cca0d57a86def6defc4b50f96fd63747a18f9d3385bde7  testdata/priva
 9a1103ba6c9ec22ecc5a5a5d995cdaf7b484fb4dac417522675255e1f6f77499  testdata/private/book-trials/chess-strategy.json
 8cb23bb920b5afe7eb06acca23c3d93b55594acdf2a689a99570bcb2f1382655  testdata/private/book-trials/endgame-course.json
 848956b7d26142e85911cdd89095a9252c872ac1386ed6880dd1ddf5ed7bf009  testdata/private/book-trials/htryc.json
-1fc7dc9f07bac7bcf11244eee4462f43f142b117749fdaede5d6900860e2180b  testdata/private/book-trials/my-system.json
+709f512e3beb4922e35a75e4f108ac1da45f6133b4c342e902c39afb35542005  testdata/private/book-trials/my-system.json
 02437bb789493472021d7b414896ee8b81a959cd1fd4beea336955f664561ea1  testdata/private/book-trials/the-blockade.json
 4fa5317deb7a7e8e1b23203b6574996bea6095eb08d063365757146d5c4d7a22  testdata/corpus/quiet_fens.txt
 ```
