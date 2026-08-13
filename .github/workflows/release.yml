@@ -50,6 +50,22 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           jq -r '.targets[] | "  \(.label)  ->  \(.requires | join(", "))"' \
             .github/release-targets.json >> "$GITHUB_STEP_SUMMARY"
+      # The website's download buttons are versioned URLs stamped by
+      # scripts/site_stamp_version.py (RELEASING.md step 1). v0.1.1
+      # shipped while the site still pointed at v0.1.0-test5; this guard
+      # makes that state fail the release instead of shipping silently.
+      # Stable tags only — test tags (v*-*) never go on the site.
+      - name: Site download links match this tag
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if ! grep -q "releases/download/${tag}/" website/index.html; then
+            echo "::error::website/index.html does not link to ${tag}." \
+              "Run: python3 scripts/site_stamp_version.py, commit, re-tag." >&2
+            grep -o 'releases/download/v[^/]*' website/index.html | sort -u >&2
+            exit 1
+          fi
       # Whether Windows signing is configured has to be decided ONCE, here,
       # and carried downstream. The `secrets` context is not available in a
       # job-level `if:`, and more importantly the publish guard must know

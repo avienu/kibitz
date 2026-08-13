@@ -230,7 +230,12 @@ build).
 
 ## Cutting a release, end to end
 
-1. Bump versions (table above), update `CHANGELOG.md`, commit.
+1. Bump versions (table above), update `CHANGELOG.md`, run
+   `python3 scripts/site_stamp_version.py` (rewrites the download links in
+   `website/index.html` to the new version), commit. The release workflow
+   refuses a stable tag whose site links point at any other version, and
+   the site redeploys automatically when the commit lands on `main`
+   (pages workflow watches `website/**`).
 2. `git tag v<version> && git push origin v<version>`.
 3. Wait for the Release workflow; check the run summary for skipped-signing notes.
 4. Open the draft release, replace the notes stub with the CHANGELOG
