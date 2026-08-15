@@ -2976,3 +2976,56 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 28/133 = 21.1% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## My System batch 2: all 22 numbered games done — and the Freymann hunt closes
+
+Games 9-22 mined, one anchor each, replay-verified (two en-passant
+captures and the game-17/18 shared trunk handled explicitly). **Part
+I's numbered games are complete.**
+
+The find: **ms-g13 IS the Freymann elasticity exhibit.** The run-11
+source hunt ("locate NIC's My System Part 3 for the Freymann game-15
+elasticity example") is closed — the game is Nimzowitsch-von Freyman,
+Vilnius 1912, printed with full score as THIS volume's Game 13, and
+its 19.Nf4! note is the elasticity doctrine in full: blockader of f5,
+anti-blockader for e5, protected, restraining, and free to leave
+because the h2-bishop takes its place. The blockader catechism
+(Games 12-13) also supplies the ideal-blockader exhibit 6.Ne3!!.
+
+Corpus: **299 positions — 162 Jeremy Silman (4 books), 137
+Nimzowitsch (My System 24, Chess Praxis 110, The Blockade 3)**.
+Quiet holdout re-measured: identical to the digit.
+
+Batch axes: 3/3 imbalances, **8/9 favors**, and 3 of 13 best-move
+sets hit suggest@3 — 10.Nd5 (central thrust over flank grab), 16...c6
+(the disdained theater), 17.Nd2 (attack the exposed base). All
+three are moves whose static case the detectors already price;
+the pattern from batch 8 (suggest connects where the book's move
+does detector-visible work) holds on a second book.
+
+Strengthened vocabulary: attack-chain-at-base ×3,
+alternating-maneuvers ×4, waiting-move-prophylaxis ×5,
+king-flight-palliative ×2, ignore-unjustified-wing-attack ×3,
+counter-in-center-vs-flank ×3, activate-worst-pieces ×2,
+defend-and-attack-simultaneously ×3. New: transform-advantages.
+
+Remaining My System material: the schematic fragments and in-text
+game excerpts of Parts I-III (diagram protocol / excerpt protocol) —
+the Johner overprotection game and the chapter exhibits live there.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **299 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 340/368 = 92.4% |
+| plans | 131/168 = 78.0% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 121/172 = 70.3% |
+| suggest@1 | 8/147 = 5.4% |
+| suggest@3 | 31/147 = 21.1% |
+
+Cost terms on the fixed 500: unchanged to the digit.

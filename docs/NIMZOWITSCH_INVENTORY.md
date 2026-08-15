@@ -292,3 +292,13 @@ Step 2 remains not started; nothing above begins it.
   attempted and refused** on its own sheet — lever geometry plus a
   space gate is not liberation; needs a mobility-delta release term
   (B3). Full record in docs/VALIDATION.md.
+
+
+## Source-hunt closure: the Freymann elasticity exhibit
+
+The run-11 open item — locate the NIC edition's My System Part 3 for
+the Freymann elasticity example — is closed. The game
+(Nimzowitsch-von Freyman, Vilnius 1912) is printed with a full score
+as My System **Game 13** in the NIC 2016 combined volume, and is now
+in the corpus as ms-g13-blockader-and-anti-blockader. No further
+Part 3 source is needed for it.
