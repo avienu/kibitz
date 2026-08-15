@@ -3029,3 +3029,22 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 31/147 = 21.1% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## Structural discovery: My System's Part II-III games — and a clean audit
+
+The text zone between My System Part I and The Blockade turns out to
+be **My System Parts II-III with their own numbered games 23-41** —
+nineteen full-score games, previously assumed to be Praxis content
+because both books number games 23+ (the volume prints two different
+"Game 30"s: My System's is Johner-Nimzowitsch Dresden 1926, the
+overprotection classic; Chess Praxis's is Nimzowitsch-V. Berger
+London 1927).
+
+That collision made an audit mandatory: every one of the corpus's
+110 Praxis entries was checked — cited players against the true
+Praxis zone's game header for that number. **110/110 match** (the
+only flags were diacritic transliterations). No remediation needed;
+the finding is pure upside: nineteen My System games including the
+Johner game, Nimzowitsch-Rubinstein Dresden 1926, and
+Kline-Capablanca are the next mining tranche, full-score, no diagram
+protocol required.
