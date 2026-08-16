@@ -3048,3 +3048,54 @@ the finding is pure upside: nineteen My System games including the
 Johner game, Nimzowitsch-Rubinstein Dresden 1926, and
 Kline-Capablanca are the next mining tranche, full-score, no diagram
 protocol required.
+
+## My System batch 3: Parts II-III complete — the strongest suggest batch on record
+
+All nineteen Part II-III games (23-41) mined, one anchor each,
+replay-verified. **My System's numbered games are now complete: 41
+of 41.** The tranche includes the Johner restraint masterpiece
+(12...Qd7! opening the Qd7-f5-h7 maneuver), both overprotection stem
+games, and the two-theaters classics.
+
+Corpus: **318 positions — 162 Jeremy Silman (4 books), 156
+Nimzowitsch (My System 43, Chess Praxis 110, The Blockade 3)**.
+Quiet holdout re-measured: identical to the digit.
+
+Two findings:
+
+1. **Four suggest@1 hits in one batch** — 12...Nd5 (the immobile
+   complex), 22.Nf5 (centralization decides), 16...Bd7 (hoard every
+   future move), 12...Na5 (the flank diversion) — suggest@1 5.4% ->
+   7.2% in a single batch, the strongest on record. All four are
+   piece moves to detector-visible squares; the pattern is now
+   confirmed across three books and has enough labeled cases to
+   inform the eventual suggest@1 ranking design.
+2. **OverprotectStrongPoint graduated on arrival at ms-g40** — the
+   squares_outposts spearhead arm (pawn under fire, surplus
+   defenders) covers 7.Bf4! overprotecting e5 exactly. That sharpens
+   the g102/ms-g33 pressure cases: the missing arm is overprotection
+   of an EMPTY strategic square or a piece, not of a pawn. Three
+   citations now carry that precise ask.
+
+Strengthened: fight-for-key-square ×10, wing-attack-requires-solid-
+center ×5, restrain-enemy-majority ×4, restrain-liberating-pawn-move
+×7 (the restrainer's own stem game ms-g38 joins), counter-in-center
+×4, deep-prophylaxis ×4, sacrifice-for-blockade ×4, alternating ×5,
+anticipate-opponents-plan ×11.
+
+## Standing figures (supersedes every aggregate above)
+
+As of **318 positions** (composition above); negatives 91 (90 clean,
+praxis-g70 the standing red); quiet holdout fixed at 500;
+fingerprints in docs/CORPUS_MANIFEST.md.
+
+| axis | figure |
+|---|---|
+| imbalances | 343/371 = 92.5% |
+| plans | 132/170 = 77.6% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 125/180 = 69.4% |
+| suggest@1 | 12/166 = 7.2% |
+| suggest@3 | 36/166 = 21.7% |
+
+Cost terms on the fixed 500: unchanged to the digit.
