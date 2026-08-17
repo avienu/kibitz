@@ -3131,3 +3131,44 @@ sank CentralizeToConsolidate from the other side. B3. The three
 citations (g102, ms-g33, ms-g40's neighbors) stay counted, now with
 two failed-design data points attached: the pawn arm ships because a
 fixed, attacked pawn is objective; squares and pieces are not.
+
+## Rank study: suggest@1 is priced — and it is two problems, not one
+
+The suggest@1 ranking design's prerequisite instrument (`rank-study`,
+king-study precedent) swept all 166 labeled best-move entries against
+the FULL pre-truncation suggestion list (new `suggest_all`, zero
+behavior change — the instrument reproduces book-eval's 12/36 figures
+to the digit as its self-check).
+
+| question | answer |
+|---|---|
+| book move present anywhere in the list | **73/166 = 44.0%** |
+| absent entirely (generation gap) | **93/166 = 56.0%** |
+| present within rank 10 | 65 |
+| blocker when present-but-not-first | **score 47**, san 11, speed 3 |
+
+The sheet's decision bands were fixed in advance: >= 50% presence
+would have authorized a pure ranking design; under 35% would have
+refused it outright. **44.0% lands in the middle band: a mixed
+problem, generation first.** Prediction 1 (>= 50%) failed;
+prediction 2 (score is the dominant blocker) held emphatically — the
+static score term buries three quarters of the found-but-not-first
+book moves.
+
+The generation gap is NOT one family: 62% of pawn book-moves, 53% of
+piece book-moves, and 3 of 4 castling moves are absent. The
+plan-to-move mapper simply has no plan naming those moves — the same
+vocabulary debt the gap board counts, seen from the suggest side.
+
+What this decides: the suggest@1 fix decomposes into (1) mapper
+coverage, which is the detector/vocabulary program continuing by
+other means — every graduated hint feeds candidates — and (2) a
+score-reweighting design for the 47 score-blocked entries, which is
+sheet-sized and must carry a "no currently-hit entry may drop" line.
+Both are now priced; neither is guesswork.
+
+## Standing figures — unchanged
+
+318 positions; all axes and cost terms identical to the digit
+(the rank study is an instrument; `suggest_all` changed no behavior,
+144+ tests green).

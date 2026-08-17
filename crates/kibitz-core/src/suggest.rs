@@ -1110,6 +1110,16 @@ pub fn role_of(record: &FeatureRecord, board: &Board, mv: Move) -> MoveRole {
 }
 
 pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
+    let mut all = suggest_all(record, board);
+    all.truncate(3);
+    all
+}
+
+/// The full ranked candidate list, before the top-3 truncation. The
+/// rank-study instrument needs to know whether a book move exists
+/// ANYWHERE in the list (a ranking problem) or not at all (a generation
+/// problem) — a question the truncated view cannot answer.
+pub fn suggest_all(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
     let stm = board.side_to_move();
     let stm_favors = color_favors(stm);
     let opp_favors = color_favors(!stm);
@@ -1237,7 +1247,7 @@ pub fn suggest(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
             })
             .then(a.san.cmp(&b.san))
     });
-    scored.truncate(3);
+
     scored
 }
 

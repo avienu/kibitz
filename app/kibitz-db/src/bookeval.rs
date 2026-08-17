@@ -940,6 +940,101 @@ pub fn hint_fp(path: &std::path::Path, hint: &str, dump: bool) -> anyhow::Result
 /// This is a pricing study, not a detector: it reports how common each
 /// condition is on each corpus and whether WeakKing already fires there.
 /// The quiet-set frequency is the cost a real detector would start from.
+/// Rank study (suggest@1 prerequisite): for every corpus entry carrying
+/// best_moves, is a book move anywhere in the FULL suggestion list, at
+/// what rank, and — when present but not first — which sort key do the
+/// moves above it win on? Prices whether suggest@1 is a ranking problem
+/// or a candidate-generation problem BEFORE any ranking design is
+/// written (see docs/VALIDATION.md, run 12 cost-term methodology).
+pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    print_input_fingerprint(paths);
+    let mut entries = 0u32;
+    let mut absent = 0u32;
+    let mut ranks: Vec<u32> = Vec::new();
+    let mut blockers: std::collections::BTreeMap<&'static str, u32> = Default::default();
+    let mut absent_ids: Vec<String> = Vec::new();
+    for p in paths {
+        for c in load(p)? {
+            for e in c.positions {
+                if e.expected.best_moves.is_empty() {
+                    continue;
+                }
+                let board: cozy_chess::Board = match e.fen.parse() {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                let record = kibitz_core::analyze(&board);
+                // The honest consumer view: static-risk-marked moves are
+                // dropped, exactly as book-eval scores it.
+                let list: Vec<_> = kibitz_core::suggest::suggest_all(&record, &board)
+                    .into_iter()
+                    .filter(|s| s.static_risk.is_none())
+                    .collect();
+                entries += 1;
+                let hit = |s: &kibitz_core::suggest::Suggestion| {
+                    e.expected
+                        .best_moves
+                        .iter()
+                        .any(|bm| san_matches(&s.san, bm))
+                };
+                let Some(pos) = list.iter().position(hit) else {
+                    absent += 1;
+                    absent_ids.push(e.id.clone());
+                    continue;
+                };
+                ranks.push(pos as u32 + 1);
+                if pos > 0 {
+                    // Attribute the FIRST higher-ranked rival's win to the
+                    // first sort key that separates them (sort order:
+                    // score, serving, speed, san — risk is already
+                    // filtered out of this view).
+                    let book = &list[pos];
+                    let rival = &list[0];
+                    let key = if rival.score != book.score {
+                        "score"
+                    } else if rival.serving.len() != book.serving.len() {
+                        "serving"
+                    } else if rival.min_speed.unwrap_or(u8::MAX)
+                        != book.min_speed.unwrap_or(u8::MAX)
+                    {
+                        "speed"
+                    } else {
+                        "san"
+                    };
+                    *blockers.entry(key).or_default() += 1;
+                }
+            }
+        }
+    }
+    let present = entries - absent;
+    let at = |k: u32| ranks.iter().filter(|&&r| r <= k).count();
+    println!("== rank study — {entries} labeled best-move entries");
+    println!(
+        "  book move present anywhere   {present:4}  ({:.1}%)",
+        100.0 * present as f64 / entries.max(1) as f64
+    );
+    println!(
+        "  absent from candidate list  {absent:4}  ({:.1}%)  <- generation gap",
+        100.0 * absent as f64 / entries.max(1) as f64
+    );
+    println!("  present at rank 1           {:4}", at(1));
+    println!("  present within rank 3       {:4}", at(3));
+    println!("  present within rank 10      {:4}", at(10));
+    println!(
+        "  beyond rank 10              {:4}",
+        ranks.iter().filter(|&&r| r > 10).count()
+    );
+    println!("  blockers when present-but-not-first (vs the rank-1 rival):");
+    for (k, n) in &blockers {
+        println!("    {k:8} {n:4}");
+    }
+    println!("  absent ids:");
+    for id in &absent_ids {
+        println!("    {id}");
+    }
+    Ok(())
+}
+
 pub fn king_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     use cozy_chess::{Color, File, Piece, Rank};
     use kibitz_core::force::{force_in, Sector};
