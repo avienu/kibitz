@@ -953,6 +953,8 @@ pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     let mut ranks: Vec<u32> = Vec::new();
     let mut blockers: std::collections::BTreeMap<&'static str, u32> = Default::default();
     let mut absent_ids: Vec<String> = Vec::new();
+    let mut at1_ids: Vec<String> = Vec::new();
+    let mut at3_ids: Vec<String> = Vec::new();
     for p in paths {
         for c in load(p)? {
             for e in c.positions {
@@ -983,6 +985,12 @@ pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
                     continue;
                 };
                 ranks.push(pos as u32 + 1);
+                if pos == 0 {
+                    at1_ids.push(e.id.clone());
+                }
+                if pos < 3 {
+                    at3_ids.push(e.id.clone());
+                }
                 if pos > 0 {
                     // Attribute the FIRST higher-ranked rival's win to the
                     // first sort key that separates them (sort order:
@@ -1028,6 +1036,8 @@ pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     for (k, n) in &blockers {
         println!("    {k:8} {n:4}");
     }
+    println!("  rank-1 ids: {}", at1_ids.join(" "));
+    println!("  rank-3 ids: {}", at3_ids.join(" "));
     println!("  absent ids:");
     for id in &absent_ids {
         println!("    {id}");

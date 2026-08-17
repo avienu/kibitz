@@ -3172,3 +3172,35 @@ Both are now priced; neither is guesswork.
 318 positions; all axes and cost terms identical to the digit
 (the rank study is an instrument; `suggest_all` changed no behavior,
 144+ tests green).
+
+## Mapper coverage: refused on the no-hit-lost line — and it settles the architecture question
+
+Thirteen unmapped hints got mapper arms (the pressure/trade family
+via the generic pressure_moves, the routed bishop/rook maneuvers,
+ChooseBlockader, the passer advances, ActivateEntombedPiece,
+TakeOpposition; OverprotectStrongPoint and the maintenance hints
+stayed unmapped on principle). The sheet's hard line: no
+currently-hit entry may drop.
+
+| state | presence | @1 | @3 | hits lost |
+|---|---|---|---|---|
+| before | 44.0% | 12 | 36 | — |
+| v1 (PREPARE adds) | 51.2% | 17 | 37 | 4 @1, 10 @3, 2 fixtures |
+| v2 (ENABLE adds — the one revision) | 51.2% | **19** | **41** | **2 @1, 6 @3, 2 fixtures** |
+
+Losses survived the revision; the budget was spent; **everything is
+reverted** (12/36 and the fixture suite restored to the digit). The
+gains were the largest suggest improvement ever measured — and the
+sheet still says what it says, because the line existed precisely to
+protect users' current answers from silent regression.
+
+The finding is structural: score = sum of serving weights + a
+convergence bonus, so ANY new candidate family reorders the list —
+even at the lowest weight, six of the displaced answers stayed
+displaced. Candidate generation and ranking are ONE coupled design,
+not two. The next sheet must change both together (per-hint score
+caps, or generation-without-rank-influence for new families, or a
+rank-guard that pins currently-hit entries), and it inherits both
+priced halves: +12 presence points of generation reach, 47
+score-blocked entries. The rank-study instrument (now printing hit-id
+sets for exactly this comparison) ships; the arms do not.
