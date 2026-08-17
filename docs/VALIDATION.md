@@ -3099,3 +3099,35 @@ fingerprints in docs/CORPUS_MANIFEST.md.
 | suggest@3 | 36/166 = 21.7% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## The OverprotectStrongPoint point arm: refused by 2.2 points
+
+The best-shaped debt on the board got its sheet: overprotect an
+EMPTY true-center square with a surplus of pieces (x-ray batteries
+counted — overprotection IS a battery), exhibits ms-g33 (fire on e5)
+and praxis-g102 (designed miss, the occupied-square piece case).
+Line fixed in advance: combined OverprotectStrongPoint <= 12.0%
+(pawn arm alone: 9.4%).
+
+| design | ms-g33 | combined quiet rate |
+|---|---|---|
+| v1: empty center square, contested, >= 3 piece-covers, covers > contest | fired [e5] | **22.4%** |
+| v2 (revision b, named in advance): + an enemy pawn on sq's file reaching it within two pushes | fired [e5] | **14.2%** |
+
+One judgment call is on the record: revision (b)'s letter said "within
+two squares behind"; White's e2-pawn sits three behind e5 but reaches
+it in two pushes via the double-step, which is the exact threat the
+exhibit's book text names — the rationale clause governed. It did not
+save the design: 14.2 > 12.0, the budget is spent, everything is
+reverted and restoration verified to the digit (9.4%, plans 132/170,
+146 tests).
+
+The finding: **three developed pieces covering a contested center
+square that an enemy pawn wants is ordinary good chess**, not
+overprotection. The book's concept carries an intention — a
+maintenance commitment against a NAMED enemy plan — that piece-count
+statics cannot see; the same missing will-of-the-position term that
+sank CentralizeToConsolidate from the other side. B3. The three
+citations (g102, ms-g33, ms-g40's neighbors) stay counted, now with
+two failed-design data points attached: the pawn arm ships because a
+fixed, attacked pawn is objective; squares and pieces are not.
