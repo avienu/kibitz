@@ -5,6 +5,40 @@ numbered work runs (full detail with verification numbers in
 `RUN_REPORT.md`); 0.1.0 is the first tagged release and collects them,
 newest first.
 
+## 0.1.2 — 2026-08-18
+
+The run-13 batch: what the completed book corpus taught the engine.
+No schema or storage changes.
+
+### Two new plan hints
+
+- **ChooseBlockader** — it is by no means a matter of indifference by
+  which piece the pawn is stopped: a knight standing on an advanced
+  passer's stop square is flagged as the right blockader to keep, and
+  when the stop square is empty the nearest knight is recommended even
+  when its road is momentarily blocked (My System, Diagrams 145-146).
+- **AlternateTargets** — with queens off and two flagged pawn
+  weaknesses at least four files apart, the engine now names the
+  two-weaknesses plan: swing between them until a guard arrives late
+  (Chess Praxis, Part V).
+
+### Overprotection and plan speed
+
+- OverprotectStrongPoint gained its spearhead arm: a fixed, attacked
+  central pawn with surplus defenders is now recognized.
+- Plan hints carry a moves-to-execute speed; equally scored
+  suggestions prefer the faster plan.
+
+### Better suggestions, with a guarantee
+
+Thirteen more detector hints now propose candidate moves (the
+pressure and trade families, routed bishop/rook maneuvers, passer
+advances, the blockader hints, taking the opposition). They rank in a
+second tier that provably cannot displace any suggestion the previous
+release made — measured id-by-id against the book-trial corpus: every
+prior top-1 and top-3 answer is preserved, and top-1 recall improved
+by a sixth.
+
 ## 0.1.1 — 2026-08-07
 
 A release-surface fix. No engine or UI changes.

@@ -1,6 +1,6 @@
 [package]
 name = "kibitz-app"
-version = "0.1.1"
+version = "0.1.2"
 description = "Kibitz Phase 0 spike demo — Tauri shell (board + PGN stepping + UCI engine panel)"
 authors = ["Shawn O'Connor"]
 license = "GPL-3.0-only"
