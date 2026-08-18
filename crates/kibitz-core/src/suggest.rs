@@ -84,6 +84,10 @@ pub struct Suggestion {
     /// Cheapest speed among the plans this move serves (run 12) — the
     /// ranking tiebreak. None when no serving plan carries a speed.
     pub min_speed: Option<u8>,
+    /// Second-tier weight (see [`TIER_TWO`]): candidates found by the
+    /// tier-two mapper arms rank below every tier-one candidate and
+    /// among themselves by this sum. Zero for pure tier-one moves.
+    pub tier2: u32,
 }
 
 /// One active plan pulled out of the record, with its EFFECTIVE owner (a
@@ -855,10 +859,138 @@ fn moves_for_hint(
                 }
             }
         }
+        // Tier-two mapper batch (see docs/VALIDATION.md, run 13): the
+        // pressure/trade family all reduce to "bear on the named square"
+        // and reuse pressure_moves — a capture there at even SEE is the
+        // act itself. Added attackers carry ENABLE, the lowest weight:
+        // at PREPARE they displaced ten book answers by sheer volume.
+        // These hints rank in a SECOND TIER (see TIER_TWO): they
+        // generate candidates but cannot reorder tier-one moves.
+        "TargetWeakPawn" | "TradeOffAttacker" | "UprootBlockader" => {
+            if let Some(t) = squares.first().and_then(|s| parse_sq(s)) {
+                out = pressure_moves(board, legal, side, t, None, ENABLE);
+            }
+        }
+        "AlternateTargets" => {
+            for t in squares.iter().filter_map(|s| parse_sq(s)) {
+                out.extend(pressure_moves(board, legal, side, t, None, ENABLE));
+            }
+        }
+        // squares = [attacker/hunter, prey]: the prey is what we bear on.
+        "HuntBishopPair" | "TradeSquareDefender" => {
+            if let Some(t) = squares.get(1).and_then(|s| parse_sq(s)) {
+                out = pressure_moves(board, legal, side, t, None, ENABLE);
+            }
+        }
+        // Routed maneuvers share the knight-outpost grammar: last square
+        // is home, the rest are waypoints.
+        "ManeuverBishopToSupportPoint" | "ManeuverRookToOpenFile" => {
+            let Some(target) = squares.last().and_then(|s| parse_sq(s)) else {
+                return out;
+            };
+            let route: Vec<Square> = squares[..squares.len().saturating_sub(1)]
+                .iter()
+                .filter_map(|s| parse_sq(s))
+                .collect();
+            let piece = if hint == "ManeuverBishopToSupportPoint" {
+                Piece::Bishop
+            } else {
+                Piece::Rook
+            };
+            for &mv in legal {
+                if board.piece_on(mv.from) != Some(piece) {
+                    continue;
+                }
+                if mv.to == target {
+                    out.push((mv, EXECUTE));
+                } else if route.contains(&mv.to) && is_safe(board, mv) {
+                    out.push((mv, PREPARE));
+                }
+            }
+        }
+        "ChooseBlockader" => {
+            // squares = [stop] (keep the installed knight) or
+            // [stop, knight-from] (bring the right blockader).
+            let Some(stop) = squares.first().and_then(|s| parse_sq(s)) else {
+                return out;
+            };
+            let enemy_pawn_cover = pawn_attacks_of(board, !side);
+            for &mv in legal {
+                if board.piece_on(mv.from) != Some(Piece::Knight) {
+                    continue;
+                }
+                if mv.to == stop {
+                    out.push((mv, EXECUTE));
+                } else if !enemy_pawn_cover.has(mv.to)
+                    && knight_distance(mv.to, stop) < knight_distance(mv.from, stop)
+                    && is_safe(board, mv)
+                {
+                    out.push((mv, ENABLE));
+                }
+            }
+        }
+        // The candidate (or the decoy passer) advances; its owner's own
+        // move IS the plan.
+        "CreatePassedPawn" | "OutsidePasserDecoy" => {
+            let Some(pawn) = squares.first().and_then(|s| parse_sq(s)) else {
+                return out;
+            };
+            if !board.colored_pieces(side, Piece::Pawn).has(pawn) {
+                return out;
+            }
+            for &mv in legal {
+                if mv.from == pawn && !is_capture(board, mv) && is_safe(board, mv) {
+                    out.push((mv, EXECUTE));
+                }
+            }
+        }
+        "ActivateEntombedPiece" => {
+            // Any move by the entombed piece that survives is progress.
+            if let Some(sq) = squares.first().and_then(|s| parse_sq(s)) {
+                for &mv in legal {
+                    if mv.from == sq && is_safe(board, mv) {
+                        out.push((mv, PREPARE));
+                    }
+                }
+            }
+        }
+        "TakeOpposition" => {
+            if let Some(sq) = squares.first().and_then(|s| parse_sq(s)) {
+                for &mv in legal {
+                    if board.piece_on(mv.from) == Some(Piece::King) && mv.to == sq {
+                        out.push((mv, EXECUTE));
+                    }
+                }
+            }
+        }
         _ => {}
     }
     out
 }
+
+/// Hints whose mapper candidates rank in the SECOND tier: they never
+/// contribute to the primary score, the serving-length key, or the
+/// speed tiebreak, so they cannot reorder tier-one candidates. The
+/// mapper-coverage refusal (docs/VALIDATION.md) measured why: score is
+/// a sum over serving plans, and at any weight a new family displaced
+/// book answers that were previously found. Structural decoupling is
+/// the fix — a tier-two-only candidate carries primary score 0 and
+/// sorts below every tier-one candidate by construction.
+const TIER_TWO: [&str; 13] = [
+    "TargetWeakPawn",
+    "AlternateTargets",
+    "HuntBishopPair",
+    "TradeSquareDefender",
+    "TradeOffAttacker",
+    "UprootBlockader",
+    "ManeuverBishopToSupportPoint",
+    "ManeuverRookToOpenFile",
+    "ChooseBlockader",
+    "CreatePassedPawn",
+    "OutsidePasserDecoy",
+    "ActivateEntombedPiece",
+    "TakeOpposition",
+];
 
 /// The strongest plan score for `favors` in the record: composites carry
 /// their synthesized score, lone hints their imbalance's magnitude weight.
@@ -1132,6 +1264,7 @@ pub fn suggest_all(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
     struct Cand {
         constructive: BTreeMap<String, u32>,
         blocking: BTreeMap<String, u32>,
+        tier2: BTreeMap<String, u32>,
     }
     // Keyed by the move's string form: cozy Move is not Ord, and the
     // string key doubles as the deterministic iteration order.
@@ -1154,14 +1287,18 @@ pub fn suggest_all(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
         if plan.favors != stm_favors && plan.favors != Favors::Balanced {
             continue;
         }
+        let second_tier = TIER_TWO.contains(&plan.hint.as_str());
         for (mv, w) in moves_for_hint(board, &legal, stm, &plan.hint, &plan.squares) {
-            let entry = cands
+            let cand = &mut cands
                 .entry(mv.to_string())
                 .or_insert_with(|| (mv, Cand::default()))
-                .1
-                .constructive
-                .entry(plan.hint.clone())
-                .or_default();
+                .1;
+            let bucket = if second_tier {
+                &mut cand.tier2
+            } else {
+                &mut cand.constructive
+            };
+            let entry = bucket.entry(plan.hint.clone()).or_default();
             *entry = (*entry).max(w);
         }
     }
@@ -1213,6 +1350,14 @@ pub fn suggest_all(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
                 .iter()
                 .filter_map(|h| speed_by_hint.get(h).copied())
                 .min();
+            // Tier-two names go LAST in the display list and touch
+            // neither score, serving-length, nor speed.
+            for k in c.tier2.keys() {
+                if !serving.contains(k) {
+                    serving.push(k.clone());
+                }
+            }
+            let tier2: u32 = c.tier2.values().sum();
             Suggestion {
                 mv: mv.to_string(),
                 san: san(board, mv),
@@ -1221,9 +1366,18 @@ pub fn suggest_all(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
                 prophylactic,
                 static_risk: static_risk(board, mv),
                 min_speed,
+                tier2,
             }
         })
         .collect();
+    // The serving-length key counts tier-one names only (tier-two names
+    // sit at the tail of the display list and must not reorder).
+    let t1_len = |x: &Suggestion| {
+        x.serving
+            .iter()
+            .filter(|h| !TIER_TWO.contains(&h.as_str()))
+            .count()
+    };
     scored.sort_by(|a, b| {
         // Unmarked before marked (run 12): a no-engine consumer drops
         // static-risk-marked moves AFTER receiving the list, so ranking
@@ -1236,7 +1390,7 @@ pub fn suggest_all(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
             .is_some()
             .cmp(&b.static_risk.is_some())
             .then(b.score.cmp(&a.score))
-            .then(b.serving.len().cmp(&a.serving.len()))
+            .then(t1_len(b).cmp(&t1_len(a)))
             // Speed as the tiebreak (run 12, the plan-speed term's
             // second consumer): between equally-scored plans, the one
             // that arrives sooner ranks first. None sorts last — a
@@ -1245,7 +1399,13 @@ pub fn suggest_all(record: &FeatureRecord, board: &Board) -> Vec<Suggestion> {
                 let sp = |x: &Suggestion| x.min_speed.unwrap_or(u8::MAX);
                 sp(a).cmp(&sp(b))
             })
+            // Tier2 ranks BELOW san (the sheet's one revision): before
+            // san it flipped three previously-san-decided ties and cost
+            // three book answers. After a total key it can never reorder
+            // two old candidates; among tier-two-only newcomers the san
+            // order is the price of the guarantee.
             .then(a.san.cmp(&b.san))
+            .then(b.tier2.cmp(&a.tier2))
     });
 
     scored

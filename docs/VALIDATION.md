@@ -3204,3 +3204,52 @@ rank-guard that pins currently-hit entries), and it inherits both
 priced halves: +12 presence points of generation reach, 47
 score-blocked entries. The rank-study instrument (now printing hit-id
 sets for exactly this comparison) ships; the arms do not.
+
+## The two-tier mapper: shipped on its sheet, zero hits lost
+
+The rethink of the refused mapper-coverage design. Diagnosis from
+the refusal: score is a sum over serving plans, so any new candidate
+family reorders the list — generation and ranking are one coupled
+design. The fix decouples them STRUCTURALLY: the thirteen new arms
+return, but their hints live in a TIER_TWO list whose weights touch
+neither the primary score, nor the serving-length key, nor the speed
+tiebreak. A tier-two-only candidate carries primary score 0 and sorts
+below every tier-one candidate by construction; no-hit-lost becomes a
+property of the sort key instead of an empirical hope.
+
+| state | presence | @1 | @3 | hits lost |
+|---|---|---|---|---|
+| before | 44.0% | 12 | 36 | — |
+| tier2 before san | 51.2% | 15 | 40 | 1 @1, 2 @3 (tie-flips) |
+| **tier2 after san (shipped)** | **51.2%** | **14** | **39** | **NONE** |
+
+The one named revision moved tier2 below the san tiebreak: san is a
+total key, so ordering among all previous candidates is bit-identical
+to the shipped baseline, and the three tie-flip losses vanished. The
+price is that tier-two newcomers order among themselves by san, which
+cost one @1 and one @3 gain relative to the pre-revision state — the
+guarantee was judged worth exactly that, and the sheet's floor
+(combined net >= +3) is met at +5.
+
+New @1 hits: ms-g15's 10.Nd5! and praxis-g53's mysterious rook-pawn
+waiting move. New @3: the bishop-hunt at g105, prophylaxis-holds-the-
+win at g83, flank-glance at g88. All five arrive through detector
+hints that already fire at those anchors — the mapper simply lets
+them speak.
+
+## Standing figures (supersedes every aggregate above)
+
+318 positions (162 Jeremy Silman / 156 Nimzowitsch); negatives 91
+(90 clean, praxis-g70 standing red); quiet holdout fixed at 500.
+
+| axis | figure |
+|---|---|
+| imbalances | 343/371 = 92.5% |
+| plans | 132/170 = 77.6% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 125/180 = 69.4% |
+| **suggest@1** | **14/166 = 8.4%** (was 12; zero prior hits lost) |
+| **suggest@3** | **39/166 = 23.5%** (was 36) |
+
+Cost terms on the fixed 500: unchanged to the digit (suggest feeds no
+cost instrument). Rank-study presence: 51.2%.
