@@ -3345,3 +3345,37 @@ praxis-g70 standing red); quiet holdout fixed at 500.
 | suggest@3 | 40/173 = 23.1% |
 
 Cost terms on the fixed 500: unchanged to the digit.
+
+## Era study: what 1888-1928 can and cannot say
+
+The maintainer's question — does recall vary with the era of the
+chess? — got its instrument (scripts/era_study.py, joining book-eval
+verbose against citation years; all four axis totals reconcile with
+book-eval to the digit). Scope registered before running: only the
+Nimzowitsch entries carry game dates, so the study covers 1888-1928;
+Silman's entries are page-cited constructed examples. Buckets, with
+n beside every figure:
+
+| bucket | n | imbalance | plan | favors | suggest@3 |
+|---|---|---|---|---|---|
+| <=1899 | 2 | 2/2 | — | — | 0/2 |
+| 1900-09 | 15 | 12/12 = 100% | 1/1 | 7/9 = 77.8% | 1/10 |
+| 1910-19 | 36 | 17/17 = 100% | 9/9 | 13/18 = 72.2% | 9/35 |
+| 1920-28 | 115 | 59/62 = 95.2% | 15/19 = 78.9% | 39/61 = 63.9% | 22/102 = 21.6% |
+
+Predictions: (1) imbalances flat — HELD (within 4.8 points across
+dated buckets; structure is era-stable and the detectors read
+structure). (2) plans peak in the 1920s — REFUTED but underpowered
+(pre-1920 scorable-plan totals are 10 combined; no conclusion). (3)
+small-bucket discipline honored.
+
+The one solid gradient is **favors: 77.8 -> 72.2 -> 63.9 with n=61
+in the deep bucket** — and it is honestly CONFOUNDED: the 1920s
+bucket is where the Praxis/Blockade compensation doctrine lives, so
+the decline tracks the annotations' concept density at least as much
+as the chess's era. Verdict: the existing corpus cannot demonstrate
+era decay of the chess itself; it demonstrates (again, from a third
+angle) that compensation-centric judgment is where recall dies. The
+century-scale half of the question — does the vocabulary decay on
+post-1930 dynamic chess? — is unmeasurable here and is exactly what
+a Kasparov pilot tranche (era-spread, ~15 entries) would supply.
