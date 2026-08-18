@@ -3253,3 +3253,38 @@ them speak.
 
 Cost terms on the fixed 500: unchanged to the digit (suggest feeds no
 cost instrument). Rank-study presence: 51.2%.
+
+## The danger-term run: opened and closed at the price
+
+Three walls cite one missing term — the consolidation gate
+(CentralizeToConsolidate's refusal), the favors compensation
+blindness, the alerts enemy-readiness discriminator. Before any
+consumer design, `danger-study` priced five static components of
+king danger (zone surplus, sector force margin, open line, enemy
+queen, shield thinness) over the alerts-labeled positives (16
+side-positions), the WeakKing-banned negatives (50), and the quiet
+holdout (1000 side-positions).
+
+The sheet's line: some conjunction of >= 2 components must hold on
+>= 60% of positives at <= 15% quiet. **No such conjunction exists**,
+and the check was exhaustive over all ten pairs plus the any-k
+tiers:
+
+- best quiet-side pair (margin&line, 10.2% quiet) reaches only
+  37.5% of positives;
+- best positives-side pair (margin&queens, 56.2%) fires on 21.1% of
+  quiet;
+- zone surplus — the WSUI's own key test — holds on 6% of positives:
+  the corpus's danger positions are danger BREWING, before attackers
+  reach the zone, which is precisely what statics cannot see.
+
+Prediction 2 confirmed (enemy queen: 87.5% of positives, 78.1% of
+quiet — necessary and useless alone). Prediction 1 refuted, and its
+pre-registered consequence executes: **the static danger term is
+refused, and all three consumer designs are refused without
+attempts** — favors credit, the WeakKing readiness gate, and the
+consolidation gate would each be tuning on noise. These axes wait
+for the engine layer (bounded verification jobs through the existing
+queue), which is exactly the decision this run existed to make.
+
+The instrument ships; the term does not.

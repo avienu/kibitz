@@ -946,6 +946,164 @@ pub fn hint_fp(path: &std::path::Path, hint: &str, dump: bool) -> anyhow::Result
 /// moves above it win on? Prices whether suggest@1 is a ranking problem
 /// or a candidate-generation problem BEFORE any ranking design is
 /// written (see docs/VALIDATION.md, run 12 cost-term methodology).
+/// Danger study (the danger-term run's price, see docs/VALIDATION.md):
+/// five static components of "danger to a side's king", computed over
+/// the alerts-labeled corpus (positives = entries expecting WeakKing,
+/// negatives = entries banning it) and the quiet holdout's 1000
+/// side-positions. Instrument only — chooses no thresholds and changes
+/// no behavior; the consumer sheets pick thresholds from these rates.
+pub fn danger_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    use cozy_chess::{get_king_moves, Color, Piece, Rank};
+    use kibitz_core::attack::attackers_of;
+    use kibitz_core::force::{force_in, Sector};
+
+    print_input_fingerprint(paths);
+    // components for danger TO `side`'s king
+    fn components(board: &cozy_chess::Board, side: Color) -> [bool; 5] {
+        let enemy = !side;
+        let king = board.king(side);
+        let occ = board.occupied();
+        let zone = get_king_moves(king) | king.bitboard();
+        let mut att = 0i32;
+        let mut def = 0i32;
+        for sq in zone {
+            att += attackers_of(board, sq, enemy, occ).len() as i32;
+            def += (attackers_of(board, sq, side, occ) & !board.pieces(Piece::King)).len() as i32;
+        }
+        let zone_surplus = att - def >= 2;
+        let sector = Sector::of(king);
+        let margin = force_in(board, enemy, sector) - force_in(board, side, sector) >= 300;
+        // open line: enemy R/Q on a file through the zone with no own pawn
+        // on it, or enemy B/Q whose current attack set reaches the zone.
+        let mut line = false;
+        for from in board.colors(enemy) & (board.pieces(Piece::Rook) | board.pieces(Piece::Queen)) {
+            let file = from.file();
+            let file_hits_zone = zone.into_iter().any(|z| z.file() == file);
+            let own_pawn_on_file =
+                !(board.colored_pieces(side, Piece::Pawn) & file.bitboard()).is_empty();
+            if file_hits_zone && !own_pawn_on_file {
+                line = true;
+            }
+        }
+        for from in board.colors(enemy) & (board.pieces(Piece::Bishop) | board.pieces(Piece::Queen))
+        {
+            let rays = cozy_chess::get_bishop_moves(from, occ);
+            if !(rays & zone).is_empty() {
+                line = true;
+            }
+        }
+        let queens = !board.colored_pieces(enemy, Piece::Queen).is_empty();
+        let span: Vec<cozy_chess::File> = {
+            let kf = king.file() as i8;
+            (-1..=1)
+                .filter_map(|d| cozy_chess::File::try_index((kf + d) as usize))
+                .collect()
+        };
+        let home_two = match side {
+            Color::White => Rank::Second.bitboard() | Rank::Third.bitboard(),
+            Color::Black => Rank::Seventh.bitboard() | Rank::Sixth.bitboard(),
+        };
+        let mut shield_pawns = 0;
+        for f in span {
+            shield_pawns +=
+                (board.colored_pieces(side, Piece::Pawn) & f.bitboard() & home_two).len();
+        }
+        let shield = shield_pawns < 2;
+        [zone_surplus, margin, line, queens, shield]
+    }
+    const NAMES: [&str; 5] = ["zone", "margin", "line", "queens", "shield"];
+
+    let mut sets: std::collections::BTreeMap<&'static str, Vec<[bool; 5]>> = Default::default();
+    for p in paths {
+        if p.extension().and_then(|e| e.to_str()) == Some("json") || p.is_dir() {
+            for c in load(p)? {
+                for e in c.positions {
+                    let Ok(board) = e.fen.parse::<cozy_chess::Board>() else {
+                        continue;
+                    };
+                    let want = e.expected.alerts.iter().any(|a| a == "WeakKing");
+                    let ban = e.not_expected.alerts.iter().any(|a| a == "WeakKing");
+                    if want {
+                        // the alerted side is whoever's king is in danger —
+                        // take the side with MORE components true.
+                        let w = components(&board, Color::White);
+                        let b = components(&board, Color::Black);
+                        let pick = if w.iter().filter(|x| **x).count()
+                            >= b.iter().filter(|x| **x).count()
+                        {
+                            w
+                        } else {
+                            b
+                        };
+                        sets.entry("positive").or_default().push(pick);
+                    } else if ban {
+                        let w = components(&board, Color::White);
+                        let b = components(&board, Color::Black);
+                        sets.entry("negative").or_default().push(w);
+                        sets.entry("negative").or_default().push(b);
+                    }
+                }
+            }
+        } else {
+            for l in std::fs::read_to_string(p)?
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+            {
+                let Ok(board) = l.parse::<cozy_chess::Board>() else {
+                    continue;
+                };
+                sets.entry("quiet")
+                    .or_default()
+                    .push(components(&board, Color::White));
+                sets.entry("quiet")
+                    .or_default()
+                    .push(components(&board, Color::Black));
+            }
+        }
+    }
+    for (name, rows) in &sets {
+        let n = rows.len();
+        println!("== {name} — {n} side-positions");
+        for (i, comp) in NAMES.iter().enumerate() {
+            let k = rows.iter().filter(|r| r[i]).count();
+            println!(
+                "  {comp:7} {k:4}  ({:.1}%)",
+                100.0 * k as f64 / n.max(1) as f64
+            );
+        }
+        // conjunction counts: how many components hold at once
+        for need in 2..=4 {
+            let k = rows
+                .iter()
+                .filter(|r| r.iter().filter(|x| **x).count() >= need)
+                .count();
+            println!(
+                "  any {need} of 5        {k:4}  ({:.1}%)",
+                100.0 * k as f64 / n.max(1) as f64
+            );
+        }
+        // the named conjunction the sheet predicts: queens AND (zone OR margin)
+        let k = rows.iter().filter(|r| r[3] && (r[0] || r[1])).count();
+        println!(
+            "  queens & (zone|margin) {k:4}  ({:.1}%)",
+            100.0 * k as f64 / n.max(1) as f64
+        );
+        // every pairwise conjunction, so a refusal is exhaustive
+        for i in 0..5 {
+            for j in (i + 1)..5 {
+                let k = rows.iter().filter(|r| r[i] && r[j]).count();
+                println!(
+                    "  {}&{:<7} {k:4}  ({:.1}%)",
+                    NAMES[i],
+                    NAMES[j],
+                    100.0 * k as f64 / n.max(1) as f64
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     print_input_fingerprint(paths);
     let mut entries = 0u32;

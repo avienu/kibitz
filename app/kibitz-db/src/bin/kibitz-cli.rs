@@ -255,6 +255,11 @@ enum Command {
     /// Price the four remaining WeakKing misses: how common are the
     /// lagging-king and sector-funnel conditions, and does WeakKing
     /// already fire there?
+    /// Static king-danger components over alerts-labeled corpus + quiet holdout — the danger-term run's price
+    DangerStudy {
+        #[arg(default_value = "testdata/private/book-trials")]
+        paths: Vec<std::path::PathBuf>,
+    },
     /// Rank of book best-moves in the full suggestion list — prices whether suggest@1 is a ranking or generation problem
     RankStudy {
         #[arg(default_value = "testdata/private/book-trials")]
@@ -719,6 +724,9 @@ fn main() -> anyhow::Result<()> {
         Command::HintFp { hint, path, dump } => {
             kibitz_db::bookeval::print_input_fingerprint(std::slice::from_ref(&path));
             kibitz_db::bookeval::hint_fp(&path, &hint, dump)?;
+        }
+        Command::DangerStudy { paths } => {
+            kibitz_db::bookeval::danger_study(&paths)?;
         }
         Command::RankStudy { paths } => {
             kibitz_db::bookeval::rank_study(&paths)?;
