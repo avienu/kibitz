@@ -3353,7 +3353,7 @@ chess? — got its instrument (scripts/era_study.py, joining book-eval
 verbose against citation years; all four axis totals reconcile with
 book-eval to the digit). Scope registered before running: only the
 Nimzowitsch entries carry game dates, so the study covers 1888-1928;
-Silman's entries are page-cited constructed examples. Buckets, with
+Jeremy Silman's entries are page-cited constructed examples. Buckets, with
 n beside every figure:
 
 | bucket | n | imbalance | plan | favors | suggest@3 |
