@@ -3288,3 +3288,60 @@ for the engine layer (bounded verification jobs through the existing
 queue), which is exactly the decision this run existed to make.
 
 The instrument ships; the term does not.
+
+## The tier-one rerank: refused at the price too
+
+The 47 score-blocked entries got their instrument before their
+design: rank-study now prints the lead hint of the winning rival
+against the book move's. The result kills the planned design —
+**about half the score-blocked cases are the SAME hint beating
+itself** (RestrictKnight over RestrictKnight x7, the knight-outpost
+maneuver over itself x4, bad-bishop and wing-storm over themselves
+x3 each). No cross-hint score reweighting can separate two moves
+serving the same plan; the block lives inside the mapper arms'
+move-selection grammar (which restricting move, which route step),
+not between plans. Ceiling for the cross-hint rerank: ~25 entries,
+against displacement risk on all 14 current @1 hits with no
+structural guard available. Refused at the price.
+
+What remains actionable is per-arm move selection — RestrictKnight
+alone touches ~14 blocked entries as rival or as beaten book hint —
+one arm per sheet, each with the hit-id hard line. Queued as the
+next suggest cycle.
+
+## The Blockade completed — and it stress-tests the danger verdict
+
+Games 3-9 mined (the Salwe classic, the Immortal Zugzwang from the
+booklet's side, the majority-for-passer conversions), one anchor
+each, replay-verified. **All three books are now fully mined**: 325
+positions — 162 Jeremy Silman, 163 Nimzowitsch (My System 43, Chess
+Praxis 110, The Blockade 10). Quiet holdout identical to the digit.
+
+Two graduations on arrival: UprootBlockader fires at g4's
+blockader-elimination anchor, BlockadeThenPressure at the Salwe
+game's own diagram. OverprotectStrongPoint missed at g5 exactly as
+its note predicted — the fourth maintenance-intention citation.
+
+The batch's finding: **five of seven favors expectations missed, and
+every miss is a compensation position** — a pawn surrendered for a
+blockade the book calls winning, scored by us for the pawn's owner.
+The favors axis drops to 67.9% BECAUSE the corpus now contains the
+literature's densest concentration of compensation judgments; this
+is the danger-run verdict confirmed from the corpus side, and these
+five entries join the engine-layer docket alongside ms-g1.
+
+## Standing figures (supersedes every aggregate above)
+
+325 positions (composition above); negatives 91 (90 clean,
+praxis-g70 standing red); quiet holdout fixed at 500.
+
+| axis | figure |
+|---|---|
+| imbalances | 346/374 = 92.5% |
+| plans | 134/173 = 77.5% |
+| alerts | 13/25 = 52.0% (3 line-conditional excluded) |
+| favors | 127/187 = 67.9% (compensation cases now 10+ labeled, engine-layer docket) |
+| suggest@1 | 15/173 = 8.7% |
+| suggest@3 | 40/173 = 23.1% |
+
+Cost terms on the fixed 500: unchanged to the digit.

@@ -1112,6 +1112,7 @@ pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     let mut blockers: std::collections::BTreeMap<&'static str, u32> = Default::default();
     let mut absent_ids: Vec<String> = Vec::new();
     let mut at1_ids: Vec<String> = Vec::new();
+    let mut score_pairs: std::collections::BTreeMap<(String, String), u32> = Default::default();
     let mut at3_ids: Vec<String> = Vec::new();
     for p in paths {
         for c in load(p)? {
@@ -1168,6 +1169,15 @@ pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
                         "san"
                     };
                     *blockers.entry(key).or_default() += 1;
+                    if key == "score" {
+                        // What does the winning rival serve that the book
+                        // move does not? The reranking design needs the
+                        // HINTS carrying the excess score, not just the key.
+                        let lead = |s: &kibitz_core::suggest::Suggestion| {
+                            s.serving.first().cloned().unwrap_or_default()
+                        };
+                        *score_pairs.entry((lead(rival), lead(book))).or_default() += 1;
+                    }
                 }
             }
         }
@@ -1193,6 +1203,15 @@ pub fn rank_study(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     println!("  blockers when present-but-not-first (vs the rank-1 rival):");
     for (k, n) in &blockers {
         println!("    {k:8} {n:4}");
+    }
+    println!("  score-blocked (rival's lead hint -> book move's lead hint):");
+    let mut pairs: Vec<_> = score_pairs.into_iter().collect();
+    pairs.sort_by(|a, b| b.1.cmp(&a.1));
+    for ((r, bk), n) in pairs.iter().take(15) {
+        println!(
+            "    {n:3}  {r} beats {}",
+            if bk.is_empty() { "(none)" } else { bk }
+        );
     }
     println!("  rank-1 ids: {}", at1_ids.join(" "));
     println!("  rank-3 ids: {}", at3_ids.join(" "));
