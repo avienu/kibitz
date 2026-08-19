@@ -3418,3 +3418,41 @@ n's are its scope. A full MGP tranche (the natural follow-on if
 wanted) would firm the modern buckets to n=30+ per bin — but the
 run's standing verdict already tells us most of those entries'
 favors judgments wait for the engine layer either way.
+
+## The compensation probe: refused at the price — and the refusal teaches more than a pass would have
+
+The engine-layer run's first instrument (`probe-study`) measured the
+queue's own bounded engine against every scorable book favors verdict
+(197 cases), at three node budgets, +/-60cp dead zone, White-POV
+normalized. Static baseline reproduced exactly (134/197 = 68.0%).
+
+| probe budget | book agreement | fixes static misses | breaks static hits |
+|---|---|---|---|
+| 10k nodes | 70.6% | 34/63 | 29/134 |
+| 50k nodes | 68.5% | 34/63 | 33/134 |
+| 200k nodes | 69.0% | 38/63 | 36/134 |
+
+The sheet's line was >= 76% (beat statics by 8 points): **the probe
+consumer is refused.** The engine disagrees with the books almost
+exactly as often as the statics do — it just disagrees on DIFFERENT
+positions, repairing over half the static misses while breaking a
+quarter of the static hits. The budget curve is flat (prediction 4
+held): this is not a depth problem at product-sane scales.
+
+The finding underneath: **book favors verdicts are didactic
+judgments, not engine evaluations.** At these anchors the books say
+"White is winning the strategic argument" at plies where the
+objective eval is near zero — and a probe that answers "who does the
+engine favor" is answering a different question from the one the
+axis asks. Three programs have now been priced against this axis
+(static lean 68%, static compensation terms refused, cheap probe
+refused); the axis itself is measuring agreement with pedagogy.
+
+What survives, as the successor design (its own sheet, not attempted
+here): the probe question that MATCHES the books' concept is not
+"who is better" but **"is the eval better than the material
+ledger?"** — compensation as eval-minus-material, which the same
+instrument can measure with the data it already collects. The quiet
+trigger price is on record (29.2% of quiet positions carry a
+one-pawn-plus imbalance). The instrument ships; the consumer does
+not.

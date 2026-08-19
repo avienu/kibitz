@@ -255,6 +255,13 @@ enum Command {
     /// Price the four remaining WeakKing misses: how common are the
     /// lagging-king and sector-funnel conditions, and does WeakKing
     /// already fire there?
+    /// Bounded-engine agreement with book favors verdicts — the engine-layer run's first instrument
+    ProbeStudy {
+        #[arg(default_value = "testdata/private/book-trials")]
+        paths: Vec<std::path::PathBuf>,
+        #[arg(long, default_value = "testdata/corpus/quiet_fens.txt")]
+        quiet: std::path::PathBuf,
+    },
     /// Static king-danger components over alerts-labeled corpus + quiet holdout — the danger-term run's price
     DangerStudy {
         #[arg(default_value = "testdata/private/book-trials")]
@@ -724,6 +731,9 @@ fn main() -> anyhow::Result<()> {
         Command::HintFp { hint, path, dump } => {
             kibitz_db::bookeval::print_input_fingerprint(std::slice::from_ref(&path));
             kibitz_db::bookeval::hint_fp(&path, &hint, dump)?;
+        }
+        Command::ProbeStudy { paths, quiet } => {
+            kibitz_db::bookeval::probe_study(&paths, &quiet)?;
         }
         Command::DangerStudy { paths } => {
             kibitz_db::bookeval::danger_study(&paths)?;

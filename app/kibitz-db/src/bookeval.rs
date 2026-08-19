@@ -946,6 +946,136 @@ pub fn hint_fp(path: &std::path::Path, hint: &str, dump: bool) -> anyhow::Result
 /// moves above it win on? Prices whether suggest@1 is a ranking problem
 /// or a candidate-generation problem BEFORE any ranking design is
 /// written (see docs/VALIDATION.md, run 12 cost-term methodology).
+/// Compensation-probe study (the engine-layer run's first instrument,
+/// see docs/VALIDATION.md): can the queue's own bounded engine express
+/// the favors judgments the statics were refused on, and at what node
+/// budget? Instrument only — no verdict path changes.
+pub fn probe_study(paths: &[std::path::PathBuf], quiet: &std::path::Path) -> anyhow::Result<()> {
+    use cozy_chess::Color;
+    print_input_fingerprint(paths);
+    let engine_path = crate::engine::resolve_engine_path()
+        .ok_or_else(|| anyhow::anyhow!("no stockfish found (KIBITZ_STOCKFISH or tools/)"))?;
+    let mut engine = crate::engine::Engine::spawn(&engine_path)?;
+
+    // (id, fen, book_verdict, static_verdict)
+    let mut cases: Vec<(String, String, &'static str, String)> = Vec::new();
+    for p in paths {
+        for c in load(p)? {
+            for e in c.positions {
+                let Some(want) = e.expected.favors.as_deref() else {
+                    continue;
+                };
+                let want = match want {
+                    "white" => "white",
+                    "black" => "black",
+                    _ => continue,
+                };
+                let Ok(board) = e.fen.parse::<cozy_chess::Board>() else {
+                    continue;
+                };
+                let record = kibitz_core::analyze(&board);
+                let lean = kibitz_core::verdict::lean(&record.imbalances);
+                let ours = if lean > 0 {
+                    "white"
+                } else if lean < 0 {
+                    "black"
+                } else {
+                    "balanced"
+                };
+                cases.push((e.id.clone(), e.fen.clone(), want, ours.to_string()));
+            }
+        }
+    }
+    println!("scorable favors cases: {}", cases.len());
+    let agree_static = cases.iter().filter(|(_, _, w, o)| w == o).count();
+    println!(
+        "static verdict agrees with book: {agree_static}/{} ({:.1}%)",
+        cases.len(),
+        100.0 * agree_static as f64 / cases.len().max(1) as f64
+    );
+
+    const DEAD_ZONE: i32 = 60;
+    for nodes in [10_000u64, 50_000, 200_000] {
+        let mut agree = 0;
+        let mut agree_on_miss = 0;
+        let mut miss_n = 0;
+        let mut agree_on_hit = 0;
+        let mut hit_n = 0;
+        for (_, fen, want, ours) in &cases {
+            let board: cozy_chess::Board = fen.parse().unwrap();
+            let line = engine.eval_nodes(fen, nodes)?;
+            let white_cp = if board.side_to_move() == Color::White {
+                line.score_cp
+            } else {
+                -line.score_cp
+            };
+            let probe = if white_cp > DEAD_ZONE {
+                "white"
+            } else if white_cp < -DEAD_ZONE {
+                "black"
+            } else {
+                "balanced"
+            };
+            let ok = probe == *want;
+            if ok {
+                agree += 1;
+            }
+            if want == ours {
+                hit_n += 1;
+                if ok {
+                    agree_on_hit += 1;
+                }
+            } else {
+                miss_n += 1;
+                if ok {
+                    agree_on_miss += 1;
+                }
+            }
+        }
+        println!(
+            "probe @{nodes:>6} nodes: book-agreement {agree}/{} ({:.1}%) | on static-miss {agree_on_miss}/{miss_n} ({:.1}%) | on static-hit {agree_on_hit}/{hit_n} ({:.1}%)",
+            cases.len(),
+            100.0 * agree as f64 / cases.len().max(1) as f64,
+            100.0 * agree_on_miss as f64 / miss_n.max(1) as f64,
+            100.0 * agree_on_hit as f64 / hit_n.max(1) as f64,
+        );
+    }
+
+    // Trigger cost: raw material imbalance >= one pawn on the quiet set.
+    let mut trig = 0;
+    let mut total = 0;
+    for l in std::fs::read_to_string(quiet)?
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
+        let Ok(board) = l.parse::<cozy_chess::Board>() else {
+            continue;
+        };
+        total += 1;
+        let val = |c: Color| {
+            use cozy_chess::Piece::*;
+            [
+                (Pawn, 100),
+                (Knight, 300),
+                (Bishop, 300),
+                (Rook, 500),
+                (Queen, 900),
+            ]
+            .iter()
+            .map(|&(p, v)| board.colored_pieces(c, p).len() as i32 * v)
+            .sum::<i32>()
+        };
+        if (val(Color::White) - val(Color::Black)).abs() >= 100 {
+            trig += 1;
+        }
+    }
+    println!(
+        "quiet trigger rate (|material| >= 1 pawn): {trig}/{total} ({:.1}%)",
+        100.0 * trig as f64 / total.max(1) as f64
+    );
+    Ok(())
+}
+
 /// Danger study (the danger-term run's price, see docs/VALIDATION.md):
 /// five static components of "danger to a side's king", computed over
 /// the alerts-labeled corpus (positives = entries expecting WeakKing,
