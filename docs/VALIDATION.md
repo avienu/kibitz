@@ -3456,3 +3456,36 @@ instrument can measure with the data it already collects. The quiet
 trigger price is on record (29.2% of quiet positions carry a
 one-pawn-plus imbalance). The instrument ships; the consumer does
 not.
+
+## The eval-minus-material rule: closer, and still refused — the favors docket closes
+
+The successor design was sheeted and measured on the same runs:
+inside the dead zone, the side a clear pawn DOWN whose eval holds is
+the side whose strategy is succeeding.
+
+| budget | plain probe | delta rule |
+|---|---|---|
+| 10k | 70.6% | **73.1%** |
+| 50k | 68.5% | 70.6% |
+| 200k | 69.0% | 71.1% |
+
+The rule improves every cell exactly as predicted (the gains come
+from the sacrifice-shaped misses, hit-breakage no worse) — and the
+pre-registered line was 76%. **Refused.** The favors docket now
+closes with a four-way price on one target:
+
+- static lean: 68.0%
+- static compensation terms (danger/overprotect/consolidate): refused
+- bounded probe, who-is-better: 69-71%
+- bounded probe, eval-minus-material: 71-73%
+
+The residual ~27% is the books' pedagogical voice itself — verdicts
+about who is winning the ARGUMENT, rendered at plies chosen for
+teaching, which neither statics nor a sane-budget engine reproduces.
+The axis stays as a calibration metric with a now-measured ceiling
+(~73% for any machinery of this class); chasing it further is
+formally off the board. Still open on the engine layer, each needing
+its own instrument and asking a genuinely different question of the
+probe: the WeakKing readiness gate (is the attack REAL?) and the
+consolidation gate (is the danger REAL?) — queued, with expectations
+tempered by this result.

@@ -1001,6 +1001,9 @@ pub fn probe_study(paths: &[std::path::PathBuf], quiet: &std::path::Path) -> any
         let mut miss_n = 0;
         let mut agree_on_hit = 0;
         let mut hit_n = 0;
+        let mut agree_delta = 0;
+        let mut delta_on_miss = 0;
+        let mut delta_on_hit = 0;
         for (_, fen, want, ours) in &cases {
             let board: cozy_chess::Board = fen.parse().unwrap();
             let line = engine.eval_nodes(fen, nodes)?;
@@ -1016,19 +1019,56 @@ pub fn probe_study(paths: &[std::path::PathBuf], quiet: &std::path::Path) -> any
             } else {
                 "balanced"
             };
+            // The eval-minus-material rule (didactic reading): inside the
+            // dead zone, a side a clear pawn DOWN whose eval holds is the
+            // side whose strategy is succeeding — full compensation is a
+            // success verdict in every book this corpus holds.
+            let val = |c: Color| {
+                use cozy_chess::Piece::*;
+                [
+                    (Pawn, 100),
+                    (Knight, 300),
+                    (Bishop, 300),
+                    (Rook, 500),
+                    (Queen, 900),
+                ]
+                .iter()
+                .map(|&(pc, v)| board.colored_pieces(c, pc).len() as i32 * v)
+                .sum::<i32>()
+            };
+            let mat = val(Color::White) - val(Color::Black);
+            let delta_rule = if probe != "balanced" {
+                probe
+            } else if mat <= -80 {
+                "white"
+            } else if mat >= 80 {
+                "black"
+            } else {
+                "balanced"
+            };
             let ok = probe == *want;
+            let okd = delta_rule == *want;
             if ok {
                 agree += 1;
+            }
+            if okd {
+                agree_delta += 1;
             }
             if want == ours {
                 hit_n += 1;
                 if ok {
                     agree_on_hit += 1;
                 }
+                if okd {
+                    delta_on_hit += 1;
+                }
             } else {
                 miss_n += 1;
                 if ok {
                     agree_on_miss += 1;
+                }
+                if okd {
+                    delta_on_miss += 1;
                 }
             }
         }
@@ -1038,6 +1078,13 @@ pub fn probe_study(paths: &[std::path::PathBuf], quiet: &std::path::Path) -> any
             100.0 * agree as f64 / cases.len().max(1) as f64,
             100.0 * agree_on_miss as f64 / miss_n.max(1) as f64,
             100.0 * agree_on_hit as f64 / hit_n.max(1) as f64,
+        );
+        println!(
+            "delta @{nodes:>6} nodes: book-agreement {agree_delta}/{} ({:.1}%) | on static-miss {delta_on_miss}/{miss_n} ({:.1}%) | on static-hit {delta_on_hit}/{hit_n} ({:.1}%)",
+            cases.len(),
+            100.0 * agree_delta as f64 / cases.len().max(1) as f64,
+            100.0 * delta_on_miss as f64 / miss_n.max(1) as f64,
+            100.0 * delta_on_hit as f64 / hit_n.max(1) as f64,
         );
     }
 
