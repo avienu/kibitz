@@ -3379,3 +3379,42 @@ angle) that compensation-centric judgment is where recall dies. The
 century-scale half of the question — does the vocabulary decay on
 post-1930 dynamic chess? — is unmeasurable here and is exactly what
 a Kasparov pilot tranche (era-spread, ~15 entries) would supply.
+
+## The Kasparov pilot: thirteen entries, and the era question gets its answer
+
+My Great Predecessors (Parts 1, 2, 4, 5; personal copies, gitignored)
+joins as the corpus's third author voice — thirteen era-spread
+entries, 1892 to 1987, every score replay-verified, anchors on
+Kasparov's own verbal verdicts. **Corpus: 338 positions — 162 Jeremy Silman,
+163 Nimzowitsch, 13 Garry Kasparov.** Quiet holdout
+identical to the digit.
+
+Pilot predictions against results:
+
+1. Imbalances >= 85% on every era bucket — **held at 100%**: the
+   structural vocabulary reads an 1892 Steinitz bind and a 1987
+   Karpov squeeze with the same eyes (5/5, including the 1892
+   WeakKing alerts-positive FIRING — the alerts axis's first dated
+   19th-century hit).
+2. Favors <= 60% predicted — **refuted upward at 70%**: better than
+   feared. The three misses are exactly the dynamic-judgment family
+   (Tal's attack-for-material 1956, Petrosian's hopeless bind 1961,
+   Karpov's blockade-tempo verdict 1987) — the same compensation
+   docket, now dated across four decades.
+3. suggest@3 <= 20% — held (2/11): and the two hits are the pilot's
+   most doctrinal moves, 15.d5! (Fischer's plan, cited into a 1922
+   game) and 16.b4! (Karpov's second front) — both at RANK 1. The
+   misses are the sacrifices and quiet retreats, era-independent.
+4. **The era-decay question**: no gradient. Post-1930 buckets are
+   pilot-sized (n=3-5, reported without conclusions), but structural
+   recall shows no cliff through 1987, and the favors misses in the
+   modern buckets are the SAME concept family as the 1920s Blockade
+   misses. The evidence now reads: the engine's blind spot is a
+   CONCEPT family (dynamic compensation), not an era — what changed
+   over the century is how often annotators reach for that family.
+
+The era study's buckets are extended through 1970-89; the pilot's
+n's are its scope. A full MGP tranche (the natural follow-on if
+wanted) would firm the modern buckets to n=30+ per bin — but the
+run's standing verdict already tells us most of those entries'
+favors judgments wait for the engine layer either way.

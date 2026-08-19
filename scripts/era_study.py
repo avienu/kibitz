@@ -20,7 +20,15 @@ from pathlib import Path
 CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else "testdata/private/book-trials")
 CLI = sys.argv[2] if len(sys.argv) > 2 else "./target/release/kibitz-cli"
 
-BUCKETS = [(0, 1899, "<=1899"), (1900, 1909, "1900-09"), (1910, 1919, "1910-19"), (1920, 1999, "1920-28")]
+BUCKETS = [
+    (0, 1899, "<=1899"),
+    (1900, 1909, "1900-09"),
+    (1910, 1919, "1910-19"),
+    (1920, 1929, "1920-29"),
+    (1930, 1949, "1930-49"),
+    (1950, 1969, "1950-69"),
+    (1970, 1989, "1970-89"),
+]
 
 
 def bucket_of(year):
